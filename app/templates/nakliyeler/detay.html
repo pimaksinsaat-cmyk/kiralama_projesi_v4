@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-3 mt-4">
+        <h2><i class="fas fa-truck"></i> Nakliye Detayları</h2>
+        <span class="badge bg-secondary">Kayıt ID: #{{ nakliye.id }}</span>
+    </div>
+    
+    <style>
+        .detail-card {
+            background-color: #fdfdfd;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05); /* Hafif gölge ekledim */
+        }
+        .detail-card h3 {
+            border-bottom: 2px solid #e9ecef;
+            padding-bottom: 10px;
+            margin-top: 0;
+            color: #0d6efd; /* Bootstrap Primary Blue */
+            font-size: 1.25rem;
+        }
+        .detail-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        /* Mobilde tek sütuna düşsün */
+        @media (max-width: 768px) {
+            .detail-grid { grid-template-columns: 1fr; }
+        }
+        .detail-item {
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 6px;
+            border-left: 4px solid #dee2e6; /* Sol tarafa çizgi detayı */
+        }
+        .detail-item strong {
+            display: block;
+            color: #6c757d;
+            font-size: 0.85em;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+            letter-spacing: 0.5px;
+        }
+        .detail-item span {
+            font-size: 1.1em;
+            color: #212529;
+            font-weight: 500;
+        }
+        /* Finansal bölüm için özel renkler */
+        .money-item { border-left-color: #198754; background-color: #f1fcf5; }
+        .money-total { border-left-color: #0d6efd; background-color: #e7f1ff; }
+    </style>
+
+    <div class="detail-card">
+        <h3><i class="fas fa-info-circle"></i> Operasyon Bilgileri</h3>
+        <div class="detail-grid">
+            <div class="detail-item">
+                <strong>Tarih</strong>
+                <span>{{ nakliye.tarih.strftime('%d.%m.%Y') }}</span>
+            </div>
+            <div class="detail-item">
+                <strong>Durum</strong>
+                <span>
+                    {% if nakliye.cari_islendi_mi %}
+                        <span class="badge bg-success"><i class="fas fa-check-circle"></i> Cariye İşlendi</span>
+                    {% else %}
+                        <span class="badge bg-warning text-dark"><i class="fas fa-clock"></i> Bekliyor</span>
+                    {% endif %}
+                </span>
+            </div>
+            <div class="detail-item">
+                <strong>Güzergah</strong>
+                <span>{{ nakliye.guzergah }}</span>
+            </div>
+            <div class="detail-item">
+                <strong>Araç Plakası</strong>
+                <span>{{ nakliye.plaka or 'Belirtilmedi' }}</span>
+            </div>
+            <div class="detail-item" style="grid-column: span 2;">
+                <strong>Açıklama / Yük Cinsi</strong>
+                <span>{{ nakliye.aciklama or '-' }}</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="detail-card">
+        <h3><i class="fas fa-building"></i> Müşteri / Firma Bilgileri</h3>
+        <div class="detail-grid">
+            <div class="detail-item">
+                <strong>Firma Adı</strong>
+                <span>
+                    <a href="{{ url_for('firmalar.bilgi', id=nakliye.firma.id) }}" class="text-decoration-none">
+                        {{ nakliye.firma.firma_adi }} <i class="fas fa-external-link-alt small"></i>
+                    </a>
+                </span>
+            </div>
+            <div class="detail-item">
+                <strong>Yetkili Kişi</strong>
+                <span>{{ nakliye.firma.yetkili or '-' }}</span>
+            </div>
+            <div class="detail-item">
+                <strong>Telefon</strong>
+                <span>{{ nakliye.firma.telefon or '-' }}</span>
+            </div>
+            <div class="detail-item">
+                <strong>Firma Güncel Bakiyesi</strong>
+                <span class="{{ 'text-danger' if nakliye.firma.bakiye < 0 else 'text-success' }}">
+                    {{ "{:,.2f}".format(nakliye.firma.bakiye) }} TL
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <div class="detail-card">
+        <h3><i class="fas fa-coins"></i> Tutar Bilgileri</h3>
+        <div class="detail-grid">
+            <div class="detail-item money-item" style="grid-column: span 2;">
+                <strong>Sözleşme Tutarı (KDV Hariç)</strong>
+                <span style="font-size: 1.3em; font-weight: bold;">{{ "{:,.2f}".format(nakliye.tutar) }} TL</span>
+            </div>
+            <div class="detail-item">
+                <strong>KDV Oranı (Fatura Kesilirken Uygulanacak)</strong>
+                <span>% {{ nakliye.kdv_orani }}</span>
+            </div>
+            <div class="detail-item">
+                <strong>Taşeron Maliyeti</strong>
+                <span>{{ "{:,.2f}".format(nakliye.taseron_maliyet or 0) }} TL</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-flex justify-content-between mt-4 mb-5">
+        <a href="{{ url_for('nakliyeler.index') }}" class="btn btn-secondary btn-lg">
+            <i class="fas fa-arrow-left"></i> Listeye Dön
+        </a>
+        
+        <div>
+            <a href="{{ url_for('nakliyeler.duzenle', id=nakliye.id) }}" class="btn btn-warning btn-lg me-2">
+                <i class="fas fa-edit"></i> Düzenle
+            </a>
+            
+            <button type="button" class="btn btn-danger btn-lg" data-bs-toggle="modal" data-bs-target="#deleteModal">
+                <i class="fas fa-trash"></i> Sil
+            </button>
+        </div>
+    </div>
+
+</div>
+
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Silme Onayı</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        Bu nakliye kaydını silmek istediğinize emin misiniz?<br>
+        <small class="text-danger">Bu işlem cari hesaptan tutarı düşecektir.</small>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+        <form action="{{ url_for('nakliyeler.sil', id=nakliye.id) }}" method="POST" style="display:inline;">
+            <button type="submit" class="btn btn-danger">Evet, Sil</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

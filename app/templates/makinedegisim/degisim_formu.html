@@ -1,0 +1,299 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    /* Filtre Butonu Efekti */
+    .btn-filter-tool { background: #f0f4ff; border: 1px solid #d1d5db; color: #2563eb; transition: all 0.2s; }
+    .btn-filter-tool:hover { background: #2563eb; color: white; transform: translateY(-1px); }
+    .section-title { font-size: 1rem; font-weight: 800; color: #2d3748; border-bottom: 2px solid #edf2f7; padding-bottom: 8px; margin-bottom: 15px; }
+</style>
+
+<div class="container mt-4">
+    <div class="card shadow border-0">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center py-3">
+            <h4 class="mb-0 fw-bold"><i class="fas fa-exchange-alt me-2"></i>Makine Değişim (Revizyon) Formu</h4>
+            <span class="badge bg-white text-primary px-3 py-2">Versiyon V{{ eski_kalem.versiyon_no }} -> V{{ eski_kalem.versiyon_no + 1 }}</span>
+        </div>
+        <div class="card-body p-4">
+            
+            {% with messages = get_flashed_messages(with_categories=true) %}
+              {% if messages %}
+                {% for category, message in messages %}
+                  <div class="alert alert-{{ category }} alert-dismissible fade show border-0 shadow-sm" role="alert">
+                    <i class="fas fa-info-circle me-2"></i>{{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                  </div>
+                {% endfor %}
+              {% endif %}
+            {% endwith %}
+
+            <div class="alert alert-light border shadow-sm mb-4">
+                <i class="fas fa-history me-2 text-primary"></i>
+                <strong>Mevcut Durum:</strong> {{ eski_kalem.kiralama.firma_musteri.firma_adi }} firmasında, 
+                {% if eski_makine %}
+                    <strong class="text-primary">{{ eski_makine.kod }}</strong> ({{ eski_makine.marka }} {{ eski_makine.model }}) 
+                    <span class="badge bg-success ms-1">ÖZ MAL</span> makine çalışmaktadır.
+                {% else %}
+                    <strong>{{ eski_kalem.harici_ekipman_marka }} {{ eski_kalem.harici_ekipman_model }}</strong> 
+                    <span class="badge bg-danger ms-1">DIŞ TEDARİK</span> makine çalışmaktadır.
+                {% endif %}
+            </div>
+
+            <form action="{{ url_for('makinedegisim.makine_degistir', kalem_id=eski_kalem.id) }}" method="POST" id="swap-form">
+                {{ form.csrf_token }}
+
+                <div class="row g-4">
+                    <!-- 1. ESKİ MAKİNE KISMI (İADE) -->
+                    <div class="col-md-5 border-end">
+                        <h5 class="text-danger fw-bold mb-3 border-bottom pb-2"><i class="fas fa-arrow-circle-left me-2"></i>1. İade Alınan Makine</h5>
+                        
+                        <div class="mb-4 p-3 bg-light rounded border border-danger shadow-sm">
+                            <label class="form-label fw-bold text-danger small"><i class="fas fa-warehouse me-1"></i>İADE ALINAN ŞUBE / DEPO</label>
+                            <select name="donus_sube_id" id="donus_sube_id" class="form-select border-danger fw-bold" required>
+                                <option value="" disabled selected>Eski makine nereye indirildi?</option>
+                                <option value="tedarikci" class="text-danger fw-bold">🏭 Tedarikçiye İade Edildi</option>
+                                <optgroup label="Pimaks Depoları">
+                                    {% for s in subeler %}
+                                        <option value="{{ s.id }}" {% if secili_donus_sube == s.id|string %}selected{% endif %}>{{ s.isim }}</option>
+                                    {% endfor %}
+                                </optgroup>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small">DEĞİŞİM NEDENİ</label>
+                            {{ form.neden(class="form-select", id="neden") }}
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small">DÖNÜŞ SAATİ</label>
+                            {{ form.donus_saati(class="form-control", placeholder="0") }}
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small">AÇIKLAMA / NOTLAR</label>
+                            {{ form.aciklama(class="form-control", rows="5", placeholder="İşlem notları...") }}
+                        </div>
+                    </div>
+
+                    <!-- 2. YENİ SÜREÇ KISMI (GİDEN) -->
+                    <div class="col-md-7">
+                        <h5 class="text-success fw-bold mb-3 border-bottom pb-2"><i class="fas fa-arrow-right me-2"></i>2. Yeni Giden Makine & Lojistik</h5>
+
+                        <div class="mb-3 p-3 bg-light rounded border border-success shadow-sm">
+                            <label class="form-label fw-bold text-success small"><i class="fas fa-calendar-check me-1"></i> FİİLİ DEĞİŞİM TARİHİ</label>
+                            {{ form.degisim_tarihi(class="form-control border-success fw-bold") }}
+                        </div>
+
+                        <div class="form-check form-switch mb-3 p-3 border rounded bg-white">
+                            {{ form.is_dis_tedarik(class="form-check-input ms-0 me-2", id="is_dis_tedarik", style="width: 40px; height: 20px;") }}
+                            <label class="form-check-label fw-bold text-primary mt-1" for="is_dis_tedarik">Dış Tedarik (Kiralık) Makine Gönderilecek</label>
+                        </div>
+
+                        <div id="oz_mal_alani">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold text-success small">YENİ MAKİNE SEÇİMİ (PİMAKS FİLO)</label>
+                                <div class="input-group shadow-sm">
+                                    {{ form.yeni_ekipman_id(id="g-ekipman", class="form-select border-success fw-bold") }}
+                                    <button type="button" class="btn btn-filter-tool px-3 fw-bold" data-bs-toggle="modal" data-bs-target="#filterModal">
+                                        <i class="fas fa-magic me-1"></i> Filtrele
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- DIŞ TEDARİK ALANI (Form sınıfındaki harici_ekipman_... adları ile %100 uyumlu) -->
+                        <div id="dis_tedarik_alani" class="p-3 border rounded bg-white shadow-sm border-primary mb-3" style="display:none;">
+                            <div class="row g-3">
+                                <div class="col-md-12">
+                                    <label class="form-label fw-bold small">TEDARİKÇİ FİRMA</label>
+                                    {{ form.harici_ekipman_tedarikci_id(id="harici_ekipman_tedarikci_id", class="form-select border-primary") }}
+                                </div>
+                                <div class="col-md-4"><label class="small fw-bold">Marka</label>{{ form.harici_marka(id="harici_marka", class="form-control") }}</div>
+                                <div class="col-md-4"><label class="small fw-bold">Model</label>{{ form.harici_model(id="harici_model", class="form-control") }}</div>
+                                <div class="col-md-4"><label class="small fw-bold">Seri No</label>{{ form.harici_ekipman_seri_no(id="harici_ekipman_seri_no", class="form-control") }}</div>
+                                
+                                <div class="col-md-4"><label class="small fw-bold">Tip</label>{{ form.harici_ekipman_tipi(id="harici_ekipman_tipi", class="form-control") }}</div>
+                                <div class="col-md-2"><label class="small fw-bold">Kapasite</label>{{ form.harici_ekipman_kapasite(id="harici_ekipman_kapasite", class="form-control") }}</div>
+                                <div class="col-md-2"><label class="small fw-bold">Yükseklik</label>{{ form.harici_ekipman_yukseklik(id="harici_ekipman_yukseklik", class="form-control") }}</div>
+                                <div class="col-md-2"><label class="small fw-bold">Üretim Yılı</label>{{ form.harici_ekipman_uretim_yili(id="harici_ekipman_uretim_yili", class="form-control") }}</div>
+                                <div class="col-md-2"><label class="small fw-bold text-danger">Alış ₺</label>{{ form.kiralama_alis_fiyat(id="kiralama_alis_fiyat", class="form-control border-danger") }}</div>
+                            </div>
+                        </div>
+
+                        <!-- NAKLİYE AYARLARI -->
+                        <div class="card mb-3 border-warning shadow-sm overflow-hidden">
+                            <div class="card-header bg-warning text-dark fw-bold py-2">
+                                <i class="fas fa-truck me-2"></i>Nakliye & Lojistik Ayarları
+                            </div>
+                            <div class="card-body bg-light py-3">
+                                <div class="row g-3 align-items-end">
+                                    <div class="col-md-4">
+                                        <label class="small fw-bold">SATIŞ (₺)</label>
+                                        {{ form.nakliye_satis_fiyat(id="nakliye_satis_fiyat", class="form-control fw-bold border-warning") }}
+                                    </div>
+                                    <div class="col-md-4" id="oz_mal_arac_secimi">
+                                        <label class="small fw-bold text-success">ÖZ MAL ARAÇ</label>
+                                        {{ form.nakliye_araci_id(id="nakliye_araci_id", class="form-select border-success") }}
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="form-check form-switch mb-2">
+                                            {{ form.is_harici_nakliye(id="is_harici_nakliye", class="form-check-input") }}
+                                            <label class="form-check-label fw-bold text-danger small" for="is_harici_nakliye">HARİCİ NAKLİYE?</label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div id="harici_nakliye_detay" class="mt-3 p-2 border rounded bg-white shadow-sm border-danger" style="display:none;">
+                                    <div class="row g-2">
+                                        <div class="col-md-7">
+                                            <label class="small fw-bold">Nakliye Firması</label>
+                                            {{ form.nakliye_tedarikci_id(id="nakliye_tedarikci_id", class="form-select form-select-sm border-danger") }}
+                                        </div>
+                                        <div class="col-md-5">
+                                            <label class="small fw-bold text-danger">Alış ₺</label>
+                                            {{ form.nakliye_alis_fiyat(id="nakliye_alis_fiyat", class="form-control form-control-sm border-danger", placeholder="0.00") }}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row g-3 pt-2 border-top">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold small">YENİ ÇIKIŞ SAATİ</label>
+                                {{ form.cikis_saati(id="cikis_saati", class="form-control", placeholder="0") }}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold text-success small">YENİ BİRİM FİYAT (SATIŞ ₺)</label>
+                                <div class="input-group">
+                                    {{ form.kiralama_brm_fiyat(id="kiralama_brm_fiyat", class="form-control fw-bold border-success") }}
+                                    <span class="input-group-text bg-success text-white">₺</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-5 pt-3 border-top">
+                    <a href="{{ url_for('kiralama.index') }}" class="btn btn-outline-secondary px-4 py-2 fw-bold">Vazgeç</a>
+                    <button type="submit" class="btn btn-primary px-5 py-2 fw-bold shadow-sm">
+                        <i class="fas fa-check-circle me-2"></i>DEĞİŞİM KAYDINI TAMAMLA
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Filtre Modalı -->
+{% include 'kiralama/_filtre_modal.html' %}
+
+<script id="filtre-ipuclari-json" type="application/json">
+{{ (filtre_ipuclari or {})|tojson|safe }}
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // --- 1. OTOMATİK VERİ DOLDURMA (UX) ---
+    const ipuclariEl = document.getElementById('filtre-ipuclari-json');
+    const ipuclari = ipuclariEl ? JSON.parse(ipuclariEl.textContent || '{}') : {};
+    
+    // Ana formdaki iade şubesi seçimi
+    const donusSubeSelect = document.getElementById('donus_sube_id');
+    if (donusSubeSelect && ipuclari.sube_id) {
+        donusSubeSelect.value = String(ipuclari.sube_id);
+    }
+
+    const filterModalEl = document.getElementById('filterModal');
+    if (filterModalEl) {
+        filterModalEl.addEventListener('show.bs.modal', function () {
+            // Modal içindeki tüm filtre elemanlarını eşleştiriyoruz
+            const mappings = {
+                'f-tip': ipuclari.tip,
+                'f-marka': ipuclari.marka,
+                'f-sube': ipuclari.sube_id ? String(ipuclari.sube_id) : null,
+                'f-y-max': ipuclari.yukseklik,
+                'f-k-min': ipuclari.kapasite,
+                'f-agirlik': ipuclari.agirlik,
+                'f-genislik': ipuclari.genislik,
+                'f-uzunluk': ipuclari.uzunluk,
+                'f-ky-max': ipuclari.kapali_yukseklik,
+                'f-enerji': ipuclari.yakit
+            };
+
+            for (const [id, value] of Object.entries(mappings)) {
+                const el = document.getElementById(id);
+                if (el && value !== undefined && value !== null && value !== '') {
+                    el.value = value;
+                }
+            }
+
+            // İç mekan uygunluk kontrolü (f-ortam)
+            const fOrtam = document.getElementById('f-ortam');
+            if (fOrtam && ipuclari.ic_mekan_uygun !== undefined) {
+                fOrtam.value = ipuclari.ic_mekan_uygun ? 'ic' : 'dis';
+            }
+            
+            // Modal içindeki canlı sayım API'sini tetikle
+            const fTip = document.getElementById('f-tip');
+            if(fTip) fTip.dispatchEvent(new Event('change'));
+        });
+    }
+
+    // --- 2. GÖRÜNÜRLÜK VE ZORUNLULUK KONTROLLERİ ---
+    const isDisTedarikCb = document.getElementById('is_dis_tedarik');
+    const isHariciNakliyeCb = document.getElementById('is_harici_nakliye');
+    const ozMalAlani = document.getElementById('oz_mal_alani');
+    const disTedarikAlani = document.getElementById('dis_tedarik_alani');
+    const hariciNakliyeDetay = document.getElementById('harici_nakliye_detay');
+    const ozMalAracSecimi = document.getElementById('oz_mal_arac_secimi');
+
+    const yeniEkipmanSelect = document.getElementById('g-ekipman');
+    const hariciTedarikciSelect = document.getElementById('harici_ekipman_tedarikci_id');
+    const nakliyeAraciSelect = document.getElementById('nakliye_araci_id');
+    const hariciNakliyeTedarikciSelect = document.getElementById('nakliye_tedarikci_id');
+
+    function toggleEkipman() {
+        const isHarici = isDisTedarikCb.checked;
+        ozMalAlani.style.display = isHarici ? 'none' : 'block';
+        disTedarikAlani.style.display = isHarici ? 'block' : 'none';
+        
+        if (yeniEkipmanSelect) {
+            yeniEkipmanSelect.setCustomValidity(!isHarici && yeniEkipmanSelect.value === "0" ? "Lütfen öz mal makine seçiniz." : "");
+        }
+        if (hariciTedarikciSelect) {
+            hariciTedarikciSelect.setCustomValidity(isHarici && hariciTedarikciSelect.value === "0" ? "Lütfen tedarikçi firma seçiniz." : "");
+        }
+        
+        disTedarikAlani.querySelectorAll('input').forEach(i => i.required = isHarici);
+    }
+
+    function toggleNakliye() {
+        const isHarici = isHariciNakliyeCb.checked;
+        hariciNakliyeDetay.style.display = isHarici ? 'block' : 'none';
+        ozMalAracSecimi.style.display = isHarici ? 'none' : 'block';
+
+        if (nakliyeAraciSelect) {
+            nakliyeAraciSelect.setCustomValidity(!isHarici && nakliyeAraciSelect.value === "0" ? "Lütfen nakliye aracınızı seçiniz." : "");
+        }
+        if (hariciNakliyeTedarikciSelect) {
+            hariciNakliyeTedarikciSelect.setCustomValidity(isHarici && hariciNakliyeTedarikciSelect.value === "0" ? "Lütfen nakliye firmasını seçiniz." : "");
+        }
+        
+        const alisInput = document.getElementById('nakliye_alis_fiyat');
+        if (alisInput) alisInput.required = isHarici;
+    }
+
+    isDisTedarikCb.addEventListener('change', toggleEkipman);
+    isHariciNakliyeCb.addEventListener('change', toggleNakliye);
+    
+    [yeniEkipmanSelect, hariciTedarikciSelect, nakliyeAraciSelect, hariciNakliyeTedarikciSelect].forEach(el => {
+        if(el) el.addEventListener('change', () => { toggleEkipman(); toggleNakliye(); });
+    });
+
+    toggleEkipman();
+    toggleNakliye();
+});
+</script>
+{% endblock %}

@@ -1,0 +1,67 @@
+{% if current_user.is_authenticated and current_user.is_admin() %}
+<div class="modal fade" id="dbBackupModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-database me-2 text-primary"></i>DB Yedekleme</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
+            </div>
+            <div class="modal-body">
+
+                <!-- Manuel SQL Yedek -->
+                <div class="mb-4">
+                    <h6 class="fw-semibold mb-2">
+                        <i class="fas fa-download me-1 text-success"></i> Manuel SQL Yedeği Al
+                    </h6>
+                    <p class="text-muted small mb-2">
+                        Butona basınca tüm veritabanı <code>.sql</code> formatında indirilir.
+                    </p>
+                    <a href="{{ url_for('db_menu.db_yedek_sql') }}" class="btn btn-success">
+                        <i class="fas fa-file-code me-1"></i> SQL Yedeği İndir
+                    </a>
+                </div>
+
+                <hr>
+
+                <!-- Otomatik Günlük Yedekler Listesi -->
+                <h6 class="fw-semibold mb-2">
+                    <i class="fas fa-clock me-1 text-info"></i> Otomatik Günlük Yedekler
+                </h6>
+                {% if db_yedek_listesi %}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Dosya Adı</th>
+                                <th>Boyut</th>
+                                <th>Tarih</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for y in db_yedek_listesi %}
+                            <tr>
+                                <td><i class="fas fa-file-code me-1 text-muted"></i>{{ y.ad }}</td>
+                                <td>{{ y.boyut_kb }} KB</td>
+                                <td>{{ y.tarih }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted small">Henüz otomatik yedek oluşturulmamış.</p>
+                {% endif %}
+                <p class="text-muted small mt-2">
+                    <i class="fas fa-info-circle me-1"></i>
+                    Otomatik yedekler her gece saat 02:00'de alınır, son 7 günlük saklanır.
+                    Yedekler <code>backups/</code> klasöründe tutulur.
+                </p>
+
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Kapat</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}

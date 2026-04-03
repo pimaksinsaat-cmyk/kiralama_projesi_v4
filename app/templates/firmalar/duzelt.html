@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Düzenle: {{ firma.firma_adi }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <h2 class="mb-4">Firmayı Düzenle: <span class="text-primary">{{ firma.firma_adi }}</span></h2>
+            <form action="" method="POST" novalidate class="card card-body shadow-sm">
+                {% with btn_text="Değişiklikleri Güncelle", btn_color="warning text-white" %}
+                    {% include "firmalar/_form_fields.html" %}
+                {% endwith %}
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

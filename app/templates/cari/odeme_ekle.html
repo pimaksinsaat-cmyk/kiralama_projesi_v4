@@ -1,0 +1,211 @@
+{% extends "base.html" %}
+
+{% set is_odeme = (request.args.get('yon') == 'odeme' or (title and 'Ödeme' in title)) %}
+{% set title_text = title if title else ('Ödeme Yap (Para Çıkışı)' if is_odeme else 'Tahsilat Al (Para Girişi)') %}
+{% set header_color = 'danger' if is_odeme else 'success' %}
+{% set icon_class = 'fa-arrow-up' if is_odeme else 'fa-arrow-down' %}
+
+{% block title %}{{ title_text }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            
+            <div class="card shadow-sm border-{{ header_color }}">
+                <div class="card-header text-white bg-{{ header_color }}">
+                    <h4 class="mb-0">
+                        <i class="fa {{ icon_class }}"></i> {{ title_text }}
+                    </h4>
+                </div>
+                
+                <div class="card-body">
+                    
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            {% for category, message in messages %}
+                                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                                    {{ message }}
+                                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+                    {% endwith %}
+
+                    <form method="POST" novalidate>
+                        {{ form.hidden_tag() }}
+
+                        <div class="d-none">
+                            {{ form.yon(id="yon_select") }}
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                {{ form.firma_musteri_id.label(class="form-label fw-bold") }}
+                                {% if form.firma_musteri_id.errors %}
+                                    {{ form.firma_musteri_id(class="form-select is-invalid") }}
+                                    <div class="invalid-feedback">{% for error in form.firma_musteri_id.errors %} {{ error }} {% endfor %}</div>
+                                {% else %}
+                                    {{ form.firma_musteri_id(class="form-select") }}
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6">
+                                <div class="d-flex justify-content-between">
+                                    {{ form.kasa_id.label(class="form-label fw-bold") }}
+                                    <a href="{{ url_for('cari.kasa_ekle') }}" class="text-decoration-none small" style="color: #007bff;">
+                                        <i class="fa fa-plus-circle"></i> Yeni Hesap
+                                    </a>
+                                </div>
+                                {% if form.kasa_id.errors %}
+                                    {{ form.kasa_id(class="form-select is-invalid") }}
+                                    <div class="invalid-feedback">{% for error in form.kasa_id.errors %} {{ error }} {% endfor %}</div>
+                                {% else %}
+                                    {{ form.kasa_id(class="form-select") }}
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                {{ form.tarih.label(class="form-label fw-bold") }}
+                                {{ form.tarih(class="form-control", type="date") }}
+                                {% for error in form.tarih.errors %}<span class="text-danger small">{{ error }}</span>{% endfor %}
+                            </div>
+                            
+                            <div class="col-md-6">
+                                {{ form.tutar.label(class="form-label fw-bold") }}
+                                <div class="input-group">
+                                    <span class="input-group-text">₺</span>
+                                    {% if form.tutar.errors %}
+                                        {{ form.tutar(class="form-control text-end is-invalid", type="text", inputmode="decimal", placeholder="0,00", style="font-size: 1.2em; font-weight: bold;") }}
+                                        <div class="invalid-feedback">{% for error in form.tutar.errors %} {{ error }} {% endfor %}</div>
+                                    {% else %}
+                                        {{ form.tutar(class="form-control text-end", type="text", inputmode="decimal", placeholder="0,00", style="font-size: 1.2em; font-weight: bold;") }}
+                                    {% endif %}
+                                </div>
+                                <small class="text-muted">Örn: 250 veya 1.250,50 (Virgül kullanabilirsiniz)</small>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                {{ form.fatura_no.label(class="form-label fw-bold") }}
+                                {{ form.fatura_no(class="form-control", placeholder="Makbuz/Dekont No") }}
+                            </div>
+                            <div class="col-md-6">
+                                {{ form.vade_tarihi.label(class="form-label fw-bold") }}
+                                {{ form.vade_tarihi(class="form-control", type="date") }}
+                                <small class="text-muted">Çek/Senet ise giriniz.</small>
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            {{ form.aciklama.label(class="form-label fw-bold") }}
+                            {{ form.aciklama(class="form-control", placeholder="Açıklama giriniz...") }}
+                        </div>
+
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-between">
+                            <a href="javascript:history.back()" class="btn btn-secondary px-4">
+                                <i class="fa fa-arrow-left"></i> İptal
+                            </a>
+                            {% set btn_text = submit_text if submit_text else title_text %}
+                            {{ form.submit(class="btn btn-" + header_color + " px-5 btn-lg", value=btn_text) }}
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+    // 1. YÖN BİLGİSİ OTOMATİK SEÇİMİ
+    const urlParams = new URLSearchParams(window.location.search);
+    const yon = urlParams.get('yon'); // 'odeme' veya 'tahsilat'
+    const selectElement = document.getElementById('yon_select');
+    if (yon && selectElement) {
+        selectElement.value = yon;
+    }
+
+    // 2. AKILLI PARA FORMATLAMA (ZIRHLI VERSİYON)
+    const inputs = document.querySelectorAll('input[name="tutar"]'); // Tutar alanını hedefle
+
+    // String -> Number (TR formatını kabul eder)
+    function parseTR(val) {
+        if (!val) return null;
+        const n = Number(val.replace(/\./g, '').replace(',', '.'));
+        return isNaN(n) ? null : n;
+    }
+
+    // Number -> TR string (Görsel format: 1.500,00)
+    function formatTR(num) {
+        return num.toLocaleString('tr-TR', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+    }
+
+    inputs.forEach(input => {
+        // İlk yükleme (Python'dan gelen ham değeri formatla)
+        if (input.value && !isNaN(Number(input.value))) {
+            input.value = formatTR(Number(input.value));
+        }
+
+        // Yazarken: Sadece görsel noktaları ve virgülü düzenle
+        input.addEventListener('input', () => {
+            let v = input.value.replace(/[^\d,]/g, '');
+            const parts = v.split(',');
+            if (parts.length > 2) v = parts[0] + ',' + parts.slice(1).join('');
+
+            const p = v.split(',');
+            const intPart = p[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+            const decPart = p[1] ? ',' + p[1].slice(0, 2) : '';
+            input.value = intPart + decPart;
+        });
+
+        // Numpad'deki noktayı otomatik virgüle çevir (Kullanıcı dostu)
+        input.addEventListener('keydown', e => {
+            if (e.key === '.') {
+                e.preventDefault();
+                const start = input.selectionStart;
+                const end = input.selectionEnd;
+                const currentVal = input.value;
+                if (!currentVal.includes(',')) {
+                    input.value = currentVal.slice(0, start) + ',' + currentVal.slice(end);
+                    input.setSelectionRange(start + 1, start + 1);
+                }
+            }
+        });
+
+        // Odaklanınca: Binlik noktalarını kaldır (Giriş kolaylığı)
+        input.addEventListener('focus', () => {
+            input.value = input.value.replace(/\./g, '');
+            setTimeout(() => input.select(), 10);
+        });
+
+        // Odaktan çıkınca: Sayıyı yuvarla ve tekrar formatla
+        input.addEventListener('blur', () => {
+            if (!input.value) return;
+            const n = parseTR(input.value);
+            if (n === null) { input.value = ''; return; }
+            const rounded = Math.round(n * 100) / 100;
+            input.value = formatTR(rounded);
+        });
+    });
+
+    // 3. SUBMIT KORUMASI: Backend'in (Python) anlayacağı tek formata çevir
+    const form = document.querySelector('form');
+    if (form) {
+        form.addEventListener('submit', () => {
+            inputs.forEach(i => {
+                if (!i.value) return;
+                // "1.500,00" -> "1500.00" (Backend artık noktayı binlik sanmayacak)
+                i.value = i.value.replace(/\./g, '').replace(',', '.');
+            });
+        });
+    }
+});
+
+</script>
+{% endblock %}

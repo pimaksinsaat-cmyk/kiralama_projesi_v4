@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+{% block title %}{{ kasa.kasa_adi }} - Hesap Hareketleri{% endblock %}
+
+{% block content %}
+<style>
+    /* Ekran Stilleri */
+    .hareket-container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    .bakiye-bilgi { font-size: 1.2rem; font-weight: bold; color: #28a745; float: right; }
+    .btn-print { background-color: #6610f2; color: white; border: none; }
+    .btn-print:hover { background-color: #520dc2; color: white; }
+
+    /* SAĞ TIK / MENÜ STİLLERİ (EKLENDİ) */
+    .context-menu { 
+        display: none; 
+        position: absolute; 
+        background-color: white; 
+        border: 1px solid #ccc; 
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2); 
+        border-radius: 5px; 
+        z-index: 1000; 
+        min-width: 180px; 
+        padding: 5px 0; 
+    }
+    .context-menu-item { 
+        display: block; 
+        padding: 10px 15px; 
+        color: #333; 
+        text-decoration: none; 
+        font-size: 0.95em; 
+        cursor: pointer;
+    }
+    .context-menu-item:hover { background-color: #f5f5f5; color: #000; text-decoration: none; }
+    .context-menu-item.delete { color: #dc3545; font-weight: bold; }
+    .context-menu-item.delete:hover { background-color: #dc3545; color: white; }
+    .context-menu-divider { height: 1px; margin: 5px 0; background-color: #eee; }
+    
+    /* Satır Hover Efekti */
+    .islem-satiri { cursor: context-menu; transition: background-color 0.2s; }
+    .islem-satiri:hover { background-color: #f8f9fa !important; }
+
+    /* Yazdırma Stilleri */
+    @media print {
+        body * { visibility: hidden; }
+        .hareket-container, .hareket-container * { visibility: visible; }
+        .hareket-container { position: absolute; left: 0; top: 0; width: 100%; box-shadow: none; padding: 0; }
+        .no-print { display: none !important; }
+        .table { font-size: 12px; }
+        .badge { border: 1px solid #000; color: #000; background: none !important; }
+        /* Menüyü baskıda gizle */
+        .context-menu { display: none !important; }
+    }
+</style>
+
+<div class="container mt-3">
+    <div class="hareket-container">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h3 class="mb-0">{{ kasa.kasa_adi }}</h3>
+                <small class="text-muted">{{ kasa.tipi|upper }} Hesabı - {{ kasa.para_birimi }}</small>
+            </div>
+            <div class="text-end">
+                <span class="d-block text-muted small">Güncel Bakiye</span>
+                <span class="bakiye-bilgi">{{ "{:,.2f}".format(kasa.bakiye|float).replace(',', 'X').replace('.', ',').replace('X', '.') }} {{ kasa.para_birimi }}</span>
+            </div>
+        </div>
+
+        <div class="mb-3 no-print">
+            <a href="{{ url_for('cari.kasa_listesi') }}" class="btn btn-secondary btn-sm"><i class="fa fa-arrow-left"></i> Listeye Dön</a>
+            <button onclick="window.print()" class="btn btn-print btn-sm"><i class="fa fa-print"></i> Yazdır / PDF</button>
+            <small class="text-muted ms-2">(İşlem için satıra sağ tıklayın veya basılı tutun)</small>
+        </div>
+
+        <table class="table table-striped table-bordered">
+            <thead class="table-light">
+                <tr>
+                    <th style="width: 120px;">Tarih</th>
+                    <th>İşlem / Açıklama</th>
+                    <th>İlgili Cari / Kaynak</th>
+                    <th class="text-end" style="width: 150px;">Tutar</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for islem in hareketler %}
+                
+                {# URL ve Veri Hazırlığı (EKLENDİ) #}
+                {% set duzenle_url = url_for('cari.odeme_duzelt', id=islem.id) if islem.id else '#' %}
+
+                {% set sil_url = url_for('cari.odeme_sil', id=islem.id) if islem.id else '#' %}
+
+                {% set tutar = islem.tutar | float %}
+                
+                <tr class="islem-satiri" 
+                    data-duzenle-url="{{ duzenle_url }}"
+                    data-sil-url="{{ sil_url }}"
+                    data-csrf-token="{{ csrf_token() }}"
+                    data-tarih="{{ islem.tarih }}"
+                    data-tur="Kasa İşlemi">
+                    
+                    <td>{{ islem.tarih }}</td> <td>
+                        {{ islem.aciklama or '-' }}
+                        {% if islem.fatura_no %}
+                            <br><small class="text-muted">Belge: {{ islem.fatura_no }}</small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {{ islem.firma_musteri.firma_adi if islem.firma_musteri else 'Sistem / Dahili' }}
+                    </td>
+                    <td class="text-end">
+                        <span class="{{ 'text-success' if tutar > 0 else 'text-danger' }} fw-bold">
+                            {{ "{:+,.2f}".format(tutar).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+                        </span>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="4" class="text-center text-muted py-4">Bu hesaba ait henüz bir işlem kaydı yok.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        
+        <div class="mt-4 text-center small text-muted d-none d-print-block">
+            Rapor Tarihi: {{ now.strftime('%d.%m.%Y %H:%M') }}
+        </div>
+    </div>
+</div>
+
+<div id="context-menu" class="context-menu">
+    <a href="#" class="context-menu-item" id="menu-duzenle">
+        <i class="fa fa-edit me-2"></i> İşlemi Düzenle
+    </a>
+    <div class="context-menu-divider"></div>
+    <a href="#" class="context-menu-item delete" id="menu-sil">
+        <i class="fa fa-trash-alt me-2"></i> İşlemi Sil
+    </a>
+</div>
+
+<form id="delete-form" method="POST" style="display: none;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+</form>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    
+    // --- MOBİL İÇİN UZUN BASMA (LONG PRESS) ---
+    function addLongPressListener(element, callback) {
+        let timer;
+        element.addEventListener('touchstart', function(e) {
+            timer = setTimeout(function() {
+                timer = null;
+                const touch = e.touches[0];
+                const mockEvent = {
+                    preventDefault: () => e.preventDefault(),
+                    stopPropagation: () => e.stopPropagation(),
+                    pageX: touch.pageX,
+                    pageY: touch.pageY
+                };
+                callback(mockEvent, element);
+            }, 600); // 600ms basılı tutulursa çalışır
+        }, {passive: false});
+        
+        function clear() { if (timer) { clearTimeout(timer); timer = null; } }
+        element.addEventListener('touchend', clear);
+        element.addEventListener('touchmove', clear);
+    }
+
+    const contextMenu = document.getElementById('context-menu');
+    const deleteForm = document.getElementById('delete-form');
+    const menuDuzenle = document.getElementById('menu-duzenle');
+    const menuSil = document.getElementById('menu-sil');
+    
+    let currentSilUrl = null;
+    let currentCsrfToken = null;
+    let currentTur = null;
+    let currentTarih = null;
+
+    const showMenu = (event, row) => {
+        event.preventDefault();
+        
+        // Verileri satırdan al (data attribute'lardan)
+        currentSilUrl = row.dataset.silUrl;
+        const duzenleUrl = row.dataset.duzenleUrl;
+        currentCsrfToken = row.dataset.csrfToken;
+        currentTur = row.dataset.tur;
+        currentTarih = row.dataset.tarih;
+        
+        // Linkleri güncelle
+        menuDuzenle.href = duzenleUrl;
+        
+        // Menüyü farenin/parmağın olduğu yerde aç
+        contextMenu.style.left = event.pageX + 'px';
+        contextMenu.style.top = event.pageY + 'px';
+        contextMenu.style.display = 'block';
+    };
+
+    // Tüm satırlara olay dinleyicisi ekle
+    document.querySelectorAll('.islem-satiri').forEach(row => {
+        // Masaüstü sağ tık
+        row.addEventListener('contextmenu', (e) => showMenu(e, row));
+        // Mobil uzun basma
+        addLongPressListener(row, showMenu);
+    });
+
+    // Menü dışında bir yere tıklayınca kapat
+    window.addEventListener('click', function() {
+        if (contextMenu.style.display === 'block') contextMenu.style.display = 'none';
+    });
+    window.addEventListener('touchstart', function(event) {
+         if (!event.target.closest('.context-menu')) contextMenu.style.display = 'none';
+    });
+
+    // Silme İşlemi Onayı
+    menuSil.addEventListener('click', function(event) {
+        event.preventDefault();
+        if (currentSilUrl) {
+            if (confirm(currentTarih + " tarihli işlemi silmek istediğinizden emin misiniz?\nBu işlem geri alınamaz!")) {
+                deleteForm.action = currentSilUrl;
+                deleteForm.querySelector('input[name="csrf_token"]').value = currentCsrfToken;
+                deleteForm.submit();
+            }
+        }
+        contextMenu.style.display = 'none';
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+
+{% block title %}Nakliye Kaydını Düzenle{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-9">
+            <div class="card shadow border-0">
+                <div class="card-header bg-warning py-3">
+                    <h4 class="mb-0 text-dark fw-bold">
+                        <i class="fas fa-edit me-2"></i> Nakliye Kaydını Düzenle
+                    </h4>
+                </div>
+                <div class="card-body p-4">
+                    <form method="POST" action="">
+                        {{ form.hidden_tag() }}
+
+                        <!-- 1. Bölüm: Temel Bilgiler -->
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold small text-muted">Sefer Tarihi</label>
+                                {{ form.tarih(class="form-control", type="date") }}
+                                {% for error in form.tarih.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                            </div>
+                            <div class="col-md-8">
+                                <label class="form-label fw-bold small text-muted">Müşteri Firma (Kime Fatura Kesilecek?)</label>
+                                {{ form.firma_id(class="form-select") }}
+                                {% for error in form.firma_id.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                            </div>
+                        </div>
+
+                        <hr class="text-muted opacity-25 mb-4">
+
+                        <!-- 2. Bölüm: Operasyon Tipi -->
+                        <div class="card bg-light border-0 mb-4 shadow-sm">
+                            <div class="card-body">
+                                <label class="form-label fw-bold text-primary mb-3">
+                                    <i class="fas fa-exchange-alt me-2"></i> Operasyon Tipi ve Araç Bilgisi
+                                </label>
+                                
+                                <div class="row g-3">
+                                    <div class="col-md-4">
+                                        <label class="form-label small fw-bold text-muted">Nakliye Yöntemi</label>
+                                        {{ form.nakliye_tipi(class="form-select fw-bold", id="nakliye_tipi_select") }}
+                                    </div>
+
+                                    <!-- Öz Mal Araç Seçimi -->
+                                    <div class="col-md-8" id="oz_mal_section" style="display: none;">
+                                        <label class="form-label small fw-bold text-muted">Filo Aracı (Öz Mal)</label>
+                                        {{ form.arac_id(class="form-select") }}
+                                        <div class="form-text text-xs text-muted">Kendi araçlarımızdan birini seçin.</div>
+                                    </div>
+
+                                    <!-- Taşeron Firma Seçimi -->
+                                    <div class="col-md-8" id="taseron_section" style="display: none;">
+                                        <label class="form-label small fw-bold text-muted">Taşeron Nakliye Firması</label>
+                                        {{ form.taseron_firma_id(class="form-select") }}
+                                        <div class="form-text text-xs text-muted">Hizmet alınan dış tedarikçiyi seçin.</div>
+                                    </div>
+                                </div>
+
+                                <div class="row g-3 mt-1">
+                                    <div class="col-md-8">
+                                        <label class="form-label small fw-bold text-muted">Güzergah</label>
+                                        {{ form.guzergah(class="form-control", placeholder="Örn: İstanbul - Gebze") }}
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label small fw-bold text-muted">Plaka (Serbest Metin)</label>
+                                        {{ form.plaka(class="form-control", placeholder="34 ABC 123") }}
+                                        <div class="form-text text-xs text-muted">Taşeron araç plakasını buraya yazabilirsiniz.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 3. Bölüm: Finansal Bilgiler -->
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold text-success small">Satış Tutarı (Matrah)</label>
+                                <div class="input-group">
+                                    {{ form.tutar(class="form-control", placeholder="0.00") }}
+                                    <span class="input-group-text small">₺</span>
+                                </div>
+                                {% for error in form.tutar.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold small text-muted">KDV Oranı</label>
+                                <div class="input-group">
+                                    {{ form.kdv_orani(class="form-control") }}
+                                    <span class="input-group-text small">%</span>
+                                </div>
+                            </div>
+                            <div class="col-md-4 shadow-sm rounded p-2 bg-danger-subtle" id="maliyet_section" style="display: none;">
+                                <label class="form-label fw-bold text-danger small">Taşeron Maliyeti (Gider)</label>
+                                <div class="input-group">
+                                    {{ form.taseron_maliyet(class="form-control", placeholder="0.00") }}
+                                    <span class="input-group-text small text-danger">₺</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label fw-bold small text-muted">Operasyon Notları</label>
+                            {{ form.aciklama(class="form-control", rows="3", placeholder="Sefer detayları, şoför bilgisi vb...") }}
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-warning btn-lg shadow-sm fw-bold">
+                                <i class="fas fa-save me-2"></i> Değişiklikleri Kaydet
+                            </button>
+                            <a href="{{ url_for('nakliyeler.index') }}" class="btn btn-light border">Vazgeç ve Listeye Dön</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <div class="alert alert-light border mt-3 small text-muted">
+                <i class="fas fa-info-circle me-1"></i> Not: Bu nakliye kaydı kiralama modülüne bağlı olsaydı düzenlenemezdi. Müstakil kayıtları burada özgürce güncelleyebilirsiniz.
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const ozMalSection = document.getElementById('oz_mal_section');
+    const taseronSection = document.getElementById('taseron_section');
+    const maliyetSection = document.getElementById('maliyet_section');
+    
+    // Açılır kutuyu yakala
+    const tipiSelect = document.getElementById('nakliye_tipi_select');
+
+    function toggleSections() {
+        if (!tipiSelect) return;
+        const selectedValue = tipiSelect.value;
+        
+        if (selectedValue === 'oz_mal') {
+            ozMalSection.style.display = 'block';
+            taseronSection.style.display = 'none';
+            maliyetSection.style.display = 'none';
+        } else if (selectedValue === 'taseron') {
+            ozMalSection.style.display = 'none';
+            taseronSection.style.display = 'block';
+            maliyetSection.style.display = 'block';
+        }
+    }
+
+    // Seçim değiştiğinde tetikle
+    if (tipiSelect) {
+        tipiSelect.addEventListener('change', toggleSections);
+    }
+
+    // Sayfa yüklendiğinde mevcut seçime göre durumu ayarla
+    toggleSections();
+});
+</script>
+
+<style>
+    .bg-danger-subtle { background-color: #f8d7da; border: 1px solid #f5c2c7; }
+    .text-xs { font-size: 0.75rem; }
+    .form-control:focus, .form-select:focus {
+        border-color: #ffc107;
+        box-shadow: 0 0 0 0.25rem rgba(255, 193, 7, 0.25);
+    }
+</style>
+{% endblock %}

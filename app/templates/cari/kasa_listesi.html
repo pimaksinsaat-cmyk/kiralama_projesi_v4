@@ -1,0 +1,523 @@
+{% extends "base.html" %}
+{% block title %}Kasa ve Banka Hesapları{% endblock %}
+{% block content %}
+<style>
+    .container { max-width: 1200px; margin: 20px auto; padding: 20px; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 0.95em; }
+    th, td { padding: 15px; border-bottom: 1px solid #dee2e6; text-align: left; vertical-align: middle; }
+    th { background-color: #f8f9fa; color: #495057; font-weight: 600; border-top: 1px solid #dee2e6; }
+    tr:hover { background-color: #f1f3f5; cursor: context-menu; }
+    
+    .bakiye-pozitif { color: #28a745; font-weight: bold; }
+    .bakiye-negatif { color: #dc3545; font-weight: bold; }
+    .bakiye-notr { color: #6c757d; font-weight: bold; }
+
+    /* Context Menu */
+    .context-menu { display: none; position: absolute; background-color: white; border: 1px solid #ccc; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border-radius: 6px; z-index: 1000; min-width: 220px; padding: 5px 0; overflow: hidden; }
+    .context-menu-item { display: block; padding: 10px 15px; color: #333; text-decoration: none; font-size: 0.95em; transition: background 0.2s; cursor: pointer; }
+    .context-menu-item:hover { background-color: #f8f9fa; color: #007bff; }
+    .context-menu-item.delete { color: #dc3545; }
+    .context-menu-item.delete:hover { background-color: #fff5f5; color: #c82333; }
+    .context-menu-header { padding: 8px 15px; background-color: #e9ecef; font-size: 0.85em; font-weight: bold; color: #6c757d; border-bottom: 1px solid #dee2e6; }
+    .context-menu-divider { height: 1px; margin: 5px 0; background-color: #eee; }
+
+    /* GÜVENLİ MODAL STİLLERİ */
+    .custom-backdrop { 
+        display: none; 
+        position: fixed; 
+        top: 0; 
+        left: 0; 
+        width: 100%; 
+        height: 100%; 
+        background: rgba(0,0,0,0.5); 
+        z-index: 1040; 
+        justify-content: center;
+        align-items: center;
+    }
+    
+    .custom-modal { 
+        background: white; 
+        padding: 25px; 
+        border-radius: 8px; 
+        width: 90%; 
+        max-width: 450px; 
+        box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+        position: relative;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+    .modal-title { margin: 0; font-size: 1.25rem; color: #333; }
+    .close-btn { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #999; }
+    .close-btn:hover { color: #333; }
+</style>
+
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="mb-0"><i class="fa fa-university text-secondary"></i> Kasa ve Banka Hesapları</h2>
+        <a href="{{ url_for('cari.kasa_ekle') }}" class="btn btn-success"><i class="fa fa-plus"></i> Yeni Hesap Ekle</a>
+    </div>
+    
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="table-responsive">
+        <table class="table table-hover">
+            <thead>
+                <tr>
+                    <th>Hesap Adı</th>
+                    <th>Tipi</th>
+                    <th>Banka Şube Adı</th>
+                    <th>Para Birimi</th>
+                    <th class="text-end">Güncel Bakiye</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for kasa in kasalar %}
+                <tr class="kasa-satiri" 
+                    data-id="{{ kasa.id }}" 
+                    data-adi="{{ kasa.kasa_adi }}" 
+                    data-birim="{{ kasa.para_birimi }}"
+                    data-bakiye="{{ kasa.bakiye }}"
+                    data-duzelt-url="{{ url_for('cari.kasa_duzelt', id=kasa.id) }}"
+                    data-sil-url="{{ url_for('cari.kasa_sil', id=kasa.id) }}"
+                    data-hareket-url="{{ url_for('cari.kasa_hareketleri', id=kasa.id) }}"
+                    data-csrf="{{ csrf_token() }}">
+                    
+                    <td>
+                        <strong>{{ kasa.kasa_adi }}</strong>
+                        <br>
+                        <small class="text-muted d-md-none">(Seçenekler için basılı tut)</small>
+                    </td>
+                    <td>
+                        {% if kasa.tipi == 'banka' %}
+                            <span class="badge bg-primary"><i class="fa fa-building"></i> Banka</span>
+                        {% else %}
+                            <span class="badge bg-secondary"><i class="fa fa-wallet"></i> Nakit</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ kasa.banka_sube_adi if kasa.banka_sube_adi else '-' }}</td>
+                    <td>{{ kasa.para_birimi }}</td>
+                    <td class="text-end">
+                        {% set bakiye_val = kasa.bakiye | float %}
+                        <span class="{% if bakiye_val > 0 %}bakiye-pozitif{% elif bakiye_val < 0 %}bakiye-negatif{% else %}bakiye-notr{% endif %}" style="font-size: 1.1em;">
+                            {{ "{:,.2f}".format(bakiye_val).replace(',', 'X').replace('.', ',').replace('X', '.') }} {{ kasa.para_birimi }}
+                        </span>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5" class="text-center text-muted py-5">
+                        <i class="fa fa-inbox fa-3x mb-3"></i><br>
+                        Henüz kayıtlı kasa veya banka hesabı bulunmuyor.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    
+    
+</div>
+
+<div id="context-menu" class="context-menu">
+    <div class="context-menu-header" id="menu-header">Kasa İşlemleri</div>
+    
+    <a href="#" class="context-menu-item" id="menu-hareketler">
+        <i class="fa fa-list-alt me-2 text-secondary"></i> Hesap Hareketleri
+    </a>
+    
+    <a href="#" class="context-menu-item" id="menu-islem">
+        <i class="fa fa-exchange-alt me-2 text-info"></i> Hızlı Para Giriş/Çıkış
+    </a>
+    
+    <a href="#" class="context-menu-item" id="menu-transfer">
+        <i class="fa fa-random me-2 text-primary"></i> Para Transferi (Virman)
+    </a>
+    
+    <a href="#" class="context-menu-item" id="menu-duzenle">
+        <i class="fa fa-edit me-2 text-warning"></i> Hesabı Düzenle
+    </a>
+    
+    <div class="context-menu-divider"></div>
+    
+    <a href="#" class="context-menu-item delete" id="menu-sil">
+        <i class="fa fa-trash-alt me-2"></i> Hesabı Sil
+    </a>
+</div>
+
+<div id="modal-backdrop-islem" class="custom-backdrop">
+    <div id="islem-modal" class="custom-modal">
+        <div class="modal-header">
+            <h5 class="modal-title"><i class="fa fa-exchange-alt"></i> Hızlı Kasa İşlemi</h5>
+            <button type="button" class="close-btn modal-close-btn">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p class="text-muted mb-3">İşlem Yapılan Hesap: <strong id="modal-kasa-adi" class="text-dark"></strong></p>
+            
+            <form id="islem-form" method="POST" action="{{ url_for('cari.kasa_hizli_islem') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="kasa_id" id="modal-kasa-id">
+                
+                <div class="mb-3">
+                    <label class="form-label fw-bold">İşlem Türü</label>
+                    <div class="d-flex gap-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="islem_yonu" id="yon_giris" value="giris" checked>
+                            <label class="form-check-label text-success fw-bold" for="yon_giris">
+                                <i class="fa fa-arrow-down"></i> Para Girişi (Ekle)
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="islem_yonu" id="yon_cikis" value="cikis">
+                            <label class="form-check-label text-danger fw-bold" for="yon_cikis">
+                                <i class="fa fa-arrow-up"></i> Para Çıkışı (Çek)
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="islem-tutar" class="form-label fw-bold">Tutar</label>
+                    <div class="input-group">
+                        <span class="input-group-text" id="modal-birim">TL</span>
+                        <input type="text" class="form-control currency-input" id="islem-tutar" name="tutar" placeholder="0,00" required autocomplete="off" style="font-size: 1.2em; font-weight: bold;">
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="islem-aciklama" class="form-label fw-bold">Açıklama</label>
+                    <textarea class="form-control" id="islem-aciklama" name="aciklama" rows="2" placeholder="Örn: Sermaye ekleme, Patron para çekişi..."></textarea>
+                </div>
+
+                <div class="text-end">
+                    <button type="button" class="btn btn-secondary me-2 modal-close-btn">İptal</button>
+                    <button type="submit" class="btn btn-primary px-4">İşlemi Kaydet</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div id="modal-backdrop-transfer" class="custom-backdrop">
+    <div id="transfer-modal" class="custom-modal">
+        <div class="modal-header">
+            <h5 class="modal-title"><i class="fa fa-random"></i> Para Transferi (Virman)</h5>
+            <button type="button" class="close-btn modal-close-btn">&times;</button>
+        </div>
+        <div class="modal-body">
+            
+            <form id="transfer-form" method="POST" action="{{ url_for('cari.kasa_transfer') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="kaynak_kasa_id" id="transfer-kaynak-id">
+                
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Kaynak Hesap (Çıkış):</label>
+                    <input type="text" class="form-control bg-light" id="transfer-kaynak-adi" readonly>
+                    <small class="text-muted">Mevcut Bakiye: <span id="transfer-kaynak-bakiye"></span></small>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Hedef Hesap (Giriş):</label>
+                    <select name="hedef_kasa_id" id="transfer-hedef-select" class="form-select" required>
+                        <option value="">-- Hedef Hesap Seçiniz --</option>
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Transfer Tutarı</label>
+                    <div class="input-group">
+                        <span class="input-group-text" id="transfer-birim">TL</span>
+                        <input type="text" class="form-control currency-input" id="transfer-tutar" name="tutar" placeholder="0,00" required autocomplete="off" style="font-size: 1.2em; font-weight: bold;">
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Açıklama</label>
+                    <textarea class="form-control" name="aciklama" rows="2" placeholder="Örn: Merkez kasadan bankaya virman..."></textarea>
+                </div>
+
+                <div class="text-end">
+                    <button type="button" class="btn btn-secondary me-2 modal-close-btn">İptal</button>
+                    <button type="submit" class="btn btn-primary px-4">Transfer Yap</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div id="modal-backdrop-delete" class="custom-backdrop">
+    <div id="delete-modal" class="custom-modal">
+        <button type="button" class="close-btn modal-close-btn">&times;</button>
+        <h4 class="text-danger mb-3"><i class="fa fa-exclamation-triangle"></i> Hesabı Sil</h4>
+        
+        <form id="delete-form" method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            
+            <div id="delete-bakiye-uyari" style="display: none;">
+                <div class="alert alert-warning">
+                    Bu hesapta <strong id="delete-mevcut-bakiye"></strong> bakiye bulunmaktadır.
+                    <br><br>
+                    Silme işlemini tamamlamak için lütfen bakiyeyi aktarmak istediğiniz hesabı seçiniz.
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Bakiyenin Aktarılacağı Hesap:</label>
+                    <select name="hedef_kasa_id" id="hedef-kasa-select" class="form-select">
+                        <option value="">-- Hedef Hesap Seçiniz --</option>
+                    </select>
+                    <small class="text-muted">Sadece aynı para birimine sahip hesaplar listelenir.</small>
+                </div>
+                
+                <div class="text-end">
+                    <button type="button" class="btn btn-secondary me-2 modal-close-btn">İptal</button>
+                    <button type="submit" class="btn btn-danger">Bakiyeyi Devret ve Sil</button>
+                </div>
+            </div>
+            
+            <div id="delete-onay-basit" style="display: none;">
+                <p><strong><span id="delete-kasa-adi"></span></strong> hesabını kalıcı olarak silmek istediğinizden emin misiniz?</p>
+                <div class="text-end mt-4">
+                    <button type="button" class="btn btn-secondary me-2 modal-close-btn">İptal</button>
+                    <button type="submit" class="btn btn-danger">Evet, Sil</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // --- AKILLI PARA BİRİMİ SCRİPTİ ---
+    const currencyInputs = document.querySelectorAll('.currency-input');
+    function formatCurrency(value) {
+        if (!value) return '';
+        let v = value.toString().replace(/\./g, '').replace(',', '.');
+        let number = parseFloat(v);
+        if (isNaN(number)) return value;
+        return number.toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
+    function formatInput(input) {
+        let value = input.value.replace(/[^\d,]/g, ''); 
+        let parts = value.split(',');
+        if (parts.length > 2) value = parts[0] + ',' + parts.slice(1).join('');
+        let intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+        let decimalPart = parts.length > 1 ? ',' + parts[1].substring(0, 2) : '';
+        input.value = intPart + decimalPart;
+    }
+    currencyInputs.forEach(input => {
+        input.addEventListener('input', function() { formatInput(this); });
+    });
+    // Formlar gönderilirken temizle
+    document.querySelectorAll('form').forEach(form => {
+        form.addEventListener('submit', function() {
+            const cInput = form.querySelector('.currency-input');
+            if (cInput) {
+                cInput.value = cInput.value.replace(/\./g, '').replace(',', '.');
+            }
+        });
+    });
+
+    // --- TÜM KASALARI VERİ OLARAK SAKLA ---
+    const tumKasalarEl = document.getElementById('tum-kasalar-json');
+    const tumKasalar = tumKasalarEl ? JSON.parse(tumKasalarEl.textContent || '[]') : [];
+
+    // --- CONTEXT MENU & MODAL MANTIĞI ---
+    const contextMenu = document.getElementById('context-menu');
+    const backdropIslem = document.getElementById('modal-backdrop-islem');
+    const backdropTransfer = document.getElementById('modal-backdrop-transfer');
+    const backdropDelete = document.getElementById('modal-backdrop-delete');
+    
+    let currentKasa = {};
+
+    // --- SAHTE EVENT (MOCK EVENT) FONKSİYONU ---
+    // Mobilde basılı tutulduğunda showMenu'ye gönderilecek sahte "e" nesnesini yaratır.
+    function showMenu(e, row) {
+        e.preventDefault();
+        
+        // Eğer mobilden geliyorsa (Touch Event), e'nin yapısı farklıdır
+        // Ancak bu fonksiyonu hem "contextmenu" (mouse) hem de "timer" (mobil) çağırıyor.
+        // Timer'dan çağrıldığında biz ona sahte bir e veriyoruz (Aşağıdaki addLongPressListener içinde).
+        
+        currentKasa = {
+            id: row.dataset.id,
+            adi: row.dataset.adi,
+            birim: row.dataset.birim,
+            bakiye: parseFloat(row.dataset.bakiye) || 0,
+            duzeltUrl: row.dataset.duzeltUrl,
+            silUrl: row.dataset.silUrl,
+            hareketUrl: row.dataset.hareketUrl
+        };
+
+        document.getElementById('menu-header').innerText = currentKasa.adi;
+        document.getElementById('menu-duzenle').href = currentKasa.duzeltUrl;
+        document.getElementById('menu-hareketler').href = currentKasa.hareketUrl;
+
+        contextMenu.style.left = e.pageX + 'px';
+        contextMenu.style.top = e.pageY + 'px';
+        contextMenu.style.display = 'block';
+    }
+
+    // --- MOBİL UZUN BASMA (LONG PRESS) DİNLEYİCİSİ ---
+    function addLongPressListener(element, callback) {
+        let timer;
+        element.addEventListener('touchstart', function(e) {
+            timer = setTimeout(function() {
+                timer = null;
+                const touch = e.touches[0];
+                // Sahte event oluşturuyoruz çünkü callback içinde e.preventDefault kullanılıyor
+                const mockEvent = {
+                    preventDefault: () => e.preventDefault(),
+                    stopPropagation: () => e.stopPropagation(),
+                    pageX: touch.pageX,
+                    pageY: touch.pageY
+                };
+                callback(mockEvent, element);
+            }, 600); // 600 ms basılı tutma süresi
+        }, {passive: false});
+
+        function clear() { if (timer) { clearTimeout(timer); timer = null; } }
+        element.addEventListener('touchend', clear);
+        element.addEventListener('touchmove', clear);
+    }
+
+    // --- EVENT LISTENERLARI EKLE ---
+    document.querySelectorAll('.kasa-satiri').forEach(row => {
+        // Masaüstü (Sağ Tık)
+        row.addEventListener('contextmenu', (e) => showMenu(e, row));
+        // Mobil (Basılı Tut)
+        addLongPressListener(row, showMenu);
+    });
+
+    window.addEventListener('click', (e) => {
+        if (!e.target.closest('.context-menu')) contextMenu.style.display = 'none';
+    });
+    window.addEventListener('touchstart', (e) => {
+        if (!e.target.closest('.context-menu')) contextMenu.style.display = 'none';
+    });
+
+    // --- HIZLI İŞLEM BUTONU ---
+    document.getElementById('menu-islem').addEventListener('click', (e) => {
+        e.preventDefault(); contextMenu.style.display = 'none';
+        
+        document.getElementById('modal-kasa-id').value = currentKasa.id;
+        document.getElementById('modal-kasa-adi').innerText = currentKasa.adi;
+        document.getElementById('modal-birim').innerText = currentKasa.birim;
+        document.getElementById('islem-tutar').value = '';
+        document.getElementById('islem-aciklama').value = '';
+        
+        backdropIslem.style.display = 'flex';
+        document.getElementById('islem-tutar').focus();
+    });
+
+    // --- TRANSFER BUTONU ---
+    document.getElementById('menu-transfer').addEventListener('click', (e) => {
+        e.preventDefault(); contextMenu.style.display = 'none';
+        
+        document.getElementById('transfer-kaynak-id').value = currentKasa.id;
+        document.getElementById('transfer-kaynak-adi').value = currentKasa.adi;
+        document.getElementById('transfer-kaynak-bakiye').innerText = currentKasa.bakiye.toLocaleString('tr-TR', {minimumFractionDigits: 2}) + ' ' + currentKasa.birim;
+        document.getElementById('transfer-birim').innerText = currentKasa.birim;
+        document.getElementById('transfer-tutar').value = '';
+        
+        // Hedef Hesapları Doldur (Sadece aynı para birimi, kendisi hariç)
+        const select = document.getElementById('transfer-hedef-select');
+        select.innerHTML = '<option value="">-- Hedef Hesap Seçiniz --</option>';
+        
+        let found = false;
+        tumKasalar.forEach(k => {
+            if (k.id !== currentKasa.id && k.birim === currentKasa.birim) {
+                const opt = document.createElement('option');
+                opt.value = k.id;
+                opt.text = k.adi + ' (' + k.birim + ')';
+                select.appendChild(opt);
+                found = true;
+            }
+        });
+        
+        if (!found) {
+            const opt = document.createElement('option');
+            opt.text = "Transfer yapılabilecek uygun hesap yok!";
+            opt.disabled = true;
+            select.appendChild(opt);
+        }
+
+        backdropTransfer.style.display = 'flex';
+        document.getElementById('transfer-tutar').focus();
+    });
+
+    // --- SİLME BUTONU ---
+    document.getElementById('menu-sil').addEventListener('click', (e) => {
+        e.preventDefault(); contextMenu.style.display = 'none';
+        
+        const deleteForm = document.getElementById('delete-form');
+        deleteForm.action = currentKasa.silUrl;
+        
+        const divBakiye = document.getElementById('delete-bakiye-uyari');
+        const divBasit = document.getElementById('delete-onay-basit');
+        
+        if (currentKasa.bakiye !== 0) {
+            divBasit.style.display = 'none';
+            divBakiye.style.display = 'block';
+            document.getElementById('delete-mevcut-bakiye').innerText = currentKasa.bakiye.toLocaleString('tr-TR', {minimumFractionDigits: 2}) + ' ' + currentKasa.birim;
+            
+            const select = document.getElementById('hedef-kasa-select');
+            select.innerHTML = '<option value="">-- Hedef Hesap Seçiniz --</option>';
+            select.required = true;
+            
+            tumKasalar.forEach(k => {
+                if (k.id !== currentKasa.id && k.birim === currentKasa.birim) {
+                    const opt = document.createElement('option');
+                    opt.value = k.id;
+                    opt.text = k.adi + ' (' + k.birim + ')';
+                    select.appendChild(opt);
+                }
+            });
+        } else {
+            divBakiye.style.display = 'none';
+            divBasit.style.display = 'block';
+            document.getElementById('delete-kasa-adi').innerText = currentKasa.adi;
+            document.getElementById('hedef-kasa-select').required = false;
+        }
+        
+        backdropDelete.style.display = 'flex';
+    });
+
+    // --- MODAL KAPATMA MANTIĞI ---
+    function closeModals() {
+        backdropIslem.style.display = 'none';
+        backdropDelete.style.display = 'none';
+        backdropTransfer.style.display = 'none';
+    }
+
+    // X veya İptal butonuna basınca
+    document.querySelectorAll('.modal-close-btn').forEach(btn => {
+        btn.addEventListener('click', closeModals);
+    });
+
+    // Sadece siyah alana (Backdrop) tıklayınca kapat
+    [backdropIslem, backdropDelete, backdropTransfer].forEach(backdrop => {
+        if(backdrop) {
+            backdrop.addEventListener('click', function(e) {
+                if (e.target === this) closeModals();
+            });
+        }
+    });
+    
+    // Modal içindeki tıklamaların dışarı taşmasını engelle
+    document.querySelectorAll('.custom-modal').forEach(modal => {
+        modal.addEventListener('click', function(e) { e.stopPropagation(); });
+    });
+});
+</script>
+
+<script id="tum-kasalar-json" type="application/json">
+{{ kasalar_json|tojson|safe }}
+</script>
+{% endblock %}

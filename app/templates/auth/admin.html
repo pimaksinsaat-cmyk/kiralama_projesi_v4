@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+
+{% block title %}Kullanıcı Yönetimi - Pimaks{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h4 class="fw-bold"><i class="fas fa-users-cog me-2"></i>Kullanıcı Yönetimi</h4>
+    </div>
+</div>
+
+<div class="row">
+    <!-- SOL: Kullanıcı Listesi -->
+    <div class="col-md-8">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-dark text-white">
+                <i class="fas fa-list me-1"></i> Kullanıcılar
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Kullanıcı Adı</th>
+                            <th>Rol</th>
+                            <th>Durum</th>
+                            <th>Son Giriş</th>
+                            <th>İşlemler</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for u in kullanicilar %}
+                        <tr>
+                            <td>
+                                <i class="fas fa-user me-1 text-muted"></i>
+                                {{ u.username }}
+                                {% if u.id == current_user.id %}
+                                    <span class="badge bg-secondary ms-1">Siz</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if u.rol == 'admin' %}
+                                    <span class="badge bg-danger">Admin</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">User</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if u.is_active %}
+                                    <span class="badge bg-success">Aktif</span>
+                                {% else %}
+                                    <span class="badge bg-warning">Pasif</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-muted small">
+                                {{ u.last_login.strftime('%d.%m.%Y %H:%M') if u.last_login else '—' }}
+                            </td>
+                            <td>
+                                <div class="d-flex gap-1">
+                                    <!-- Rol Değiştir -->
+                                    {% if u.id != current_user.id %}
+                                    <form method="POST" action="{{ url_for('auth.rol_degistir', user_id=u.id) }}">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn btn-sm btn-outline-warning" 
+                                                title="{{ 'Admin yap' if u.rol == 'user' else 'User yap' }}"
+                                                onclick="return confirm('Rolü değiştirmek istediğinize emin misiniz?')">
+                                            <i class="fas fa-exchange-alt"></i>
+                                        </button>
+                                    </form>
+                                    {% endif %}
+
+                                    <!-- Şifre Değiştir -->
+                                    <button class="btn btn-sm btn-outline-primary" 
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#sifreModal{{ u.id }}"
+                                            title="Şifre Değiştir">
+                                        <i class="fas fa-key"></i>
+                                    </button>
+
+                                    <!-- Log -->
+                                    <a href="{{ url_for('auth.kullanici_loglari', user_id=u.id) }}"
+                                       class="btn btn-sm btn-outline-info"
+                                       title="İşlem Logları">
+                                        <i class="fas fa-clipboard-list"></i>
+                                    </a>
+
+                                    <!-- Sil -->
+                                    {% if u.id != current_user.id %}
+                                    <form method="POST" action="{{ url_for('auth.kullanici_sil', user_id=u.id) }}">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger"
+                                                title="Sil"
+                                                onclick="return confirm('{{ u.username }} silinecek, emin misiniz?')">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </form>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+
+                        <!-- Şifre Değiştir Modal -->
+                        <div class="modal fade" id="sifreModal{{ u.id }}" tabindex="-1">
+                            <div class="modal-dialog modal-sm">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h6 class="modal-title">
+                                            <i class="fas fa-key me-1"></i> {{ u.username }} - Şifre Değiştir
+                                        </h6>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <form method="POST" action="{{ url_for('auth.sifre_degistir', user_id=u.id) }}">
+                                        <div class="modal-body">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <input type="password" name="yeni_sifre" 
+                                                   class="form-control" 
+                                                   placeholder="Yeni şifre (min. 4 karakter)"
+                                                   required minlength="4">
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">İptal</button>
+                                            <button type="submit" class="btn btn-primary btn-sm">Kaydet</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- SAĞ: Yeni Kullanıcı Ekle -->
+    <div class="col-md-4">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-success text-white">
+                <i class="fas fa-user-plus me-1"></i> Yeni Kullanıcı Ekle
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('auth.kullanici_ekle') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Kullanıcı Adı</label>
+                        <input type="text" name="username" class="form-control" 
+                               placeholder="kullanici_adi" required minlength="3">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Şifre</label>
+                        <input type="password" name="password" class="form-control" 
+                               placeholder="Min. 4 karakter" required minlength="4">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Rol</label>
+                        <select name="rol" class="form-select">
+                            <option value="user">User</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-success">
+                            <i class="fas fa-plus me-1"></i> Kullanıcı Ekle
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

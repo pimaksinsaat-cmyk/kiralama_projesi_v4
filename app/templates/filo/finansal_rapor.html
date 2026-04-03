@@ -1,0 +1,452 @@
+{% extends "base.html" %}
+
+{% block title %}Finansal Analiz - {{ ekipman.kod }} | Pimaks{% endblock %}
+
+{% block head %}
+    {{ super() }}
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { background-color: #f1f5f9; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
+            .rapor-container { max-width: 1080px; margin: 18px auto; padding: 0 14px; }
+            .rapor-header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 22px 24px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 8px 20px rgba(0,0,0,0.15); }
+            .rapor-header h1 { margin: 0; font-size: 1.7rem; font-weight: 700; }
+        .rapor-header .breadcrumb { color: rgba(255,255,255,0.9); margin-top: 10px; }
+        
+        .filtreleme-card { background: white; padding: 18px 20px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); margin-bottom: 20px; }
+        .filtreleme-card h3 { margin: 0 0 16px 0; color: #333; font-size: 1rem; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+        .filtreleme-card h3 i { color: #667eea; }
+
+        .form-field { display: flex; flex-direction: column; gap: 8px; }
+        .form-field label { font-size: 0.82rem; font-weight: 600; color: #475569; text-transform: uppercase; letter-spacing: 0.04em; }
+        
+        .tarih-input-group { display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; align-items: end; }
+        .tarih-input-group input[type="date"] { padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 0.9rem; }
+        .tarih-input-group input[type="date"]:focus { border-color: #667eea; outline: none; background-color: #f8f9ff; }
+        .tarih-input-group button { padding: 10px 20px; background-color: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; transition: all 0.3s; font-size: 0.9rem; }
+        .tarih-input-group button:hover { background-color: #5568d3; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4); }
+        .tarih-input-group button:disabled { opacity: 0.8; cursor: not-allowed; transform: none; box-shadow: none; }
+
+        .hizli-araliklar { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+        .hizli-aralik-btn { border: 1px solid #cbd5e1; background: #ffffff; color: #334155; font-size: 0.78rem; font-weight: 600; padding: 6px 10px; border-radius: 999px; cursor: pointer; transition: all 0.2s; }
+        .hizli-aralik-btn:hover { background: #eef2ff; border-color: #a5b4fc; color: #3730a3; }
+        
+        .ozet-kartlar { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-bottom: 20px; }
+        .kart { background: white; padding: 18px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); border-left: 5px solid; position: relative; overflow: hidden; }
+        .kart::before { content: ''; position: absolute; top: 0; right: 0; width: 100px; height: 100px; background: rgba(0,0,0,0.02); border-radius: 50%; transform: translate(30%, -30%); }
+        
+        .kart.temin { border-left-color: #3b82f6; }
+        .kart.gelir { border-left-color: #10b981; }
+        .kart.masraf { border-left-color: #f59e0b; }
+        .kart.net { border-left-color: #8b5cf6; }
+        .kart.roi { border-left-color: #ec4899; }
+        .kart.durum { border-left-color: #06b6d4; }
+        
+        .kart-etiket { font-size: 0.78rem; color: #999; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+        .kart-deger { font-size: 1.55rem; font-weight: 700; color: #1f2937; margin-bottom: 10px; }
+        .kart-detay { font-size: 0.84rem; color: #666; line-height: 1.5; }
+        .deger-pozitif { color: #10b981; }
+        .deger-negatif { color: #ef4444; }
+        .deger-uyari { color: #f59e0b; }
+        
+        .durum-badge { display: inline-block; padding: 6px 12px; border-radius: 20px; font-weight: 700; font-size: 0.82rem; margin-top: 8px; }
+        .durum-engel { background: #fecaca; color: #9f1239; }
+        .durum-calisma { background: #fbbf24; color: #92400e; }
+        .durum-oldu { background: #a7f3d0; color: #065f46; }
+        .durum-kar { background: #bfdbfe; color: #1e40af; }
+        
+        .tablo-card { background: white; padding: 18px 20px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); margin-bottom: 20px; }
+        .tablo-card h3 { margin: 0 0 16px 0; color: #333; font-size: 1rem; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+        .tablo-card h3 i { color: #667eea; }
+
+        .amorti-grafik-wrap { display: grid; grid-template-columns: minmax(220px, 320px) 1fr; gap: 16px; align-items: center; }
+        .amorti-canvas-kapsayici { position: relative; min-height: 220px; }
+        .amorti-metrikler { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .amorti-metrik { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px; }
+        .amorti-metrik-etiket { display: block; color: #64748b; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
+        .amorti-metrik-deger { display: block; color: #0f172a; font-size: 0.95rem; font-weight: 700; }
+        .amorti-not { margin-top: 12px; color: #475569; font-size: 0.84rem; }
+        
+        table { width: 100%; border-collapse: collapse; }
+        table thead { background-color: #f8fafc; }
+        table thead th { padding: 14px; text-align: left; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; }
+        table tbody tr { border-bottom: 1px solid #f1f5f9; transition: all 0.2s; }
+        table tbody tr:hover { background-color: #f8fafc; }
+        table tbody td { padding: 14px; color: #334155; }
+        
+        .sarı-sonuc { background-color: #fef3c7; padding: 15px; border-left: 4px solid #f59e0b; border-radius: 8px; margin-bottom: 20px; color: #92400e; }
+        
+        @media (max-width: 768px) {
+            .tarih-input-group { grid-template-columns: 1fr; }
+            .ozet-kartlar { grid-template-columns: 1fr; }
+            .rapor-header h1 { font-size: 1.5rem; }
+            table { font-size: 0.85rem; }
+            table td, table th { padding: 10px; }
+            .hizli-araliklar { gap: 8px; }
+            .hizli-aralik-btn { font-size: 0.78rem; padding: 6px 10px; }
+            .amorti-grafik-wrap { grid-template-columns: 1fr; }
+            .amorti-canvas-kapsayici { min-height: 220px; }
+            .amorti-metrikler { grid-template-columns: 1fr; }
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="rapor-container">
+    {% set yilin_ilk_gunu = end_date.replace(month=1, day=1) if end_date else None %}
+    {% set ytd_toplam_gun = ((end_date - yilin_ilk_gunu).days + 1) if (end_date and yilin_ilk_gunu) else 0 %}
+    {% set ytd_calisilan_gun = ozet.kiralama_istatistikleri.toplam_gun_sayisi if (ytd_toplam_gun > 0 and ozet.kiralama_istatistikleri.toplam_gun_sayisi < ytd_toplam_gun) else ytd_toplam_gun %}
+    {% set ytd_bos_gun = (ytd_toplam_gun - ytd_calisilan_gun) if ytd_toplam_gun > 0 else 0 %}
+    {% set ytd_calisma_orani = ((ytd_calisilan_gun / ytd_toplam_gun) * 100) if ytd_toplam_gun > 0 else 0 %}
+    {% set roi_orijinal_yuzde = ((ozet.net_gelir_orijinal / ozet.giris_maliyeti_orijinal) * 100) if ozet.giris_maliyeti_orijinal > 0 else 0 %}
+
+    <!-- BAŞLIK -->
+    <div class="rapor-header">
+        <h1><i class="fas fa-chart-line me-3"></i>Finansal Analiz Raporu</h1>
+        <div class="breadcrumb">
+            <span><strong>Makine:</strong> {{ ekipman.kod }} ({{ ekipman.marka }} {{ ekipman.model }})</span> | 
+            <span><strong>Seri No:</strong> {{ ekipman.seri_no }}</span>
+        </div>
+    </div>
+
+    <!-- FİLTRELEME -->
+    <div class="filtreleme-card">
+        <h3><i class="fas fa-calendar-alt"></i>Tarih Aralığı Seçimi</h3>
+        <form id="finansalRaporForm" method="POST" action="{{ url_for('filo.finansal_rapor', ekipman_id=ekipman.id) }}" class="tarih-input-group">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-field">
+                <label for="startDate">Başlangıç Tarihi</label>
+                <input id="startDate" type="date" name="start_date" value="{{ start_date.isoformat() if start_date else '' }}" 
+                       title="Raporun başlangıç tarihi" required>
+            </div>
+            <div class="form-field">
+                <label for="endDate">Bitiş Tarihi</label>
+                <input id="endDate" type="date" name="end_date" value="{{ end_date.isoformat() if end_date else '' }}" 
+                       title="Raporun bitiş tarihi" required>
+            </div>
+            <button id="submitRaporBtn" type="submit"><i class="fas fa-sync me-2"></i>Raporu Güncelle</button>
+        </form>
+        <div class="hizli-araliklar" aria-label="Hızlı tarih aralığı">
+            <button type="button" class="hizli-aralik-btn" data-days="30">Son 30 Gün</button>
+            <button type="button" class="hizli-aralik-btn" data-days="90">Son 90 Gün</button>
+            <button type="button" class="hizli-aralik-btn" data-days="365">Son 1 Yıl</button>
+            <button type="button" class="hizli-aralik-btn" data-ytd="1">Yılbaşından Bugüne</button>
+        </div>
+    </div>
+
+    <!-- ÖZET KARTLARI -->
+    <div class="ozet-kartlar">
+        <!-- Temin Maliyeti -->
+        <div class="kart temin">
+            <div class="kart-etiket"><i class="fas fa-box me-2"></i>Satın Alma Maliyeti</div>
+            <div class="kart-deger">
+                {{ "%.2f"|format(ozet.giris_maliyeti_orijinal) }} {{ ozet.para_birimi }}
+                {% if ozet.para_birimi != 'TRY' %}
+                    <br><span style="font-size: 0.7em; color: #666;">{{ "%.2f"|format(ozet.temin_bedeli_try) }} TRY</span>
+                {% endif %}
+            </div>
+            <div class="kart-detay">
+                {% if ozet.temin_tarihi %}
+                    <strong>Satın Alma Tarihi:</strong> {{ ozet.temin_tarihi.strftime('%d.%m.%Y') }}<br>
+                {% endif %}
+                <strong>USD Kuru (Rapor):</strong> 
+                {% if ozet.rapor_doviz_kuru_usd > 0 %}
+                    {{ "%.4f"|format(ozet.rapor_doviz_kuru_usd) }}
+                {% else %}
+                    <span style="color: #f59e0b;"><strong>Girilmedi ⚠️</strong></span>
+                {% endif %}
+                <br>
+                <strong>EUR Kuru (Rapor):</strong> 
+                {% if ozet.rapor_doviz_kuru_eur > 0 %}
+                    {{ "%.4f"|format(ozet.rapor_doviz_kuru_eur) }}
+                {% else %}
+                    <span style="color: #f59e0b;"><strong>Girilmedi ⚠️</strong></span>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Kiralama Geliri -->
+        <div class="kart gelir">
+            <div class="kart-etiket"><i class="fas fa-dollar-sign me-2"></i>Kiralama Geliri</div>
+            <div class="kart-deger">
+                {% if ozet.para_birimi != 'TRY' %}
+                    {{ "%.2f"|format(ozet.kiralama_geliri_orijinal) }} {{ ozet.para_birimi }}
+                    <br><span style="font-size: 0.7em; color: #666;">{{ "%.2f"|format(ozet.kiralama_geliri_try) }} TRY</span>
+                {% else %}
+                    {{ "%.2f"|format(ozet.kiralama_geliri_try) }} TRY
+                {% endif %}
+            </div>
+            <div class="kart-detay">
+                <strong>Kiralama Sayısı:</strong> {{ ozet.kiralama_istatistikleri.toplam_kiralama_sayisi }}<br>
+                <strong>Toplam Gün:</strong> {{ ozet.kiralama_istatistikleri.toplam_gun_sayisi }} gün<br>
+                <strong>Müşteri Sayısı:</strong> {{ ozet.kiralama_istatistikleri.farkli_musteri_sayisi }}
+            </div>
+        </div>
+
+        <!-- Masraflar -->
+        <div class="kart masraf">
+            <div class="kart-etiket"><i class="fas fa-tools me-2"></i>Toplam Giderler (TRY)</div>
+            <div class="kart-deger">{{ "%.2f"|format(ozet.toplam_giderler_try) }} TRY</div>
+            <div class="kart-detay">
+                <strong>Servis:</strong> {{ "%.2f"|format(ozet.servis_giderleri_try) }} TRY<br>
+                <strong>Nakliye:</strong> {{ "%.2f"|format(ozet.nakliye_giderleri_try) }} TRY
+            </div>
+        </div>
+
+        <!-- Net Gelir -->
+        <div class="kart net">
+            <div class="kart-etiket"><i class="fas fa-wallet me-2"></i>Net Gelir</div>
+            <div class="kart-deger {% if ozet.net_gelir_orijinal >= 0 %}deger-pozitif{% else %}deger-negatif{% endif %}">
+                {% if ozet.para_birimi != 'TRY' %}
+                    {{ "%.2f"|format(ozet.net_gelir_orijinal) }} {{ ozet.para_birimi }}
+                    <br><span style="font-size: 0.7em; color: #666;">{{ "%.2f"|format(ozet.net_gelir_try) }} TRY</span>
+                {% else %}
+                    {{ "%.2f"|format(ozet.net_gelir_try) }} TRY
+                {% endif %}
+            </div>
+            <div class="kart-detay">
+                Kiralama Geliri - Giderler<br>
+                <strong class="{% if ozet.net_gelir_orijinal >= 0 %}deger-pozitif{% else %}deger-negatif{% endif %}" style="font-size: 1.1rem;">
+                    {% if ozet.net_gelir_orijinal >= 0 %}✓ Pozitif{% else %}✗ Negatif{% endif %}
+                </strong>
+            </div>
+        </div>
+
+        <!-- ROI Yüzdesi -->
+        <div class="kart roi">
+            <div class="kart-etiket"><i class="fas fa-percent me-2"></i>ROI (Yatırım Getirisi)</div>
+            <div class="kart-deger {% if roi_orijinal_yuzde > 0 %}deger-pozitif{% elif roi_orijinal_yuzde > -50 %}deger-uyari{% else %}deger-negatif{% endif %}">
+                {{ "%.2f"|format(roi_orijinal_yuzde) }}%
+            </div>
+            <div class="kart-detay">
+                (Net Gelir / Satın Alma Maliyeti) × 100<br>
+                <strong>Hesap Dövizi:</strong> {{ ozet.para_birimi }}<br>
+                <strong>Dönem:</strong> {{ start_date.strftime('%d.%m.%Y') if start_date else 'Başlangıç' }} - {{ end_date.strftime('%d.%m.%Y') }}
+            </div>
+        </div>
+
+        <!-- Çalışma Oranı -->
+        <div class="kart durum">
+            <div class="kart-etiket"><i class="fas fa-calendar-check me-2"></i>Yılbaşından Bu Yana Çalışma</div>
+            <div class="kart-deger">
+                <span class="durum-badge {% if ytd_calisma_orani >= 70 %}durum-oldu{% elif ytd_calisma_orani >= 40 %}durum-calisma{% else %}durum-engel{% endif %}">
+                    {{ "%.1f"|format(ytd_calisma_orani) }}% Çalışma
+                </span>
+            </div>
+            <div class="kart-detay">
+                <strong>Çalışılan Gün:</strong> {{ ytd_calisilan_gun }}<br>
+                <strong>Toplam Gün:</strong> {{ ytd_toplam_gun }}<br>
+                {% if ytd_calisma_orani >= 70 %}
+                    🟢 Makine kullanım oranı güçlü seviyede.
+                {% elif ytd_calisma_orani >= 40 %}
+                    🟡 Kullanım oranı orta seviyede, artırılabilir.
+                {% else %}
+                    🔴 Kullanım oranı düşük, planlama gözden geçirilmeli.
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- UYARI NOTU -->
+    {% if ozet.kiralama_istatistikleri.toplam_kiralama_sayisi == 0 %}
+    <div class="sarı-sonuc">
+        <strong><i class="fas fa-exclamation-triangle me-2"></i>Bilgi:</strong> 
+        Bu tarih aralığında hiçbir kiralama kaydı bulunamadı. İlk kiralamadan sonra finansal analiz görüntülenir.
+    </div>
+    {% endif %}
+
+    {% set amorti_oran = ((ozet.kiralama_geliri_orijinal / ozet.giris_maliyeti_orijinal) * 100) if ozet.giris_maliyeti_orijinal > 0 else 0 %}
+    {% set kalan_tutar = (ozet.giris_maliyeti_orijinal - ozet.kiralama_geliri_orijinal) if ozet.kiralama_geliri_orijinal < ozet.giris_maliyeti_orijinal else 0 %}
+    {% set fazla_getiri = (ozet.kiralama_geliri_orijinal - ozet.giris_maliyeti_orijinal) if ozet.kiralama_geliri_orijinal > ozet.giris_maliyeti_orijinal else 0 %}
+
+    <div class="tablo-card">
+        <h3><i class="fas fa-chart-pie"></i>Amortisman Oranı</h3>
+        <div class="amorti-grafik-wrap">
+            <div class="amorti-canvas-kapsayici">
+                <canvas id="amortiDurumChart"></canvas>
+            </div>
+            <div>
+                <div class="amorti-metrikler">
+                    <div class="amorti-metrik">
+                        <span class="amorti-metrik-etiket">Amortisman Oranı</span>
+                        <span class="amorti-metrik-deger">{{ "%.1f"|format(amorti_oran) }}%</span>
+                    </div>
+                    <div class="amorti-metrik">
+                        <span class="amorti-metrik-etiket">Yatırım Tutarı</span>
+                        <span class="amorti-metrik-deger">{{ "%.2f"|format(ozet.giris_maliyeti_orijinal) }} {{ ozet.para_birimi }}</span>
+                    </div>
+                    <div class="amorti-metrik">
+                        <span class="amorti-metrik-etiket">Kalan Tutar</span>
+                        <span class="amorti-metrik-deger">{{ "%.2f"|format(kalan_tutar) }} {{ ozet.para_birimi }}</span>
+                    </div>
+                    <div class="amorti-metrik">
+                        <span class="amorti-metrik-etiket">Fazla Getiri</span>
+                        <span class="amorti-metrik-deger">{{ "%.2f"|format(fazla_getiri) }} {{ ozet.para_birimi }}</span>
+                    </div>
+                </div>
+                <div class="amorti-not">
+                    Grafik, kiralama gelirinin makinenin satın alma döviz cinsindeki maliyetini ne kadar karşıladığını gösterir.
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- GERİ BUTONU -->
+    <div style="margin-top: 22px; text-align: center;">
+        <a href="{{ url_for('filo.index') }}" class="btn btn-outline-secondary" style="padding: 10px 22px; border-radius: 8px; font-weight: 600; font-size: 0.92rem;">
+            <i class="fas fa-arrow-left me-2"></i>Makine Partına Dön
+        </a>
+    </div>
+</div>
+
+<script>
+    (function () {
+        const form = document.getElementById('finansalRaporForm');
+        const startInput = document.getElementById('startDate');
+        const endInput = document.getElementById('endDate');
+        const submitBtn = document.getElementById('submitRaporBtn');
+        const quickButtons = document.querySelectorAll('.hizli-aralik-btn');
+        const amortiChartCanvas = document.getElementById('amortiDurumChart');
+
+        if (!form || !startInput || !endInput || !submitBtn) {
+            return;
+        }
+
+        const toISODate = (date) => {
+            const tzOffsetMs = date.getTimezoneOffset() * 60000;
+            return new Date(date.getTime() - tzOffsetMs).toISOString().split('T')[0];
+        };
+
+        const syncDateLimits = () => {
+            if (startInput.value) {
+                endInput.min = startInput.value;
+            }
+            if (endInput.value) {
+                startInput.max = endInput.value;
+            }
+        };
+
+        startInput.addEventListener('change', syncDateLimits);
+        endInput.addEventListener('change', syncDateLimits);
+        syncDateLimits();
+
+        quickButtons.forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const today = new Date();
+                let startDate = new Date(today);
+
+                if (btn.dataset.ytd === '1') {
+                    startDate = new Date(today.getFullYear(), 0, 1);
+                } else {
+                    const days = Number(btn.dataset.days || 30);
+                    startDate.setDate(startDate.getDate() - days);
+                }
+
+                startInput.value = toISODate(startDate);
+                endInput.value = toISODate(today);
+                syncDateLimits();
+            });
+        });
+
+        form.addEventListener('submit', () => {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Güncelleniyor...';
+        });
+
+        if (amortiChartCanvas && typeof Chart !== 'undefined') {
+            const paraBirimi = '{{ ozet.para_birimi }}';
+            const girisMaliyetiOrijinal = Number('{{ (ozet.giris_maliyeti_orijinal or 0)|float }}');
+            const kiralamaGeliriOrijinal = Number('{{ (ozet.kiralama_geliri_orijinal or 0)|float }}');
+            const amortiOran = girisMaliyetiOrijinal > 0 ? ((kiralamaGeliriOrijinal / girisMaliyetiOrijinal) * 100) : 0;
+            const karsilanan = Math.max(Math.min(kiralamaGeliriOrijinal, girisMaliyetiOrijinal), 0);
+            const kalan = Math.max(girisMaliyetiOrijinal - kiralamaGeliriOrijinal, 0);
+            const fazla = Math.max(kiralamaGeliriOrijinal - girisMaliyetiOrijinal, 0);
+
+            let labels = [];
+            let data = [];
+            let colors = [];
+
+            if (girisMaliyetiOrijinal <= 0) {
+                labels = ['Yatırım verisi yok'];
+                data = [1];
+                colors = ['#cbd5e1'];
+            } else if (fazla > 0) {
+                labels = ['Karşılanan Yatırım', 'Fazla Getiri'];
+                data = [karsilanan, fazla];
+                colors = ['#10b981', '#3b82f6'];
+            } else {
+                labels = ['Karşılanan Yatırım', 'Kalan Tutar'];
+                data = [karsilanan, kalan];
+                colors = ['#10b981', '#f59e0b'];
+            }
+
+            const centerTextPlugin = {
+                id: 'centerTextPlugin',
+                afterDraw: (chart) => {
+                    const meta = chart.getDatasetMeta(0);
+                    if (!meta || !meta.data || !meta.data[0]) {
+                        return;
+                    }
+
+                    const { ctx } = chart;
+                    const centerX = meta.data[0].x;
+                    const centerY = meta.data[0].y;
+                    const gosterilecekOran = Number.isFinite(amortiOran) ? amortiOran : 0;
+                    const oranYazi = `%${gosterilecekOran.toLocaleString('tr-TR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}`;
+
+                    ctx.save();
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+
+                    ctx.fillStyle = '#64748b';
+                    ctx.font = '600 12px Segoe UI';
+                    ctx.fillText('Amorti', centerX, centerY - 14);
+
+                    ctx.fillStyle = gosterilecekOran >= 100 ? '#2563eb' : (gosterilecekOran >= 0 ? '#0f172a' : '#ef4444');
+                    ctx.font = '700 22px Segoe UI';
+                    ctx.fillText(oranYazi, centerX, centerY + 10);
+                    ctx.restore();
+                }
+            };
+
+            new Chart(amortiChartCanvas, {
+                type: 'doughnut',
+                data: {
+                    labels,
+                    datasets: [{
+                        data,
+                        backgroundColor: colors,
+                        borderWidth: 0,
+                        hoverOffset: 6
+                    }]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    cutout: '68%',
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                usePointStyle: true,
+                                pointStyle: 'circle',
+                                boxWidth: 10,
+                                padding: 14
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => {
+                                    const value = Number(context.raw || 0);
+                                    return `${context.label}: ${value.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${paraBirimi}`;
+                                }
+                            }
+                        }
+                    }
+                },
+                plugins: [centerTextPlugin]
+            });
+        }
+    })();
+</script>
+
+{% endblock %}

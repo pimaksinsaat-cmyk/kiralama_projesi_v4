@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block title %}Giriş Yap - Pimaks{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-5">
+    <div class="col-md-4">
+        <div class="card shadow-sm border-0">
+            <div class="card-body p-4">
+                
+                <div class="text-center mb-4">
+                    <img src="{{ url_for('static', filename='img/logo.JPG') }}" 
+                         alt="Pimaks Logo" style="height: 60px;" class="mb-3"
+                         onerror="this.onerror=null;">
+                    <h4 class="fw-bold">Sisteme Giriş</h4>
+                    <p class="text-muted small">Pimaks Kiralama Yönetim Sistemi</p>
+                </div>
+
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">
+                            <i class="fas fa-user me-1"></i> Kullanıcı Adı
+                        </label>
+                        {{ form.username(class="form-control", placeholder="Kullanıcı adınız") }}
+                        {% if form.username.errors %}
+                            <div class="text-danger small mt-1">{{ form.username.errors[0] }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">
+                            <i class="fas fa-lock me-1"></i> Şifre
+                        </label>
+                        {{ form.password(class="form-control", placeholder="Şifreniz") }}
+                        {% if form.password.errors %}
+                            <div class="text-danger small mt-1">{{ form.password.errors[0] }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3 form-check">
+                        {{ form.beni_hatirla(class="form-check-input") }}
+                        <label class="form-check-label">Beni Hatırla</label>
+                    </div>
+
+                    <div class="d-grid">
+                        {{ form.submit(class="btn btn-dark btn-lg") }}
+                    </div>
+                </form>
+
+            </div>
+        </div>
+        <p class="text-center text-muted small mt-3">
+            &copy; 2026 Pimaks Kiralama Yönetim Sistemi
+        </p>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card shadow border-0">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <h4 class="mb-0"><i class="fas fa-truck"></i> Yeni Nakliye Girişi</h4>
+                    <a href="{{ url_for('nakliyeler.arac_ekle') }}" class="btn btn-sm btn-light text-primary fw-bold">
+                        <i class="fas fa-plus"></i> Yeni Araç Tanımla
+                    </a>
+                </div>
+                <div class="card-body p-4">
+                    <form method="POST" action="">
+                        {{ form.hidden_tag() }}
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Sefer Tarihi</label>
+                                {{ form.tarih(class="form-control", type="date") }}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Müşteri / Firma</label>
+                                {{ form.firma_id(class="form-select") }}
+                            </div>
+                        </div>
+
+                        <div class="card bg-light mb-4 border-0">
+                            <div class="card-body">
+                                <label class="form-label d-block fw-bold mb-3 text-center">Nakliye Nasıl Yapılıyor?</label>
+                                <div class="d-flex justify-content-center gap-4">
+                                    <div class="form-check form-check-inline">
+                                        <input class="form-check-input" type="radio" name="nakliye_tipi" id="tip_ozmal" value="oz_mal" checked>
+                                        <label class="form-check-label" for="tip_ozmal">Öz Mal (Bizim Araç)</label>
+                                    </div>
+                                    <div class="form-check form-check-inline">
+                                        <input class="form-check-input" type="radio" name="nakliye_tipi" id="tip_taseron" value="taseron">
+                                        <label class="form-check-label" for="tip_taseron">Taşeron (Aracılık)</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-8">
+                                <label class="form-label fw-bold">Güzergah</label>
+                                {{ form.guzergah(class="form-control", placeholder="Örn: İkitelli - Gebze Şantiye") }}
+                            </div>
+                            
+                            <div class="col-md-4" id="ozmal_alani">
+                                <label class="form-label fw-bold">Araç Plakası</label>
+                                {{ form.arac_id(class="form-select") }}
+                            </div>
+
+                            <div class="col-md-4 d-none" id="taseron_alani_plaka">
+                                <label class="form-label fw-bold">Dış Araç Plaka</label>
+                                {{ form.plaka(class="form-control", placeholder="Taşeron Plakası") }}
+                            </div>
+                        </div>
+
+                        <div class="row mb-3 d-none" id="taseron_detay_alani">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold text-danger">Taşeron Nakliyeci Firma</label>
+                                {{ form.taseron_firma_id(class="form-select border-danger") }}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold text-danger">Taşeron Alış Maliyeti (₺)</label>
+                                {{ form.taseron_maliyet(class="form-control border-danger", placeholder="Bize gelişi") }}
+                            </div>
+                        </div>
+
+                        <hr>
+
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold text-success">Müşteri Satış Tutarı (₺)</label>
+                                {{ form.tutar(class="form-control border-success", id="tutar_input", placeholder="0.00") }}
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">KDV Oranı (%) <small class="text-muted fw-normal">— Fatura kesilirken uygulanır</small></label>
+                                {{ form.kdv_orani(class="form-control", id="kdv_input") }}
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold text-muted">Bilgi</label>
+                                <div class="form-control bg-light text-muted small d-flex align-items-center" style="height:38px;">
+                                    <i class="fas fa-info-circle me-1"></i> KDV fatura aşamasında hesaplanır
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Açıklama / Notlar</label>
+                            {{ form.aciklama(class="form-control", rows="2") }}
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            {{ form.submit(class="btn btn-primary btn-lg") }}
+                            <a href="{{ url_for('nakliyeler.index') }}" class="btn btn-outline-secondary">İptal</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const tipOzmal = document.getElementById('tip_ozmal');
+    const tipTaseron = document.getElementById('tip_taseron');
+    const ozmalAlani = document.getElementById('ozmal_alani');
+    const taseronAlaniPlaka = document.getElementById('taseron_alani_plaka');
+    const taseronDetayAlani = document.getElementById('taseron_detay_alani');
+
+    // 1. Tip Değişimini Dinle
+    function toggleFields() {
+        if (tipOzmal.checked) {
+            ozmalAlani.classList.remove('d-none');
+            taseronAlaniPlaka.classList.add('d-none');
+            taseronDetayAlani.classList.add('d-none');
+        } else {
+            ozmalAlani.classList.add('d-none');
+            taseronAlaniPlaka.classList.remove('d-none');
+            taseronDetayAlani.classList.remove('d-none');
+        }
+    }
+
+    tipOzmal.addEventListener('change', toggleFields);
+    tipTaseron.addEventListener('change', toggleFields);
+
+    // 2. Anlık Tutar Hesaplama
+    const tutarInput = document.getElementById('tutar_input');
+    const kdvInput = document.getElementById('kdv_input');
+    const toplamLabel = document.getElementById('toplam_tutar_label');
+
+    // KDV hesaplaması fatura aşamasında yapılacağından canlı hesaplama kaldırıldı.
+    tutarInput.addEventListener('input', function() {});
+});
+</script>
+{% endblock %}

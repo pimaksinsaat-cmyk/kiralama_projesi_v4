@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}Yeni Araç Tanımla - Pimaks{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card shadow border-0">
+                <div class="card-header {{ 'bg-warning text-dark' if arac else 'bg-success text-white' }} d-flex align-items-center">
+                    <h4 class="mb-0">
+                        <i class="fas fa-{{ 'edit' if arac else 'truck-pickup' }} me-2"></i>
+                        {{ arac.plaka + ' - Düzenle' if arac else 'Yeni Nakliye Aracı Tanımla' }}
+                    </h4>
+                </div>
+                <div class="card-body p-4">
+                    <form method="POST" action="{{ url_for('araclar.duzenle', arac_id=arac.id) if arac else url_for('araclar.ekle') }}">
+                        {{ form.hidden_tag() }}
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Araç Plakası</label>
+                                {{ form.plaka(class="form-control form-control-lg", placeholder="Örn: 34 ABC 123") }}
+                                {% for error in form.plaka.errors %}
+                                    <span class="text-danger small">{{ error }}</span>
+                                {% endfor %}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Araç Tipi</label>
+                                {{ form.arac_tipi(class="form-control", placeholder="Örn: Çekici, Kayar Kasa") }}
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Marka / Model</label>
+                            {{ form.marka_model(class="form-control", placeholder="Örn: Mercedes Axor 1840") }}
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Bağlı Şube</label>
+                            {{ form.sube_id(class="form-select") }}
+                        </div>
+
+                        <hr class="my-4">
+                        <h5 class="text-secondary mb-3"><i class="fas fa-calendar-check me-2"></i> Yasal Takip Bilgileri</h5>
+                        
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold text-danger">Muayene Bitiş Tarihi</label>
+                                {{ form.muayene_tarihi(class="form-control", type="date") }}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold text-danger">Sigorta Bitiş Tarihi</label>
+                                {{ form.sigorta_tarihi(class="form-control", type="date") }}
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <div class="form-check form-switch p-3 bg-light rounded border">
+                                {{ form.is_active(class="form-check-input ms-0", type="checkbox", id="aracStatus", checked=True) }}
+                                <label class="form-check-label fw-bold ms-2" for="aracStatus">Araç Aktif (Operasyona Hazır)</label>
+                            </div>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            {{ form.submit(class="btn btn-" + ('warning' if arac else 'success') + " btn-lg shadow-sm") }}
+                            <a href="{{ url_for('araclar.index') }}" class="btn btn-outline-secondary">
+                                <i class="fas fa-times"></i> Vazgeç
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <div class="mt-3 text-center text-muted small">
+                <i class="fas fa-info-circle"></i> Buraya eklediğiniz araçlar, nakliye seferleri ve kiralama formlarında seçim listesine gelecektir.
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

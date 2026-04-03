@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block title %}Yeni Hakediş Oluştur{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <!-- Geri Dönüş Linki -->
+            <div class="mb-4">
+                <a href="{{ url_for('fatura.index') }}" class="text-decoration-none text-muted small">
+                    <i class="fas fa-arrow-left me-1"></i> Hakediş Listesine Dön
+                </a>
+            </div>
+
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-primary text-white p-4 border-0">
+                    <h3 class="card-title mb-1"><i class="fas fa-magic me-2"></i>Yeni Hakediş Taslağı</h3>
+                    <p class="mb-0 opacity-75 small">Sözleşme seçerek ilgili döneme ait çalışma günlerini otomatik hesaplayın.</p>
+                </div>
+                <div class="card-body p-4 p-md-5">
+                    
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            {% for category, message in messages %}
+                                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                                    {{ message }}
+                                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+                    {% endwith %}
+
+                    <form method="POST" novalidate>
+                        {{ form.hidden_tag() }}
+
+                        <!-- 1. Bölüm: Sözleşme Seçimi -->
+                        <div class="section-title mb-3 pb-2 border-bottom">
+                            <h5 class="text-primary fw-bold mb-0">1. Sözleşme ve Proje Bilgisi</h5>
+                        </div>
+                        <div class="mb-4">
+                            {{ form.kiralama_id.label(class="form-label fw-semibold") }}
+                            {{ form.kiralama_id(class="form-select form-select-lg shadow-sm") }}
+                            {% for error in form.kiralama_id.errors %}
+                                <div class="text-danger small mt-1">{{ error }}</div>
+                            {% endfor %}
+                            <div class="form-text mt-2">Hakediş çıkarmak istediğiniz aktif kiralama sözleşmesini (PS) seçin.</div>
+                        </div>
+
+                        <!-- 2. Bölüm: Tarih Aralığı -->
+                        <div class="section-title mb-3 mt-5 pb-2 border-bottom">
+                            <h5 class="text-primary fw-bold mb-0">2. Hakediş Dönemi</h5>
+                        </div>
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                {{ form.baslangic_tarihi.label(class="form-label fw-semibold") }}
+                                {{ form.baslangic_tarihi(class="form-control", type="date") }}
+                                {% for error in form.baslangic_tarihi.errors %}
+                                    <div class="text-danger small mt-1">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                            <div class="col-md-6">
+                                {{ form.bitis_tarihi.label(class="form-label fw-semibold") }}
+                                {{ form.bitis_tarihi(class="form-control", type="date") }}
+                                {% for error in form.bitis_tarihi.errors %}
+                                    <div class="text-danger small mt-1">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                            <div class="col-12 mt-2">
+                                <div class="alert alert-info py-2 px-3 small d-flex align-items-center">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    Sistem bu tarih aralığındaki çalışma günlerini sözleşme giriş-çıkış tarihleriyle kesiştirerek otomatik hesaplayacaktır.
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 3. Bölüm: e-Fatura Ayarları -->
+                        <div class="section-title mb-3 mt-5 pb-2 border-bottom">
+                            <h5 class="text-primary fw-bold mb-0">3. Fatura ve Muhasebe Tercihleri</h5>
+                        </div>
+                        <div class="row g-3 mb-5">
+                            <div class="col-md-4">
+                                {{ form.fatura_senaryosu.label(class="form-label fw-semibold") }}
+                                {{ form.fatura_senaryosu(class="form-select") }}
+                            </div>
+                            <div class="col-md-4">
+                                {{ form.fatura_tipi.label(class="form-label fw-semibold") }}
+                                {{ form.fatura_tipi(class="form-select") }}
+                            </div>
+                            <div class="col-md-4">
+                                {{ form.para_birimi.label(class="form-label fw-semibold") }}
+                                {{ form.para_birimi(class="form-select") }}
+                            </div>
+                        </div>
+
+                        <!-- Butonlar -->
+                        <div class="d-grid gap-2">
+                            {{ form.submit(class="btn btn-primary btn-lg shadow-sm py-3 fw-bold") }}
+                            <a href="{{ url_for('fatura.index') }}" class="btn btn-link text-muted">Vazgeç ve Listeye Dön</a>
+                        </div>
+                    </form>
+
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .form-control:focus, .form-select:focus {
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 0.25rem rgba(59, 130, 246, 0.15);
+    }
+    .section-title h5 {
+        font-size: 0.95rem;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+    }
+</style>
+{% endblock %}

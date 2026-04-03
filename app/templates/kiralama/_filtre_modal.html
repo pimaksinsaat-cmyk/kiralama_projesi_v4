@@ -1,0 +1,251 @@
+<!-- 
+  MAKİNE SEÇİM ASİSTANI (MODAL)
+  Bu dosya ana şablonlara include edilerek eklenir. 
+  Kriterlerin hiçbiri zorunlu değildir, boş bırakılanlar aramayı kısıtlamaz.
+-->
+{% set makine_data = mevcut_makine if mevcut_makine else eski_makine %}
+<div class="modal fade" id="filterModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg border-0">
+        <div class="modal-content shadow-lg rounded-4 overflow-hidden">
+            <div class="modal-header bg-primary text-white border-0 py-3">
+                <h5 class="modal-title d-flex align-items-center">
+                    <i class="fas fa-robot me-2 fs-4"></i>
+                    <div>
+                        <span class="fw-bold">Makine Seçim Asistanı</span>
+                        <div class="small fw-normal opacity-75">Şubeye ve teknik özelliklere göre arama yapın</div>
+                    </div>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Kapat"></button>
+            </div>
+            <div class="modal-body p-4 bg-light">
+                <div class="row g-3">
+                    <!-- 1. GRUP: Konum ve Kimlik -->
+                    <div class="col-md-6">
+                        <label for="f-sube" class="form-label fw-bold text-success"><i class="fas fa-map-marker-alt me-1"></i>Bulunduğu Şube</label>
+                        <select id="f-sube" class="form-select border-0 shadow-sm border-start border-success border-3">
+                            <option value="">Tüm Şubeler</option>
+                            {% if subeler %}
+                                {% for sube in subeler %}
+                                <option value="{{ sube.id }}" {% if makine_data and makine_data.sube_id == sube.id %}selected{% endif %}>{{ sube.isim }}</option>
+                                {% endfor %}
+                            {% else %}
+                                <option value="" disabled>⚠️ Python'dan subeler gelmedi!</option>
+                            {% endif %}
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="f-tip" class="form-label fw-bold text-primary">Makine Tipi</label>
+                        <select id="f-tip" class="form-select border-0 shadow-sm">
+                            <option value="">Tümü</option>
+                            {% if tipler %}
+                                {% for tip in tipler %}
+                                <option value="{{ tip }}" {% if request.args.get('tip') == tip or (makine_data and (makine_data.tip == tip or makine_data.tipi == tip)) %}selected{% endif %}>{{ tip }}</option>
+                                {% endfor %}
+                            {% else %}
+                                <option value="" disabled>⚠️ Python'dan tipler gelmedi!</option>
+                            {% endif %}
+                        </select>
+                    </div>
+
+                    <!-- 2. GRUP: Teknik Kriterler -->
+                    <div class="col-md-4">
+                        <label for="f-marka" class="form-label fw-bold small">Marka</label>
+                        <select id="f-marka" class="form-select border-0 shadow-sm">
+                            <option value="">Tüm Markalar</option>
+                            {% if markalar %}
+                                {% for marka in markalar %}
+                                <option value="{{ marka }}" {% if request.args.get('marka') == marka or (makine_data and makine_data.marka == marka) %}selected{% endif %}>{{ marka }}</option>
+                                {% endfor %}
+                            {% else %}
+                                <option value="" disabled>⚠️ Python'dan markalar gelmedi!</option>
+                            {% endif %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="f-enerji" class="form-label fw-bold small">Enerji Kaynağı</label>
+                        <select id="f-enerji" class="form-select border-0 shadow-sm">
+                            <option value="">Hepsi</option>
+                            {% if enerji_kaynaklari %}
+                                {% for enerji in enerji_kaynaklari %}
+                                <option value="{{ enerji }}" {% if request.args.get('enerji') == enerji or (makine_data and makine_data.yakit == enerji) %}selected{% endif %}>{{ enerji }}</option>
+                                {% endfor %}
+                            {% else %}
+                                <!-- Python'dan dinamik liste gelmezse varsayılan değerler -->
+                                <option value="Akülü" {% if request.args.get('enerji') == 'Akülü' or (makine_data and makine_data.yakit == 'Akülü') %}selected{% endif %}>Akülü</option>
+                                <option value="Elektrikli" {% if request.args.get('enerji') == 'Elektrikli' or (makine_data and makine_data.yakit == 'Elektrikli') %}selected{% endif %}>Elektrikli</option>
+                                <option value="Dizel" {% if request.args.get('enerji') == 'Dizel' or (makine_data and makine_data.yakit == 'Dizel') %}selected{% endif %}>Dizel</option>
+                                <option value="Hibrit" {% if request.args.get('enerji') == 'Hibrit' or (makine_data and makine_data.yakit == 'Hibrit') %}selected{% endif %}>Hibrit</option>
+                            {% endif %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="f-ortam" class="form-label fw-bold small">Kullanım Ortamı</label>
+                        <select id="f-ortam" class="form-select border-0 shadow-sm">
+                            <option value="">Farketmez</option>
+                            <option value="ic" {% if request.args.get('ortam') == 'ic' or (makine_data and makine_data.kullanim_ortami == 'ic') %}selected{% endif %}>Sadece İç Mekan</option>
+                            <option value="dis" {% if request.args.get('ortam') == 'dis' or (makine_data and makine_data.kullanim_ortami == 'dis') %}selected{% endif %}>Arazi / Dış Mekan</option>
+                        </select>
+                    </div>
+
+                    <!-- 3. GRUP: Yükseklik ve Kapasite -->
+                    <div class="col-md-4">
+                        <label for="f-y-min" class="form-label fw-bold small">Min Çalışma Yük. (m)</label>
+                        <input type="number" id="f-y-min" class="form-control border-0 shadow-sm" placeholder="Örn: 14" value="{{ request.args.get('y_min', '') or ((makine_data.calisma_yuksekligi if makine_data and makine_data.calisma_yuksekligi != None else '')) }}">
+                    </div>
+                    <div class="col-md-4">
+                        <label for="f-k-min" class="form-label fw-bold small">Min Kapasite (kg)</label>
+                        <input type="number" id="f-k-min" class="form-control border-0 shadow-sm" placeholder="Örn: 230" value="{{ request.args.get('k_min', '') or ((makine_data.kaldirma_kapasitesi if makine_data and makine_data.kaldirma_kapasitesi != None else (makine_data.kapasite if makine_data and makine_data.kapasite != None else ''))) }}">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small text-danger">Max Kapalı Yük. (m)</label>
+                        <input type="number" step="0.01" id="f-ky-max" class="form-control border-0 shadow-sm border-start border-danger border-3" placeholder="Geçiş Sınırı" value="{{ request.args.get('ky_max', '') or ((makine_data.kapali_yukseklik if makine_data and makine_data.kapali_yukseklik != None else '')) }}">
+                    </div>
+
+                    <!-- 4. GRUP: Ebatlar ve Ağırlık -->
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small">Max Genişlik (m)</label>
+                        <input type="number" step="0.01" id="f-genislik" class="form-control border-0 shadow-sm" placeholder="Örn: 1.20" value="{{ request.args.get('genislik_max', '') or ((makine_data.genislik if makine_data and makine_data.genislik != None else '')) }}">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small">Max Uzunluk (m)</label>
+                        <input type="number" step="0.01" id="f-uzunluk" class="form-control border-0 shadow-sm" placeholder="Örn: 2.50" value="{{ request.args.get('uzunluk_max', '') or ((makine_data.uzunluk if makine_data and makine_data.uzunluk != None else '')) }}">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small">Max Makine Ağırlığı (kg)</label>
+                        <input type="number" id="f-agirlik" class="form-control border-0 shadow-sm" placeholder="Örn: 3500" value="{{ request.args.get('agirlik_max', '') or ((makine_data.agirlik if makine_data and makine_data.agirlik != None else '')) }}">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer bg-white border-0 p-3">
+                <button type="button" class="btn btn-link text-decoration-none text-muted" id="f-reset">
+                    <i class="fas fa-sync-alt me-1"></i> Filtreleri Temizle
+                </button>
+                <div class="ms-auto d-flex gap-2">
+                    <button type="button" class="btn btn-light px-4" data-bs-dismiss="modal">İptal</button>
+                    <button type="button" class="btn btn-primary px-5 fw-bold shadow-sm" id="f-apply">
+                        <span id="f-count" class="badge bg-white text-primary me-2">?</span> MAKINELERİ LİSTELE
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    const filterModalEl = document.getElementById('filterModal');
+    const applyBtn = document.getElementById('f-apply');
+    const countBadge = document.getElementById('f-count');
+    const targetSelectId = "{{ g_ekipman_id|default('g-ekipman') }}";
+    const mainSelect = document.getElementById(targetSelectId);
+    const redirectUrl = "{{ filtre_redirect_url|default('') }}";
+
+    function collectParams() {
+        const params = new URLSearchParams();
+        const fields = {
+            'sube_id': 'f-sube', 
+            'tip': 'f-tip', 
+            'marka': 'f-marka', 
+            'enerji': 'f-enerji', 
+            'ortam': 'f-ortam',
+            'y_min': 'f-y-min', 
+            'k_min': 'f-k-min', 
+            'agirlik_max': 'f-agirlik', 
+            'genislik_max': 'f-genislik',
+            'uzunluk_max': 'f-uzunluk', 
+            'ky_max': 'f-ky-max'
+        };
+        for (let key in fields) {
+            const el = document.getElementById(fields[key]);
+            if (el && el.value) params.append(key, el.value);
+        }
+        return params;
+    }
+
+    const API_URL = "{{ url_for('kiralama.api_ekipman_filtrele') }}";
+
+    async function updateLiveCount() {
+        countBadge.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        try {
+            const res = await fetch(`${API_URL}?${collectParams()}`);
+            if(!res.ok) throw new Error("Sunucu Hatası (" + res.status + ")");
+            const json = await res.json();
+            if(json.success) {
+                countBadge.innerText = json.count;
+                applyBtn.disabled = (json.count === 0 && collectParams().toString() !== "");
+            } else {
+                countBadge.innerText = "!";
+                console.error("Filtreleme Backend Hatası:", json.error || json.message);
+            }
+        } catch(e) { 
+            console.error("Filtre API İletişim Hatası:", e);
+            countBadge.innerText = "!"; 
+        }
+    }
+
+    if (filterModalEl) {
+        filterModalEl.addEventListener('shown.bs.modal', updateLiveCount);
+        filterModalEl.querySelectorAll('input, select').forEach(el => {
+            el.addEventListener('change', updateLiveCount);
+        });
+    }
+
+    if (applyBtn) {
+        applyBtn.onclick = async () => {
+            applyBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Listeleniyor...';
+            try {
+                const params = collectParams();
+
+                // Seçim kutusu olmayan ekranlarda (örn: filo.index), filtreyi URL query ile uygula.
+                if (!mainSelect && redirectUrl) {
+                    const qs = params.toString();
+                    window.location.href = qs ? `${redirectUrl}?${qs}` : redirectUrl;
+                    return;
+                }
+
+                const res = await fetch(`${API_URL}?${params}`);
+                const json = await res.json();
+                
+                if(json.success) {
+                    if (!mainSelect) {
+                        return;
+                    }
+
+                    mainSelect.innerHTML = `<option value="0">--- Filtrelenmiş Sonuçlar (${json.count}) ---</option>`;
+                    if(json.data.length > 0) {
+                        json.data.forEach(item => {
+                            const opt = document.createElement('option');
+                            opt.value = item.id;
+                            opt.innerText = item.label;
+                            mainSelect.appendChild(opt);
+                        });
+                        mainSelect.classList.add('is-valid', 'border-primary');
+                    } else {
+                        mainSelect.innerHTML = `<option value="0">--- Kriterlere Uygun Makine Bulunamadı ---</option>`;
+                        mainSelect.classList.remove('is-valid', 'border-primary');
+                    }
+                    
+                    const modalInstance = bootstrap.Modal.getInstance(filterModalEl);
+                    if(modalInstance) modalInstance.hide();
+                    mainSelect.focus();
+                } else {
+                    alert("Filtreleme sırasında hata oluştu:\n\n" + (json.error || json.message || "Bilinmeyen Sunucu Hatası"));
+                }
+            } catch(e) {
+                console.error(e);
+                alert("Sistemle iletişim kurulamadı. Lütfen sayfayı yenileyin.");
+            } finally {
+                applyBtn.innerHTML = `<span id="f-count" class="badge bg-white text-primary me-2">?</span> MAKINELERİ LİSTELE`;
+                updateLiveCount(); 
+            }
+        };
+    }
+
+    if (document.getElementById('f-reset')) {
+        document.getElementById('f-reset').onclick = () => {
+            filterModalEl.querySelectorAll('input, select').forEach(i => i.value = "");
+            updateLiveCount();
+        };
+    }
+})();
+</script>

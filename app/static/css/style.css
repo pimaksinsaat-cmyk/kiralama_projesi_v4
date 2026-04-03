@@ -1,0 +1,252 @@
+
+    body { 
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; 
+        margin: 20px; 
+        background-color: #f8f9fa; 
+    }
+    .container { 
+        max-width: 700px; 
+        margin: auto; 
+        padding: 25px; 
+        background-color: #fff; 
+        border-radius: 8px; 
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1); 
+    }
+    .container2 { 
+        max-width: 1500px;
+        margin: auto;
+        padding: 20px; 
+        background-color: #fff; 
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    h2 { 
+        color: #343a40; 
+        text-align: center; 
+        margin-bottom: 20px;
+    }
+    /* Bilgi satırları için stil */
+    .info-group { 
+        margin-bottom: 1rem;
+        font-size: 1rem;
+        line-height: 1.5;
+        padding: 8px;
+        border-bottom: 1px solid #eee;
+    }
+    .info-group:last-of-type {
+        border-bottom: none;
+    }
+    /* Başlıklar (Firma Adı, Yetkili Kişi vb.) için stil */
+    .info-group strong {
+        display: inline-block;
+        min-width: 200px; /* Başlıkların hizalı durması için */
+        font-weight: 500; 
+        color: #495057;
+    }
+    label { 
+        display: block;
+        margin-bottom: .5rem;
+        margin-top: .5rem;
+        font-weight: 500;
+        color: #2384e4; 
+    }
+    input, select, textarea {
+    width: 100%; 
+    max-width: 700px;
+    padding: 1rem; 
+    border: 1px solid #ced4da; 
+    border-radius: .25rem; 
+    box-sizing: border-box; 
+    font-size: 1rem; 
+    
+    /* YENİ EKLENEN SATIRLAR: */
+    font-family: inherit; /* Fontu 'body' etiketinden miras almayı zorunlu kılar */
+    resize: vertical;     /* Sadece dikeyde boyutlandırmaya izin verir */
+    }
+    
+    .btn-container { 
+        margin-top: 25px; 
+        text-align: center;
+    }
+    .btn { 
+        padding: 10px 15px; 
+        border: none; 
+        border-radius: 4px; 
+        cursor: pointer; 
+        width: auto; 
+        font-weight: bold; 
+        font-size: 1.1rem;
+        text-decoration: none; /* <a> etiketi için */
+        display: inline-block; /* <a> etiketi için */
+        box-sizing: border-box; /* <a> etiketi için */
+    }
+    .btn-primary { 
+        background-color: #007bff; 
+        color: white; 
+    }
+    .btn-primary:hover {
+        background-color: #0056b3;
+    }
+    .btn-danger { 
+        background-color: #c82333; 
+        width: 15%;
+        color: white;
+         border: none;
+         padding: 5px 10px;
+         border-radius: 4px;
+         cursor: pointer;
+         font-size: 0.9em;
+    }
+    .btn-danger2 { 
+        background-color: #c82333; 
+        width: 100%;
+        color: white;
+         border: none;
+         padding: 5px 10px;
+         border-radius: 4px;
+         cursor: pointer;
+         font-size: 0.9em;
+    }     
+    .form-row {
+        display: flex;
+        gap: 20px; /* inputlar arası boşluk */
+        margin-bottom: 20px;
+    }
+
+    .form-group {
+        display: flex;
+        flex-direction: column;
+        flex: 1; /* her input eşit genişlikte olur */
+    }
+    table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    font-size: 0.9em;
+    }
+
+    th, td {
+    padding: 10px;
+    border: 1px solid #dee2e6;
+    text-align: left;
+    vertical-align: middle;
+    }
+
+    h {
+    background-color: #e9ecef;
+    color: #343a40;
+    }
+    .logo {
+     /* --- Boyut Ayarı --- */
+    width: 250px;
+    height: auto;
+
+    /* --- Konum Ayarı (Ortalamak için) --- */
+    display: block;         /* Resimler normalde 'inline' elemandır, ortalamak için 'block' yaparız */
+    margin-left: auto;    /* Sol boşluğu otomatik ayarla */
+    margin-right: auto;   /* Sağ boşluğu otomatik ayarla */
+  
+    /* --- Konum Ayarı (Boşluklar) --- */
+     margin-bottom: 20px;  /* Logonun altına 20px boşluk ekler */
+    }
+   .truncate { 
+        white-space: nowrap; 
+        overflow: hidden; 
+        text-overflow: ellipsis; 
+        max-width: 1px; /* fixed table layout ile taşmayı önlemek için kritik */
+    }
+    .truncate:hover { 
+        white-space: normal; 
+        overflow: visible; 
+        background: #fff; 
+        position: relative; 
+        z-index: 5; 
+    }
+
+    .alert-danger {
+        background-color: #f8d7da;
+        border: 1px solid #f5c6cb;
+        color: #721c24;
+    }
+
+    .alert-success {
+    background-color: #d4edda;
+    border: 1px solid #c3e6cb;
+    color: #155724;
+    }
+
+    /* Arama Çubuğu Tasarımı */
+    .search-form { 
+        display: flex; 
+        gap: 10px; 
+        margin-bottom: 15px; 
+        max-width: 900px; /* Kutunun toplam genişliğini buradan ayarlayabilirsin */
+    }
+
+    .search-form input { 
+        flex-grow: 1; /* İçindeki boşluğu tamamen doldurur */
+        padding: 10px; /* Biraz daha etli durması için padding artırıldı */
+        border: 1px solid #ccc; 
+        border-radius: 5px; 
+        font-size: 1em;
+    }
+
+    .search-form button {
+        padding: 10px 25px; /* Butonu da giriş kutusuyla aynı hizaya getirdik */
+    }
+/* Mobil Uzun Basma (Sağ Tık) İçin Global Engelleyici Sınıf */
+    .context-menu-hedefi,
+    .table-hover tbody tr, 
+    .kiralama-satiri, 
+    .kalem-listesi-item {
+        -webkit-touch-callout: none; /* iOS Safari'de "Kopyala/Paylaş" yerleşik menüsünü engeller */
+        -webkit-user-select: none;   /* Safari */
+        -moz-user-select: none;      /* Firefox */
+        -ms-user-select: none;       /* IE10+/Edge */
+        user-select: none;           /* Standart - Metin seçimini engeller */
+    }
+/* iPhone'un kendi menüsünü ve büyütecini KÖKTEN kapatan kalkan */
+    .kiralama-satiri, 
+    .kiralama-satiri *, 
+    .kalem-listesi-item, 
+    .kalem-listesi-item * {
+        -webkit-touch-callout: none !important; /* iPhone sağ tık menüsünü engeller */
+        -webkit-user-select: none !important;    /* Metin seçimini engeller */
+        user-select: none !important;
+    }
+/* iPhone'un kendi menüsünü her noktada kapatır */
+    .firma-satiri, 
+    .firma-satiri * {
+        -webkit-touch-callout: none !important;
+        -webkit-user-select: none !important;
+        user-select: none !important;
+    }
+/* Filo için iPhone kalkanı */
+    .makine-satiri, 
+    .makine-satiri * {
+        -webkit-touch-callout: none !important;
+        -webkit-user-select: none !important;
+        user-select: none !important;
+    }
+/* HAFTA SONLARINI BELİRGİNLEŞTİR (Uçuk Mavi) - Baş Mühendis Ayarı */
+    
+    /* 1. Takvim içindeki Cumartesi (6) ve Pazar (0) hücrelerini boya */
+    .fc-daygrid-day[data-dow="6"], 
+    .fc-daygrid-day[data-dow="0"] {
+        background-color: #f0f7ff !important; /* En uçuk, en temiz mavi */
+    }
+
+    /* 2. Üstteki gün başlıklarını (Cmt-Paz) da aynı tonda boya ki sütun bütünlüğü olsun */
+    .fc-col-header-cell[data-dow="6"], 
+    .fc-col-header-cell[data-dow="0"] {
+        background-color: #e6f2ff !important; /* Başlık bir tık daha belirgin mavi */
+    }
+
+    /* 3. Liste görünümünde (listMonth) hafta sonu etiketlerini boya */
+    .fc-list-day-side[data-dow="6"], 
+    .fc-list-day-side[data-dow="0"],
+    .fc-list-day-text[data-dow="6"], 
+    .fc-list-day-text[data-dow="0"] {
+        color: #0056b3 !important; /* Hafta sonu yazılarını mavi yap */
+        font-weight: bold;
+    }

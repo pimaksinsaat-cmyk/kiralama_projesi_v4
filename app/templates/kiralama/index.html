@@ -1,0 +1,934 @@
+{% extends "base.html" %}
+
+{% block title %}Kiralama Yönetimi{% endblock %}
+
+{% block content %}
+{# Sayaçları ve finansal toplamları döngü dışında tanımlıyoruz #}
+{% set stats = namespace(geciken=0, yaklasan=0, harici=0, aktif_hacim=0) %}
+
+{# Dashboard sayaçlarını hesaplamak için ön döngü #}
+{% for k in kiralamalar %}
+    {% for kalem in k.kalemler %}
+        {% if not kalem.sonlandirildi %}
+            {# Sözleşme bedeli hesaplama (Gün x Fiyat + Nakliye) #}
+            {% set gun_fark = (kalem.kiralama_bitis - kalem.kiralama_baslangici).days + 1 %}
+            {% set bedel = (gun_fark * kalem.kiralama_brm_fiyat) + (kalem.nakliye_satis_fiyat or 0) %}
+            {% set stats.aktif_hacim = stats.aktif_hacim + bedel %}
+
+            {% if today %}
+                {% set kalan = (kalem.kiralama_bitis - today).days %}
+                {% if kalan < 0 %}
+                    {% set stats.geciken = stats.geciken + 1 %}
+                {% elif kalan <= 3 %}
+                    {% set stats.yaklasan = stats.yaklasan + 1 %}
+                {% endif %}
+            {% endif %}
+        {% endif %}
+        {% if kalem.is_dis_tedarik_ekipman %}
+            {% set stats.harici = stats.harici + 1 %}
+        {% endif %}
+    {% endfor %}
+{% endfor %}
+
+<style>
+    /* Dashboard Stilleri */
+    .stats-card-mini {
+        border-radius: 6px;
+        border: 1px solid #dee2e6;
+        background: #fff;
+        padding: 10px 15px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        min-width: 140px;
+    }
+    .stats-label { font-size: 0.7rem; color: #6c757d; text-transform: uppercase; font-weight: 700; margin-bottom: 2px; }
+    .stats-value { font-size: 1.1rem; font-weight: 800; color: #343a40; }
+    
+    .kur-box { font-size: 0.8rem; background: #f8f9fa; border-radius: 4px; padding: 4px 8px; border: 1px solid #e9ecef; }
+    
+    .container { max-width: 1600px; margin: 20px auto; padding: 20px; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 0.85rem; }
+    th, td { padding: 10px; border: 1px solid #dee2e6; text-align: left; vertical-align: middle; }
+    th { background-color: #f8f9fa; font-weight: 700; color: #495057; text-transform: uppercase; font-size: 0.75rem; }
+    
+    .kalem-listesi { list-style-type: none; padding-left: 0; margin-bottom: 0; }
+    .kalem-listesi li { padding: 4px 0; border-bottom: 1px dashed #eee; }
+    .kalem-listesi li:last-child { border-bottom: none; }
+    .kalem-listesi-item:hover { background-color: #f8f9fa; cursor: context-menu; border-radius: 4px; }
+    
+    .status-badge { min-width: 135px; text-align: center; font-size: 0.7rem; padding: 4px; font-weight: 700; border-radius: 4px; }
+    .inline-action-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-left: 8px;
+        padding: 4px 8px;
+        border: 1px solid #f0ad4e;
+        border-radius: 4px;
+        background: #fff8e8;
+        color: #9a6700;
+        font-size: 0.7rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    .inline-action-btn:hover {
+        background: #fff1cc;
+        border-color: #d39e00;
+    }
+    .inline-action-note {
+        display: inline-block;
+        margin-left: 6px;
+        font-size: 0.66rem;
+        font-weight: 700;
+        color: #6c757d;
+        vertical-align: middle;
+    }
+    .external-badge { font-size: 0.6rem; padding: 2px 5px; background: #dc3545; color: #fff; border-radius: 3px; margin-right: 5px; font-weight: bold; }
+    .supplier-info { font-size: 0.75rem; color: #0d6efd; font-weight: 600; margin-top: 2px; display: block; }
+    .supplier-label { color: #6c757d; font-weight: normal; font-style: italic; margin-right: 3px; }
+
+    .context-menu, .context-menu-kalem { display: none; position: absolute; background-color: white; border: 1px solid #ccc; box-shadow: 0 4px 12px rgba(0,0,0,0.2); border-radius: 6px; z-index: 1000; min-width: 200px; padding: 5px 0; }
+    .context-menu-item { display: block; padding: 10px 15px; color: #333; text-decoration: none; font-size: 0.9em; cursor: pointer; transition: 0.2s; }
+    .context-menu-item:hover { background-color: #f8f9fa; color: #007bff; }
+    
+    .price-text { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-weight: 700; color: #198754; white-space: nowrap; }
+
+    .custom-backdrop { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); z-index: 1040; justify-content: center; align-items: center; }
+    .custom-modal { background: white; padding: 25px; border-radius: 10px; width: 90%; max-width: 420px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+
+    /* Sayfalama */
+    .pagination { display: flex; gap: 4px; list-style: none; padding: 0; margin: 0; }
+    .pagination .page-item .page-link { display: inline-block; padding: 6px 12px; border: 1px solid #dee2e6; border-radius: 4px; color: #667eea; text-decoration: none; font-size: 0.875rem; transition: all 0.2s; }
+    .pagination .page-item.active .page-link { background: #667eea; border-color: #667eea; color: white; }
+    .pagination .page-item.disabled .page-link { color: #adb5bd; pointer-events: none; }
+    .pagination .page-item .page-link:hover { background: #eef2ff; border-color: #a5b4fc; }
+</style>
+
+<div class="container">
+    <div class="d-flex justify-content-between align-items-end mb-4">
+        <div class="d-flex gap-3 flex-grow-1">
+            <div class="stats-card-mini border-start border-danger border-4 shadow-sm">
+                <div class="stats-label">Gecikenler</div>
+                <div class="stats-value text-danger">{{ stats.geciken }}</div>
+            </div>
+
+            <div class="stats-card-mini border-start border-warning border-4 shadow-sm">
+                <div class="stats-label">Yaklaşanlar (3G)</div>
+                <div class="stats-value text-warning">{{ stats.yaklasan }}</div>
+            </div>
+
+            <div class="stats-card-mini border-start border-success border-4 shadow-sm">
+                <div class="stats-label">Sözleşme Hacmi</div>
+                <div class="stats-value text-success">{{ "{:,.2f}".format(stats.aktif_hacim).replace(",", "X").replace(".", ",").replace("X", ".") }} ₺</div>
+            </div>
+
+            <div class="stats-card-mini border-start border-info border-4 shadow-sm">
+                <div class="stats-label">Dış Tedarik</div>
+                <div class="stats-value text-info">{{ stats.harici }}</div>
+            </div>
+        </div>
+
+        <div class="text-end">
+            <div class="d-flex gap-2 justify-content-end mb-1">
+                <div class="kur-box shadow-sm">
+                    <span class="text-muted fw-bold">USD:</span> <span class="text-success fw-bold">{{ kurlar.USD if kurlar else '0.00' }}</span>
+                </div>
+                <div class="kur-box shadow-sm">
+                    <span class="text-muted fw-bold">EUR:</span> <span class="text-primary fw-bold">{{ kurlar.EUR if kurlar else '0.00' }}</span>
+                </div>
+            </div>
+            <small class="text-muted" style="font-size: 0.65rem;">TCMB Güncel Satış</small>
+        </div>
+    </div>
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <a href="{{ url_for('kiralama.ekle') }}" class="btn btn-primary btn-sm px-4 fw-bold shadow-sm"><i class="fas fa-plus me-2"></i>Yeni Kiralama Kaydı</a>
+            
+            <!-- Diğer İşlemler Dropdown -->
+            <div class="btn-group ms-2" role="group">
+                <button type="button" class="btn btn-outline-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="fas fa-bars me-1"></i>Diğer İşlemler
+                </button>
+                <ul class="dropdown-menu shadow border-0">
+                    <li><a class="dropdown-item" href="{{ url_for('kiralama.excel_disari_aktar') }}"><i class="fas fa-file-excel me-2 text-success"></i>Excel Dışa Aktar</a></li>
+                    <li><a class="dropdown-item" href="#" id="excel-ice-yukle-ac"><i class="fas fa-upload me-2 text-success"></i>Excel'den Yükle</a></li>
+                </ul>
+            </div>
+        </div>
+        
+        <form method="GET" action="{{ url_for('kiralama.index') }}" class="d-flex mb-0" style="width: 35%;">
+            <input type="text" name="q" class="form-control form-control-sm me-2 shadow-sm border-secondary" placeholder="Form no, müşteri veya makine kodu ara..." value="{{ q or '' }}">
+            <input type="hidden" name="per_page" value="{{ per_page }}">
+            <button type="submit" class="btn btn-dark btn-sm px-4 shadow-sm">ARA</button>
+        </form>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ 'danger' if category == 'danger' else 'success' }} py-2 mb-3 small shadow-sm fw-bold" role="alert">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="table-responsive">
+        <table class="table-hover shadow-sm rounded overflow-hidden">
+            <thead>
+                <tr>
+                    <th width="130">Form No</th>
+                    <th>Kiracı Müşteri</th>
+                    <th>Makine & Tedarik Detayı</th>
+                    <th width="140" class="text-end">Sözleşme Tutarı</th>
+                    <th width="380">Durum / Vade / Süre</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for kiralama in kiralamalar %}
+                {% set satir_toplam = namespace(val=0) %}
+                <tr class="kiralama-satiri"
+                    data-kiralama-id="{{ kiralama.id }}"
+                    data-duzenle-url="{{ url_for('kiralama.duzenle', kiralama_id=kiralama.id) }}"
+                    data-sil-url="{{ url_for('kiralama.sil', kiralama_id=kiralama.id) }}"
+                    data-csrf-token="{{ csrf_token() }}"
+                    data-form-no="{{ kiralama.kiralama_form_no }}">
+                    
+                    <td class="fw-bold text-dark">{{ kiralama.kiralama_form_no }}</td>
+                    
+                    <td>
+                        {% if kiralama.firma_musteri %}
+                            <a href="{{ url_for('firmalar.bilgi', id=kiralama.firma_musteri.id) }}" class="text-decoration-none fw-bold text-primary" title="{{ kiralama.firma_musteri.firma_adi }}">
+                                {{ kiralama.firma_musteri.firma_adi | truncate_name }}
+                            </a>
+                        {% else %}
+                            <span class="text-danger small">Müşteri Tanımsız</span>
+                        {% endif %}
+                    </td>
+
+                    <td>
+                        <ul class="kalem-listesi">
+                            {% for kalem in kiralama.kalemler %}
+                            {# Tutar hesaplama #}
+                            {% set g = (kalem.kiralama_bitis - kalem.kiralama_baslangici).days + 1 %}
+                            {% set nk_sayi = 2 if kalem.donus_nakliye_fatura_et else 1 %}
+                            {% set nk_birim = (kalem.nakliye_satis_fiyat or 0) / nk_sayi %}
+                            {% set bdl = (g * kalem.kiralama_brm_fiyat) + (kalem.nakliye_satis_fiyat or 0) %}
+                            {% set satir_toplam.val = satir_toplam.val + bdl %}
+
+                            <li class="kalem-listesi-item px-2
+                                {% if not kalem.is_active %}
+                                    opacity-50 text-decoration-line-through
+                                {% endif %}"
+                                data-kalem-id="{{ kalem.id }}"
+                                data-ekipman-kod="{{ kalem.ekipman.kod if kalem.ekipman else (kalem.harici_ekipman_marka ~ ' ' ~ kalem.harici_ekipman_model) }}"
+                                data-csrf-token="{{ csrf_token() }}"
+                                data-sonlandirilmis="{{ 1 if kalem.sonlandirildi else 0 }}"
+                                data-swap="{{ 1 if not kalem.is_active else 0 }}"
+                                data-baslangic="{{ kalem.kiralama_baslangici.strftime('%Y-%m-%d') if kalem.kiralama_baslangici else '' }}"
+                                data-nakliye-satis="{{ kalem.nakliye_satis_fiyat or 0 }}"
+                                data-donus-nakliye-satis="{{ kalem.donus_nakliye_satis_fiyat if kalem.donus_nakliye_satis_fiyat is not none else '' }}"
+                                data-donus-fatura-et="{{ 1 if kalem.donus_nakliye_fatura_et else 0 }}">
+                                
+                                
+                                {% if kalem.is_dis_tedarik_ekipman %}
+                                    <span class="external-badge">DIŞ TEDARİK</span>
+                                    <span class="fw-bold">{{ kalem.harici_ekipman_marka }} {{ kalem.harici_ekipman_model }}</span>
+                                    
+                                    <span class="supplier-info">
+                                        <i class="fas fa-truck-loading me-1"></i>
+                                        <span class="supplier-label">Tedarikçi:</span>
+                                        {{ (kalem.harici_tedarikci.firma_adi | truncate_name) if kalem.harici_tedarikci else 'Bilinmiyor' }}
+                                    </span>
+                                {% elif kalem.ekipman %}
+                                    <span class="fw-bold text-dark">{{ kalem.ekipman.kod }}</span> <small class="text-muted">({{ kalem.ekipman.tipi }})</small>
+                                {% else %}
+                                    <span class="text-muted small">Ekipman Verisi Eksik</span>
+                                {% endif %}
+
+                                <div class="small text-muted mt-1">
+                                    {{ g }} Gün x {{ "{:,.2f}".format(kalem.kiralama_brm_fiyat or 0).replace(",", "X").replace(".", ",").replace("X", ".") }} ₺
+                                    +
+                                    {{ nk_sayi }} x {{ "{:,.2f}".format(nk_birim).replace(",", "X").replace(".", ",").replace("X", ".") }} ₺
+                                    =
+                                    <span class="fw-bold">{{ "{:,.2f}".format(bdl).replace(",", "X").replace(".", ",").replace("X", ".") }} ₺</span>
+                                    <span class="ms-1">({{ 'Dönüş dahil' if kalem.donus_nakliye_fatura_et else 'Tek Yön' }})</span>
+                                </div>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </td>
+
+                    <td class="text-end">
+                        <span class="price-text">{{ "{:,.2f}".format(satir_toplam.val).replace(",", "X").replace(".", ",").replace("X", ".") }} ₺</span>
+                    </td>
+
+                    <td>
+                        <ul class="kalem-listesi">
+                            {% for kalem in kiralama.kalemler %}
+                            <li>
+                                {% if kalem.sonlandirildi %}
+                                    <span class="badge bg-secondary status-badge shadow-sm"><i class="fas fa-check-double me-1"></i> TAMAMLANDI</span>
+                                    {% if kalem.is_active and kalem.id in recently_returned_kalem_ids %}
+                                        <button
+                                            type="button"
+                                            class="inline-action-btn js-iade-iptal-btn"
+                                            data-kalem-id="{{ kalem.id }}"
+                                            data-csrf-token="{{ csrf_token() }}"
+                                            data-ekipman-kod="{{ kalem.ekipman.kod if kalem.ekipman else (kalem.harici_ekipman_marka ~ ' ' ~ kalem.harici_ekipman_model) }}"
+                                            title="İade işlemini geri al (yalnızca 24 saat içinde)">
+                                            <i class="fas fa-undo-alt"></i> İade İptal
+                                        </button>
+                                    {% endif %}
+                                {% else %}
+                                    {% if today %}
+                                        {% set kalan_gun = (kalem.kiralama_bitis - today).days %}
+                                        {% if kalan_gun < 0 %}
+                                            <span class="badge bg-danger status-badge shadow-sm"><i class="fas fa-exclamation-triangle me-1"></i> GECİKTİ ({{ kalan_gun|abs }} GÜN)</span>
+                                        {% elif kalan_gun <= 3 %}
+                                            <span class="badge bg-warning text-dark status-badge shadow-sm"><i class="fas fa-hourglass-half me-1"></i> VADE AZALDI ({{ kalan_gun }} GÜN)</span>
+                                        {% else %}
+                                            <span class="badge bg-success status-badge shadow-sm">AKTİF ({{ kalan_gun }} GÜN VAR)</span>
+                                        {% endif %}
+                                    {% endif %}
+                                {% endif %}
+                                <small class="text-muted ms-2 fw-bold" style="font-size: 0.7rem;">
+                                    {{ kalem.kiralama_baslangici.strftime('%d.%m') }} - {{ kalem.kiralama_bitis.strftime('%d.%m') }}
+                                </small>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="5" class="text-center py-5 text-muted fw-bold">HERHANGİ BİR KİRALAMA KAYDI BULUNAMADI.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
+    <form method="GET" action="{{ url_for('kiralama.index') }}" class="d-flex align-items-center gap-2 mb-0">
+        <input type="hidden" name="q" value="{{ q or '' }}">
+        <label for="kiralama-per-page" class="small text-muted mb-0">Sayfa başına</label>
+        <select id="kiralama-per-page" name="per_page" class="form-select form-select-sm" style="max-width:130px;" onchange="this.form.submit()">
+            <option value="10" {{ 'selected' if per_page == 10 else '' }}>10</option>
+            <option value="25" {{ 'selected' if per_page == 25 else '' }}>25</option>
+            <option value="50" {{ 'selected' if per_page == 50 else '' }}>50</option>
+            <option value="100" {{ 'selected' if per_page == 100 else '' }}>100</option>
+        </select>
+    </form>
+
+    {% if pagination %}
+    <ul class="pagination mb-0">
+        <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('kiralama.index', page=pagination.prev_num, per_page=per_page, q=q) }}">&laquo;</a>
+        </li>
+        {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
+            {% if page_num %}
+            <li class="page-item {% if page_num == pagination.page %}active{% endif %}">
+                <a class="page-link" href="{{ url_for('kiralama.index', page=page_num, per_page=per_page, q=q) }}">{{ page_num }}</a>
+            </li>
+            {% else %}
+            <li class="page-item disabled"><span class="page-link">&hellip;</span></li>
+            {% endif %}
+        {% endfor %}
+        <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('kiralama.index', page=pagination.next_num, per_page=per_page, q=q) }}">&raquo;</a>
+        </li>
+    </ul>
+    {% endif %}
+</div>
+
+<!-- Excel İçe Aktarım Formu (Gizli) -->
+<form id="excel-ice-yukle-form" method="POST" action="{{ url_for('kiralama.excel_ice_yukle') }}" enctype="multipart/form-data" style="display:none;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="confirm_password" id="excel-confirm-password-hidden">
+    <input type="file" name="excel_file" id="excel-ice-yukle-input" accept=".xlsx">
+</form>
+
+<!-- Şifre Doğrulama Modal -->
+<div class="modal fade" id="excel-password-modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-light border-0">
+                <h5 class="modal-title fw-bold"><i class="fas fa-shield-alt me-2 text-warning"></i>Güvenlik Doğrulaması</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small mb-3">Excel'den toplu veri yüklemesi için kullanıcı şifrenizi tekrar girin.</p>
+                <label for="excel-confirm-password" class="form-label fw-semibold">Şifre</label>
+                <input type="password" id="excel-confirm-password" class="form-control" autocomplete="current-password" placeholder="Şifrenizi girin">
+                <div class="form-text">Doğrulama sonrası Excel dosyası seçimi açılacaktır.</div>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">İptal</button>
+                <button type="button" class="btn btn-primary" id="excel-password-confirm-btn">Devam Et</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="context-menu" class="context-menu shadow">
+    <div class="px-3 py-2 small text-muted border-bottom fw-bold" id="menu-form-title">FORM İŞLEMLERİ</div>
+    <a class="context-menu-item" id="menu-duzenle"><i class="fas fa-edit me-2 text-primary"></i>Kiralama Formunu Düzenle</a>
+    
+    <div style="height:1px; background:#eee; margin:5px 0;"></div>
+    <a class="context-menu-item text-primary" id="menu-kiralama-formu"><i class="fas fa-file-invoice me-2"></i>Kiralama Formunu Yazdır (PDF)</a>
+    <a class="context-menu-item text-success" id="menu-teslim-tutanagi"><i class="fas fa-file-contract me-2"></i>Teslim Tutanağı Yazdır (PDF)</a>
+    <div style="height:1px; background:#eee; margin:5px 0;"></div>
+    <a class="context-menu-item text-danger fw-bold" id="menu-sil"><i class="fas fa-trash-alt me-2"></i>Kiralama Kaydını Sil</a>
+</div>
+
+<div id="context-menu-kalem" class="context-menu-kalem shadow">
+    <div class="px-3 py-2 small text-muted border-bottom fw-bold" id="menu-kalem-title">MAKİNE İŞLEMLERİ</div>
+    <a class="context-menu-item text-primary fw-bold" id="menu-degistir"><i class="fas fa-exchange-alt me-2"></i>Makineyi Değiştir (Revizyon)</a>
+    
+    <div style="height:1px; background:#eee; margin:5px 0;"></div>
+    <a class="context-menu-item text-success fw-bold" id="menu-sonlandir"><i class="fas fa-stopwatch me-2"></i>Kiralamayı Sonlandır</a>
+    <a class="context-menu-item text-info fw-bold" id="menu-tarih-guncelle"><i class="fas fa-calendar-alt me-2"></i>Planlanan Bitiş Tarihini Güncelle</a>
+    <a class="context-menu-item text-warning fw-bold" id="menu-iptal"><i class="fas fa-undo-alt me-2"></i>Sonlandırmayı İptal Et</a>
+
+    <div style="height:1px; background:#eee; margin:5px 0;"></div>
+    <a class="context-menu-item text-danger fw-bold" id="menu-degisim-iptal">
+    <i class="fas fa-undo me-2"></i>Makine Değişimini İptal Et
+    </a>
+</div>
+
+<div id="modal-backdrop-sonlandir" class="custom-backdrop">
+    <div class="custom-modal border border-primary" style="max-width: 500px;"> <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="mb-0 fw-bold text-dark"><i class="fas fa-stopwatch text-danger me-2"></i>Kiralamayı Sonlandır</h5>
+            <button type="button" class="btn-close" onclick="closeModals()"></button>
+        </div>
+        <p class="small text-muted mb-3"><span id="modal-ekipman-kod" class="fw-bold text-primary"></span> için sahadan çekilme ve dönüş bilgilerini girin.</p>
+        
+        <form id="sonlandir-kalem-form" method="POST" action="{{ url_for('kiralama.sonlandir_kalem') }}">
+            <input type="hidden" name="csrf_token" id="modal-csrf-token">
+            <input type="hidden" name="kalem_id" id="modal-kalem-id">
+            
+            <div class="mb-3">
+                <label class="form-label small fw-bold text-secondary"><i class="far fa-calendar-alt me-1"></i>Fiili Bitiş Tarihi:</label>
+                <input type="date" name="bitis_tarihi" id="modal-bitis-tarihi" class="form-control shadow-sm border-primary" required>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label small fw-bold text-secondary"><i class="fas fa-warehouse me-1"></i>İade Alınan Şube / Depo:</label>
+                <select name="donus_sube_id" class="form-select shadow-sm border-primary" required>
+                    <option value="" disabled selected>Lütfen dönüş yapılan yeri seçin...</option>
+                    
+                    <option value="tedarikci" class="text-danger fw-bold">🏭 Tedarikçi / Sahibine İade Edildi</option>
+                    
+                    <optgroup label="Kendi Depolarımız">
+                        {% for s in subeler %}
+                            <option value="{{ s.id }}">{{ s.isim }}</option>
+                        {% endfor %}
+                    </optgroup>
+                </select>
+            </div>
+
+            <div class="card border-secondary mb-4 shadow-sm bg-light">
+                <div class="card-body py-2 px-3">
+                    <div class="fw-bold text-secondary small mb-2 border-bottom pb-1">
+                        <i class="fas fa-truck-loading me-1"></i> Dönüş Nakliye Bilgileri
+                    </div>
+                    
+                    <div class="form-check form-switch mb-2">
+                        <input class="form-check-input" type="checkbox" id="hariciNakliyeSonlandir" name="is_harici_nakliye">
+                        <label class="form-check-label small fw-bold text-dark" for="hariciNakliyeSonlandir">Dış Nakliye (Taşeron) Kullanıldı</label>
+                    </div>
+                    
+                    <div id="ozMalAracDiv" class="mb-1">
+                        <select name="nakliye_araci_id" class="form-select form-select-sm border-secondary text-muted">
+                            <option value="">Öz Mal Araç Seçiniz (Opsiyonel)...</option>
+                            {% if nakliye_araclari %}
+                                {% for arac in nakliye_araclari %}
+                                    <option value="{{ arac.id }}">{{ arac.plaka }} - {{ arac.arac_tipi }}</option>
+                                {% endfor %}
+                            {% endif %}
+                        </select>
+                    </div>
+
+                    <div id="taseronFirmaDiv" class="mb-1" style="display:none;">
+                        <select id="taseronFirmaSelect" name="nakliye_tedarikci_id" class="form-select form-select-sm border-warning">
+                            <option value="" disabled selected>Nakliye firmasını seçin...</option>
+                            {% for f in nakliye_tedarikci_listesi %}
+                                <option value="{{ f.id }}">{{ f.firma_adi | truncate_name }}</option>
+                            {% endfor %}
+                        </select>
+                        <input type="number" id="taseronMaliyetInput" name="nakliye_alis_fiyat" class="form-control form-control-sm border-warning mt-2" step="0.01" min="0" placeholder="Nakliye firmasına ödenecek tutar (TL)">
+                        <div class="mt-1 text-warning small fw-bold"><i class="fas fa-info-circle me-1"></i>Seçilen firmanın cari hesabına nakliye kaydı düşer.</div>
+                    </div>
+
+                    <div class="mt-2">
+                        <label class="form-label small fw-bold text-secondary">Dönüş Nakliye Satış Bedeli (Müşteri):</label>
+                        <div class="input-group input-group-sm">
+                            <input type="number" id="donusNakliyeSatisInput" name="donus_nakliye_satis_fiyat" class="form-control form-control-sm" step="0.01" min="0" readonly style="background:#f8f9fa; cursor:not-allowed;">
+                            <span class="input-group-text bg-light text-muted" id="donus-lock-icon"><i class="fas fa-lock"></i></span>
+                        </div>
+                        <div class="form-check mt-2">
+                            <input class="form-check-input" type="checkbox" id="donusFiyatDegistirCheck">
+                            <label class="form-check-label small text-secondary" for="donusFiyatDegistirCheck">Dönüş nakliyesinde farklı fiyat uygula</label>
+                        </div>
+                        <div class="small text-warning fw-bold mt-1 d-none" id="donus-fark-uyari"><i class="fas fa-exclamation-triangle me-1"></i>Planlanan bedelden fark oluşursa müşteri carisine nakliye farkı işlenecektir.</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-grid">
+                <button type="submit" class="btn btn-primary fw-bold shadow"><i class="fas fa-check-circle me-2"></i> KİRALAMAYI TAMAMLA</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Planlanan Bitiş Tarihini Güncelle Modal -->
+<div id="modal-backdrop-tarih-guncelle" class="custom-backdrop">
+    <div class="custom-modal border border-info" style="max-width: 450px;">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="mb-0 fw-bold text-dark"><i class="fas fa-calendar-alt text-info me-2"></i>Planlanan Bitiş Tarihini Güncelle</h5>
+            <button type="button" class="btn-close" onclick="closeTarihGuncelleModal()"></button>
+        </div>
+        <p class="small text-muted mb-3">Makine <span id="modal-tarih-guncelle-kod" class="fw-bold text-primary"></span> için yeni planlanan bitiş tarihini girin.</p>
+
+        <form id="tarih-guncelle-form" method="POST" action="{{ url_for('kiralama.tarih_guncelle_kalem') }}">
+            <input type="hidden" name="csrf_token" id="modal-tarih-guncelle-csrf">
+            <input type="hidden" name="kalem_id" id="modal-tarih-guncelle-kalem-id">
+
+            <div class="mb-4">
+                <label class="form-label small fw-bold text-secondary"><i class="far fa-calendar-alt me-1"></i>Yeni Bitiş Tarihi:</label>
+                <input type="date" name="yeni_bitis_tarihi" id="modal-yeni-bitis-tarihi" class="form-control shadow-sm border-info" required>
+            </div>
+
+            <div class="d-grid gap-2">
+                <button type="submit" class="btn btn-info fw-bold shadow"><i class="fas fa-save me-2"></i> TARİHİ GÜNCELLE</button>
+                <button type="button" class="btn btn-light" onclick="closeTarihGuncelleModal()">İptal</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<form id="delete-form" method="POST" style="display: none;"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form>
+<form id="iptal-kalem-form" method="POST" action="{{ url_for('kiralama.iptal_et_kalem') }}" style="display: none;">
+    <input type="hidden" name="csrf_token" id="iptal-csrf-token">
+    <input type="hidden" name="kalem_id" id="iptal-kalem-id">
+</form>
+
+<script>
+// GLOBAL FONKSIYONLAR (DOMContentLoaded dışında tanımlı)
+function closeTarihGuncelleModal() {
+    document.getElementById('modal-backdrop-tarih-guncelle').style.display = 'none';
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Mobilde native menüyü engellemek için
+    const preventNativeContextMenu = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+    };
+    // Sadece .kiralama-satiri ve .kalem-listesi-item üzerinde contextmenu'yu engelle
+    document.querySelectorAll('.kiralama-satiri, .kalem-listesi-item').forEach(function(row) {
+        row.addEventListener('contextmenu', preventNativeContextMenu, { passive: false });
+    });
+    const contextMenu = document.getElementById('context-menu');
+    const contextMenuKalem = document.getElementById('context-menu-kalem');
+    const backdrop = document.getElementById('modal-backdrop-sonlandir');
+
+    let state = { kUrl: null, sUrl: null, fNo: null, csrf: null, kId: null, eKod: null, kCsrf: null, rentalId: null, baslangic: null, nakliyeSatis: 0, donusNakliyeSatis: null, donusFaturaEt: false };
+
+    function closeModals() {
+        backdrop.style.display = 'none';
+        contextMenu.style.display = 'none';
+        contextMenuKalem.style.display = 'none';
+        document.getElementById('modal-backdrop-tarih-guncelle').style.display = 'none';
+    }
+    window.closeModals = closeModals;
+
+    function openTarihGuncelleModal() {
+        document.getElementById('modal-tarih-guncelle-kalem-id').value = state.kId;
+        document.getElementById('modal-tarih-guncelle-kod').innerText = state.eKod;
+        document.getElementById('modal-tarih-guncelle-csrf').value = state.kCsrf;
+        // Yeni bitiş tarihinin en az başlangıç tarihi kadar olması gerektiğini belirt
+        document.getElementById('modal-yeni-bitis-tarihi').min = state.baslangic || '';
+
+        // DEFAULT DEĞER: Yarını set et
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const tomorrowStr = tomorrow.toISOString().split('T')[0];
+        document.getElementById('modal-yeni-bitis-tarihi').value = tomorrowStr;
+
+        document.getElementById('modal-backdrop-tarih-guncelle').style.display = 'flex';
+    }
+
+    function openSonlandirModal() {
+        document.getElementById('modal-kalem-id').value = state.kId;
+        document.getElementById('modal-ekipman-kod').innerText = state.eKod;
+        document.getElementById('modal-csrf-token').value = state.kCsrf;
+        const today = new Date().toISOString().split('T')[0];
+        const bitisTarihi = document.getElementById('modal-bitis-tarihi');
+        bitisTarihi.value = today;
+        bitisTarihi.min = state.baslangic || '';
+        // reset nakliye fields
+        document.getElementById('hariciNakliyeSonlandir').checked = false;
+        document.getElementById('ozMalAracDiv').style.display = 'block';
+        document.getElementById('taseronFirmaDiv').style.display = 'none';
+        document.getElementById('taseronFirmaSelect').value = '';
+        document.getElementById('taseronMaliyetInput').value = '';
+        const donusInput = document.getElementById('donusNakliyeSatisInput');
+        const donusNakTutari = parseFloat(state.nakliyeSatis || 0);
+        const defaultDonus = (state.donusNakliyeSatis !== null && state.donusNakliyeSatis !== '')
+            ? parseFloat(state.donusNakliyeSatis)
+            : (state.donusFaturaEt ? donusNakTutari / 2 : 0);
+        donusInput.value = Number.isFinite(defaultDonus) ? defaultDonus.toFixed(2) : '0.00';
+        // reset fiyat değiştir checkbox
+        const degistirCheck = document.getElementById('donusFiyatDegistirCheck');
+        degistirCheck.checked = false;
+        donusInput.readOnly = true;
+        donusInput.style.background = '#f8f9fa';
+        donusInput.style.cursor = 'not-allowed';
+        document.getElementById('donus-lock-icon').innerHTML = '<i class="fas fa-lock"></i>';
+        document.getElementById('donus-lock-icon').className = 'input-group-text bg-light text-muted';
+        document.getElementById('donus-fark-uyari').classList.add('d-none');
+        // Checkbox etiketini ve uyarı metnini duruma göre güncelle
+        const degistirLabel = document.querySelector('label[for="donusFiyatDegistirCheck"]');
+        const farkUyari = document.getElementById('donus-fark-uyari');
+        if (state.donusFaturaEt) {
+            degistirLabel.textContent = 'Dönüş nakliyesinde farklı fiyat uygula';
+            farkUyari.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i>Planlanan bedelden fark oluşursa müşteri carisine nakliye farkı işlenecektir.';
+        } else {
+            degistirLabel.textContent = 'Dönüş nakliyesi ekle';
+            farkUyari.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i>Müşteri carisine dönüş nakliye bedeli olarak işlenecektir.';
+        }
+        backdrop.style.display = 'flex';
+    }
+
+    // Form Bazlı Sağ Tık
+    document.querySelectorAll('.kiralama-satiri').forEach(row => {
+        row.addEventListener('contextmenu', function(e) {
+            e.preventDefault(); e.stopPropagation(); closeModals();
+            state.kUrl = this.dataset.duzenleUrl;
+            state.sUrl = this.dataset.silUrl;
+            state.fNo = this.dataset.formNo;
+            state.csrf = this.dataset.csrfToken;
+            state.rentalId = this.dataset.kiralamaId;
+            
+            document.getElementById('menu-form-title').innerText = state.fNo;
+            contextMenu.style.top = e.pageY + 'px'; contextMenu.style.left = e.pageX + 'px';
+            contextMenu.style.display = 'block';
+        });
+    });
+
+    // Makine Bazlı Sağ Tık
+    document.querySelectorAll('.kalem-listesi-item').forEach(item => {
+        item.addEventListener('contextmenu', function(e) {
+            e.preventDefault(); e.stopPropagation(); closeModals();
+            state.kId = this.dataset.kalemId;
+            state.eKod = this.dataset.ekipmanKod;
+            state.kCsrf = this.dataset.csrfToken;
+            state.baslangic = this.dataset.baslangic || '';
+            state.nakliyeSatis = this.dataset.nakliyeSatis || '0';
+            state.donusNakliyeSatis = this.dataset.donusNakliyeSatis || '';
+            state.donusFaturaEt = this.dataset.donusFaturaEt === '1';
+            
+            const done = this.dataset.sonlandirilmis === '1';
+            const isSwap = this.dataset.swap === '1';
+            
+            document.getElementById('menu-degisim-iptal').style.display = isSwap ? 'block' : 'none';
+
+            document.getElementById('menu-kalem-title').innerText = state.eKod;
+            
+            // Normal aktif kalem
+            if (!done) {
+                document.getElementById('menu-degistir').style.display = 'block';
+                document.getElementById('menu-sonlandir').style.display = 'block';
+                document.getElementById('menu-iptal').style.display = 'none';
+                document.getElementById('menu-degisim-iptal').style.display = 'none';
+            }
+            // Normal sonlandırılmış kalem
+            else if (done && !isSwap) {
+                document.getElementById('menu-degistir').style.display = 'none';
+                document.getElementById('menu-sonlandir').style.display = 'none';
+                document.getElementById('menu-iptal').style.display = 'block';
+                document.getElementById('menu-degisim-iptal').style.display = 'none';
+            
+            }
+            // Swap edilmiş eski kalem
+            else if (done && isSwap) {
+                document.getElementById('menu-degistir').style.display = 'none';
+                document.getElementById('menu-sonlandir').style.display = 'none';
+                document.getElementById('menu-iptal').style.display = 'none';
+                document.getElementById('menu-degisim-iptal').style.display = 'block';
+            }
+
+            contextMenuKalem.style.top = e.pageY + 'px';
+            contextMenuKalem.style.left = e.pageX + 'px';
+            contextMenuKalem.style.display = 'block';
+        });
+    });
+
+    // Menu Click İşlemleri
+    document.getElementById('menu-duzenle').onclick = () => { if(state.kUrl) window.location.href = state.kUrl; };
+    // --- MENÜ AÇILIŞ (FİRMALAR AYARI - iPHONE DOSTU) ---
+    const openFormMenu = (e, row) => {
+        closeModals();
+        state.kUrl = row.dataset.duzenleUrl;
+        state.sUrl = row.dataset.silUrl;
+        state.fNo = row.dataset.formNo;
+        state.csrf = row.dataset.csrfToken;
+        state.rentalId = row.dataset.kiralamaId;
+        
+        document.getElementById('menu-form-title').innerText = state.fNo;
+        const x = e.pageX || (e.touches ? e.touches[0].pageX : 0);
+        const y = e.pageY || (e.touches ? e.touches[0].pageY : 0);
+        contextMenu.style.left = x + 'px';
+        contextMenu.style.top = y + 'px';
+        contextMenu.style.display = 'block';
+    };
+
+    const openItemMenu = (e, item) => {
+        closeModals();
+        state.kId = item.dataset.kalemId;
+        state.eKod = item.dataset.ekipmanKod;
+        state.kCsrf = item.dataset.csrfToken;
+        state.nakliyeSatis = item.dataset.nakliyeSatis || 0;
+        state.donusFaturaEt = item.dataset.donusFaturaEt === '1';
+        
+        const done = item.dataset.sonlandirilmis === '1';
+        document.getElementById('menu-kalem-title').innerText = state.eKod;
+        document.getElementById('menu-degistir').style.display = !done ? 'block' : 'none';
+        document.getElementById('menu-sonlandir').style.display = !done ? 'block' : 'none';
+        document.getElementById('menu-tarih-guncelle').style.display = !done ? 'block' : 'none';
+        document.getElementById('menu-iptal').style.display = done ? 'block' : 'none';
+
+        const x = e.pageX || (e.touches ? e.touches[0].pageX : 0);
+        const y = e.pageY || (e.touches ? e.touches[0].pageY : 0);
+        contextMenuKalem.style.left = x + 'px';
+        contextMenuKalem.style.top = y + 'px';
+        contextMenuKalem.style.display = 'block';
+    };
+
+    // --- OLAY DİNLEYİCİLERİ (iPHONE İÇİN PASSIVE FALSE YAPILDI) ---
+    document.querySelectorAll('.kiralama-satiri').forEach(row => {
+        row.addEventListener('contextmenu', (e) => { e.preventDefault(); openFormMenu(e, row); });
+        let t;
+        row.addEventListener('touchstart', (e) => {
+            t = setTimeout(() => { 
+                if (navigator.vibrate) navigator.vibrate(50);
+                openFormMenu(e, row);
+            }, 700);
+        }, { passive: true });
+        row.addEventListener('touchend', () => clearTimeout(t));
+        row.addEventListener('touchmove', () => clearTimeout(t));
+    });
+
+    document.querySelectorAll('.kalem-listesi-item').forEach(item => {
+        item.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); openItemMenu(e, item); });
+        let t;
+        item.addEventListener('touchstart', (e) => {
+            e.stopPropagation();
+            t = setTimeout(() => { 
+                if (navigator.vibrate) navigator.vibrate(50);
+                openItemMenu(e, item);
+            }, 700);
+        }, { passive: true });
+        item.addEventListener('touchend', () => clearTimeout(t));
+        item.addEventListener('touchmove', () => clearTimeout(t));
+    });
+    // YAZDIRMA AKSİYONU (SADECE KİRALAMA FORMU)
+    document.getElementById('menu-kiralama-formu').onclick = () => {
+        if(state.rentalId) window.open(`/dokumanlar/yazdir/form/${state.rentalId}`, '_blank');
+    };
+
+      document.getElementById('menu-sil').onclick = () => {
+        if(confirm(state.fNo + ' nolu tüm kiralama silinecek. Emin misiniz?')) {
+            const form = document.getElementById('delete-form');
+            form.action = state.sUrl; form.querySelector('input[name="csrf_token"]').value = state.csrf;
+            form.submit();
+        }
+    };
+
+    // Mevcut script içindeki menu click işlemlerine ekleyin:
+        document.getElementById('menu-teslim-tutanagi').onclick = () => {
+            if(state.rentalId) window.open(`/dokumanlar/yazdir/teslim-tutanagi/${state.rentalId}`, '_blank');
+        };
+
+    // YENİ EKLENEN: Makine Değişim (Revizyon) Click İşlemi
+        document.getElementById('menu-degistir').onclick = () => {
+             if(state.kId) {
+                 window.location.href = `/makinedegisim/degistir/${state.kId}`;
+             }
+        };
+
+    document.getElementById('menu-sonlandir').onclick = () => {
+        openSonlandirModal();
+    };
+
+    document.getElementById('menu-tarih-guncelle').onclick = () => {
+        if (state.kId) {
+            openTarihGuncelleModal();
+        }
+    };
+
+    document.getElementById('menu-iptal').onclick = () => {
+        if(confirm(state.eKod + ' tekrar AKTİF edilsin mi?')) {
+            document.getElementById('iptal-kalem-id').value = state.kId;
+            document.getElementById('iptal-csrf-token').value = state.kCsrf;
+            document.getElementById('iptal-kalem-form').submit();
+        }
+    };
+
+    // Dış Nakliye checkbox toggle
+    document.getElementById('hariciNakliyeSonlandir').addEventListener('change', function() {
+        document.getElementById('ozMalAracDiv').style.display = this.checked ? 'none' : 'block';
+        document.getElementById('taseronFirmaDiv').style.display = this.checked ? 'block' : 'none';
+        if (!this.checked) {
+            document.getElementById('taseronFirmaSelect').value = '';
+            document.getElementById('taseronMaliyetInput').value = '';
+        }
+    });
+
+    // Form gönderim validasyonu
+    document.getElementById('sonlandir-kalem-form').addEventListener('submit', function(e) {
+        const subeVal = this.querySelector('[name="donus_sube_id"]').value;
+        const donusSatis = parseFloat(document.getElementById('donusNakliyeSatisInput').value || '0');
+        if (!subeVal) {
+            e.preventDefault();
+            alert('Lütfen dönüş şubesi veya teslimat noktasını seçin.');
+            return;
+        }
+        if (donusSatis < 0) {
+            e.preventDefault();
+            alert('Dönüş nakliye satış bedeli negatif olamaz.');
+            return;
+        }
+        const harici = document.getElementById('hariciNakliyeSonlandir').checked;
+        if (harici) {
+            const sel = document.getElementById('taseronFirmaSelect');
+            const maliyetInput = document.getElementById('taseronMaliyetInput');
+            const maliyet = parseFloat(maliyetInput.value || '0');
+            if (!sel.value) {
+                e.preventDefault();
+                alert('Lütfen harici nakliye firmasını seçin.');
+                return;
+            }
+            if (!(maliyet > 0)) {
+                e.preventDefault();
+                alert('Lütfen nakliye firmasına ödenecek tutarı girin (0\'dan büyük).');
+                maliyetInput.focus();
+                return;
+            }
+            const firmaAdi = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : '';
+            const msg = firmaAdi
+                ? `"${firmaAdi}" firmasının cari hesabına ${maliyet.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TL nakliye kaydı düşecektir.\n\nOnaylıyor musunuz?`
+                : 'Dış nakliye firması cari hesabına kaydı düşecektir.\n\nOnaylıyor musunuz?';
+            if (!confirm(msg)) { e.preventDefault(); }
+        }
+    });
+
+    document.querySelectorAll('.js-iade-iptal-btn').forEach((button) => {
+        button.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+
+            const ekipmanKod = button.dataset.ekipmanKod;
+            const kalemId = button.dataset.kalemId;
+            const csrfToken = button.dataset.csrfToken;
+
+            if(confirm(ekipmanKod + ' için iade işlemi geri alınsın mı?')) {
+                document.getElementById('iptal-kalem-id').value = kalemId;
+                document.getElementById('iptal-csrf-token').value = csrfToken;
+                document.getElementById('iptal-kalem-form').submit();
+            }
+        });
+    });
+
+    document.getElementById('menu-degisim-iptal').onclick = () => {
+    if(confirm(state.eKod + ' için yapılan makine değişimi geri alınacak. Emin misiniz?')) {
+        fetch(`/makinedegisim/degisim_iptal/${state.kId}`, {
+            method: "POST",
+            headers: {
+                "X-CSRFToken": state.kCsrf
+            }
+        }).then(() => location.reload());
+    }
+    };
+
+    window.onclick = (e) => { if(e.target === backdrop) closeModals(); else { contextMenu.style.display = 'none'; contextMenuKalem.style.display = 'none'; } };
+
+    // Dönüş fiyatı değiştir checkbox toggle
+    document.getElementById('donusFiyatDegistirCheck').addEventListener('change', function() {
+        const donusInput = document.getElementById('donusNakliyeSatisInput');
+        const lockIcon = document.getElementById('donus-lock-icon');
+        const uyari = document.getElementById('donus-fark-uyari');
+        if (this.checked) {
+            donusInput.readOnly = false;
+            donusInput.style.background = '';
+            donusInput.style.cursor = '';
+            donusInput.classList.add('border-warning');
+            lockIcon.innerHTML = '<i class="fas fa-lock-open"></i>';
+            lockIcon.className = 'input-group-text bg-warning text-white';
+            uyari.classList.remove('d-none');
+            donusInput.focus();
+        } else {
+            donusInput.readOnly = true;
+            donusInput.style.background = '#f8f9fa';
+            donusInput.style.cursor = 'not-allowed';
+            donusInput.classList.remove('border-warning');
+            lockIcon.innerHTML = '<i class="fas fa-lock"></i>';
+            lockIcon.className = 'input-group-text bg-light text-muted';
+            uyari.classList.add('d-none');
+        }
+    });
+
+    // ==================== EXCEL İÇE/DIŞA AKTARIMI ====================
+    const excelImportTrigger = document.getElementById('excel-ice-yukle-ac');
+    const excelImportInput = document.getElementById('excel-ice-yukle-input');
+    const excelImportForm = document.getElementById('excel-ice-yukle-form');
+    const excelPasswordModalEl = document.getElementById('excel-password-modal');
+    const excelPasswordInput = document.getElementById('excel-confirm-password');
+    const excelPasswordHidden = document.getElementById('excel-confirm-password-hidden');
+    const excelPasswordConfirmBtn = document.getElementById('excel-password-confirm-btn');
+    const excelPasswordModal = excelPasswordModalEl ? new bootstrap.Modal(excelPasswordModalEl) : null;
+
+    if (
+        excelImportTrigger && excelImportInput && excelImportForm &&
+        excelPasswordModal && excelPasswordInput && excelPasswordHidden && excelPasswordConfirmBtn
+    ) {
+        excelImportTrigger.addEventListener('click', function(e) {
+            e.preventDefault();
+            excelPasswordInput.value = '';
+            excelPasswordHidden.value = '';
+            excelPasswordModal.show();
+        });
+
+        excelPasswordConfirmBtn.addEventListener('click', function() {
+            const pwd = (excelPasswordInput.value || '').trim();
+            if (!pwd) {
+                excelPasswordInput.focus();
+                return;
+            }
+            excelPasswordHidden.value = pwd;
+            excelPasswordModal.hide();
+            excelImportInput.click();
+        });
+
+        excelImportInput.addEventListener('change', function() {
+            if (this.files && this.files.length > 0) {
+                excelImportForm.submit();
+            } else {
+                excelPasswordHidden.value = '';
+            }
+        });
+
+        excelPasswordInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                excelPasswordConfirmBtn.click();
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

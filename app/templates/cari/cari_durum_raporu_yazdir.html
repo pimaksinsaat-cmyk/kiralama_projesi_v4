@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <title>Cari Durum Raporu - Yazdır</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            font-size: 12px;
+            color: #222;
+            background: #f4f6f8;
+        }
+
+        .page-wrapper {
+            max-width: 1100px;
+            margin: 30px auto;
+            background: white;
+            padding: 24px 28px;
+            border-radius: 6px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.10);
+        }
+
+        @media print {
+            body { background: white; }
+            .page-wrapper {
+                max-width: 100%;
+                margin: 0;
+                padding: 0;
+                box-shadow: none;
+                border-radius: 0;
+            }
+        }
+
+        @page {
+            size: A4 landscape;
+            margin: 8mm 10mm;
+        }
+
+        /* HEADER */
+        .print-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            border-bottom: 2px solid #333;
+            padding-bottom: 6px;
+            margin-bottom: 10px;
+        }
+        .print-header h1 {
+            font-size: 16px;
+            font-weight: 700;
+            color: #111;
+        }
+        .print-header .sub {
+            font-size: 10px;
+            color: #666;
+            margin-top: 2px;
+        }
+        .print-header .meta {
+            font-size: 9px;
+            color: #666;
+            text-align: right;
+            line-height: 1.6;
+        }
+        .print-header .meta strong {
+            font-size: 10px;
+            color: #2d3e50;
+        }
+
+        /* TABLO */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+        }
+
+        col.col-no     { width: 4%; }
+        col.col-firma  { width: 35%; }
+        col.col-tipi   { width: 12%; }
+        col.col-borc   { width: 16%; }
+        col.col-alacak { width: 16%; }
+        col.col-bakiye { width: 12%; }
+        col.col-durum  { width: 10%; }
+
+        thead th {
+            background: #dbe7f3;
+            color: #18324a;
+            padding: 9px 10px;
+            text-align: left;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            border-top: 2px solid #18324a;
+            border-bottom: 2px solid #18324a;
+        }
+        thead th.text-end { text-align: right; }
+        thead th.text-center { text-align: center; }
+
+        tbody tr { border-bottom: 1px solid #dee2e6; }
+        tbody tr:nth-child(odd) { background: #f8f9fa; }
+        tbody tr:nth-child(even) { background: white; }
+        tbody td {
+            padding: 7px 10px;
+            vertical-align: middle;
+        }
+        .text-end { text-align: right; }
+        .text-center { text-align: center; }
+        .fw-bold { font-weight: 700; }
+        .text-muted { color: #6c757d; font-size: 10px; display: block; margin-top: 1px; }
+
+        .firma-adi { font-weight: 600; color: #111; }
+
+        .tipi-badge {
+            display: inline-block;
+            border: 1px solid #ced4da;
+            border-radius: 3px;
+            padding: 1px 6px;
+            font-size: 9px;
+            color: #495057;
+            background: #f8f9fa;
+        }
+
+        .durum-badge {
+            display: inline-block;
+            border-radius: 3px;
+            padding: 1px 6px;
+            font-size: 9px;
+            font-weight: 700;
+        }
+        .durum-borclu   { background: #f8d7da; color: #842029; border: 1px solid #f1aeb5; }
+        .durum-alacakli { background: #d1e7dd; color: #0f5132; border: 1px solid #a3cfbb; }
+        .durum-kapali   { background: #e9ecef; color: #6c757d; border: 1px solid #ced4da; }
+
+        .bakiye-pozitif { color: #dc3545; font-weight: 700; }
+        .bakiye-negatif { color: #198754; font-weight: 700; }
+        .bakiye-sifir   { color: #6c757d; }
+
+        /* TOPLAM SATIRI */
+        tfoot td {
+            padding: 7px 10px;
+            border-top: 2px solid #333;
+            font-weight: 700;
+            font-size: 11px;
+            background: #f0f0f0;
+        }
+
+        /* SAYFA FOOTER */
+        .print-footer {
+            margin-top: 12px;
+            padding-top: 6px;
+            border-top: 1px solid #ccc;
+            display: flex;
+            justify-content: space-between;
+            font-size: 8px;
+            color: #999;
+        }
+
+        /* EKRAN BUTONLARI */
+        .print-actions {
+            position: fixed;
+            top: 15px;
+            right: 15px;
+            z-index: 9999;
+            display: flex;
+            gap: 8px;
+        }
+        .print-actions button, .print-actions a {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-print { background: #2c3e50; color: white; }
+        .btn-print:hover { background: #1a252f; }
+        .btn-excel { background: #1f7a3f; color: white; }
+        .btn-excel:hover { background: #186132; }
+        .btn-back { background: #e9ecef; color: #333; }
+        .btn-back:hover { background: #dee2e6; }
+
+        @media print {
+            .print-actions { display: none !important; }
+            body { padding: 0; }
+            thead { display: table-header-group; }
+            thead th {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="print-actions">
+    <button class="btn-print" onclick="window.print()">
+        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M2.5 8a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1z"/><path d="M5 1a2 2 0 0 0-2 2v2H2a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h1v1a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-1h1a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-1V3a2 2 0 0 0-2-2H5zM4 3a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2H4V3zm1 10a1 1 0 0 1-1-1V9h8v3a1 1 0 0 1-1 1H5z"/></svg>
+        Yazdır / PDF
+    </button>
+    <a class="btn-excel" href="{{ url_for('cari.cari_durum_raporu_excel', q=q, sort_by=request.args.get('sort_by', 'firma_adi'), sort_dir=request.args.get('sort_dir', 'asc')) }}">
+        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.884 6.68a.5.5 0 1 0-.768.64L6.347 8.8 5.116 10.28a.5.5 0 0 0 .768.64L7 9.601l1.116 1.319a.5.5 0 0 0 .768-.64L7.653 8.8l1.231-1.48a.5.5 0 1 0-.768-.64L7 7.999 5.884 6.68z"/><path d="M14 4.5V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h5.5L14 4.5zM9.5 1.5V4a1 1 0 0 0 1 1H13"/></svg>
+        Excel'e Aktar
+    </a>
+    <button class="btn-back" onclick="window.close()">
+        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M15 8a.5.5 0 0 0-.5-.5H2.707l3.147-3.146a.5.5 0 1 0-.708-.708l-4 4a.5.5 0 0 0 0 .708l4 4a.5.5 0 0 0 .708-.708L2.707 8.5H14.5A.5.5 0 0 0 15 8z"/></svg>
+        Kapat
+    </button>
+</div>
+
+<div class="page-wrapper">
+
+<!-- HEADER -->
+<div class="print-header">
+    <div>
+        <h1>Firma Cari Durum Raporu</h1>
+        <div class="sub">Tüm finansal hareketlerin özetidir{% if q %} — Filtre: "{{ q }}"{% endif %}</div>
+    </div>
+    <div class="meta">
+        <div>Rapor Tarihi: {{ rapor_tarihi }}</div>
+        <div>Toplam Firma: {{ rapor | length }}</div>
+        <div><strong>Genel Toplam Borç: {{ "{:,.2f}".format(genel_toplam.borc_kdvli).replace(',', 'X').replace('.', ',').replace('X', '.') }} TL</strong></div>
+        <div><strong>Genel Toplam Alacak: {{ "{:,.2f}".format(genel_toplam.alacak_kdvli).replace(',', 'X').replace('.', ',').replace('X', '.') }} TL</strong></div>
+        <div><strong>Güncel Bakiye: {{ "{:,.2f}".format(genel_toplam.bakiye_kdvli).replace(',', 'X').replace('.', ',').replace('X', '.') }} TL</strong></div>
+    </div>
+</div>
+
+<!-- TABLO -->
+<table>
+    <colgroup>
+        <col class="col-no">
+        <col class="col-firma">
+        <col class="col-tipi">
+        <col class="col-borc">
+        <col class="col-alacak">
+        <col class="col-bakiye">
+        <col class="col-durum">
+    </colgroup>
+    <thead>
+        <tr>
+            <th>#</th>
+            <th>Firma Adı</th>
+            <th>Tipi</th>
+            <th class="text-end">Toplam Borç (KDV Dahil)</th>
+            <th class="text-end">Toplam Alacak (KDV Dahil)</th>
+            <th class="text-end">Güncel Bakiye (KDV Dahil)</th>
+            <th class="text-center">Durum</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for satir in rapor %}
+        <tr>
+            <td>{{ loop.index }}</td>
+            <td>
+                <span class="firma-adi">{{ satir.firma_adi }}</span>
+                {% if satir.yetkili %}
+                    <span class="text-muted">{{ satir.yetkili }}</span>
+                {% endif %}
+            </td>
+            <td>
+                <span class="tipi-badge">{{ satir.tipi if satir.tipi else 'Firma' }}</span>
+            </td>
+            <td class="text-end">
+                {{ "{:,.2f}".format(satir.borc_kdvli).replace(',', 'X').replace('.', ',').replace('X', '.') }} TL
+            </td>
+            <td class="text-end">
+                {{ "{:,.2f}".format(satir.alacak_kdvli).replace(',', 'X').replace('.', ',').replace('X', '.') }} TL
+            </td>
+            <td class="text-end">
+                {% if satir.bakiye_kdvli > 0 %}
+                    <span class="bakiye-pozitif">{{ "{:,.2f}".format(satir.bakiye_kdvli).replace(',', 'X').replace('.', ',').replace('X', '.') }} TL</span>
+                {% elif satir.bakiye_kdvli < 0 %}
+                    <span class="bakiye-negatif">{{ "{:,.2f}".format(satir.bakiye_kdvli).replace(',', 'X').replace('.', ',').replace('X', '.') }} TL</span>
+                {% else %}
+                    <span class="bakiye-sifir">0,00 TL</span>
+                {% endif %}
+            </td>
+            <td class="text-center">
+                {% if satir.bakiye > 0 %}
+                    <span class="durum-badge durum-borclu">Borçlu</span>
+                {% elif satir.bakiye < 0 %}
+                    <span class="durum-badge durum-alacakli">Alacaklı</span>
+                {% else %}
+                    <span class="durum-badge durum-kapali">Kapalı</span>
+                {% endif %}
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="text-center" style="padding:20px;">Kayıt bulunamadı.</td></tr>
+        {% endfor %}
+    </tbody>
+    {% if rapor %}
+    <tfoot>
+        <tr>
+            <td colspan="3" class="text-end">GENEL TOPLAM:</td>
+            <td class="text-end">
+                {{ "{:,.2f}".format(genel_toplam.borc_kdvli).replace(',', 'X').replace('.', ',').replace('X', '.') }} TL
+            </td>
+            <td class="text-end">
+                {{ "{:,.2f}".format(genel_toplam.alacak_kdvli).replace(',', 'X').replace('.', ',').replace('X', '.') }} TL
+            </td>
+            <td class="text-end {% if genel_toplam.bakiye_kdvli > 0 %}bakiye-pozitif{% elif genel_toplam.bakiye_kdvli < 0 %}bakiye-negatif{% endif %}">
+                {{ "{:,.2f}".format(genel_toplam.bakiye_kdvli).replace(',', 'X').replace('.', ',').replace('X', '.') }} TL
+            </td>
+            <td></td>
+        </tr>
+    </tfoot>
+    {% endif %}
+</table>
+
+<!-- FOOTER -->
+<div class="print-footer">
+    <div>{{ rapor | length }} firma listelendi</div>
+    <div>Bu belge bilgi amacıyla hazırlanmıştır.</div>
+</div>
+
+</div><!-- /page-wrapper -->
+
+</body>
+</html>

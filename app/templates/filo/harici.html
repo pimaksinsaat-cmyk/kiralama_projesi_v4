@@ -1,0 +1,248 @@
+{% extends "base.html" %}
+
+{% block title %}Harici Ekipmanlar{% endblock %}
+
+{% block content %}
+<style>
+    .container { max-width: 1500px; margin: 20px auto; padding: 20px; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 0.9em; }
+    th, td { padding: 12px; border: 1px solid #dee2e6; text-align: left; vertical-align: middle;}
+    th { background-color: #e9ecef; position: sticky; top: 0; z-index: 10; }
+    a { color: #007bff; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* Buton Stilleri */
+    .btn { display: inline-block; padding: 8px 12px; border-radius: 5px; text-decoration: none; font-weight: bold; color: white; transition: background-color 0.2s; margin-bottom: 5px; border: none; cursor: pointer; font-size: 0.9em; }
+    .btn-danger { background-color: #c82333; }
+    .btn-primary { background-color: #007bff; }
+    
+    .alert { padding: 1rem; margin-bottom: 1rem; border: 1px solid transparent; border-radius: .25rem; }
+    .alert-danger { color: #721c24; background-color: #f8d7da; border-color: #f5c6cb; }
+    .alert-success { color: #155724; background-color: #d4edda; border-color: #c3e6cb; }
+
+    /* Durum Etiketleri */
+    .badge { display: inline-block; padding: .45em .75em; font-size: .8em; font-weight: 700; line-height: 1; color: #fff; text-align: center; white-space: nowrap; vertical-align: baseline; border-radius: .25rem; }
+    .bg-warning { background-color: #ffc107; color: #343a40; } /* Harici için sarı */
+    .bg-secondary { background-color: #6c757d; }
+
+    /* Sağ Tık Menüsü (Context Menu) */
+    .context-menu { display: none; position: absolute; background-color: white; border: 1px solid #ccc; box-shadow: 0 4px 8px rgba(0,0,0,0.1); border-radius: 5px; z-index: 1000; min-width: 180px; padding: 5px 0; }
+    .context-menu-item { display: block; padding: 8px 15px; color: #333; text-decoration: none; font-size: 0.9em; }
+    .context-menu-item:hover { background-color: #f5f5f5; color: #000; text-decoration: none; }
+    .context-menu-item.delete { color: #dc3545; font-weight: bold; }
+    .context-menu-item.delete:hover { background-color: #dc3545; color: white; }
+    .context-menu-divider { height: 1px; margin: 5px 0; background-color: #eee; }
+    
+    /* Arama ve Sayfalama */
+    .search-form { display: flex; gap: 10px; margin-bottom: 15px; }
+    .search-form input[type="text"] { flex-grow: 1; padding: 8px; border: 1px solid #ccc; border-radius: 5px; font-size: 1em; }
+    .search-form button { padding: 8px 15px; border: none; border-radius: 5px; background-color: #007bff; color: white; font-weight: bold; cursor: pointer; }
+    .pagination { margin-top: 20px; text-align: center; }
+    .pagination a, .pagination span { display: inline-block; padding: 8px 12px; margin: 0 3px; border: 1px solid #dee2e6; border-radius: 5px; text-decoration: none; color: #007bff; }
+    .pagination a:hover { background-color: #e9ecef; }
+    .pagination .active { background-color: #007bff; color: white; border-color: #007bff; }
+    .pagination .disabled { color: #6c757d; pointer-events: none; }
+</style>
+
+<div class="container">
+    <h1>Harici Ekipman Listesi (Dış Tedarik)</h1>
+    
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+            <div class="alert alert-{{ 'danger' if category == 'danger' else 'success' }}" role="alert">
+                {{ message }}
+            </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <p>
+        <a href="{{ url_for('filo.index') }}">Pimaks Makine Parkına Dön</a>
+         &nbsp; | &nbsp; 
+        <a href="{{ url_for('main.index') }}">Ana Sayfaya Dön</a>
+    </p>
+
+    <!-- Arama Formu -->
+    <form method="GET" action="{{ url_for('filo.harici') }}" class="search-form">
+        <input type="text" name="q" placeholder="Makine Kodu, Marka, Model veya Seri No ile ara..." value="{{ q or '' }}">
+        <button type="submit">Bul</button>
+    </form>
+
+    <table>
+        <thead>
+            <tr>
+                <th>
+                    Makine Kodu
+                    <br>
+                    <small class="text-muted" style="font-weight: normal;">(Seçenekler için sağ tık)</small>
+                </th>
+                <!-- GÜNCELLEME: Marka ve Model Başlığı Eklendi -->
+                <th>Marka / Model / Tip</th>
+                <th>Seri No</th>
+                <th>Tedarikçi Firma</th>
+                <th>Durum</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for ekipman in ekipmanlar %}
+            <tr class="ekipman-satiri"
+                data-ekipman-id="{{ ekipman.id }}"
+                data-duzenle-url="{{ url_for('filo.duzelt', id=ekipman.id) }}"
+                data-sil-url="{{ url_for('filo.sil', id=ekipman.id) }}"
+                data-bilgi-url="{{ url_for('filo.bilgi', id=ekipman.id) }}"
+                data-csrf-token="{{ csrf_token() }}"
+                data-ekipman-kod="{{ ekipman.kod }}"
+                >
+                <td>
+                    <strong>{{ ekipman.kod }}</strong>
+                </td> 
+                
+                <!-- GÜNCELLEME: Marka ve Model Gösterimi Eklendi -->
+                <td>
+                    {% if ekipman.marka and ekipman.marka != 'Bilinmiyor' %}
+                        <strong>{{ ekipman.marka }}</strong>
+                    {% endif %}
+                    
+                    {% if ekipman.model %}
+                        {{ ekipman.model }}
+                    {% endif %}
+                    
+                    <br>
+                    <small class="text-muted">({{ ekipman.tipi }})</small>
+                </td>
+                
+                <td>{{ ekipman.seri_no }}</td>
+                
+                <td>
+                    {% if ekipman.firma_tedarikci %}
+                        <a href="{{ url_for('firmalar.bilgi', id=ekipman.firma_tedarikci.id) }}">
+                            {{ ekipman.firma_tedarikci.firma_adi }}
+                        </a>
+                    {% else %}
+                        <span class="text-muted">Bilinmiyor</span>
+                    {% endif %}
+                </td>
+                
+                <td>
+                    <span class="badge bg-warning">Dış Tedarik</span>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="5">
+                    {% if q %}
+                        "'{{ q }}'" için arama sonucu bulunamadı.
+                    {% else %}
+                        Kayıtlı harici ekipman bulunamadı.
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- Sayfalama -->
+    {% if pagination %}
+    <div class="pagination">
+        <a href="{{ url_for('filo.harici', page=pagination.prev_num, q=q) if pagination.has_prev else '#' }}"
+           class="{{ 'disabled' if not pagination.has_prev else '' }}">
+           &laquo; Önceki
+        </a>
+        {% for page_num in pagination.iter_pages() %}
+            {% if page_num %}
+                {% if page_num != pagination.page %}
+                    <a href="{{ url_for('filo.harici', page=page_num, q=q) }}">{{ page_num }}</a>
+                {% else %}
+                    <span class="active">{{ page_num }}</span>
+                {% endif %}
+            {% else %}
+                <span class="disabled">...</span>
+            {% endif %}
+        {% endfor %}
+        <a href="{{ url_for('filo.harici', page=pagination.next_num, q=q) if pagination.has_next else '#' }}"
+           class="{{ 'disabled' if not pagination.has_next else '' }}">
+           Sonraki &raquo;
+        </a>
+    </div>
+    <div style="text-align: center; font-size: 0.9em; color: #555;">
+        Toplam {{ pagination.total }} kayıttan {{ pagination.first }} - {{ pagination.last }} arası gösteriliyor.
+    </div>
+    {% endif %}
+
+</div>
+
+<!-- Sağ Tık Menüsü (Sadeleştirilmiş) -->
+<div id="context-menu" class="context-menu">
+    <a href="#" class="context-menu-item" id="menu-bilgi">
+        <i class="fa fa-eye"></i> Detay Görüntüle
+    </a>
+    <!-- Harici makineyi düzenleme genelde kısıtlıdır ama link bırakalım -->
+    <a href="#" class="context-menu-item" id="menu-duzenle">
+        <i class="fa fa-pencil"></i> Kaydı Düzenle
+    </a>
+    <div class="context-menu-divider"></div>
+    <a href="#" class="context-menu-item delete" id="menu-sil">
+        <i class="fa fa-trash"></i> Kaydı Sil
+    </a>
+</div>
+
+<!-- Gizli Silme Formu -->
+<form id="delete-form" method="POST" style="display: none;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+</form>
+
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    
+    const contextMenu = document.getElementById('context-menu');
+    const deleteForm = document.getElementById('delete-form');
+    const menuBilgi = document.getElementById('menu-bilgi');
+    const menuDuzenle = document.getElementById('menu-duzenle');
+    const menuSil = document.getElementById('menu-sil');
+    
+    let currentSilUrl = null;
+    let currentCsrfToken = null;
+    let currentEkipmanKod = null;
+
+    document.querySelectorAll('.ekipman-satiri').forEach(row => {
+        row.addEventListener('contextmenu', function(event) {
+            event.preventDefault();
+
+            currentSilUrl = row.dataset.silUrl;
+            currentCsrfToken = row.dataset.csrfToken;
+            currentEkipmanKod = row.dataset.ekipmanKod;
+            menuBilgi.href = row.dataset.bilgiUrl;
+            menuDuzenle.href = row.dataset.duzenleUrl;
+
+            contextMenu.style.left = event.pageX + 'px';
+            contextMenu.style.top = event.pageY + 'px';
+            contextMenu.style.display = 'block';
+        });
+    });
+
+    // Menü dışına tıklama
+    window.addEventListener('click', function() {
+        if (contextMenu.style.display === 'block') {
+            contextMenu.style.display = 'none';
+        }
+    });
+
+    // Sil butonu
+    menuSil.addEventListener('click', function(event) {
+        event.preventDefault();
+        if (currentSilUrl && currentEkipmanKod) {
+            const onay = confirm("'" + currentEkipmanKod + "' kodlu HARİCİ ekipman kaydını silmek istediğinizden emin misiniz?");
+            if (onay) {
+                deleteForm.action = currentSilUrl;
+                deleteForm.querySelector('input[name="csrf_token"]').value = currentCsrfToken;
+                deleteForm.submit();
+            }
+        }
+        contextMenu.style.display = 'none';
+    });
+});
+</script>
+
+{% endblock %}

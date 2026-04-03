@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}Fatura Detayı{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h4 class="mb-0"><i class="fa fa-file-invoice"></i> Fatura Detayı</h4>
+        </div>
+        <div class="card-body">
+            <dl class="row">
+                <dt class="col-sm-4">Firma</dt>
+                <dd class="col-sm-8">{{ hizmet.firma.firma_adi }}</dd>
+                <dt class="col-sm-4">Tarih</dt>
+                <dd class="col-sm-8">{{ hizmet.tarih }}</dd>
+                <dt class="col-sm-4">Tutar</dt>
+                <dd class="col-sm-8">{{ hizmet.tutar }} ₺</dd>
+                <dt class="col-sm-4">KDV Oranı</dt>
+                <dd class="col-sm-8">{{ hizmet.kdv_orani }}%</dd>
+                <dt class="col-sm-4">Açıklama</dt>
+                <dd class="col-sm-8">{{ hizmet.aciklama }}</dd>
+                <dt class="col-sm-4">Yön</dt>
+                <dd class="col-sm-8">{{ 'Satış (Gelir)' if hizmet.yon == 'giden' else 'Alış (Gider)' }}</dd>
+                <dt class="col-sm-4">Fatura No</dt>
+                <dd class="col-sm-8">{{ hizmet.fatura_no or '-' }}</dd>
+                <dt class="col-sm-4">Vade Tarihi</dt>
+                <dd class="col-sm-8">{{ hizmet.vade_tarihi or '-' }}</dd>
+            </dl>
+            <div class="mt-3">
+                <a href="{{ url_for('cari.hizmet_duzelt', id=hizmet.id) }}" class="btn btn-warning">Düzenle</a>
+                <a href="{{ url_for('firmalar.bilgi', id=hizmet.firma_id) }}" class="btn btn-secondary">Geri Dön</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

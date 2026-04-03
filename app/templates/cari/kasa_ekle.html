@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}Yeni Kasa/Banka Tanımla{% endblock %}
+{% block content %}
+<style>
+    .form-section {
+        background-color: #fff;
+        padding: 30px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        max-width: 600px;
+        margin: 20px auto;
+    }
+</style>
+
+<div class="container">
+    <div class="form-section">
+        <h2 class="mb-4 text-center">Yeni Kasa veya Banka Hesabı</h2>
+        
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <form method="POST">
+            {{ form.hidden_tag() }}
+            
+            <div class="mb-3">
+                {{ form.kasa_adi.label(class="form-label fw-bold") }}
+                {{ form.kasa_adi(class="form-control", placeholder="Örn: Akbank TL Hesabı") }}
+            </div>
+            
+            <div class="row mb-3">
+                <div class="col">
+                    {{ form.tipi.label(class="form-label fw-bold") }}
+                    {{ form.tipi(class="form-select") }}
+                </div>
+                <div class="col">
+                    {{ form.para_birimi.label(class="form-label fw-bold") }}
+                    {{ form.para_birimi(class="form-select") }}
+                </div>
+                <div class="col">
+                    {{ form.banka_sube_adi.label(class="form-label fw-bold") }}
+                    {{ form.banka_sube_adi(class="form-control", placeholder="Örn: Dudullu Şubesi") }}
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                {{ form.bakiye.label(class="form-label fw-bold") }}
+                <div class="input-group">
+                    <span class="input-group-text">₺</span>
+                    <!-- Akıllı Giriş -->
+                    {{ form.bakiye(class="form-control currency-input", placeholder="0,00", type="text", autocomplete="off", style="font-size: 1.2em; font-weight: bold;") }}
+                </div>
+                <small class="text-muted">Mevcut bakiye varsa giriniz (Açılış Bakiyesi)</small>
+            </div>
+            
+            <div class="d-flex justify-content-between mt-4">
+                <a href="{{ url_for('cari.kasa_listesi') }}" class="btn btn-secondary">İptal</a>
+                <button type="submit" class="btn btn-primary">Kaydet</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const currencyInputs = document.querySelectorAll('.currency-input');
+
+    function formatCurrency(value) {
+        if (!value) return '';
+        // 1.500 -> 1500 (Noktaları sil), sonra virgülü nokta yap
+        let v = value.toString().replace(/\./g, '').replace(',', '.');
+        let number = parseFloat(v);
+        if (isNaN(number)) return value;
+        return number.toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
+
+    function cleanCurrency(val) {
+        if (!val) return "0.00";
+        // 1.500,00 -> 1500.00 formatına çevir (DecimalField için gerekli)
+        return val.toString().replace(/\./g, '').replace(',', '.');
+    }
+
+    function formatInput(input) {
+        let value = input.value;
+        if (value === '') return;
+
+        let cleanVal = value.replace(/[^\d,]/g, '');
+        let parts = cleanVal.split(',');
+        if (parts.length > 2) cleanVal = parts[0] + ',' + parts.slice(1).join('');
+        
+        parts = cleanVal.split(',');
+        let integerPart = parts[0];
+        let decimalPart = parts.length > 1 ? ',' + parts[1].substring(0, 2) : ''; 
+        let formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+        let formattedValue = formattedInteger + decimalPart;
+        
+        if (cleanVal === ',') formattedValue = '0,';
+        input.value = formattedValue;
+    }
+
+    currencyInputs.forEach(input => {
+        if (input.value) input.value = formatCurrency(input.value);
+
+        input.addEventListener('input', function() { formatInput(this); });
+        
+        input.addEventListener('keydown', function(e) {
+            const allowed = ['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete', 'Escape', 'Enter'];
+            if (allowed.includes(e.key)) return;
+            if (e.ctrlKey || e.metaKey) return;
+            if (!/^[0-9,]$/.test(e.key)) e.preventDefault();
+        });
+
+        input.addEventListener('focus', function() {
+            let val = this.value;
+            let raw = val.replace(/\./g, '');
+            if (raw === '0,00' || raw === '0') raw = '';
+            this.value = raw;
+            setTimeout(() => { this.select(); }, 50);
+        });
+
+        input.addEventListener('blur', function() {
+            this.value = formatCurrency(this.value);
+        });
+
+        // NOT: KasaForm 'DecimalField' kullandığı için, veriyi 1500.00 (nokta ondalık) formatında göndermeliyiz.
+        // Bu yüzden burada submit listener'ını AKTİF tutuyoruz.
+        input.form.addEventListener('submit', function() {
+            input.value = cleanCurrency(input.value);
+        });
+    });
+});
+</script>
+{% endblock %}

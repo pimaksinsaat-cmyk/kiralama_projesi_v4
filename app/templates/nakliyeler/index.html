@@ -1,0 +1,624 @@
+{% extends "base.html" %}
+
+{% block title %}Nakliye Sefer Listesi{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h2 class="mb-0"><i class="fas fa-truck text-primary me-2"></i> Nakliye Listesi</h2>
+        <small class="text-muted">Operasyonel lojistik ve araç yönetimi</small>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('nakliyeler.yazdir', baslangic=baslangic, bitis=bitis, plaka=secili_plaka, taseron_id=secili_taseron_id, firma_id=secili_firma_id) }}" target="_blank" class="btn btn-outline-dark shadow-sm px-3">
+            <i class="fas fa-print me-1"></i> Yazdır / PDF
+        </a>
+        <a href="{{ url_for('nakliyeler.ekle') }}" class="btn btn-primary shadow-sm px-4">
+            <i class="fas fa-plus me-1"></i> Yeni Nakliye Ekle
+        </a>
+    </div>
+</div>
+
+<!-- Özet İstatistik Kartları -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card border-start border-primary border-4 shadow-sm h-100">
+            <div class="card-body py-3">
+                <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Toplam Sefer</div>
+                <div class="h4 mb-0 font-weight-bold text-gray-800">{{ stats.sefer_sayisi }} Adet</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-start border-success border-4 shadow-sm h-100">
+            <div class="card-body py-3">
+                <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Toplam Ciro (Navlun)</div>
+                <div class="h4 mb-0 font-weight-bold text-gray-800">{{ "{:,.2f}".format(stats.ciro).replace(",", "X").replace(".", ",").replace("X", ".") }} ₺</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-start border-danger border-4 shadow-sm h-100">
+            <div class="card-body py-3">
+                <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">Dış Tedarik (Maliyet)</div>
+                <div class="h4 mb-0 font-weight-bold text-gray-800">{{ "{:,.2f}".format(stats.maliyet).replace(",", "X").replace(".", ",").replace("X", ".") }} ₺</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-start border-info border-4 shadow-sm h-100">
+            <div class="card-body py-3">
+                <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Tahmini Brüt Kâr</div>
+                <div class="h4 mb-0 font-weight-bold text-gray-800">{{ "{:,.2f}".format(stats.kar).replace(",", "X").replace(".", ",").replace("X", ".") }} ₺</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Gelişmiş Filtreleme Paneli -->
+<div class="card shadow-sm mb-4 bg-light border-0">
+    <div class="card-body p-3">
+        <form method="GET" action="{{ url_for('nakliyeler.index') }}" class="row g-3 align-items-end" id="nakliye-filtre-form">
+            <div class="col-md-2">
+                <label class="form-label small fw-bold text-muted mb-1">Başlangıç</label>
+                <input type="date" name="baslangic" id="nakliye-baslangic" class="form-control form-control-sm" value="{{ baslangic or '' }}">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold text-muted mb-1">Bitiş</label>
+                <input type="date" name="bitis" id="nakliye-bitis" class="form-control form-control-sm" value="{{ bitis or '' }}">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold text-muted mb-1">Müşteri Firma</label>
+                <div class="position-relative firma-search-container">
+                    <div class="input-group input-group-sm">
+                        <input type="text" id="firma-arama" class="form-control form-control-sm" placeholder="Firma adı ara..." autocomplete="off">
+                        <button class="btn btn-outline-secondary" type="button" id="firma-dropdown-toggle" title="Tüm Firmalar">
+                            <i class="fas fa-chevron-down"></i>
+                        </button>
+                    </div>
+                    <input type="hidden" id="firma_id" name="firma_id" value="{{ secili_firma_id or '' }}">
+                    <ul id="firma-dropdown" class="list-group shadow-sm firma-dropdown-list" style="display:none; position:absolute; top:100%; left:0; right:0; max-height:250px; overflow-y:auto; z-index:1000; margin-top:2px;">
+                    </ul>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold text-muted mb-1">Tedarikçi (Taşeron)</label>
+                <select name="taseron_id" class="form-select form-select-sm filter-select-hover">
+                    <option value="">Tüm Tedarikçiler</option>
+                    {% if taseron_listesi %}
+                        {% for t in taseron_listesi %}
+                            <option value="{{ t.id }}" {% if t.id|string == secili_taseron_id|string %}selected{% endif %}>{{ t.firma_adi | truncate_name }}</option>
+                        {% endfor %}
+                    {% endif %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold text-muted mb-1">Araç (Plaka)</label>
+                <select name="plaka" class="form-select form-select-sm filter-select-hover">
+                    <option value="">Tüm Araçlar</option>
+                    {% for p in plaka_listesi %}
+                        <option value="{{ p }}" {% if p == secili_plaka %}selected{% endif %}>{{ p }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-1 d-grid gap-2 d-md-flex justify-content-md-end">
+                <button type="submit" class="btn btn-primary btn-sm px-3 shadow-sm">
+                    <i class="fas fa-filter"></i>
+                </button>
+                <a href="{{ url_for('nakliyeler.index') }}" class="btn btn-outline-secondary btn-sm" title="Filtreleri Sıfırla">
+                    <i class="fas fa-sync-alt"></i>
+                </a>
+            </div>
+            <div class="col-12">
+                <div class="d-flex flex-wrap gap-2 pt-1">
+                    <button type="button" class="btn btn-outline-primary btn-sm hizli-tarih-btn" data-aralik="bugun">Bugün</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm hizli-tarih-btn" data-gun="30">30 gün</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm hizli-tarih-btn" data-gun="60">60 gün</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm hizli-tarih-btn" data-gun="90">90 gün</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm hizli-tarih-btn" data-aralik="yilbasi">Yılbaşından beri</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="alert alert-info border-0 shadow-sm small mb-3 py-2">
+    <i class="fas fa-info-circle me-2"></i> 
+    İşlem yapmak için satırların üzerine gelip <b>SAĞ TIKLAYINIZ</b>.
+</div>
+
+<div class="card shadow border-0 overflow-hidden">
+    <div class="card-body p-0"> 
+        <div class="table-responsive">
+            <table class="table table-hover table-striped align-middle mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th style="width:4%;">#</th>
+                        <th class="ps-3">Tarih</th>
+                        <th>Müşteri Firma</th>
+                        <th>Güzergah / Açıklama</th>
+                        <th>Plaka / Tedarikçi</th>
+                        <th class="text-end">Matrah</th>
+                        <th class="text-end">Kdv Oranı</th>
+                        <th class="text-end">KDV</th>
+                        <th class="text-end">Tutar</th>
+                        <th class="text-center">Durum</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for nakliye in nakliyeler %}
+                        <tr class="sag-tik-satir" 
+                            style="cursor: context-menu;"
+                            data-detay-url="{{ url_for('nakliyeler.detay', id=nakliye.id) }}"
+                            data-duzenle-url="{{ url_for('nakliyeler.duzenle', id=nakliye.id) }}"
+                            data-sil-url="{{ url_for('nakliyeler.sil', id=nakliye.id) }}"
+                            data-islendi="{{ '1' if nakliye.cari_islendi_mi else '0' }}"
+                            data-kiralama="{{ '1' if nakliye.kiralama_id else '0' }}">
+                            
+                            <td>{{ (pagination.page - 1) * pagination.per_page + loop.index }}</td>
+                            <td class="ps-3">{{ nakliye.tarih.strftime('%d.%m.%Y') }}</td>
+                            
+                            <td>
+                                <a href="{{ url_for('firmalar.bilgi', id=nakliye.firma.id) }}" class="text-decoration-none fw-bold text-dark" title="{{ nakliye.firma.firma_adi }}">
+                                    {{ nakliye.firma.firma_adi | truncate_name }} 
+                                    <i class="fas fa-external-link-alt small text-muted ms-1" style="font-size: 0.7rem;"></i>
+                                </a>
+                            </td>
+                            
+                            <td>
+                                <div class="text-truncate" style="max-width: 200px;" title="{{ nakliye.guzergah }}">
+                                    {{ nakliye.guzergah }}
+                                </div>
+                                {% if nakliye.aciklama %}
+                                    <small class="text-muted d-block text-truncate" style="max-width: 200px;">{{ nakliye.aciklama }}</small>
+                                {% endif %}
+                            </td>
+
+                            <td>
+                                {% if nakliye.nakliye_tipi == 'taseron' and nakliye.taseron_firma %}
+                                    <div class="d-flex flex-column">
+                                        <span class="badge bg-info text-dark border-info shadow-sm mb-1" style="font-size: 0.75rem; width: fit-content;" title="{{ nakliye.taseron_firma.firma_adi }}">
+                                            <i class="fas fa-truck-loading me-1"></i> {{ nakliye.taseron_firma.firma_adi | truncate_name }}
+                                        </span>
+                                        {% if nakliye.plaka %}
+                                            <small class="text-muted fw-bold ms-1" style="font-size: 0.7rem;">
+                                                <i class="fas fa-id-card me-1"></i> {{ nakliye.plaka }}
+                                            </small>
+                                        {% endif %}
+                                    </div>
+                                {% else %}
+                                    <span class="badge bg-white text-dark border shadow-sm">
+                                        <i class="fas fa-shuttle-van me-1 text-primary"></i> {{ nakliye.plaka or '-' }}
+                                    </span>
+                                {% endif %}
+                            </td>
+                            
+                            <td class="text-end">
+                                {{ "{:,.2f}".format(nakliye.tutar or 0).replace(',', 'X').replace('.', ',').replace('X', '.') }} ₺
+                            </td>
+                            <td class="text-end">
+                                {% if nakliye.kiralama_id and nakliye.kiralama and nakliye.kiralama.kalemler %}
+                                    {% set kiralama_kdv = nakliye.kiralama.kalemler[0].nakliye_satis_kdv or 0 %}
+                                    {% if kiralama_kdv and kiralama_kdv != 0 %}
+                                        {{ kiralama_kdv }} %
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                {% else %}
+                                    {% set kdv_orani = nakliye.kdv_orani or 0 %}
+                                    {% if kdv_orani and kdv_orani != 0 %}
+                                        {{ kdv_orani }} %
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                {% if nakliye.kiralama_id and nakliye.kiralama and nakliye.kiralama.kalemler %}
+                                    {% set kdv_orani = nakliye.kiralama.kalemler[0].nakliye_satis_kdv or 0 %}
+                                {% else %}
+                                    {% set kdv_orani = nakliye.kdv_orani or 0 %}
+                                {% endif %}
+                                {% if kdv_orani and kdv_orani != 0 %}
+                                    {{ "{:,.2f}".format((nakliye.tutar|float) * (kdv_orani / 100.0)).replace(',', 'X').replace('.', ',').replace('X', '.') }} ₺
+                                {% else %}
+                                    0,00 ₺
+                                {% endif %}
+                            </td>
+                            <td class="text-end fw-bold text-primary">
+                                {% if nakliye.kiralama_id and nakliye.kiralama and nakliye.kiralama.kalemler %}
+                                    {% set kdv_orani = nakliye.kiralama.kalemler[0].nakliye_satis_kdv or 0 %}
+                                {% else %}
+                                    {% set kdv_orani = nakliye.kdv_orani or 0 %}
+                                {% endif %}
+                                {% set matrah = nakliye.tutar or 0 %}
+                                {% set kdv = (matrah|float) * (kdv_orani / 100.0) %}
+                                {{ "{:,.2f}".format((matrah|float) + kdv).replace(',', 'X').replace('.', ',').replace('X', '.') }} ₺
+                            </td>
+                            
+                            <td class="text-center">
+                                <div class="d-flex align-items-center justify-content-center gap-2">
+                                    {% if nakliye.kiralama_id %}
+                                        <i class="fas fa-lock text-muted" title="Kiralama Bağlantılı Kayıt"></i>
+                                    {% endif %}
+                                    
+                                    {% if nakliye.cari_islendi_mi %}
+                                        <span class="badge rounded-pill bg-success-subtle text-success border border-success-subtle">
+                                            <i class="fas fa-check-circle me-1"></i> İşlendi
+                                        </span>
+                                    {% else %}
+                                        <span class="badge rounded-pill bg-light text-muted border">Bekliyor</span>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="10" class="text-center py-5 text-muted">
+                                <i class="fas fa-box-open fa-2x mb-3 d-block opacity-25"></i>
+                                Henüz nakliye sefer kaydı bulunmuyor.
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
+    <form method="GET" action="{{ url_for('nakliyeler.index') }}" class="d-flex align-items-center gap-2 mb-0">
+        <input type="hidden" name="baslangic" value="{{ baslangic or '' }}">
+        <input type="hidden" name="bitis" value="{{ bitis or '' }}">
+        <input type="hidden" name="plaka" value="{{ secili_plaka or '' }}">
+        <input type="hidden" name="taseron_id" value="{{ secili_taseron_id or '' }}">
+        <input type="hidden" name="firma_id" value="{{ secili_firma_id or '' }}">
+        <label for="nakliyeler-per-page" class="small text-muted mb-0">Sayfa başına</label>
+        <select id="nakliyeler-per-page" name="per_page" class="form-select form-select-sm" style="max-width:130px;" onchange="this.form.submit()">
+            <option value="10" {{ 'selected' if per_page == 10 else '' }}>10</option>
+            <option value="25" {{ 'selected' if per_page == 25 else '' }}>25</option>
+            <option value="50" {{ 'selected' if per_page == 50 else '' }}>50</option>
+            <option value="100" {{ 'selected' if per_page == 100 else '' }}>100</option>
+        </select>
+    </form>
+
+    {% if pagination %}
+    <ul class="pagination mb-0">
+        <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('nakliyeler.index', page=pagination.prev_num, per_page=per_page, baslangic=baslangic, bitis=bitis, plaka=secili_plaka, taseron_id=secili_taseron_id, firma_id=secili_firma_id) }}">&laquo;</a>
+        </li>
+        {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
+            {% if page_num %}
+            <li class="page-item {% if page_num == pagination.page %}active{% endif %}">
+                <a class="page-link" href="{{ url_for('nakliyeler.index', page=page_num, per_page=per_page, baslangic=baslangic, bitis=bitis, plaka=secili_plaka, taseron_id=secili_taseron_id, firma_id=secili_firma_id) }}">{{ page_num }}</a>
+            </li>
+            {% else %}
+            <li class="page-item disabled"><span class="page-link">&hellip;</span></li>
+            {% endif %}
+        {% endfor %}
+        <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('nakliyeler.index', page=pagination.next_num, per_page=per_page, baslangic=baslangic, bitis=bitis, plaka=secili_plaka, taseron_id=secili_taseron_id, firma_id=secili_firma_id) }}">&raquo;</a>
+        </li>
+    </ul>
+    {% endif %}
+</div>
+
+<!-- ÖZEL SAĞ TIK MENÜSÜ -->
+<div id="customContextMenu" class="dropdown-menu shadow-lg border-0 py-2" style="display:none; position:fixed; z-index:9999; min-width: 200px;">
+    <h6 class="dropdown-header border-bottom pb-2 mb-2 text-primary">
+        <i class="fas fa-tasks me-2"></i>Sefer İşlemleri
+    </h6>
+    
+    <a class="dropdown-item py-2" href="#" id="ctxDetay">
+        <i class="fas fa-eye text-info me-3"></i> Detaylı Görünüm
+    </a>
+    
+    <div id="ctxDuzenleGrup">
+        <a class="dropdown-item py-2" href="#" id="ctxDuzenle">
+            <i class="fas fa-edit text-warning me-3"></i> Kaydı Düzenle
+        </a>
+        <div class="dropdown-divider"></div>
+        <a class="dropdown-item py-2 text-danger fw-bold" href="#" id="ctxSilTrigger">
+            <i class="fas fa-trash-alt me-3"></i> Seferi Sil
+        </a>
+    </div>
+
+    <div id="ctxKilitliMesaj" class="px-3 py-2 text-center" style="display:none;">
+        <span class="badge bg-light text-muted border p-2 w-100">
+            <i class="fas fa-lock me-2"></i> Kiralama'dan Yönetilir
+        </span>
+    </div>
+</div>
+
+<!-- SİLME ONAY MODAL -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-danger text-white border-0">
+                <h5 class="modal-title"><i class="fas fa-exclamation-triangle me-2"></i> Silme Onayı</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                Bu nakliye kaydını silmek istediğinize emin misiniz?<br>
+                <div class="alert alert-warning mt-3 mb-0 small border-0 bg-warning-subtle text-dark">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <b>Önemli:</b> Bu işlem bağlı olan cari hizmet kaydını ve maliyet kayıtlarını da otomatik olarak silecektir.
+                </div>
+            </div>
+            <div class="modal-footer bg-light border-0">
+                <button type="button" class="btn btn-secondary px-4" data-bs-dismiss="modal">Vazgeç</button>
+                <form id="deleteForm" action="" method="POST" style="display:inline;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-danger px-4 shadow-sm">Evet, Kalıcı Olarak Sil</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const filtreForm = document.getElementById('nakliye-filtre-form');
+        const baslangicInput = document.getElementById('nakliye-baslangic');
+        const bitisInput = document.getElementById('nakliye-bitis');
+
+        // FIRMA AUTOCOMPLETE
+        const firmaAramaInput = document.getElementById('firma-arama');
+        const firmaDropdown = document.getElementById('firma-dropdown');
+        const firmaIdInput = document.getElementById('firma_id');
+        const firmaDropdownToggle = document.getElementById('firma-dropdown-toggle');
+        const firmaListesi = [
+            {% for f in firma_listesi %}
+            { id: {{ f.id }}, firma_adi: '{{ f.firma_adi | replace("'", "\\'") }}' }{{ "," if not loop.last }}
+            {% endfor %}
+        ];
+
+        function truncateName(name) {
+            return name.split(' ').slice(0, 4).join(' ');
+        }
+
+        function renderFirmaList(firmalar) {
+            firmaDropdown.innerHTML = '';
+            if (firmalar.length === 0) {
+                const item = document.createElement('li');
+                item.className = 'list-group-item small text-muted';
+                item.textContent = 'Firma bulunamadı';
+                firmaDropdown.appendChild(item);
+                return;
+            }
+
+            firmalar.slice(0, 20).forEach(firma => {
+                const item = document.createElement('li');
+                item.className = 'list-group-item list-group-item-action small cursor-pointer';
+                item.textContent = truncateName(firma.firma_adi);
+                item.title = firma.firma_adi;
+                item.onclick = (e) => {
+                    e.preventDefault();
+                    firmaAramaInput.value = truncateName(firma.firma_adi);
+                    firmaIdInput.value = firma.id;
+                    firmaDropdown.style.display = 'none';
+                    filtreForm.submit();
+                };
+                item.style.cursor = 'pointer';
+                firmaDropdown.appendChild(item);
+            });
+        }
+
+        // Input değiştiğinde filtrele
+        firmaAramaInput.addEventListener('input', function() {
+            const arama = this.value.toLowerCase().trim();
+
+            if (arama.length === 0) {
+                firmaDropdown.style.display = 'none';
+                return;
+            }
+
+            const eslesen = firmaListesi.filter(f =>
+                f.firma_adi.toLowerCase().includes(arama)
+            );
+
+            renderFirmaList(eslesen);
+            firmaDropdown.style.display = 'block';
+        });
+
+        // Dropdown toggle butonuna tıklandığında tüm firmalar göster
+        firmaDropdownToggle.addEventListener('click', function(e) {
+            e.preventDefault();
+            if (firmaDropdown.style.display === 'none') {
+                renderFirmaList(firmaListesi.sort((a, b) => a.firma_adi.localeCompare(b.firma_adi)));
+                firmaDropdown.style.display = 'block';
+                firmaAramaInput.focus();
+            } else {
+                firmaDropdown.style.display = 'none';
+            }
+        });
+
+        // Focus olduğunda dropdown göster (eğer içerik varsa)
+        firmaAramaInput.addEventListener('focus', function() {
+            if (firmaListesi.length > 0 && this.value.length === 0) {
+                renderFirmaList(firmaListesi.sort((a, b) => a.firma_adi.localeCompare(b.firma_adi)));
+                firmaDropdown.style.display = 'block';
+            }
+        });
+
+        // Dropdown dışına tıklandığında kapat
+        document.addEventListener('click', function(e) {
+            const container = document.querySelector('.firma-search-container');
+            if (!container.contains(e.target)) {
+                firmaDropdown.style.display = 'none';
+            }
+        });
+
+        // Sayfa yüklendiğinde seçili firma adını göster
+        const seciliFirmaId = parseInt(firmaIdInput.value);
+        if (seciliFirmaId) {
+            const seciliFirma = firmaListesi.find(f => f.id === seciliFirmaId);
+            if (seciliFirma) {
+                firmaAramaInput.value = truncateName(seciliFirma.firma_adi);
+            }
+        }
+
+        function formatDate(dateValue) {
+            const yil = dateValue.getFullYear();
+            const ay = String(dateValue.getMonth() + 1).padStart(2, '0');
+            const gun = String(dateValue.getDate()).padStart(2, '0');
+            return `${yil}-${ay}-${gun}`;
+        }
+
+        document.querySelectorAll('.hizli-tarih-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const bugun = new Date();
+                const bitisTarihi = new Date(bugun.getFullYear(), bugun.getMonth(), bugun.getDate());
+                let baslangicTarihi;
+
+                if (this.dataset.aralik === 'bugun') {
+                    baslangicInput.value = formatDate(bugun);
+                    bitisInput.value = formatDate(bugun);
+                } else if (this.dataset.aralik === 'yilbasi') {
+                    baslangicTarihi = new Date(bitisTarihi.getFullYear(), 0, 1);
+                    baslangicInput.value = formatDate(baslangicTarihi);
+                    bitisInput.value = formatDate(bitisTarihi);
+                } else {
+                    const gunSayisi = parseInt(this.dataset.gun || '0', 10);
+                    baslangicTarihi = new Date(bitisTarihi);
+                    baslangicTarihi.setDate(baslangicTarihi.getDate() - gunSayisi);
+                    baslangicInput.value = formatDate(baslangicTarihi);
+                    bitisInput.value = formatDate(bitisTarihi);
+                }
+                filtreForm.submit();
+            });
+        });
+
+        const menu = document.getElementById('customContextMenu');
+        const detayLink = document.getElementById('ctxDetay');
+        const duzenleLink = document.getElementById('ctxDuzenle');
+        const duzenleGrup = document.getElementById('ctxDuzenleGrup');
+        const silTrigger = document.getElementById('ctxSilTrigger');
+        const kilitliMesaj = document.getElementById('ctxKilitliMesaj');
+        
+        const deleteModalEl = document.getElementById('deleteModal');
+        const deleteForm = document.getElementById('deleteForm');
+        const deleteModal = new bootstrap.Modal(deleteModalEl);
+
+        let currentDeleteUrl = "";
+
+        // SAĞ TIK MANTIĞI
+        const rows = document.querySelectorAll('.sag-tik-satir');
+        rows.forEach(row => {
+            row.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+
+                const detayUrl = this.getAttribute('data-detay-url');
+                const duzenleUrl = this.getAttribute('data-duzenle-url');
+                const isKiralama = this.getAttribute('data-kiralama') === '1';
+                currentDeleteUrl = this.getAttribute('data-sil-url');
+
+                detayLink.href = detayUrl;
+                duzenleLink.href = duzenleUrl;
+
+                // Kiralama Kilidi Mantığı
+                if (isKiralama) {
+                    duzenleGrup.style.display = 'none';
+                    kilitliMesaj.style.display = 'block';
+                } else {
+                    duzenleGrup.style.display = 'block';
+                    kilitliMesaj.style.display = 'none';
+                }
+
+                menu.style.display = 'block';
+                
+                // Ekran sınırlarını kontrol et
+                let posX = e.pageX;
+                let posY = e.pageY;
+                const menuWidth = 200;
+                const menuHeight = 180;
+                
+                if (posX + menuWidth > window.innerWidth) posX -= menuWidth;
+                if (posY + menuHeight > window.innerHeight) posY -= menuHeight;
+
+                menu.style.left = posX + 'px';
+                menu.style.top = posY + 'px';
+            });
+        });
+
+        // SİL BUTONU TETİKLEME
+        silTrigger.addEventListener('click', function(e) {
+            e.preventDefault();
+            menu.style.display = 'none';
+            deleteForm.action = currentDeleteUrl;
+            deleteModal.show();
+        });
+
+        // MENÜYÜ KAPATMA
+        document.addEventListener('click', () => menu.style.display = 'none');
+        document.addEventListener('scroll', () => menu.style.display = 'none');
+        document.addEventListener('keyup', (e) => { if (e.key === "Escape") menu.style.display = 'none'; });
+    });
+</script>
+
+<style>
+    .bg-success-subtle { background-color: #d1e7dd; }
+    .bg-warning-subtle { background-color: #fff3cd; }
+    .text-xs { font-size: 0.7rem; }
+    .sag-tik-satir:hover { background-color: rgba(13, 110, 253, 0.05) !important; transition: 0.2s; }
+    #customContextMenu { border-radius: 8px; }
+    .dropdown-item:hover { background-color: #f8f9fa; }
+
+    /* Sayfalama */
+    .pagination { display: flex; gap: 4px; list-style: none; padding: 0; margin: 0; }
+    .pagination .page-item .page-link { display: inline-block; padding: 6px 12px; border: 1px solid #dee2e6; border-radius: 4px; color: #667eea; text-decoration: none; font-size: 0.875rem; transition: all 0.2s; }
+    .pagination .page-item.active .page-link { background: #667eea; border-color: #667eea; color: white; }
+    .pagination .page-item.disabled .page-link { color: #adb5bd; pointer-events: none; }
+    .pagination .page-item .page-link:hover { background: #eef2ff; border-color: #a5b4fc; }
+
+    /* Firma Autocomplete Dropdown */
+    .firma-dropdown-list {
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        background: white;
+        z-index: 1000;
+    }
+    .firma-dropdown-list .list-group-item {
+        border: none;
+        padding: 8px 12px;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+    .firma-dropdown-list .list-group-item-action:hover {
+        background-color: #f8f9fa;
+        padding-left: 16px;
+        border-left: 3px solid #667eea;
+    }
+    .firma-dropdown-list .list-group-item-action:active {
+        background-color: #e9ecef;
+    }
+
+    /* Select Hover Effect */
+    select.filter-select-hover {
+        transition: all 0.2s ease-in-out !important;
+        border: 1px solid #dee2e6 !important;
+        background-color: white !important;
+    }
+    select.filter-select-hover:hover {
+        background-color: #f8f9fa !important;
+        border-color: #667eea !important;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1) !important;
+    }
+    select.filter-select-hover:focus {
+        border-color: #667eea !important;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15) !important;
+        background-color: white !important;
+    }
+
+    /* Firma Search Container */
+    .firma-search-container .input-group-sm .btn {
+        border: 1px solid #dee2e6;
+        transition: all 0.2s;
+    }
+    .firma-search-container:hover .input-group-sm .btn {
+        border-color: #667eea;
+        background-color: #f8f9fa;
+    }
+
+
+</style>
+{% endblock %}

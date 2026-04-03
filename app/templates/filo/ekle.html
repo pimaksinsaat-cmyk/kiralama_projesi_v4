@@ -1,0 +1,251 @@
+{% extends "base.html" %}
+
+{% block title %}Yeni Makine Kayıt{% endblock %}
+
+{% block head %}
+    {{ super() }}
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 20px; background-color: #f8f9fa; }
+        .container { max-width: 650px; margin: auto; padding: 25px; background-color: #fff; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        h2 { color: #343a40; text-align: center; margin-bottom: 20px;} 
+        .form-group { margin-bottom: 0.7rem; }
+        label { display: block; margin-bottom: .4rem; font-weight: 500; color: #495057; }
+        input.form-control, select.form-control, textarea.form-control { width: 100%; padding: .5rem; border: 1px solid #ced4da; border-radius: .25rem; box-sizing: border-box; font-size: 1rem; font-family: inherit; resize: vertical; }
+        .form-info { background-color: #e9ecef; padding: 10px; border-radius: 4px; margin-bottom: 20px; font-size: 0.9rem; text-align: center;}
+        .alert { padding: 1rem; margin-bottom: 1rem; border: 1px solid transparent; border-radius: .25rem; }
+        .alert-danger { color: #721c24; background-color: #f8d7da; border-color: #f5c6cb; }
+        .alert-success { color: #155724; background-color: #d4edda; border-color: #c3e6cb; }
+        .butonlar { display: flex; justify-content: flex-start; gap: 40px; margin-top: 30px; }
+        .buton { display: inline-block; padding: 10px 20px; background-color: #007BFF; color: white; text-decoration: none; border-radius: 5px; font-weight: bold; border: none; cursor: pointer; transition: background-color 0.3s ease; font-size: 1.1rem; }
+        .buton:hover { background-color: #0056b3; }
+        .buton.iptal { background-color: #6c757d; }
+        .buton.iptal:hover { background-color: #5a6268; }
+        .custom-checkbox { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 10px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px; }
+        .custom-checkbox input[type="checkbox"] { width: 1.2rem; height: 1.2rem; cursor: pointer; }
+        .custom-checkbox label { margin-bottom: 0; cursor: pointer; color: #198754; font-weight: 600; }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h2>Yeni Makine Ekle (Pimaks Filosu)</h2>
+    
+    <form action="" method="POST" novalidate>
+        {{ form.hidden_tag() }}
+        
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        <div class="form-info">
+            Kayıtlı Son Makine Kodu: <strong>{{ son_kod }}</strong>
+        </div>
+
+        <div class="row">
+            <div class="col-md-6 form-group">
+                {{ form.kod.label(text="Makine Kodu :") }}
+                {{ form.kod(class="form-control") }}
+                {% for error in form.kod.errors %}<span style="color: red;">[{{ error }}]</span>{% endfor %}
+            </div>
+            <div class="col-md-6 form-group">
+                {{ form.seri_no.label(text="Seri No :") }}   
+                {{ form.seri_no(id="seri_no", class="form-control") }}
+                {% for error in form.seri_no.errors %}<span style="color: red;">[{{ error }}]</span>{% endfor %}
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-6 form-group">
+                 {{ form.marka.label(text="Markası :") }}
+                 {{ form.marka(id="marka", class="form-control", list="marka-listesi") }}
+                <datalist id="marka-listesi">
+                    <option value="Dingli"><option value="Sinoboom"><option value="Zoomlion">
+                    <option value="Haulotte"><option value="JLG"><option value="Genie"><option value="Skyjack">
+                </datalist>
+                {% for error in form.marka.errors %}<span style="color: red;">[{{ error }}]</span>{% endfor %}
+            </div>
+            <div class="col-md-6 form-group">
+                 {{ form.model.label(text="Modeli :") }}
+                 {{ form.model(id="model", class="form-control") }}
+                {% for error in form.model.errors %}<span style="color: red;">[{{ error }}]</span>{% endfor %}
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-6 form-group">
+                 {{ form.tipi.label(text="Makine Tipi:") }}
+                 {{ form.tipi(id="tipi", class="form-control", list="tip-listesi") }}
+                <datalist id="tip-listesi">
+                    <option value="Makaslı Platform"><option value="Eklemli Platform">
+                    <option value="Dikey Mastlı"><option value="Teleskopik">
+                    <option value="Sepetli Platform"><option value="Forklift">
+                </datalist>
+                {% for error in form.tipi.errors %}<span style="color: red;">[{{ error }}]</span>{% endfor %}
+            </div>
+            <div class="col-md-6 form-group">
+                {{ form.yakit.label(text="Motor Tipi (Klasik) :") }}
+                {{ form.yakit(id="yakit", class="form-control", list="yakit-listesi") }}
+               <datalist id="yakit-listesi">
+                   <option value="Elektrikli"><option value="Dizel"><option value="Hybrid"> 
+               </datalist>
+               {% for error in form.yakit.errors %}<span style="color: red;">[{{ error }}]</span>{% endfor %}
+           </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-4 form-group">
+                {{ form.calisma_yuksekligi.label(text="Yükseklik (m):") }}
+                {{ form.calisma_yuksekligi(id="calisma_yuksekligi", class="form-control", type="number", step="1") }}    
+                {% for error in form.calisma_yuksekligi.errors %}<span style="color: red;">[{{ error }}]</span>{% endfor %}
+            </div>
+            <div class="col-md-4 form-group">
+                {{ form.kaldirma_kapasitesi.label(text="Kapasite (kg):") }}
+                {{ form.kaldirma_kapasitesi(id="kaldirma_kapasitesi", class="form-control", type="number") }}
+                {% for error in form.kaldirma_kapasitesi.errors %}<span style="color: red;">[{{ error }}]</span>{% endfor %}
+            </div>
+            <div class="col-md-4 form-group">
+                {{ form.uretim_yili.label(text="Üretim Yılı:") }}
+                {{ form.uretim_yili(id="uretim_yili", class="form-control", type="number", step="1", min="1990") }}
+                {% for error in form.uretim_yili.errors %}<span style="color: red;">[{{ error }}]</span>{% endfor %}
+            </div>
+        </div>
+
+        <!-- YENİ EKLENEN: TEKNİK ÖLÇÜLER VE ÖZELLİKLER -->
+        <fieldset class="form-group" style="border: 1px solid #17a2b8; padding: 1.5rem; margin-top: 20px; border-radius: 5px; background-color: #fdfdfe;">
+            <legend style="font-size: 1.1em; font-weight: 600; color: #17a2b8; width: auto; padding: 0 10px; margin-left: 5px;">Teknik Ölçüler ve Ağırlık</legend>
+            <div class="row">
+                <div class="col-md-12 form-group">
+                    {{ form.agirlik.label(text="Makine Ağırlığı (kg):") }}
+                    {{ form.agirlik(class="form-control", placeholder="Örn: 3500", step="0.1") }}
+                </div>
+            </div>
+            <div class="row mt-2">
+                <div class="col-md-4 form-group">
+                    {{ form.genislik.label(text="Genişlik (m):") }}
+                    {{ form.genislik(class="form-control", placeholder="Örn: 1.20", step="0.01") }}
+                </div>
+                <div class="col-md-4 form-group">
+                    {{ form.uzunluk.label(text="Uzunluk (m):") }}
+                    {{ form.uzunluk(class="form-control", placeholder="Örn: 2.50", step="0.01") }}
+                </div>
+                <div class="col-md-4 form-group">
+                    {{ form.kapali_yukseklik.label(text="Kapalı Yükseklik:") }}
+                    {{ form.kapali_yukseklik(class="form-control text-danger fw-bold", placeholder="Geçiş (m)", step="0.01") }}
+                </div>
+            </div>
+            <div class="row mt-2">
+                <div class="col-md-6">
+                    <div class="custom-checkbox">
+                        {{ form.ic_mekan_uygun() }}
+                        <label for="ic_mekan_uygun">Sadece İç Mekan</label>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="custom-checkbox">
+                        {{ form.arazi_tipi_uygun() }}
+                        <label for="arazi_tipi_uygun">Arazi Tipi</label>
+                    </div>
+                </div>
+            </div>
+        </fieldset>
+        <!-- / YENİ EKLENEN -->
+
+        <div class="form-group mt-3">
+            {{ form.sube_id.label(text="Kayıt Şubesi :") }}
+            {{ form.sube_id(class="form-control") }}
+            <small style="color: #666;">Makinenin fiziksel olarak bağlı olduğu depoyu seçiniz.</small>
+            {% for error in form.sube_id.errors %}<span style="color: red;">[{{ error }}]</span>{% endfor %}
+        </div>
+
+        <fieldset class="form-group" style="border: 1px solid #dee2e6; padding: 1.5rem; margin-top: 20px; border-radius: 5px;">
+            <legend style="font-size: 1.2em; font-weight: 500; width: auto; padding: 0 10px; margin-left: 5px;">Makine Maliyeti ve Satın Alma Döviz Kurları</legend>
+            <div class="row">
+                <div class="col-md-8 form-group">
+                    {{ form.giris_maliyeti.label(text="Giriş Maliyeti (Satın Alma Fiyatı):") }}
+                    {{ form.giris_maliyeti(class="form-control", placeholder="Örn: 15000 veya 15000,50", id="giris_maliyeti", autocomplete="off") }} 
+                    <small style="color: #555; margin-top: 5px; display: block;">Kuruş ayracı olarak <strong>virgül</strong> kullanabilirsiniz.</small>
+                    {% for error in form.giris_maliyeti.errors %}<span style="color: red;">[{{ error }}]</span>{% endfor %}
+                </div>
+                <div class="col-md-4 form-group">
+                    {{ form.para_birimi.label(text="Satın Alma Para Birimi:") }}
+                    {{ form.para_birimi(class="form-control") }}
+                    <small style="color: #666; margin-top: 5px; display: block;">Makinenin kaç hangi para birimi ile satın alındığını seçin.</small>
+                </div>
+            </div>
+
+        </fieldset>
+
+        <div class="butonlar">
+         {{ form.submit(class="buton", value="Kaydet") }}
+         <a href="{{ url_for(request.args.get('next', 'filo.index')) }}" class="buton iptal">İptal</a>
+         </div>
+    </form>
+</div>
+
+<script>
+    const yilInput = document.getElementById('uretim_yili');
+    if (yilInput && !yilInput.value) { 
+        const bugunYil = new Date().getFullYear();
+        yilInput.value = bugunYil; 
+    }
+
+    // Teknik olculer/agrlik alanlarinda 1,25 girisini 1.25 formatina cevir.
+    (function () {
+        const decimalFields = ['agirlik', 'genislik', 'uzunluk', 'kapali_yukseklik'];
+        const form = document.querySelector('form');
+
+        function normalizeDecimal(rawValue) {
+            if (rawValue === null || rawValue === undefined) {
+                return rawValue;
+            }
+
+            let value = String(rawValue).trim().replace(/\s+/g, '');
+            if (!value) {
+                return value;
+            }
+
+            if (value.includes(',') && value.includes('.')) {
+                if (value.lastIndexOf(',') > value.lastIndexOf('.')) {
+                    value = value.replace(/\./g, '').replace(',', '.');
+                } else {
+                    value = value.replace(/,/g, '');
+                }
+            } else if (value.includes(',')) {
+                value = value.replace(',', '.');
+            }
+
+            return value;
+        }
+
+        decimalFields.forEach((fieldName) => {
+            const input = document.getElementById(fieldName);
+            if (!input) {
+                return;
+            }
+
+            input.setAttribute('inputmode', 'decimal');
+            input.setAttribute('lang', 'tr');
+
+            input.addEventListener('blur', function () {
+                this.value = normalizeDecimal(this.value);
+            });
+        });
+
+        if (form) {
+            form.addEventListener('submit', function () {
+                decimalFields.forEach((fieldName) => {
+                    const input = document.getElementById(fieldName);
+                    if (input) {
+                        input.value = normalizeDecimal(input.value);
+                    }
+                });
+            });
+        }
+    })();
+
+</script>
+{% endblock %}

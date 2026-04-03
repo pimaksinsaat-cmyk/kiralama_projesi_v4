@@ -1,0 +1,136 @@
+{% extends 'base.html' %}
+
+{% block title %}Genel Ayarlar{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="mb-1">Genel Ayarlar</h2>
+        <p class="text-muted mb-0">Şirket bilgileri, fatura bilgileri ve numaralandırma başlangıçları burada yönetilir.</p>
+    </div>
+</div>
+
+<form method="POST" enctype="multipart/form-data" class="row g-4">
+    {{ form.hidden_tag() }}
+
+    <div class="col-12 col-xl-8">
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-white"><strong>Şirket Bilgileri</strong></div>
+            <div class="card-body row g-3">
+                <div class="col-md-8">
+                    {{ form.company_name.label(class='form-label') }}
+                    {{ form.company_name(class='form-control') }}
+                </div>
+                <div class="col-md-4">
+                    {{ form.company_short_name.label(class='form-label') }}
+                    {{ form.company_short_name(class='form-control') }}
+                </div>
+                <div class="col-md-6">
+                    {{ form.company_phone.label(class='form-label') }}
+                    {{ form.company_phone(class='form-control') }}
+                </div>
+                <div class="col-md-6">
+                    {{ form.company_email.label(class='form-label') }}
+                    {{ form.company_email(class='form-control') }}
+                </div>
+                <div class="col-md-12">
+                    {{ form.company_website.label(class='form-label') }}
+                    {{ form.company_website(class='form-control') }}
+                </div>
+                <div class="col-md-12">
+                    {{ form.company_address.label(class='form-label') }}
+                    {{ form.company_address(class='form-control', rows='3') }}
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-white"><strong>Fatura Bilgileri</strong></div>
+            <div class="card-body row g-3">
+                <div class="col-md-6">
+                    {{ form.invoice_title.label(class='form-label') }}
+                    {{ form.invoice_title(class='form-control') }}
+                </div>
+                <div class="col-md-6">
+                    {{ form.invoice_tax_office.label(class='form-label') }}
+                    {{ form.invoice_tax_office(class='form-control') }}
+                </div>
+                <div class="col-md-6">
+                    {{ form.invoice_tax_number.label(class='form-label') }}
+                    {{ form.invoice_tax_number(class='form-control') }}
+                </div>
+                <div class="col-md-6">
+                    {{ form.invoice_mersis_no.label(class='form-label') }}
+                    {{ form.invoice_mersis_no(class='form-control') }}
+                </div>
+                <div class="col-md-12">
+                    {{ form.invoice_iban.label(class='form-label') }}
+                    {{ form.invoice_iban(class='form-control') }}
+                </div>
+                <div class="col-md-12">
+                    {{ form.invoice_address.label(class='form-label') }}
+                    {{ form.invoice_address(class='form-control', rows='3') }}
+                </div>
+                <div class="col-md-12">
+                    {{ form.invoice_notes.label(class='form-label') }}
+                    {{ form.invoice_notes(class='form-control', rows='3') }}
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white"><strong>Numaralandırma</strong></div>
+            <div class="card-body row g-3">
+                <div class="col-md-6">
+                    {{ form.kiralama_form_start_no.label(class='form-label') }}
+                    {{ form.kiralama_form_start_no(class='form-control') }}
+                    <small class="text-muted">İlk boş yılda formatı için bu sıra kullanılır.</small>
+                </div>
+                <div class="col-md-6">
+                    {{ form.kiralama_form_prefix.label(class='form-label') }}
+                    {{ form.kiralama_form_prefix(class='form-control', placeholder='PF') }}
+                    <small class="text-muted">Örneğin PF-YIL/XXXX formatında PF kısaltması.</small>
+                </div>
+                <div class="col-md-6">
+                    {{ form.genel_sozlesme_start_no.label(class='form-label') }}
+                    {{ form.genel_sozlesme_start_no(class='form-control') }}
+                    <small class="text-muted">İlk boş yılda formatı için bu sıra kullanılır.</small>
+                </div>
+                <div class="col-md-6">
+                    {{ form.genel_sozlesme_prefix.label(class='form-label') }}
+                    {{ form.genel_sozlesme_prefix(class='form-control', placeholder='PS') }}
+                    <small class="text-muted">Örneğin PS-YIL-XXX formatında PS kısaltması.</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-xl-4">
+        <div class="card shadow-sm border-0 sticky-top" style="top: 1rem;">
+            <div class="card-header bg-white"><strong>Logo ve Önizleme</strong></div>
+            <div class="card-body">
+                <div class="text-center mb-3">
+                    <img
+                        src="{{ url_for('static', filename=settings.logo_path or 'img/logo.JPG') }}"
+                        alt="{{ settings.company_name or 'Şirket Logosu' }}"
+                        class="img-fluid rounded border p-2 bg-light"
+                        style="max-height: 140px; object-fit: contain;"
+                    >
+                </div>
+                <div class="mb-3">
+                    {{ form.logo_file.label(class='form-label') }}
+                    {{ form.logo_file(class='form-control', accept='image/*') }}
+                </div>
+                <div class="border rounded p-3 bg-light-subtle">
+                    <div class="fw-semibold">{{ settings.company_name }}</div>
+                    <div class="small text-muted">{{ settings.invoice_title or settings.company_name }}</div>
+                    <div class="small text-muted mt-2">{{ settings.invoice_tax_office or '-' }} / {{ settings.invoice_tax_number or '-' }}</div>
+                </div>
+                <div class="mt-3 text-end">
+                    {{ form.submit(class='btn btn-primary') }}
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+{% endblock %}

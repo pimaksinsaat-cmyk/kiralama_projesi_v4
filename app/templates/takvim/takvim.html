@@ -1,0 +1,262 @@
+{% extends "base.html" %}
+
+{% block title %}Takvim ve Hatırlatmalar{% endblock %}
+
+{% block head %}
+{{ super() }}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css">
+<style>
+    /* 1. Takvim Kasası ve Genel Küçültme */
+    .calendar-shell {
+        background: #ffffff;
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.06);
+        padding: 10px;
+    }
+    
+    /* Hücreleri ve Fontları Ufaltalım */
+    .fc .fc-toolbar-title { font-size: 1.1rem !important; font-weight: 700; }
+    .fc .fc-button { padding: 4px 8px !important; font-size: 0.8rem !important; }
+    .fc .fc-daygrid-day-number { font-size: 0.8rem; padding: 2px !important; }
+    .fc .fc-col-header-cell-cushion { font-size: 0.75rem; padding: 4px !important; }
+    .fc .fc-event { font-size: 0.75rem !important; padding: 1px 3px !important; border-radius: 3px !important; cursor: pointer; }
+
+    /* 2. iPhone Büyüteç ve Menü Engelleyici */
+    .fc-event, .fc-event *, .fc-daygrid-day-number {
+        -webkit-touch-callout: none !important;
+        -webkit-user-select: none !important;
+        user-select: none !important;
+    }
+
+    /* 3. Sağ Tık / Uzun Basma Menüsü (Z-Index Yüksek) */
+    .reminder-context-menu {
+        position: fixed; z-index: 4000; min-width: 180px; background: #fff;
+        border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+        display: none; overflow: hidden;
+    }
+    .reminder-context-menu button {
+        width: 100%; border: none; background: transparent;
+        text-align: left; padding: 10px 15px; font-size: 0.9rem; cursor: pointer;
+    }
+    .reminder-context-menu button:hover { background: #fef2f2; color: #b91c1c; }
+
+    /* 4. Bilgi Popover (Bilgi Kutucuğu) */
+    .hatirlatma-popover {
+        position: fixed; background: white; border: 1px solid #e2e8f0;
+        border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+        z-index: 3500; min-width: 280px; display: none; max-width: 320px;
+    }
+    .hatirlatma-popover-header {
+        color: white; padding: 8px 12px; border-radius: 10px 10px 0 0;
+        font-weight: 700; font-size: 0.85rem; display: flex; align-items: center; gap: 6px;
+    }
+    .hatirlatma-popover-body { padding: 12px; color: #334155; font-size: 0.85rem; line-height: 1.4; }
+
+    /* Renk Tanımları */
+    .bg-kiralama { background: #f59e0b; }
+    .bg-sigorta { background: #ef4444; }
+    .bg-muayene { background: #2563eb; }
+    .bg-hatirlatma { background: #10b981; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-0">
+    <div class="d-flex justify-content-between align-items-center mb-2 px-1">
+        <h4 class="fw-bold mb-0">Takvim</h4>
+        <button class="btn btn-success btn-sm px-3 shadow-sm fw-bold" data-bs-toggle="modal" data-bs-target="#hatirlatmaModal">
+            <i class="fas fa-plus me-1"></i> Ekle
+        </button>
+    </div>
+
+    <div class="calendar-shell">
+        <div id="takvim"></div>
+    </div>
+</div>
+
+<div class="modal fade" id="hatirlatmaModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <form method="POST" action="{{ url_for('takvim.takvim_hatirlatma_ekle') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header bg-light py-2">
+                    <h6 class="modal-title fw-bold">Yeni Hatırlatma</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body py-3">
+                    <div class="mb-2">
+                        <label class="small fw-bold text-muted">Tarih</label>
+                        <input type="date" class="form-control form-control-sm" name="tarih" id="hatirlatmaTarih" required>
+                    </div>
+                    <div class="mb-2">
+                        <label class="small fw-bold text-muted">Başlık</label>
+                        <input type="text" class="form-control form-control-sm" name="baslik" required>
+                    </div>
+                    <div>
+                        <label class="small fw-bold text-muted">Detay</label>
+                        <textarea class="form-control form-control-sm" name="aciklama" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer py-1 border-0">
+                    <button type="submit" class="btn btn-success btn-sm px-4 fw-bold">KAYDET</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<form id="hatirlatmaSilForm" method="POST" style="display:none;"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form>
+
+<div id="hatirlatmaContextMenu" class="reminder-context-menu">
+    <button type="button" id="hatirlatmaSilBtn" class="text-danger"><i class="fas fa-trash-alt me-2"></i>Bu Kaydı Sil</button>
+</div>
+
+<div id="hatirlatmaPopover" class="hatirlatma-popover">
+    <div class="hatirlatma-popover-header" id="popoverHeader"></div>
+    <div class="hatirlatma-popover-body">
+        <div class="fw-bold mb-1" id="popoverTitle"></div>
+        <div id="popoverContent"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+    const calendarEl = document.getElementById('takvim');
+    const contextMenu = document.getElementById('hatirlatmaContextMenu');
+    const popover = document.getElementById('hatirlatmaPopover');
+    const silForm = document.getElementById('hatirlatmaSilForm');
+    let activeEventId = null;
+
+    function closeAll() {
+        contextMenu.style.display = 'none';
+        popover.style.display = 'none';
+    }
+
+        function setTodayToHatirlatmaTarih() {
+            if (tarihInput) {
+                const now = new Date();
+                const month = String(now.getMonth() + 1).padStart(2, '0');
+                const day = String(now.getDate()).padStart(2, '0');
+                const todayStr = now.getFullYear() + '-' + month + '-' + day;
+                tarihInput.value = todayStr;
+            }
+        }
+
+        // Modal açılırken bugünün tarihi otomatik gelsin
+        const hatirlatmaModal = document.getElementById('hatirlatmaModal');
+        if (hatirlatmaModal) {
+            hatirlatmaModal.addEventListener('show.bs.modal', function() {
+                setTodayToHatirlatmaTarih();
+            });
+        }
+
+        const calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'dayGridMonth',
+        locale: 'tr',
+        firstDay: 1,
+        height: 580,         /* Kompakt görünüm */
+        aspectRatio: 2.1,
+        headerToolbar: { 
+            left: 'prev,next today', 
+            center: 'title', 
+            right: 'dayGridMonth,listMonth' 
+        },
+        buttonText: { today: 'Bugün', month: 'Ay', list: 'Liste' },
+        events: "{{ url_for('takvim.takvim_events') }}",
+
+        dateClick: function(info) {
+            closeAll();
+            document.getElementById('hatirlatmaTarih').value = info.dateStr;
+            new bootstrap.Modal(document.getElementById('hatirlatmaModal')).show();
+        },
+
+        eventDidMount: function(info) {
+            const el = info.el;
+            const eventObj = info.event;
+
+            // iPhone Sağ Tık / Uzun Basma Motoru
+            el.addEventListener('contextmenu', function(e) {
+                e.preventDefault(); e.stopPropagation();
+                if (eventObj.extendedProps.type === 'hatirlatma') {
+                    closeAll();
+                    activeEventId = eventObj.id;
+                    contextMenu.style.left = e.pageX + 'px';
+                    contextMenu.style.top = e.pageY + 'px';
+                    contextMenu.style.display = 'block';
+                }
+                return false;
+            });
+
+            let t;
+            el.addEventListener('touchstart', function(e) {
+                if (eventObj.extendedProps.type === 'hatirlatma') {
+                    t = setTimeout(() => {
+                        if (navigator.vibrate) navigator.vibrate(50);
+                        closeAll();
+                        activeEventId = eventObj.id;
+                        contextMenu.style.left = e.touches[0].pageX + 'px';
+                        contextMenu.style.top = e.touches[0].pageY + 'px';
+                        contextMenu.style.display = 'block';
+                    }, 700);
+                }
+            }, { passive: true });
+            el.addEventListener('touchend', () => clearTimeout(t));
+        },
+
+        eventClick: function(info) {
+            // MASAÜSTÜ AÇILMAMA SORUNUNU ÇÖZEN FREN
+            info.jsEvent.preventDefault();
+            info.jsEvent.stopPropagation();
+            
+            const wasOpen = (popover.style.display === 'block' && activeEventId === info.event.id);
+            closeAll();
+            if (wasOpen) return;
+
+            activeEventId = info.event.id;
+            const props = info.event.extendedProps;
+
+            // Renk ve Başlık Ayarı
+            let hClass = "bg-hatirlatma";
+            if (props.type === 'kiralama') hClass = "bg-kiralama";
+            else if (props.type === 'sigorta') hClass = "bg-sigorta";
+            else if (props.type === 'muayene') hClass = "bg-muayene";
+
+            document.getElementById('popoverHeader').className = "hatirlatma-popover-header " + hClass;
+            document.getElementById('popoverHeader').innerText = props.type.toUpperCase();
+            document.getElementById('popoverTitle').innerText = info.event.title.split(':').pop().trim();
+            document.getElementById('popoverContent').innerText = props.detay || props.aciklama || "-";
+            
+            const rect = info.el.getBoundingClientRect();
+            popover.style.display = 'block';
+            
+            // Taşma Kontrolü
+            let left = rect.left;
+            if (left + 290 > window.innerWidth) left = window.innerWidth - 300;
+            
+            popover.style.left = left + 'px';
+            popover.style.top = (rect.bottom + 6) + 'px';
+        }
+    });
+
+    // Silme Butonu Logic
+    document.getElementById('hatirlatmaSilBtn').onclick = function() {
+        if (activeEventId && confirm('Bu kayıt kalıcı olarak silinsin mi?')) {
+            silForm.action = "/takvim/hatirlatma/sil/" + activeEventId;
+            silForm.submit();
+        }
+    };
+
+    // Boşluğa tıklayınca kapat (Geliştirilmiş)
+    document.addEventListener('click', function(e) {
+        if (!contextMenu.contains(e.target) && !popover.contains(e.target)) {
+            closeAll();
+        }
+    });
+
+    calendar.render();
+});
+</script>
+{% endblock %}

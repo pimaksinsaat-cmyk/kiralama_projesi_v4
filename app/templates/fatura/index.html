@@ -1,0 +1,381 @@
+{% extends "base.html" %}
+
+{% block title %}Hakediş ve Fatura Yönetimi{% endblock %}
+
+{% block content %}
+<style>
+    .status-badge {
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+    .status-taslak      { background-color: #e2e8f0; color: #475569; }
+    .status-onaylandi   { background-color: #dcfce7; color: #166534; }
+    .status-faturalasti { background-color: #dbeafe; color: #1e40af; }
+    .status-iptal       { background-color: #fee2e2; color: #991b1b; }
+
+    .table-vcenter td { vertical-align: middle; }
+
+    .hakedis-row { cursor: context-menu; }
+    .hakedis-row:hover { background-color: #f8fafc; }
+
+    /* Sağ Tık Menüsü */
+    #sagTikMenusi {
+        display: none;
+        position: fixed;
+        z-index: 9999;
+        min-width: 210px;
+        border-radius: 10px;
+        overflow: hidden;
+        background: #fff;
+    }
+    #sagTikMenusi .dropdown-item {
+        font-size: 0.9rem;
+        padding: 8px 16px;
+        cursor: pointer;
+    }
+    #sagTikMenusi .dropdown-item:hover {
+        background-color: #f1f5f9;
+    }
+    #sagTikMenusi .dropdown-item.disabled {
+        opacity: 0.5;
+        pointer-events: none;
+    }
+</style>
+
+<div class="container-fluid py-4">
+
+    <!-- Başlık -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold text-dark mb-1">Hakediş ve Fatura Yönetimi</h2>
+            <p class="text-muted small mb-0">
+                Sözleşme bazlı hakedişlerinizi ve e-fatura süreçlerinizi buradan yönetin.
+            </p>
+        </div>
+        <a href="{{ url_for('fatura.olustur') }}" class="btn btn-primary shadow-sm">
+            <i class="fas fa-plus-circle me-2"></i>Yeni Hakediş Oluştur
+        </a>
+    </div>
+
+    <!-- Özet Kartlar -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 bg-white p-3">
+                <div class="d-flex align-items-center">
+                    <div class="rounded-circle bg-light p-3 me-3">
+                        <i class="fas fa-file-invoice text-primary fs-4"></i>
+                    </div>
+                    <div>
+                        <small class="text-muted d-block">Taslak</small>
+                        <span class="fw-bold fs-5">
+                            {{ hakedisler | selectattr('durum', 'equalto', 'taslak') | list | length }} Adet
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 bg-white p-3">
+                <div class="d-flex align-items-center">
+                    <div class="rounded-circle bg-light p-3 me-3">
+                        <i class="fas fa-check-double text-success fs-4"></i>
+                    </div>
+                    <div>
+                        <small class="text-muted d-block">Onaylı / Cari İşlenen</small>
+                        <span class="fw-bold fs-5">
+                            {{ hakedisler | selectattr('durum', 'equalto', 'onaylandi') | list | length }} Adet
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 bg-white p-3">
+                <div class="d-flex align-items-center">
+                    <div class="rounded-circle bg-light p-3 me-3">
+                        <i class="fas fa-file-export text-info fs-4"></i>
+                    </div>
+                    <div>
+                        <small class="text-muted d-block">Faturalandı</small>
+                        <span class="fw-bold fs-5">
+                            {{ hakedisler | selectattr('durum', 'equalto', 'faturalasti') | list | length }} Adet
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 bg-white p-3">
+                <div class="d-flex align-items-center">
+                    <div class="rounded-circle bg-light p-3 me-3">
+                        <i class="fas fa-ban text-danger fs-4"></i>
+                    </div>
+                    <div>
+                        <small class="text-muted d-block">İptal</small>
+                        <span class="fw-bold fs-5">
+                            {{ hakedisler | selectattr('durum', 'equalto', 'iptal') | list | length }} Adet
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Liste Tablosu -->
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover table-vcenter mb-0">
+                    <thead class="bg-light text-muted small text-uppercase">
+                        <tr>
+                            <th class="ps-4">Hakediş No / Tarih</th>
+                            <th>Firma & Şantiye</th>
+                            <th>Sözleşme (PS)</th>
+                            <th>Dönem</th>
+                            <th class="text-end">Tutar (KDV Dahil)</th>
+                            <th class="text-center">Durum</th>
+                            <th class="text-end pe-4">İşlemler</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for h in hakedisler %}
+                        <tr class="hakedis-row"
+                            data-id="{{ h.id }}"
+                            data-durum="{{ h.durum }}"
+                            oncontextmenu="sagTikMenu(event, {{ h.id }}, '{{ h.durum }}'); return false;">
+
+                            <td class="ps-4">
+                                <span class="fw-bold text-dark d-block">{{ h.hakedis_no }}</span>
+                                <small class="text-muted">{{ h.created_at.strftime('%d.%m.%Y') }}</small>
+                            </td>
+
+                            <td>
+                                <span class="d-block fw-semibold text-primary">{{ h.firma.firma_adi }}</span>
+                                <small class="text-muted">
+                                    <i class="fas fa-map-marker-alt me-1"></i>
+                                    {{ h.proje_adi or 'Genel Şantiye' }}
+                                </small>
+                            </td>
+
+                            <td>
+                                <span class="badge bg-light text-secondary border">
+                                    {{ h.kiralama.kiralama_form_no or h.kiralama_id }}
+                                </span>
+                            </td>
+
+                            <td>
+                                <small>
+                                    <i class="far fa-calendar-alt text-muted me-1"></i>
+                                    {{ h.baslangic_tarihi.strftime('%d.%m.%Y') }} —
+                                    {{ h.bitis_tarihi.strftime('%d.%m.%Y') }}
+                                </small>
+                            </td>
+
+                            <td class="text-end fw-bold">
+                                {{ "{:,.2f}".format(h.genel_toplam)
+                                    .replace(',', 'X')
+                                    .replace('.', ',')
+                                    .replace('X', '.') }}
+                                {{ h.para_birimi }}
+                            </td>
+
+                            <td class="text-center">
+                                <span class="status-badge status-{{ h.durum }}">
+                                    {% if h.durum == 'taslak' %}
+                                        <i class="fas fa-clock me-1"></i>Taslak
+                                    {% elif h.durum == 'onaylandi' %}
+                                        <i class="fas fa-check-circle me-1"></i>Onaylandı
+                                    {% elif h.durum == 'faturalasti' %}
+                                        <i class="fas fa-file-export me-1"></i>Faturalandı
+                                    {% elif h.durum == 'iptal' %}
+                                        <i class="fas fa-ban me-1"></i>İptal
+                                    {% endif %}
+                                </span>
+                                {% if h.is_faturalasti %}
+                                    <div class="mt-1 small text-primary">
+                                        <i class="fas fa-cloud-upload-alt me-1"></i>e-Fatura Hazır
+                                    </div>
+                                {% endif %}
+                            </td>
+
+                            <td class="text-end pe-4">
+                                <div class="btn-group">
+                                    <a href="{{ url_for('fatura.detay', id=h.id) }}"
+                                       class="btn btn-sm btn-outline-secondary" title="İncele">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    {% if h.durum in ('taslak', 'iptal') %}
+                                    <form action="{{ url_for('fatura.sil', id=h.id) }}" method="POST"
+                                          onsubmit="return confirm('Bu hakedişi silmek istediğinize emin misiniz?');"
+                                          style="display:inline;">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Sil">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </form>
+                                    {% endif %}
+                                </div>
+                            </td>
+
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="7" class="text-center py-5">
+                                <div class="text-muted">
+                                    <i class="fas fa-receipt fs-1 d-block mb-3"></i>
+                                    Henüz hiç hakediş kaydı oluşturulmamış.
+                                </div>
+                                <a href="{{ url_for('fatura.olustur') }}"
+                                   class="btn btn-primary btn-sm mt-3">
+                                    İlk Hakedişi Oluştur
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- SAĞ TIK MENÜSÜ -->
+<div id="sagTikMenusi" class="card shadow border-0 p-1">
+    <ul class="list-unstyled mb-0">
+        <li>
+            <a id="menu-detay" href="#" class="dropdown-item rounded py-2">
+                <i class="fas fa-eye me-2 text-secondary"></i>Detayı Görüntüle
+            </a>
+        </li>
+        <li><hr class="dropdown-divider my-1"></li>
+        <li>
+            <a id="menu-xml" href="#" class="dropdown-item rounded py-2">
+                <i class="fas fa-code me-2 text-info"></i>XML İndir
+            </a>
+        </li>
+        <li>
+            <a id="menu-pdf" href="#" class="dropdown-item rounded py-2">
+                <i class="fas fa-file-pdf me-2 text-danger"></i>PDF İndir
+            </a>
+        </li>
+        <li><hr class="dropdown-divider my-1"></li>
+        <li id="menu-cariye-li">
+            <a id="menu-cariye" href="#" class="dropdown-item rounded py-2 text-success">
+                <i class="fas fa-check-circle me-2"></i>Cariye İşle
+            </a>
+        </li>
+        <li>
+            <a id="menu-gib" href="#" class="dropdown-item rounded py-2 disabled">
+                <i class="fas fa-cloud-upload-alt me-2"></i>GİB'e Gönder
+                <span class="badge bg-secondary ms-1" style="font-size:0.7rem;">Yakında</span>
+            </a>
+        </li>
+        <li><hr class="dropdown-divider my-1"></li>
+        <li id="menu-iptal-li">
+            <a id="menu-iptal" href="#" class="dropdown-item rounded py-2 text-warning">
+                <i class="fas fa-ban me-2"></i>İptal Et
+            </a>
+        </li>
+        <li id="menu-sil-li">
+            <a id="menu-sil" href="#" class="dropdown-item rounded py-2 text-danger">
+                <i class="fas fa-trash me-2"></i>Sil
+            </a>
+        </li>
+    </ul>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const menu = document.getElementById('sagTikMenusi');
+
+    function sagTikMenu(e, id, durum) {
+
+        // Linkleri güncelle
+        document.getElementById('menu-detay').href = `/fatura/detay/${id}`;
+        document.getElementById('menu-xml').href   = `/fatura/xml/${id}`;
+        document.getElementById('menu-pdf').href   = `/fatura/pdf/${id}`;
+
+        // Duruma göre menü öğelerini göster/gizle
+        const cariyeLi = document.getElementById('menu-cariye-li');
+        const iptalLi  = document.getElementById('menu-iptal-li');
+        const silLi    = document.getElementById('menu-sil-li');
+
+        cariyeLi.style.display = durum === 'taslak'                          ? 'block' : 'none';
+        iptalLi.style.display  = ['taslak', 'onaylandi'].includes(durum)     ? 'block' : 'none';
+        silLi.style.display    = ['taslak', 'iptal'].includes(durum)         ? 'block' : 'none';
+
+        // Cariye işle
+        document.getElementById('menu-cariye').onclick = function(e) {
+            e.preventDefault();
+            kapatMenu();
+            if (confirm('Hakediş cariye işlenecek, onaylıyor musunuz?')) {
+                submitForm(`/fatura/cariye-isle/${id}`);
+            }
+        };
+
+        // İptal et
+        document.getElementById('menu-iptal').onclick = function(e) {
+            e.preventDefault();
+            kapatMenu();
+            if (confirm('Hakedişi iptal etmek istediğinize emin misiniz?')) {
+                submitForm(`/fatura/iptal/${id}`);
+            }
+        };
+
+        // Sil
+        document.getElementById('menu-sil').onclick = function(e) {
+            e.preventDefault();
+            kapatMenu();
+            if (confirm('Bu hakedişi silmek istediğinize emin misiniz?')) {
+                submitForm(`/fatura/sil/${id}`);
+            }
+        };
+
+        // Menüyü konumlandır
+        menu.style.display = 'block';
+        menu.style.left    = e.pageX + 'px';
+        menu.style.top     = e.pageY + 'px';
+
+        // Ekran taşmasını önle
+        requestAnimationFrame(() => {
+            const rect = menu.getBoundingClientRect();
+            if (rect.right > window.innerWidth) {
+                menu.style.left = (e.pageX - rect.width) + 'px';
+            }
+            if (rect.bottom > window.innerHeight) {
+                menu.style.top = (e.pageY - rect.height) + 'px';
+            }
+        });
+    }
+
+    function kapatMenu() {
+        menu.style.display = 'none';
+    }
+
+    // CSRF token ile POST formu gönder
+    function submitForm(action) {
+        const form  = document.createElement('form');
+        form.method = 'POST';
+        form.action = action;
+        const csrf  = document.createElement('input');
+        csrf.type   = 'hidden';
+        csrf.name   = 'csrf_token';
+        csrf.value  = '{{ csrf_token() }}';
+        form.appendChild(csrf);
+        document.body.appendChild(form);
+        form.submit();
+    }
+
+    // Başka yere tıklayınca kapat
+    document.addEventListener('click', kapatMenu);
+    document.addEventListener('contextmenu', function(e) {
+        if (!e.target.closest('.hakedis-row')) {
+            kapatMenu();
+        }
+    });
+</script>
+{% endblock %}

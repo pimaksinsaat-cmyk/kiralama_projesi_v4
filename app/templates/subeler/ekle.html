@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    .form-container {
+        max-width: 800px;
+        margin: 3rem auto;
+        padding: 0 1rem;
+    }
+
+    .form-card {
+        background: white;
+        border-radius: 20px;
+        box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+        overflow: hidden;
+        border: 1px solid #edf2f7;
+    }
+
+    .form-header {
+        background: linear-gradient(135deg, #0d47a1 0%, #1976d2 100%);
+        padding: 2rem;
+        color: white;
+        text-align: center;
+    }
+
+    .form-header h2 {
+        margin: 0;
+        font-weight: 700;
+        letter-spacing: 1px;
+    }
+
+    .form-body {
+        padding: 2.5rem;
+    }
+
+    .form-group {
+        margin-bottom: 1.5rem;
+    }
+
+    .form-label {
+        font-weight: 600;
+        color: #2c3e50;
+        margin-bottom: 0.5rem;
+        display: block;
+    }
+
+    .form-control {
+        width: 100%;
+        padding: 12px 15px;
+        border: 2px solid #e2e8f0;
+        border-radius: 10px;
+        transition: all 0.3s ease;
+        font-size: 1rem;
+    }
+
+    .form-control:focus {
+        border-color: #0d47a1;
+        outline: none;
+        box-shadow: 0 0 0 4px rgba(13, 71, 161, 0.1);
+    }
+
+    .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+    }
+
+    .btn-group {
+        margin-top: 2rem;
+        display: flex;
+        gap: 15px;
+    }
+
+    .btn-save {
+        flex: 2;
+        background-color: #0d47a1;
+        color: white;
+        border: none;
+        padding: 15px;
+        border-radius: 10px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: 0.3s;
+    }
+
+    .btn-cancel {
+        flex: 1;
+        background-color: #f1f5f9;
+        color: #64748b;
+        text-align: center;
+        padding: 15px;
+        border-radius: 10px;
+        text-decoration: none;
+        font-weight: 600;
+        transition: 0.3s;
+    }
+
+    .btn-save:hover { background-color: #1565c0; transform: translateY(-2px); }
+    .btn-cancel:hover { background-color: #e2e8f0; }
+
+    /* Hata mesajları için */
+    .text-danger {
+        color: #e74c3c;
+        font-size: 0.85rem;
+        margin-top: 5px;
+    }
+</style>
+
+<div class="form-container">
+    <div class="form-card">
+        <div class="form-header">
+            <h2>{{ title }}</h2>
+            <p style="margin-top: 10px; opacity: 0.9;">Şube ve depo bilgilerini buradan güncelleyebilirsiniz.</p>
+        </div>
+
+        <div class="form-body">
+            <form method="POST">
+                {{ form.hidden_tag() }}
+
+                <div class="form-group">
+                    <label class="form-label">Şube / Depo Adı</label>
+                    {{ form.isim(class="form-control", placeholder="Örn: Tuzla Merkez Depo") }}
+                    {% for error in form.isim.errors %}
+                        <span class="text-danger">{{ error }}</span>
+                    {% endfor %}
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Yetkili Kişi</label>
+                        {{ form.yetkili_kisi(class="form-control", placeholder="Ad Soyad") }}
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Telefon</label>
+                        {{ form.telefon(class="form-control", placeholder="05XX XXX XX XX") }}
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">E-Posta</label>
+                        {{ form.email(class="form-control", placeholder="sube@pimaks.com") }}
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Google Maps Linki</label>
+                        {{ form.konum_linki(class="form-control", placeholder="https://maps.google.com/...") }}
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Açık Adres</label>
+                    {{ form.adres(class="form-control", rows="3", placeholder="Tam adresi buraya yazınız...") }}
+                </div>
+
+                <div class="btn-group">
+                    <a href="{{ url_for('subeler.index') }}" class="btn-cancel">İptal</a>
+                    <button type="submit" class="btn-save">Değişiklikleri Kaydet</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

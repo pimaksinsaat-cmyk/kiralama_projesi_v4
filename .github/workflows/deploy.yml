@@ -1,0 +1,23 @@
+name: Helsinki Auto Deploy
+
+on:
+  push:
+    branches:
+      - main  # Eğer ana dalın adı 'master' ise burayı master yap
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploying to Helsinki Server
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            cd /root/kiralama_projesi_v3
+            git pull origin main
+            source venv/bin/activate
+            pip install -r requirements.txt
+            systemctl restart kiralama

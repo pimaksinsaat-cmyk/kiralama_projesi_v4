@@ -1,0 +1,227 @@
+
+{% extends "base.html" %}
+
+{% block title %}
+  {% if form.id and form.id.data %}
+    Hizmet / Fatura Düzenle
+  {% else %}
+    Hizmet / Fatura Ekle
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+<style>
+    .form-section {
+        background-color: #fff;
+        padding: 30px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        max-width: 800px;
+        margin: 20px auto;
+        border-top: 5px solid #0d6efd;
+    }
+    .form-title {
+        color: #343a40;
+        text-align: center;
+        margin-bottom: 25px;
+        font-weight: bold;
+    }
+</style>
+<div class="container">
+    <div class="form-section">
+        <h2 class="form-title"><i class="fa fa-plus"></i> Hizmet / Fatura Kaydı</h2>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <form method="POST" novalidate>
+            {{ form.hidden_tag() }}
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    {{ form.firma_id.label(class="form-label fw-bold") }}
+                    {{ form.firma_id(class="form-select form-control" + (' is-invalid' if form.firma_id.errors else '')) }}
+                    {% for error in form.firma_id.errors %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                    {% endfor %}
+                </div>
+                <div class="col-md-6">
+                    {{ form.yon.label(class="form-label fw-bold") }}
+                    {{ form.yon(class="form-select form-control" + (' is-invalid' if form.yon.errors else '')) }}
+                    {% for error in form.yon.errors %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    {{ form.tarih.label(class="form-label fw-bold") }}
+                    {{ form.tarih(class="form-control align-middle" + (' is-invalid' if form.tarih.errors else ''), type="date", style="height: 38px;") }}
+                    {% for error in form.tarih.errors %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                    {% endfor %}
+                </div>
+                <div class="col-md-4">
+                    {{ form.kdv_orani.label(class="form-label fw-bold") }}
+                    <div class="input-group align-middle">
+                        {{ form.kdv_orani(class="form-control align-middle" + (' is-invalid' if form.kdv_orani.errors else ''), placeholder="KDV", min="0", max="99", maxlength="2", style="width:40px; text-align:right; height: 38px;", type="number") }}
+                        <span class="input-group-text" style="height: 38px;">%</span>
+                    </div>
+                    {% for error in form.kdv_orani.errors %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                    {% endfor %}
+                </div>
+                <div class="col-md-4">
+                    {{ form.tutar.label(class="form-label fw-bold") }}
+                    <div class="input-group align-middle">
+                        <span class="input-group-text" style="height: 38px;">₺</span>
+                        {{ form.tutar(class="form-control currency-input align-middle" + (' is-invalid' if form.tutar.errors else ''), placeholder="0,00", type="text", autocomplete="off", style="font-size: 1.2em; font-weight: bold; min-width: 180px; max-width: 260px; height: 38px;") }}
+                    </div>
+                    {% for error in form.tutar.errors %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    {{ form.fatura_no.label(class="form-label fw-bold") }}
+                    {{ form.fatura_no(class="form-control" + (' is-invalid' if form.fatura_no.errors else '')) }}
+                    {% for error in form.fatura_no.errors %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                    {% endfor %}
+                </div>
+                <div class="col-md-6">
+                    {{ form.vade_tarihi.label(class="form-label fw-bold") }}
+                    {{ form.vade_tarihi(class="form-control" + (' is-invalid' if form.vade_tarihi.errors else ''), type="date") }}
+                    {% for error in form.vade_tarihi.errors %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="mb-4">
+                {{ form.aciklama.label(class="form-label fw-bold") }}
+                {{ form.aciklama(class="form-control" + (' is-invalid' if form.aciklama.errors else '')) }}
+                {% for error in form.aciklama.errors %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                {% endfor %}
+            </div>
+
+            <div class="d-flex justify-content-between align-items-center">
+                <a href="{{ url_for('firmalar.bilgi', id=firma.id if firma else '#') }}" class="btn btn-secondary">Geri Dön</a>
+                <button type="submit" class="btn btn-primary">
+                    {% if form.id and form.id.data %}
+                        Kaydı Güncelle
+                    {% else %}
+                        Kaydı Ekle
+                    {% endif %}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const currencyInputs = document.querySelectorAll('.currency-input');
+
+    function formatCurrency(value) {
+        if (!value) return '';
+        let v = value.toString().replace(/\./g, '').replace(',', '.');
+        let number = parseFloat(v);
+        if (isNaN(number)) return value;
+        return number.toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
+
+    function formatInput(input) {
+        let value = input.value;
+        if (value === '') return;
+        let cleanVal = value.replace(/[^\d,]/g, '');
+        let parts = cleanVal.split(',');
+        if (parts.length > 2) cleanVal = parts[0] + ',' + parts.slice(1).join('');
+        parts = cleanVal.split(',');
+        let integerPart = parts[0];
+        let decimalPart = parts.length > 1 ? ',' + parts[1].substring(0, 2) : '';
+        let formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+        let formattedValue = formattedInteger + decimalPart;
+        if (cleanVal === ',') formattedValue = '0,';
+        input.value = formattedValue;
+    }
+
+    currencyInputs.forEach(input => {
+        if (input.value) {
+            if (input.value.indexOf('.') > -1 && input.value.indexOf(',') === -1) {
+                input.value = input.value.replace('.', ',');
+            }
+            input.value = formatCurrency(input.value);
+        }
+
+        input.addEventListener('input', function() { formatInput(this); });
+
+        input.addEventListener('keydown', function(e) {
+            const allowed = ['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete', 'Escape', 'Enter'];
+            if (allowed.includes(e.key)) return;
+            if (e.ctrlKey || e.metaKey) return;
+            if (!/^[0-9,]$/.test(e.key)) e.preventDefault();
+        });
+
+        input.addEventListener('focus', function() {
+            let val = this.value;
+            let raw = val.replace(/\./g, '');
+            if (raw === '0,00' || raw === '0') raw = '';
+            this.value = raw;
+            setTimeout(() => { this.select(); }, 50);
+        });
+
+        input.addEventListener('blur', function() {
+            this.value = formatCurrency(this.value);
+        });
+    });
+
+    // Zorunlu alan kontrolü ve görsel uyarı
+    const form = document.querySelector('form');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            let valid = true;
+            const requiredFields = [
+                {el: form.querySelector('[name="firma_id"]'), msg: 'Firma seçilmelidir.'},
+                {el: form.querySelector('[name="yon"]'), msg: 'Yön seçilmelidir.'},
+                {el: form.querySelector('[name="tarih"]'), msg: 'Tarih girilmelidir.'},
+                {el: form.querySelector('[name="tutar"]'), msg: 'Tutar girilmelidir.'},
+                {el: form.querySelector('[name="aciklama"]'), msg: 'Açıklama girilmelidir.'}
+            ];
+            requiredFields.forEach(f => {
+                if (!f.el || !f.el.value || f.el.value === '0' || f.el.value === '') {
+                    valid = false;
+                    f.el.classList.add('is-invalid');
+                    if (!f.el.nextElementSibling || !f.el.nextElementSibling.classList.contains('invalid-feedback')) {
+                        const div = document.createElement('div');
+                        div.className = 'invalid-feedback';
+                        div.innerText = f.msg;
+                        f.el.parentNode.appendChild(div);
+                    }
+                } else {
+                    f.el.classList.remove('is-invalid');
+                    if (f.el.nextElementSibling && f.el.nextElementSibling.classList.contains('invalid-feedback')) {
+                        f.el.nextElementSibling.remove();
+                    }
+                }
+            });
+            if (!valid) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

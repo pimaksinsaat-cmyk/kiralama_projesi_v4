@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+
+{% block title %}Yeni Hakediş Oluştur{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+
+            <!-- Geri Dönüş Linki -->
+            <div class="mb-4">
+                <a href="{{ url_for('fatura.index') }}" class="text-decoration-none text-muted small">
+                    <i class="fas fa-arrow-left me-1"></i> Hakediş Listesine Dön
+                </a>
+            </div>
+
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-primary text-white p-4 border-0">
+                    <h3 class="card-title mb-1">
+                        <i class="fas fa-magic me-2"></i>Yeni Hakediş Taslağı
+                    </h3>
+                    <p class="mb-0 opacity-75 small">
+                        Sözleşme seçerek ilgili döneme ait çalışma günlerini otomatik hesaplayın.
+                    </p>
+                </div>
+
+                <div class="card-body p-4 p-md-5">
+                    <form method="POST" novalidate>
+                        {{ form.hidden_tag() }}
+
+                        <!-- 1. BÖLÜM: Sözleşme ve Proje Bilgisi -->
+                        <div class="section-title mb-3 pb-2 border-bottom">
+                            <h5 class="text-primary fw-bold mb-0"
+                                style="font-size: 0.95rem; letter-spacing: 0.5px; text-transform: uppercase;">
+                                1. Sözleşme ve Proje Bilgisi
+                            </h5>
+                        </div>
+
+                        <div class="mb-3">
+                            {{ form.kiralama_id.label(class="form-label fw-bold") }}
+                            {{ form.kiralama_id(class="form-select form-select-lg shadow-sm") }}
+                            {% for error in form.kiralama_id.errors %}
+                                <div class="text-danger small mt-1">{{ error }}</div>
+                            {% endfor %}
+                            <div class="form-text small text-muted mt-1">
+                                Hakediş çıkarmak istediğiniz aktif kiralama sözleşmesini (PS) seçin.
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            {{ form.proje_adi.label(class="form-label fw-bold") }}
+                            {{ form.proje_adi(class="form-control",
+                                placeholder="Örn: Ankara Çevre Yolu Projesi") }}
+                            {% for error in form.proje_adi.errors %}
+                                <div class="text-danger small mt-1">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+
+                        <div class="mb-4">
+                            {{ form.santiye_adresi.label(class="form-label fw-bold") }}
+                            {{ form.santiye_adresi(class="form-control", rows=2,
+                                placeholder="Şantiye adresi...") }}
+                            {% for error in form.santiye_adresi.errors %}
+                                <div class="text-danger small mt-1">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+
+                        <!-- 2. BÖLÜM: Hakediş Dönemi -->
+                        <div class="section-title mb-3 mt-5 pb-2 border-bottom">
+                            <h5 class="text-primary fw-bold mb-0"
+                                style="font-size: 0.95rem; letter-spacing: 0.5px; text-transform: uppercase;">
+                                2. Hakediş Dönemi
+                            </h5>
+                        </div>
+
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                {{ form.baslangic_tarihi.label(class="form-label fw-bold") }}
+                                {{ form.baslangic_tarihi(class="form-control", type="date") }}
+                                {% for error in form.baslangic_tarihi.errors %}
+                                    <div class="text-danger small mt-1">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                            <div class="col-md-6">
+                                {{ form.bitis_tarihi.label(class="form-label fw-bold") }}
+                                {{ form.bitis_tarihi(class="form-control", type="date") }}
+                                {% for error in form.bitis_tarihi.errors %}
+                                    <div class="text-danger small mt-1">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                            <div class="col-12 mt-2">
+                                <div class="alert alert-info py-2 px-3 small d-flex align-items-center mt-2"
+                                     style="font-size: 0.85rem;">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    Sistem bu tarih aralığındaki çalışma günlerini sözleşme
+                                    giriş-çıkış tarihleriyle kesiştirerek otomatik hesaplayacaktır.
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 3. BÖLÜM: Fatura ve Muhasebe Tercihleri -->
+                        <div class="section-title mb-3 mt-5 pb-2 border-bottom">
+                            <h5 class="text-primary fw-bold mb-0"
+                                style="font-size: 0.95rem; letter-spacing: 0.5px; text-transform: uppercase;">
+                                3. Fatura ve Muhasebe Tercihleri
+                            </h5>
+                        </div>
+
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-4">
+                                {{ form.fatura_senaryosu.label(class="form-label fw-bold small text-muted text-uppercase") }}
+                                {{ form.fatura_senaryosu(class="form-select") }}
+                                {% for error in form.fatura_senaryosu.errors %}
+                                    <div class="text-danger small mt-1">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                            <div class="col-md-4">
+                                {{ form.fatura_tipi.label(class="form-label fw-bold small text-muted text-uppercase") }}
+                                {{ form.fatura_tipi(class="form-select") }}
+                                {% for error in form.fatura_tipi.errors %}
+                                    <div class="text-danger small mt-1">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                            <div class="col-md-4">
+                                {{ form.para_birimi.label(class="form-label fw-bold small text-muted text-uppercase") }}
+                                {{ form.para_birimi(class="form-select", id="para_birimi") }}
+                                {% for error in form.para_birimi.errors %}
+                                    <div class="text-danger small mt-1">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+
+                            <!-- Kur alanı — TRY dışı seçilince görünür -->
+                            <div class="col-md-4" id="kur_div" style="display:none;">
+                                {{ form.kur_degeri.label(class="form-label fw-bold small text-muted text-uppercase") }}
+                                {{ form.kur_degeri(class="form-control", placeholder="Örn: 32.5000") }}
+                                {% for error in form.kur_degeri.errors %}
+                                    <div class="text-danger small mt-1">{{ error }}</div>
+                                {% endfor %}
+                                <div class="form-text small text-muted">
+                                    1 birim dövizin TL karşılığını giriniz.
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Butonlar -->
+                        <div class="d-grid gap-2 mt-5">
+                            {{ form.submit(class="btn btn-primary btn-lg shadow-sm py-3 fw-bold") }}
+                            <a href="{{ url_for('fatura.index') }}"
+                               class="btn btn-link text-muted text-decoration-none">
+                                Vazgeç ve Listeye Dön
+                            </a>
+                        </div>
+
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Para birimi TRY dışı seçilince kur alanını göster/gizle
+    const paraBirimiSelect = document.getElementById('para_birimi');
+    const kurDiv = document.getElementById('kur_div');
+
+    function toggleKurAlani() {
+        kurDiv.style.display = paraBirimiSelect.value !== 'TRY' ? 'block' : 'none';
+    }
+
+    // Sayfa yüklenince kontrol et (form hatası sonrası geri dönüşte)
+    toggleKurAlani();
+
+    paraBirimiSelect.addEventListener('change', toggleKurAlani);
+</script>
+{% endblock %}

@@ -1,0 +1,449 @@
+"""
+EkipmanRaporuService - Makine finansal analizi ve raporlama
+Makinenin satın alma maliyeti, kiralama geliri, servis masrafları ve ROI hesaplamaları
+"""
+
+from decimal import Decimal
+from datetime import datetime, date
+from sqlalchemy import func, and_, or_
+from app.extensions import db
+from app.filo.models import Ekipman, BakimKaydi, KullanilanParca
+from app.kiralama.models import Kiralama, KiralamaKalemi
+
+
+class EkipmanRaporuService:
+    """
+    Makine finansal analizi servisi
+    - Satın alma maliyeti
+    - Kiralama gelirleri (dönem bazında)
+    - Servis ve nakliye masrafları
+    - ROI ve amorti durum hesaplamaları
+    """
+    
+    @staticmethod
+    def get_finansal_ozet(ekipman_id: int, start_date: date = None, end_date: date = None):
+        """
+        Makinenin finansal özetini hesaplar.
+        
+        Args:
+            ekipman_id: Makine ID
+            start_date: Başlangıç tarihi (None = min tarih)
+            end_date: Bitiş tarihi (None = bugün)
+            
+        Returns:
+            dict: Finansal özet bilgileri
+        """
+        ekipman = Ekipman.query.get(ekipman_id)
+        if not ekipman:
+            return None
+        
+        # Varsayılan tarih aralığı
+        if end_date is None:
+            end_date = date.today()
+        
+        # Döviz kurları (0 ise kur yok kabul edilir)
+        usd_rate = float(ekipman.temin_doviz_kuru_usd or 0)
+        eur_rate = float(ekipman.temin_doviz_kuru_eur or 0)
+
+        # Ekipman kuru boşsa kiralama anında kaydedilen kur ortalamasını kullan
+        if usd_rate <= 0:
+            usd_rate = EkipmanRaporuService._get_kiralama_kuru(ekipman_id, 'USD', start_date, end_date)
+        if eur_rate <= 0:
+            eur_rate = EkipmanRaporuService._get_kiralama_kuru(ekipman_id, 'EUR', start_date, end_date)
+
+        # Temin maliyeti (para birimini dikkate alarak TRY'ye çevir)
+        temin_bedeli_try, kur_eksik = EkipmanRaporuService._convert_to_try(
+            float(ekipman.giris_maliyeti or 0.0),
+            ekipman.para_birimi,
+            usd_rate,
+            eur_rate
+        )
+        temin_tarihi = ekipman.created_at.date() if ekipman.created_at else None
+
+        # Kur yoksa USD/EUR etiketinde hatalı değer göstermemek için TRY'ye düş
+        rapor_para_birimi = ekipman.para_birimi
+        if (ekipman.para_birimi == 'USD' and usd_rate <= 0) or (ekipman.para_birimi == 'EUR' and eur_rate <= 0):
+            rapor_para_birimi = 'TRY'
+        
+        # Kiralama gelirleri (Makine satın alma para birimine göre hesapla)
+        kiralama_geliri_orijinal = EkipmanRaporuService._calculate_kirlama_geliri(
+            ekipman_id, start_date, end_date, 
+            target_currency=rapor_para_birimi,
+            usd_rate=usd_rate,
+            eur_rate=eur_rate
+        )
+        
+        # Kiralama gelirleri TRY cinsinden (her halükarda raporlama için)
+        kiralama_geliri_try = EkipmanRaporuService._calculate_kirlama_geliri(
+            ekipman_id, start_date, end_date, 
+            target_currency='TRY',
+            usd_rate=1,
+            eur_rate=1
+        )
+        
+        # Servis masrafları
+        servis_giderleri_try = EkipmanRaporuService._calculate_servis_giderleri(
+            ekipman_id, start_date, end_date
+        )
+        
+        # Nakliye masrafları
+        nakliye_giderleri_try = EkipmanRaporuService._calculate_nakliye_giderleri(
+            ekipman_id, start_date, end_date
+        )
+        
+        total_masraf = servis_giderleri_try + nakliye_giderleri_try
+        
+        # Net Gelir Hesaplama (TRY cinsinden)
+        net_gelir_try = kiralama_geliri_try - total_masraf
+        
+        # Net Gelir Hesaplama (orijinal para biriminde)
+        # Masrafları orijinal para birimine çevir
+        if rapor_para_birimi == 'TRY':
+            net_gelir_orijinal = kiralama_geliri_orijinal - total_masraf
+        else:
+            # Masrafları orijinal para birimine çevir
+            if rapor_para_birimi == 'USD' and usd_rate > 0:
+                masraf_orijinal = total_masraf / Decimal(usd_rate)
+            elif rapor_para_birimi == 'EUR' and eur_rate > 0:
+                masraf_orijinal = total_masraf / Decimal(eur_rate)
+            else:
+                masraf_orijinal = total_masraf  # Dönüştürülemedi, TRY olarak bırak
+            
+            net_gelir_orijinal = kiralama_geliri_orijinal - masraf_orijinal
+        
+        # ROI Hesaplaması (orijinal para biriminde)
+        if rapor_para_birimi != 'TRY' and float(ekipman.giris_maliyeti or 0) > 0:
+            # Orijinal para biriminde hesapla
+            roi_yuzde = (float(net_gelir_orijinal) / float(ekipman.giris_maliyeti)) * 100
+        elif temin_bedeli_try > 0:
+            roi_yuzde = (net_gelir_try / Decimal(temin_bedeli_try)) * 100
+        else:
+            roi_yuzde = 0
+        
+        # Durum Belirleme
+        durum = EkipmanRaporuService._determine_status(roi_yuzde)
+        
+        # Kiralama istatistikleri
+        kiralama_stats = EkipmanRaporuService._get_kiralama_istatistikleri(
+            ekipman_id, start_date, end_date
+        )
+        
+        return {
+            'ekipman_id': ekipman_id,
+            'ekipman_kodu': ekipman.kod,
+            'ekipman_adi': f"{ekipman.marka} - {ekipman.model}",
+            'para_birimi': rapor_para_birimi,
+            'giris_maliyeti_orijinal': float(ekipman.giris_maliyeti or 0.0),
+            'temin_bedeli_try': float(temin_bedeli_try),
+            'kur_bilgisi_eksik': kur_eksik,
+            'temin_tarihi': temin_tarihi,
+            'temin_doviz_kuru_usd': float(ekipman.temin_doviz_kuru_usd or 0),
+            'temin_doviz_kuru_eur': float(ekipman.temin_doviz_kuru_eur or 0),
+            'rapor_doviz_kuru_usd': float(usd_rate or 0),
+            'rapor_doviz_kuru_eur': float(eur_rate or 0),
+            'kiralama_geliri_orijinal': float(kiralama_geliri_orijinal),
+            'kiralama_geliri_try': float(kiralama_geliri_try),
+            'servis_giderleri_try': float(servis_giderleri_try),
+            'nakliye_giderleri_try': float(nakliye_giderleri_try),
+            'toplam_giderler_try': float(total_masraf),
+            'net_gelir_orijinal': float(net_gelir_orijinal),
+            'net_gelir_try': float(net_gelir_try),
+            'roi_yuzde': float(roi_yuzde),
+            'durum': durum,
+            'start_date': start_date,
+            'end_date': end_date,
+            'kiralama_istatistikleri': kiralama_stats
+        }
+    
+    @staticmethod
+    def _convert_to_try(amount: float, currency: str, usd_rate: float, eur_rate: float) -> tuple:
+        """
+        Tutarı belirtilen para biriminden TRY'ye çevirir.
+        Kur bilgisi yoksa (0 ise), orijinal tutarı döndürür ve uyarı işareti verir.
+        
+        Args:
+            amount: Tutarın değeri
+            currency: Para birimi (TRY, USD, EUR, GBP)
+            usd_rate: USD/TRY kuru
+            eur_rate: EUR/TRY kuru
+            
+        Returns:
+            tuple: (try_tutarı, kur_eksik_mi)
+        """
+        if currency == 'TRY':
+            return (amount, False)
+        elif currency == 'USD':
+            if usd_rate and usd_rate > 0:
+                return (amount * usd_rate, False)
+            else:
+                # Kur girilmemiş, orijinal tutarı döndür ve uyarı ver
+                return (amount, True)
+        elif currency == 'EUR':
+            if eur_rate and eur_rate > 0:
+                return (amount * eur_rate, False)
+            else:
+                # Kur girilmemiş, orijinal tutarı döndür ve uyarı ver
+                return (amount, True)
+        else:
+            # Bilinmeyen para birimi
+            return (amount, True)
+
+    @staticmethod
+    def _get_kiralama_kuru(ekipman_id: int, currency: str, start_date: date = None, end_date: date = None) -> float:
+        """Ekipmana ait kiralamalardan pozitif kur ortalamasını döner."""
+        if currency == 'USD':
+            kur_kolonu = Kiralama.doviz_kuru_usd
+        elif currency == 'EUR':
+            kur_kolonu = Kiralama.doviz_kuru_eur
+        else:
+            return 0.0
+
+        query = db.session.query(func.avg(kur_kolonu)).select_from(KiralamaKalemi).join(
+            Kiralama, Kiralama.id == KiralamaKalemi.kiralama_id
+        ).filter(
+            KiralamaKalemi.ekipman_id == ekipman_id,
+            KiralamaKalemi.is_active == True,
+            kur_kolonu.isnot(None),
+            kur_kolonu > 0
+        )
+
+        if start_date:
+            query = query.filter(KiralamaKalemi.kiralama_bitis >= start_date)
+        if end_date:
+            query = query.filter(KiralamaKalemi.kiralama_baslangici <= end_date)
+
+        ortalama_kur = query.scalar()
+        return float(ortalama_kur or 0.0)
+    
+    @staticmethod
+    def _calculate_kirlama_geliri(ekipman_id: int, start_date: date = None, end_date: date = None, target_currency: str = 'TRY', usd_rate: float = 1, eur_rate: float = 1) -> Decimal:
+        """
+        Makinenin belirtilen tarih aralığında elde ettiği kiralama gelirini hesaplar.
+        Belirtilen para birimine dönüştürülmüş şekilde.
+        
+        Args:
+            ekipman_id: Makine ID
+            start_date: Başlangıç tarihi
+            end_date: Bitiş tarihi
+            target_currency: Hedef para birimi (TRY, USD, EUR)
+            usd_rate: USD/TRY kuru (dönüştürme için)
+            eur_rate: EUR/TRY kuru (dönüştürme için)
+        """
+        query = db.session.query(KiralamaKalemi).filter(
+            KiralamaKalemi.ekipman_id == ekipman_id,
+            KiralamaKalemi.is_active == True
+        )
+        
+        # Tarih aralığı filtresi: kirlama ile aranan dönem çakışıyor mu?
+        if start_date:
+            # Kiralama bitiş tarihi arama başlangıcından sonra olmalı
+            query = query.filter(KiralamaKalemi.kiralama_bitis >= start_date)
+        if end_date:
+            # Kiralama başlangıç tarihi arama bitiş tarihinden önce olmalı
+            query = query.filter(KiralamaKalemi.kiralama_baslangici <= end_date)
+        
+        kiralamalar = query.all()
+        
+        total_gelir = Decimal(0)
+        
+        for kalem in kiralamalar:
+            kalem_bas = kalem.kiralama_baslangici
+            kalem_bit = kalem.kiralama_bitis
+            
+            # Filtre ile kiralama aralığının kesişimini gün bazında (inclusive) hesapla
+            etkin_bas = max(kalem_bas, start_date) if start_date else kalem_bas
+            etkin_bit = min(kalem_bit, end_date) if end_date else kalem_bit
+            gun_sayisi = max(0, (etkin_bit - etkin_bas).days + 1)
+            
+            kiralama_fiyat = Decimal(kalem.kiralama_brm_fiyat or 0)
+            
+            # Filtre aralığındaki günler için toplam gelir = günlük fiyat * gün sayısı
+            toplam_kalem_geliri = kiralama_fiyat * gun_sayisi
+            
+            # Hedef para birimine dönüştür
+            if target_currency == 'USD' and usd_rate > 0:
+                # TRY'den USD'ye: TRY / USD_KURU
+                converted = toplam_kalem_geliri / Decimal(usd_rate)
+            elif target_currency == 'EUR' and eur_rate > 0:
+                # TRY'den EUR'a: TRY / EUR_KURU
+                converted = toplam_kalem_geliri / Decimal(eur_rate)
+            else:
+                # TRY cinsinden kalır
+                converted = toplam_kalem_geliri
+            
+            total_gelir += converted
+        
+        return total_gelir
+    
+    @staticmethod
+    def _calculate_servis_giderleri(ekipman_id: int, start_date: date = None, end_date: date = None) -> Decimal:
+        """
+        Makinenin belirtilen tarih aralığında yapılan servis masraflarını hesaplar.
+        """
+        # BakimKaydi → KullanilanParca → StokKarti → StokHareket
+        query = db.session.query(
+            func.sum(KullanilanParca.kullanilan_adet).label('total_adet')
+        ).join(
+            BakimKaydi, KullanilanParca.bakim_kaydi_id == BakimKaydi.id
+        ).filter(
+            BakimKaydi.ekipman_id == ekipman_id
+        )
+        
+        if start_date:
+            query = query.filter(BakimKaydi.tarih >= start_date)
+        if end_date:
+            query = query.filter(BakimKaydi.tarih <= end_date)
+        
+        result = query.first()
+        
+        # TODO: Parça birim fiyatları ile çarpılıp toplamı hesaplanmalı
+        # Şimdilik sadece adet sayısı alıyoruz, gerçek implementasyonda:
+        # SUM(KullanilanParca.kullanilan_adet * StokKarti.birim_fiyat)
+        
+        if not result or result.total_adet is None:
+            return Decimal(0)
+        
+        # Örnek: Adet başına 100 TRY varsayalım (gerçek fiyat StokHareket'den gelmeliydi)
+        return Decimal(result.total_adet or 0) * Decimal(100)
+    
+    @staticmethod
+    def _calculate_nakliye_giderleri(ekipman_id: int, start_date: date = None, end_date: date = None) -> Decimal:
+        """
+        Makinenin nakliye masraflarını hesaplar (nakliye aracı olarak kullanıldığında)
+        """
+        query = db.session.query(
+            func.sum(KiralamaKalemi.nakliye_alis_fiyat).label('total_nakliye')
+        ).filter(
+            KiralamaKalemi.nakliye_araci_id == ekipman_id
+        )
+        
+        # Tarih aralığı filtresi: nakliye ile aranan dönem çakışıyor mu?
+        if start_date:
+            # Kiralama bitiş tarihi arama başlangıcından sonra olmalı
+            query = query.filter(KiralamaKalemi.kiralama_bitis >= start_date)
+        if end_date:
+            # Kiralama başlangıç tarihi arama bitiş tarihinden önce olmalı
+            query = query.filter(KiralamaKalemi.kiralama_baslangici <= end_date)
+        
+        result = query.first()
+        
+        if not result or result.total_nakliye is None:
+            return Decimal(0)
+        
+        return Decimal(result.total_nakliye)
+    
+    @staticmethod
+    def _determine_status(roi_yuzde: float) -> str:
+        """
+        ROI yüzdesine göre makine durumunu belirler
+        """
+        if roi_yuzde < 0:
+            return "amorti_olmadi_zarar"  # Henüz amorti olmadı (zarar)
+        elif roi_yuzde < 20:
+            return "amorti_surecinde"  # Amorti süreci başladı
+        elif roi_yuzde < 100:
+            return "amorti_surecinde"  # Hala amorti süreci içinde
+        elif roi_yuzde < 200:
+            return "amorti_oldu"  # Kendini amorti etti
+        else:
+            return "kar_asamasi"  # Kâr aşamasında
+    
+    @staticmethod
+    def _get_kiralama_istatistikleri(ekipman_id: int, start_date: date = None, end_date: date = None) -> dict:
+        """
+        Kiralama istatistiklerini (sayı, gün, vb) hesaplar
+        """
+        query = KiralamaKalemi.query.filter(
+            KiralamaKalemi.ekipman_id == ekipman_id,
+            KiralamaKalemi.is_active == True
+        )
+        
+        # Tarih aralığı ile kesişen tüm kiralamalar (kırpılacak)
+        if start_date and end_date:
+            # Başlangıcı end_date'den önce, bitişi start_date'den sonra olan kiralamalar
+            query = query.filter(and_(
+                KiralamaKalemi.kiralama_bitis >= start_date,
+                KiralamaKalemi.kiralama_baslangici <= end_date
+            ))
+        elif start_date:
+            query = query.filter(KiralamaKalemi.kiralama_bitis >= start_date)
+        elif end_date:
+            query = query.filter(KiralamaKalemi.kiralama_baslangici <= end_date)
+        
+        kiralamalar = query.all()
+        
+        toplam_gu = 0
+        toplam_kiralama = len(kiralamalar)
+        musteri_listesi = set()
+        
+        for kalem in kiralamalar:
+            # Başlangıç ve bitiş tarihini sınırlandır (aralığa göre kırp)
+            baslangic = max(kalem.kiralama_baslangici, start_date) if start_date else kalem.kiralama_baslangici
+            bitis = min(kalem.kiralama_bitis, end_date) if end_date else kalem.kiralama_bitis
+            
+            # Gün sayısını hesapla (inclusive + negatif koruma)
+            gu = max(0, (bitis - baslangic).days + 1)
+            toplam_gu += gu
+            if kalem.kiralama.firma_musteri:
+                musteri_listesi.add(kalem.kiralama.firma_musteri.firma_adi)
+        
+        return {
+            'toplam_kiralama_sayisi': toplam_kiralama,
+            'toplam_gun_sayisi': toplam_gu,
+            'ortalama_gun_per_kiralama': toplam_gu / toplam_kiralama if toplam_kiralama > 0 else 0,
+            'farkli_musteri_sayisi': len(musteri_listesi),
+            'musteriler': list(musteri_listesi)
+        }
+    
+    @staticmethod
+    def get_kiralama_detaylari(ekipman_id: int, start_date: date = None, end_date: date = None) -> list:
+        """
+        Makinenin belirtilen tarih aralığındaki tüm kiralama detaylarını döner
+        """
+        query = KiralamaKalemi.query.filter(
+            KiralamaKalemi.ekipman_id == ekipman_id,
+            KiralamaKalemi.is_active == True
+        ).join(Kiralama).order_by(KiralamaKalemi.kiralama_baslangici.desc())
+        
+        # Tarih aralığı filtresi: kiralama ile aranan dönem çakışıyor mu?
+        if start_date:
+            # Kiralama bitiş tarihi arama başlangıcından sonra olmalı
+            query = query.filter(KiralamaKalemi.kiralama_bitis >= start_date)
+        if end_date:
+            # Kiralama başlangıç tarihi arama bitiş tarihinden önce olmalı
+            query = query.filter(KiralamaKalemi.kiralama_baslangici <= end_date)
+        
+        kiralamalar = query.all()
+        
+        detaylar = []
+        for kalem in kiralamalar:
+            # Kiralama tarihleri
+            kalem_bas = kalem.kiralama_baslangici
+            kalem_bit = kalem.kiralama_bitis
+            
+            # Filtre aralığı ile kiralama aralığının kesişimini bul (inclusive)
+            etkin_bas = max(kalem_bas, start_date) if start_date else kalem_bas
+            etkin_bit = min(kalem_bit, end_date) if end_date else kalem_bit
+            gu = max(0, (etkin_bit - etkin_bas).days + 1)
+            bas_rapor = etkin_bas
+            bit_rapor = etkin_bit
+            
+            # Döviz cinsinden gelir hesapla (filtre aralığındaki günler için)
+            gelir_try = float(kalem.kiralama_brm_fiyat or 0) * gu
+            gelir_usd = gelir_try / float(kalem.kiralama.doviz_kuru_usd or 1) if kalem.kiralama.doviz_kuru_usd else 0
+            gelir_eur = gelir_try / float(kalem.kiralama.doviz_kuru_eur or 1) if kalem.kiralama.doviz_kuru_eur else 0
+            
+            detaylar.append({
+                'kiralama_no': kalem.kiralama.kiralama_form_no,
+                'musteri': kalem.kiralama.firma_musteri.firma_adi if kalem.kiralama.firma_musteri else '-',
+                'baslangic_tarihi': bas_rapor,
+                'bitis_tarihi': bit_rapor,
+                'gun_sayisi': gu,
+                'gelir_try': gelir_try,
+                'gelir_usd': gelir_usd,
+                'gelir_eur': gelir_eur,
+                'doviz_kuru_usd': float(kalem.kiralama.doviz_kuru_usd or 0),
+                'doviz_kuru_eur': float(kalem.kiralama.doviz_kuru_eur or 0)
+            })
+        
+        return detaylar

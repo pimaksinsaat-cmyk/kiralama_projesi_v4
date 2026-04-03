@@ -1,0 +1,94 @@
+{{ form.hidden_tag() }}
+
+<!-- ÜST BİLGİ SATIRI: RESMİ SÖZLEŞME NUMARASI -->
+
+<div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
+<h5 class="fw-bold mb-0 text-dark">Firma Bilgileri</h5>
+<div class="text-end">
+
+<div class="text-muted mt-1" style="font-size: 0.8rem;">
+    Sözleşme No: 
+    <span style="color:#3446e8;font-weight:600;">{{ next_ps_no }}</span>
+</div>
+
+
+</span>
+<div class="text-muted mt-1" style="font-size: 0.7rem;">Sözleşme Tarihi: {{ today_date }}</div>
+</div>
+</div>
+
+<!-- 1. FİRMA ÜNVANI -->
+
+<div class="mb-3">
+{{ form.firma_adi.label(class="form-label fw-bold small") }}
+{{ form.firma_adi(class="form-control form-control-sm" + (" is-invalid" if form.firma_adi.errors else ""), placeholder="Örn: Pimaks İnşaat A.Ş.") }}
+{% if form.firma_adi.errors %}
+<div class="invalid-feedback">{% for error in form.firma_adi.errors %}{{ error }}{% endfor %}</div>
+{% endif %}
+</div>
+
+<!-- 2. YETKİLİ KİŞİ -->
+
+<div class="mb-3">
+{{ form.yetkili_adi.label(class="form-label fw-bold small") }}
+{{ form.yetkili_adi(class="form-control form-control-sm" + (" is-invalid" if form.yetkili_adi.errors else "")) }}
+</div>
+
+<!-- 3. TELEFON VE E-POSTA -->
+
+<div class="row">
+<div class="col-md-6 mb-3">
+{{ form.telefon.label(class="form-label fw-bold small") }}
+{{ form.telefon(class="form-control form-control-sm", placeholder="05xx xxx xx xx") }}
+</div>
+<div class="col-md-6 mb-3">
+{{ form.eposta.label(class="form-label fw-bold small") }}
+{{ form.eposta(class="form-control form-control-sm", placeholder="ornek@firma.com") }}
+</div>
+</div>
+
+<!-- 4. ADRES -->
+
+<div class="mb-3">
+{{ form.iletisim_bilgileri.label(class="form-label fw-bold small") }}
+{{ form.iletisim_bilgileri(class="form-control form-control-sm", rows=3) }}
+</div>
+
+<!-- 5. VERGİ BİLGİLERİ -->
+
+<div class="row">
+<div class="col-md-6 mb-3">
+{{ form.vergi_dairesi.label(class="form-label fw-bold small") }}
+{{ form.vergi_dairesi(class="form-control form-control-sm") }}
+</div>
+<div class="col-md-6 mb-3">
+{{ form.vergi_no.label(class="form-label fw-bold small") }}
+{{ form.vergi_no(class="form-control form-control-sm") }}
+</div>
+</div>
+
+<!-- 6. ROL TANIMLARI -->
+
+<div class="p-3 bg-light rounded-3 mb-4 shadow-sm border">
+<div class="row align-items-center">
+<div class="col-6">
+<div class="form-check form-switch">
+{{ form.is_musteri(class="form-check-input", role="switch") }}
+<label class="form-check-label fw-bold small text-primary" for="is_musteri">Müşteri</label>
+</div>
+</div>
+<div class="col-6 border-start">
+<div class="form-check form-switch ps-5">
+{{ form.is_tedarikci(class="form-check-input", role="switch") }}
+<label class="form-check-label fw-bold small text-secondary" for="is_tedarikci">Tedarikçi</label>
+</div>
+</div>
+</div>
+</div>
+
+<!-- 7. BUTONLAR -->
+
+<div class="d-flex justify-content-end gap-2 mt-4">
+<a href="{{ url_for('firmalar.index') }}" class="btn btn-outline-secondary px-4 btn-sm">İptal</a>
+{{ form.submit(class="btn btn-primary px-5 btn-sm shadow-sm", value="Firmayı ve Sözleşmeyi Kaydet") }}
+</div>

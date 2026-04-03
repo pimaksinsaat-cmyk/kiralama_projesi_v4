@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <title>{% if tab == 'kiralama' %}Kiralamalar{% else %}Cari Hesap Ekstresi{% endif %} - {{ firma.firma_adi }}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            font-size: 12px;
+            color: #222;
+            background: #f4f6f8;
+        }
+
+        .page-wrapper {
+            max-width: 1100px;
+            margin: 30px auto;
+            background: white;
+            padding: 24px 28px;
+            border-radius: 6px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.10);
+        }
+
+        @media print {
+            body { background: white; }
+            .page-wrapper {
+                max-width: 100%;
+                margin: 0;
+                padding: 0;
+                box-shadow: none;
+                border-radius: 0;
+            }
+        }
+
+        @page {
+            size: A4 landscape;
+            margin: 8mm 10mm;
+        }
+
+        /* HEADER */
+        .print-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            border-bottom: 2px solid #333;
+            padding-bottom: 6px;
+            margin-bottom: 10px;
+        }
+        .print-header h1 {
+            font-size: 16px;
+            font-weight: 700;
+            color: #111;
+        }
+        .print-header .firma-sub {
+            font-size: 11px;
+            color: #555;
+            margin-top: 2px;
+        }
+        .print-header .meta {
+            font-size: 9px;
+            color: #666;
+            text-align: right;
+            line-height: 1.6;
+        }
+        .print-header .meta .meta-highlight {
+            font-size: 10px;
+            font-weight: 600;
+            color: #2d3e50;
+        }
+
+        /* TABLO */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+        }
+
+        col.col-no       { width: 3%; }
+        col.col-tarih    { width: 8%; }
+        col.col-tur      { width: 10%; }
+        col.col-aciklama { width: 28%; }
+        col.col-matrah   { width: 9%; }
+        col.col-kdvpct   { width: 8%; }
+        col.col-kdvtut   { width: 9%; }
+        col.col-borc     { width: 9%; }
+        col.col-alacak   { width: 9%; }
+        col.col-bakiye   { width: 10%; }
+
+        thead th {
+            background: #dbe7f3;
+            color: #18324a;
+            padding: 9px 10px;
+            text-align: left;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            border-top: 2px solid #18324a;
+            border-bottom: 2px solid #18324a;
+        }
+        thead tr { box-shadow: inset 0 1px 0 #f7fbff, inset 0 -1px 0 #b7c9db; }
+        thead th.text-end { text-align: right; }
+        thead th.text-center { text-align: center; }
+
+        tbody tr { border-bottom: 1px solid #dee2e6; }
+        tbody tr:nth-child(odd) { background: #f8f9fa; }
+        tbody tr:nth-child(even) { background: white; }
+        tbody tr:hover { background: rgba(13, 110, 253, 0.04); }
+        tbody td {
+            padding: 6px 10px;
+            vertical-align: middle;
+        }
+        .text-end { text-align: right; }
+        .text-center { text-align: center; }
+        .fw-bold { font-weight: 700; }
+        .text-muted { color: #6c757d; font-size: 10px; }
+        .text-danger { color: #dc3545; }
+        .text-success { color: #198754; }
+
+        .tur-badge {
+            display: inline-block;
+            border-radius: 3px;
+            padding: 1px 6px;
+            font-size: 9px;
+            font-weight: 700;
+        }
+        .tur-kiralama  { background: #fff3cd; color: #7d5a00; border: 1px solid #ffc107; }
+        .tur-nakliye   { background: #cfe2ff; color: #0a3d8f; border: 1px solid #9ec5fe; }
+        .tur-tahsilat  { background: #d1e7dd; color: #0f5132; border: 1px solid #a3cfbb; }
+        .tur-odeme     { background: #f8d7da; color: #842029; border: 1px solid #f1aeb5; }
+        .tur-fatura    { background: #e8f4fd; color: #1a6fa0; border: 1px solid #b3d9f2; }
+        .tur-diger     { background: #e9ecef; color: #495057; border: 1px solid #ced4da; }
+
+        .belge-no { font-size: 9px; color: #6c757d; display: block; margin-top: 1px; }
+
+        /* KİRALAMA TABLOSU */
+        col.col-formno   { width: 12%; }
+        col.col-ekipman  { width: 35%; }
+        col.col-durum    { width: 15%; }
+        col.col-genel    { width: 20%; }
+
+        .kalem-list { list-style: none; margin: 0; padding: 0; }
+        .kalem-list li { margin-bottom: 6px; font-size: 10px; }
+        .kalem-list li:last-child { margin-bottom: 0; }
+        .kalem-baslangic { color: #0a3d8f; font-size: 9px; display: block; margin-top: 1px; }
+        .kalem-bitis { color: #555; font-size: 9px; display: block; }
+        .durum-aktif    { display: inline-block; background: #d1e7dd; color: #0f5132; border: 1px solid #a3cfbb; border-radius: 3px; padding: 1px 6px; font-size: 9px; font-weight: 700; }
+        .durum-bitti    { display: inline-block; background: #e9ecef; color: #6c757d; border: 1px solid #ced4da; border-radius: 3px; padding: 1px 6px; font-size: 9px; font-weight: 700; opacity: 0.8; }
+
+        /* FOOTER SATIRI */
+        tfoot td {
+            padding: 7px 10px;
+            border-top: 2px solid #333;
+            font-weight: 700;
+            font-size: 11px;
+            background: #f0f0f0;
+        }
+        tfoot .bakiye-pozitif { color: #dc3545; }
+        tfoot .bakiye-negatif { color: #198754; }
+
+        /* SAYFA FOOTER */
+        .print-footer {
+            margin-top: 12px;
+            padding-top: 6px;
+            border-top: 1px solid #ccc;
+            display: flex;
+            justify-content: space-between;
+            font-size: 8px;
+            color: #999;
+        }
+
+        /* YAZDIR BUTONU - Sadece ekranda görünür */
+        .print-actions {
+            position: fixed;
+            top: 15px;
+            right: 15px;
+            z-index: 9999;
+            display: flex;
+            gap: 8px;
+        }
+        .print-actions button, .print-actions a {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-print { background: #2c3e50; color: white; }
+        .btn-print:hover { background: #1a252f; }
+        .btn-excel { background: #1f7a3f; color: white; }
+        .btn-excel:hover { background: #186132; }
+        .btn-back { background: #e9ecef; color: #333; }
+        .btn-back:hover { background: #dee2e6; }
+
+        @media print {
+            .print-actions { display: none !important; }
+            body { padding: 0; }
+            thead { display: table-header-group; }
+            thead th {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="print-actions">
+    <button class="btn-print" onclick="window.print()">
+        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M2.5 8a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1z"/><path d="M5 1a2 2 0 0 0-2 2v2H2a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h1v1a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-1h1a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-1V3a2 2 0 0 0-2-2H5zM4 3a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2H4V3zm1 10a1 1 0 0 1-1-1V9h8v3a1 1 0 0 1-1 1H5z"/></svg>
+        Yazdır / PDF
+    </button>
+    <a class="btn-excel" href="{{ url_for('firmalar.bilgi_excel', id=firma.id, tab=tab) }}">
+        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.884 6.68a.5.5 0 1 0-.768.64L6.347 8.8 5.116 10.28a.5.5 0 0 0 .768.64L7 9.601l1.116 1.319a.5.5 0 0 0 .768-.64L7.653 8.8l1.231-1.48a.5.5 0 1 0-.768-.64L7 7.999 5.884 6.68z"/><path d="M14 4.5V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h5.5L14 4.5zM9.5 1.5V4a1 1 0 0 0 1 1H13"/></svg>
+        Excel'e Aktar
+    </a>
+    <button class="btn-back" onclick="window.close()">
+        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M15 8a.5.5 0 0 0-.5-.5H2.707l3.147-3.146a.5.5 0 1 0-.708-.708l-4 4a.5.5 0 0 0 0 .708l4 4a.5.5 0 0 0 .708-.708L2.707 8.5H14.5A.5.5 0 0 0 15 8z"/></svg>
+        Kapat
+    </button>
+</div>
+
+<div class="page-wrapper">
+
+<!-- HEADER -->
+<div class="print-header">
+    <div>
+        <h1>{% if tab == 'kiralama' %}Kiralama Listesi{% else %}Cari Hesap Ekstresi{% endif %}</h1>
+        <div class="firma-sub">{{ firma.firma_adi }}</div>
+    </div>
+    <div class="meta">
+        <div class="meta-highlight">Rapor Tarihi: {{ rapor_tarihi }}</div>
+        {% if toplam_borc is defined and toplam_borc is not none %}
+        <div class="meta-highlight">Toplam Borç: {{ "{:,.2f}".format(toplam_borc).replace(',', 'X').replace('.', ',').replace('X', '.') }} TL</div>
+        {% endif %}
+        {% if toplam_alacak is defined and toplam_alacak is not none %}
+        <div class="meta-highlight">Toplam Alacak: {{ "{:,.2f}".format(toplam_alacak | abs).replace(',', 'X').replace('.', ',').replace('X', '.') }} TL</div>
+        {% endif %}
+        {% if guncel_bakiye is defined and guncel_bakiye is not none %}
+        <div class="meta-highlight"><strong>Güncel Bakiye: {{ "{:,.2f}".format(guncel_bakiye).replace(',', 'X').replace('.', ',').replace('X', '.') }} TL</strong></div>
+        {% endif %}
+    </div>
+</div>
+
+{% if tab == 'kiralama' %}
+<!-- KİRALAMALAR TABLOSU -->
+<table>
+    <colgroup>
+        <col class="col-no">
+        <col class="col-formno">
+        <col class="col-ekipman">
+        <col class="col-durum">
+        <col class="col-genel">
+    </colgroup>
+    <thead>
+        <tr>
+            <th>#</th>
+            <th>Form No</th>
+            <th>Ekipmanlar</th>
+            <th>Durumları</th>
+            <th class="text-center">Genel Durum</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for kiralama in kiralamalar %}
+        <tr>
+            <td>{{ loop.index }}</td>
+            <td class="fw-bold">{{ kiralama.kiralama_form_no or 'Belirtilmemiş' }}</td>
+            <td>
+                <ul class="kalem-list">
+                    {% for kalem in kiralama.kalemler %}
+                    <li>
+                        {% set ekipman_adi = (((kalem.ekipman.marka or '') ~ ' - ' ~ (kalem.ekipman.model or '')) | trim(' -')) if kalem.ekipman else (((kalem.harici_ekipman_marka or '') ~ ' - ' ~ (kalem.harici_ekipman_model or '')) | trim(' -')) %}
+                        {% if kalem.ekipman and kalem.ekipman.kod %}
+                            <span class="text-muted fw-bold">({{ kalem.ekipman.kod }})</span>
+                        {% elif kalem.is_dis_tedarik_ekipman %}
+                            <span class="text-muted fw-bold">(Dış Tedarik)</span>
+                        {% endif %}
+                        <span class="fw-bold">{{ ekipman_adi or (kalem.ekipman.tipi if kalem.ekipman else 'Ekipman bilgisi yok') }}</span>
+                        {% if kalem.is_dis_tedarik_ekipman and kalem.harici_tedarikci %}
+                            <span class="kalem-bitis">Tedarikçi: {{ kalem.harici_tedarikci.firma_adi | truncate_name }}</span>
+                        {% endif %}
+                    </li>
+                    {% endfor %}
+                </ul>
+            </td>
+            <td>
+                <ul class="kalem-list">
+                {% for kalem in kiralama.kalemler %}
+                    <li>
+                    {% if kalem.sonlandirildi %}
+                        <span class="durum-bitti">Bitti</span>
+                        <span class="kalem-bitis">{{ kalem.kiralama_baslangici.strftime('%d.%m.%Y') }} - {{ kalem.kiralama_bitis.strftime('%d.%m.%Y') }}</span>
+                    {% else %}
+                        <span class="durum-aktif">Aktif</span>
+                        <span class="kalem-baslangic">{{ kalem.kiralama_baslangici.strftime('%d.%m.%Y') }} tarihinden beri sahada</span>
+                    {% endif %}
+                    </li>
+                {% endfor %}
+                </ul>
+            </td>
+            <td class="text-center">
+                {% set toplam = kiralama.kalemler | length %}
+                {% set biten = kiralama.kalemler | selectattr('sonlandirildi', 'equalto', true) | list | length %}
+                {% if biten == 0 %}
+                    <span class="durum-aktif">Tamamı Sahada</span>
+                {% elif biten == toplam %}
+                    <span class="durum-bitti">Sözleşme Kapandı</span>
+                {% else %}
+                    <span class="tur-badge tur-fatura">Parçalı ({{ biten }}/{{ toplam }})</span>
+                {% endif %}
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="text-center" style="padding:20px;">Kayıt bulunamadı.</td></tr>
+        {% endfor %}
+    </tbody>
+    {% if kiralamalar %}
+    <tfoot>
+        <tr>
+            <td colspan="5">TOPLAM: {{ kiralamalar | length }} kiralama kaydı</td>
+        </tr>
+    </tfoot>
+    {% endif %}
+</table>
+
+<!-- FOOTER -->
+<div class="print-footer">
+    <div>{{ kiralamalar | length }} kiralama kaydı listelendi — {{ firma.firma_adi }}</div>
+    <div>Bu belge bilgi amacıyla hazırlanmıştır.</div>
+</div>
+
+{% else %}
+<!-- CARİ HAREKETLER TABLOSU -->
+<table>
+    <colgroup>
+        <col class="col-no">
+        <col class="col-tarih">
+        <col class="col-tur">
+        <col class="col-aciklama">
+        <col class="col-matrah">
+        <col class="col-kdvpct">
+        <col class="col-kdvtut">
+        <col class="col-borc">
+        <col class="col-alacak">
+        <col class="col-bakiye">
+    </colgroup>
+    <thead>
+        <tr>
+            <th>#</th>
+            <th>Tarih</th>
+            <th>İşlem Türü</th>
+            <th>Açıklama</th>
+            <th class="text-end">Matrah</th>
+            <th class="text-end">KDV Oranı</th>
+            <th class="text-end">KDV Tutarı</th>
+            <th class="text-end">Borç</th>
+            <th class="text-end">Alacak</th>
+            <th class="text-end">Bakiye</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for islem in hareketler %}
+        {% set is_kiralama = (islem.tur == 'Kiralama' and islem.ozel_id) %}
+        {% set is_nakliye = (islem.tur == 'Nakliye' and islem.ozel_id) %}
+        <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ islem.tarih.strftime('%d.%m.%Y') if islem.tarih else '-' }}</td>
+            <td>
+                {% if is_kiralama %}
+                    <span class="tur-badge tur-kiralama">Kiralama</span>
+                {% elif is_nakliye %}
+                    <span class="tur-badge tur-nakliye">Nakliye</span>
+                {% elif 'Fatura' in islem.tur or 'Hizmet' in islem.tur %}
+                    <span class="tur-badge tur-fatura">Fatura</span>
+                {% elif islem.tur == 'Tahsilat (Giriş)' %}
+                    <span class="tur-badge tur-tahsilat">Tahsilat</span>
+                {% elif islem.tur == 'Ödeme (Çıkış)' %}
+                    <span class="tur-badge tur-odeme">Ödeme</span>
+                {% else %}
+                    <span class="tur-badge tur-diger">{{ islem.tur }}</span>
+                {% endif %}
+            </td>
+            <td>
+                {{ islem.aciklama }}
+                {% if islem.belge_no %}
+                    <span class="belge-no">
+                        {% if islem.tur_tipi == 'odeme' %}Kasa: {{ islem.belge_no }}{% else %}No: {{ islem.belge_no }}{% endif %}
+                    </span>
+                {% endif %}
+            </td>
+            <td class="text-end">
+                {% if islem.tur_tipi != 'odeme' and islem.tutar is defined and islem.tutar is not none and islem.tutar != 0 %}
+                    {{ "{:,.2f}".format(islem.tutar | abs).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+                {% else %}-{% endif %}
+            </td>
+            <td class="text-end">
+                {% if islem.kiralama_alis_kdv is defined and islem.kiralama_alis_kdv is not none %}
+                    %{{ islem.kiralama_alis_kdv }}
+                {% elif islem.nakliye_alis_kdv is defined and islem.nakliye_alis_kdv is not none %}
+                    %{{ islem.nakliye_alis_kdv }}
+                {% elif islem.kdv_orani is defined and islem.kdv_orani is not none %}
+                    %{{ islem.kdv_orani }}
+                {% else %}-{% endif %}
+            </td>
+            <td class="text-end">
+                {% if islem.kdv_tutari is defined and islem.kdv_tutari is not none %}
+                    {{ "{:,.2f}".format(islem.kdv_tutari).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+                {% else %}-{% endif %}
+            </td>
+            <td class="text-end fw-bold text-danger">
+                {% if islem.borc is defined and islem.borc is not none and islem.borc != 0 %}
+                    {{ "{:,.2f}".format(islem.borc).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+                {% else %}-{% endif %}
+            </td>
+            <td class="text-end fw-bold text-success">
+                {% if islem.alacak is defined and islem.alacak is not none and islem.alacak != 0 %}
+                    {{ "{:,.2f}".format(islem.alacak).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+                {% else %}-{% endif %}
+            </td>
+            <td class="text-end fw-bold">
+                {{ "{:,.2f}".format(islem.kumulatif_bakiye).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="10" class="text-center" style="padding:20px;">Kayıt bulunamadı.</td></tr>
+        {% endfor %}
+    </tbody>
+    {% if hareketler %}
+    <tfoot>
+        <tr>
+            <td colspan="7" class="text-end">NET BAKİYE:</td>
+            <td class="text-end text-danger">
+                {% if toplam_borc is defined and toplam_borc is not none %}
+                    {{ "{:,.2f}".format(toplam_borc).replace(',', 'X').replace('.', ',').replace('X', '.') }} TL
+                {% endif %}
+            </td>
+            <td class="text-end text-success">
+                {% if toplam_alacak is defined and toplam_alacak is not none %}
+                    {{ "{:,.2f}".format(toplam_alacak | abs).replace(',', 'X').replace('.', ',').replace('X', '.') }} TL
+                {% endif %}
+            </td>
+            <td class="text-end {% if guncel_bakiye is defined and guncel_bakiye is not none and guncel_bakiye > 0 %}bakiye-pozitif{% elif guncel_bakiye is defined and guncel_bakiye is not none and guncel_bakiye < 0 %}bakiye-negatif{% endif %}">
+                {% if guncel_bakiye is defined and guncel_bakiye is not none %}
+                    {{ "{:,.2f}".format(guncel_bakiye).replace(',', 'X').replace('.', ',').replace('X', '.') }} TL
+                {% endif %}
+            </td>
+        </tr>
+    </tfoot>
+    {% endif %}
+</table>
+
+<!-- FOOTER -->
+<div class="print-footer">
+    <div>{{ hareketler | length }} kayıt listelendi — {{ firma.firma_adi }}</div>
+    <div>Bu belge bilgi amacıyla hazırlanmıştır.</div>
+</div>
+{% endif %}
+
+</div><!-- /page-wrapper -->
+
+</body>
+</html>

@@ -1,0 +1,271 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<style>
+    .bilgi-container {
+        max-width: 1100px;
+        margin: 10px auto;
+        padding: 0 15px;
+    }
+    
+    .bilgi-header {
+        background-color: #f0f4f8;
+        padding: 12px 15px;
+        margin-bottom: 12px;
+        border-left: 4px solid #667eea;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .bilgi-header h1 {
+        margin: 0;
+        font-size: 1.7rem;
+        color: #333;
+    }
+    
+    .bilgi-header p {
+        margin: 3px 0 0 0 !important;
+        color: #666;
+        font-size: 0.9rem;
+    }
+    
+    .durum-badge {
+        display: inline-block;
+        padding: 5px 12px;
+        border-radius: 4px;
+        font-weight: bold;
+        font-size: 0.85rem;
+    }
+    
+    .durum-kirada {
+        background-color: #ffebee;
+        color: #c62828;
+    }
+    
+    .durum-bosta {
+        background-color: #e8f5e9;
+        color: #2e7d32;
+    }
+    
+    .durum-bakim {
+        background-color: #fff8e1;
+        color: #e65100;
+    }
+    
+    .bilgi-table {
+        width: 100%;
+        border-collapse: collapse;
+        background-color: white;
+        border: 1px solid #ddd;
+        font-size: 0.9rem;
+    }
+    
+    .bilgi-table tr {
+        border-bottom: 1px solid #ddd;
+    }
+    
+    .bilgi-table tr:hover {
+        background-color: #f9f9f9;
+    }
+    
+    .bilgi-table tr:last-child {
+        border-bottom: none;
+    }
+    
+    .bilgi-table td {
+        padding: 8px 12px;
+        vertical-align: top;
+    }
+    
+    .info-label {
+        font-weight: 600;
+        color: #333;
+        width: 30%;
+        background-color: #f5f5f5;
+        border-right: 1px solid #ddd;
+    }
+    
+    .info-value {
+        color: #555;
+        width: 70%;
+    }
+    
+    .info-value.empty {
+        color: #999;
+        font-style: italic;
+    }
+    
+    .section-group {
+        margin-bottom: 12px;
+    }
+    
+    .section-title {
+        font-size: 0.95rem;
+        font-weight: bold;
+        color: #333;
+        background-color: #e8eef7;
+        padding: 8px 12px;
+        margin-bottom: 0;
+        border-left: 3px solid #667eea;
+    }
+    
+    .button-container {
+        margin-top: 15px;
+        padding-top: 12px;
+    }
+    
+    .btn-back {
+        background-color: #667eea;
+        color: white;
+        padding: 8px 20px;
+        border: none;
+        border-radius: 4px;
+        font-size: 0.9rem;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-block;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-back:hover {
+        background-color: #5568d3;
+    }
+    
+    .uygun-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 3px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+    
+    .uygun {
+        background-color: #d4edda;
+        color: #155724;
+    }
+    
+    .uygun-degil {
+        background-color: #f8d7da;
+        color: #721c24;
+    }
+</style>
+
+<div class="bilgi-container">
+    <!-- Header -->
+    <div class="bilgi-header">
+        <div>
+            <h1>{{ ekipman.kod }}</h1>
+            <p>{{ ekipman.marka }} {{ ekipman.model }}</p>
+        </div>
+        <div class="durum-badge durum-{{ ekipman.calisma_durumu }}">
+            {{ ekipman.calisma_durumu|upper }}
+        </div>
+    </div>
+
+    <!-- Temel Bilgiler -->
+    <div class="section-group">
+        <div class="section-title">Temel Bilgiler</div>
+        <table class="bilgi-table">
+            <tr>
+                <td class="info-label">Ekipman Kodu</td>
+                <td class="info-value">{{ ekipman.kod }}</td>
+            </tr>
+            <tr>
+                <td class="info-label">Marka</td>
+                <td class="info-value">{{ ekipman.marka }}</td>
+            </tr>
+            <tr>
+                <td class="info-label">Model</td>
+                <td class="info-value">{{ ekipman.model if ekipman.model else '-' }}</td>
+            </tr>
+            <tr>
+                <td class="info-label">Seri Numarası</td>
+                <td class="info-value">{{ ekipman.seri_no }}</td>
+            </tr>
+            <tr>
+                <td class="info-label">Üretim Yılı</td>
+                <td class="info-value">{{ ekipman.uretim_yili }}</td>
+            </tr>
+            <tr>
+                <td class="info-label">Şube</td>
+                <td class="info-value">{{ ekipman.sube.isim if ekipman.sube else '-' }}</td>
+            </tr>
+        </table>
+    </div>
+
+    <!-- Teknik Özellikler -->
+    <div class="section-group">
+        <div class="section-title">Teknik Özellikler</div>
+        <table class="bilgi-table">
+            <tr>
+                <td class="info-label">Makine Tipi</td>
+                <td class="info-value">{{ ekipman.tipi if ekipman.tipi else '-' }}</td>
+            </tr>
+            <tr>
+                <td class="info-label">Yakıt Tipi</td>
+                <td class="info-value">{{ ekipman.yakit }}</td>
+            </tr>
+            <tr>
+                <td class="info-label">Ağırlık</td>
+                <td class="info-value">{{ ekipman.agirlik|round(2) if ekipman.agirlik else '-' }} kg</td>
+            </tr>
+            <tr>
+                <td class="info-label">İç Mekan Uygunluğu</td>
+                <td class="info-value">
+                    {% if ekipman.ic_mekan_uygun %}
+                        <span class="uygun-badge uygun">✓ Uygun</span>
+                    {% else %}
+                        <span class="uygun-badge uygun-degil">✗ Uygun Değil</span>
+                    {% endif %}
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <!-- Kapasiteler & Boyutlar -->
+    <div class="section-group">
+        <div class="section-title">Kapasiteler & Boyutlar</div>
+        <table class="bilgi-table">
+            <tr>
+                <td class="info-label">Çalışma Yüksekliği</td>
+                <td class="info-value">{{ ekipman.calisma_yuksekligi }} m</td>
+            </tr>
+            <tr>
+                <td class="info-label">Kaldırma Kapasitesi</td>
+                <td class="info-value">{{ ekipman.kaldirma_kapasitesi }} kg</td>
+            </tr>
+            <tr>
+                <td class="info-label">Genişlik</td>
+                <td class="info-value">{{ ekipman.genislik|round(2) if ekipman.genislik else '-' }} m</td>
+            </tr>
+            <tr>
+                <td class="info-label">Uzunluk</td>
+                <td class="info-value">{{ ekipman.uzunluk|round(2) if ekipman.uzunluk else '-' }} m</td>
+            </tr>
+            <tr>
+                <td class="info-label">Kapalı Yükseklik</td>
+                <td class="info-value">{{ ekipman.kapali_yukseklik|round(2) if ekipman.kapali_yukseklik else '-' }} m</td>
+            </tr>
+        </table>
+    </div>
+
+    <!-- Mali Bilgiler -->
+    <div class="section-group">
+        <div class="section-title">Mali Bilgiler</div>
+        <table class="bilgi-table">
+            <tr>
+                <td class="info-label">Giriş Maliyeti</td>
+                <td class="info-value">{{ "%.2f"|format(ekipman.giris_maliyeti) if ekipman.giris_maliyeti else '0.00' }} {{ ekipman.para_birimi }}</td>
+            </tr>
+        </table>
+    </div>
+
+    <!-- Geri Dön Butonu -->
+    <div class="button-container">
+        <a href="{{ referrer }}" class="btn-back">← Geri Dön</a>
+    </div>
+</div>
+
+{% endblock %}

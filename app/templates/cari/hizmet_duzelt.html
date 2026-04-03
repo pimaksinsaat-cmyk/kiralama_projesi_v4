@@ -1,0 +1,305 @@
+{% extends "base.html" %}
+
+{% block title %}Hizmet Kaydını Düzenle{% endblock %}
+
+{% block content %}
+<style>
+    .form-section {
+        background-color: #fff;
+        padding: 30px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        max-width: 800px;
+        margin: 20px auto;
+        border-top: 5px solid #ffc107;
+    }
+    .form-title {
+        color: #343a40;
+        text-align: center;
+        margin-bottom: 25px;
+        font-weight: bold;
+    }
+</style>
+
+<div class="container">
+    <div class="form-section">
+        <h2 class="form-title"><i class="fa fa-edit"></i> Hizmet / Fatura Kaydını Düzenle</h2>
+        
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <!-- KİLİT MANTIĞI -->
+        {% set is_system_record = ('Kiralama' in (hizmet.aciklama or '')) or ('Nakliye' in (hizmet.aciklama or '')) or ('PF-' in (hizmet.fatura_no or '')) %}
+
+        {% if is_system_record %}
+            <div class="alert alert-warning border-warning">
+                <h5 class="alert-heading"><i class="fa fa-lock"></i> Otomatik Kayıt</h5>
+                <p class="mb-0">
+                    Bu finansal hareket, <strong>Kiralama Modülü</strong> tarafından otomatik oluşturulmuştur. 
+                    Tutarı veya tarihi değiştirmek için lütfen ilgili Kiralama Sözleşmesini düzenleyiniz.
+                    Buradan yapılan değişiklikler, kiralama güncellendiğinde <strong>kaybolacaktır.</strong>
+                </p>
+                <hr>
+                <a href="{{ url_for('kiralama.index', q=hizmet.fatura_no) }}" class="btn btn-warning btn-sm fw-bold">
+                    <i class="fa fa-external-link-alt"></i> İlgili Kiralamaya Git
+                </a>
+            </div>
+        {% endif %}
+
+        <form method="POST" novalidate>
+            {{ form.hidden_tag() }}
+            
+            {% set readonly_attr = 'readonly' if is_system_record else '' %}
+            {% set disabled_class = 'bg-light' if is_system_record else '' %}
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    {{ form.firma_id.label(class="form-label fw-bold") }}
+                    {% if is_system_record %}
+                        <input type="text" class="form-control bg-light" value="{{ hizmet.firma.firma_adi }}" readonly>
+                        <div style="display:none;">{{ form.firma_id() }}</div>
+                    {% else %}
+                        {{ form.firma_id(class="form-select form-control" + (' is-invalid' if form.firma_id.errors else '')) }}
+                        {% for error in form.firma_id.errors %}
+                            <div class="invalid-feedback d-block">{{ error }}</div>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+                <div class="col-md-6">
+                    {{ form.yon.label(class="form-label fw-bold") }}
+                    {% if is_system_record %}
+                        <input type="text" class="form-control bg-light" value="{{ 'Borç (Giden)' if hizmet.yon == 'giden' else 'Alacak (Gelen)' }}" readonly>
+                        <div style="display:none;">{{ form.yon() }}</div>
+                    {% else %}
+                        {{ form.yon(class="form-select form-control" + (' is-invalid' if form.yon.errors else '')) }}
+                        {% for error in form.yon.errors %}
+                            <div class="invalid-feedback d-block">{{ error }}</div>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    {{ form.tarih.label(class="form-label fw-bold") }}
+                    {% if is_system_record %}
+                         <input type="text" class="form-control bg-light align-middle" value="{{ hizmet.tarih }}" readonly style="height: 38px;">
+                    {% else %}
+                        {{ form.tarih(class="form-control align-middle" + (' is-invalid' if form.tarih.errors else ''), type="date", style="height: 38px;") }}
+                        {% for error in form.tarih.errors %}
+                            <div class="invalid-feedback d-block">{{ error }}</div>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+                <div class="col-md-4">
+                    {{ form.kdv_orani.label(class="form-label fw-bold") }}
+                    <div class="input-group align-middle">
+                        {% if is_system_record %}
+                            {{ form.kdv_orani(class="form-control bg-light align-middle", readonly=true, style="width:40px; text-align:right; height: 38px;") }}
+                        {% else %}
+                            {{ form.kdv_orani(class="form-control align-middle" + (' is-invalid' if form.kdv_orani.errors else ''), placeholder="KDV", min="0", max="99", maxlength="2", style="width:40px; text-align:right; height: 38px;", type="number") }}
+                            {% for error in form.kdv_orani.errors %}
+                                <div class="invalid-feedback d-block">{{ error }}</div>
+                            {% endfor %}
+                        {% endif %}
+                        <span class="input-group-text" style="height: 38px;">%</span>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    {{ form.tutar.label(class="form-label fw-bold") }}
+                    <div class="input-group align-middle">
+                        <span class="input-group-text" style="height: 38px;">₺</span>
+                        {% if is_system_record %}
+                             {{ form.tutar(class="form-control currency-input bg-light align-middle", readonly=true, style="font-size: 1.2em; font-weight: bold; min-width: 180px; max-width: 260px; height: 38px;") }}
+                        {% else %}
+                             {{ form.tutar(class="form-control currency-input align-middle" + (' is-invalid' if form.tutar.errors else ''), placeholder="0,00", type="text", autocomplete="off", style="font-size: 1.2em; font-weight: bold; min-width: 180px; max-width: 260px; height: 38px;") }}
+                             {% for error in form.tutar.errors %}
+                                 <div class="invalid-feedback d-block">{{ error }}</div>
+                             {% endfor %}
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    {{ form.fatura_no.label(class="form-label fw-bold") }}
+                    {% if is_system_record %}
+                        {{ form.fatura_no(class="form-control bg-light", readonly=true) }}
+                    {% else %}
+                        {{ form.fatura_no(class="form-control" + (' is-invalid' if form.fatura_no.errors else '')) }}
+                        {% for error in form.fatura_no.errors %}
+                            <div class="invalid-feedback d-block">{{ error }}</div>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+                <div class="col-md-6">
+                    {{ form.vade_tarihi.label(class="form-label fw-bold") }}
+                    {{ form.vade_tarihi(class="form-control" + (' is-invalid' if form.vade_tarihi.errors else ''), type="date") }}
+                    {% for error in form.vade_tarihi.errors %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="mb-4">
+                {{ form.aciklama.label(class="form-label fw-bold") }}
+                {% if is_system_record %}
+                    {{ form.aciklama(class="form-control bg-light", readonly=true) }}
+                {% else %}
+                    {{ form.aciklama(class="form-control" + (' is-invalid' if form.aciklama.errors else '')) }}
+                    {% for error in form.aciklama.errors %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                    {% endfor %}
+                {% endif %}
+            </div>
+
+            <div class="d-flex justify-content-between align-items-center">
+                <a href="{{ url_for('firmalar.bilgi', id=hizmet.firma_id) }}" class="btn btn-secondary">Geri Dön</a>
+                <div class="d-flex gap-2">
+                    {% if not is_system_record %}
+                        <button type="submit" class="btn btn-warning">Kaydı Güncelle</button>
+                        <button type="button" class="btn btn-danger" id="silBtn">Sil</button>
+                    {% else %}
+                        <button type="button" class="btn btn-secondary" disabled>Otomatik Kayıt (Değiştirilemez)</button>
+                    {% endif %}
+                </div>
+            </div>
+        </form>
+
+        {% if not is_system_record %}
+        <form id="silForm" method="POST" action="{{ url_for('cari.hizmet_sil', id=hizmet.id) }}" style="display:none;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        </form>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Sil butonu için JS ile submit ve confirm
+    var silBtn = document.getElementById('silBtn');
+    var silForm = document.getElementById('silForm');
+    if (silBtn && silForm) {
+        silBtn.addEventListener('click', function() {
+            if (confirm('Bu faturayı silmek istediğinize emin misiniz?')) {
+                silForm.submit();
+            }
+        });
+    }
+    const currencyInputs = document.querySelectorAll('.currency-input');
+
+    function formatCurrency(value) {
+        if (!value) return '';
+        // DÜZELTME: Noktaları sil, virgülü nokta yap
+        let v = value.toString().replace(/\./g, '').replace(',', '.');
+        let number = parseFloat(v);
+        if (isNaN(number)) return value;
+        return number.toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
+
+    function cleanCurrency(val) {
+        if (!val) return "0.00";
+        return val.toString().replace(/\./g, '').replace(',', '.');
+    }
+
+    function formatInput(input) {
+        if (input.readOnly) return; 
+        
+        let value = input.value;
+        if (value === '') return;
+        
+        let cleanVal = value.replace(/[^\d,]/g, '');
+        let parts = cleanVal.split(',');
+        if (parts.length > 2) cleanVal = parts[0] + ',' + parts.slice(1).join('');
+        
+        parts = cleanVal.split(',');
+        let integerPart = parts[0];
+        let decimalPart = parts.length > 1 ? ',' + parts[1].substring(0, 2) : ''; 
+        let formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+        let formattedValue = formattedInteger + decimalPart;
+        
+        if (cleanVal === ',') formattedValue = '0,';
+        input.value = formattedValue;
+    }
+    
+    currencyInputs.forEach(input => {
+        // Açılışta formatla (Readonly olsa bile güzel görünsün)
+        if (input.value) {
+             if (input.value.indexOf('.') > -1 && input.value.indexOf(',') === -1) {
+                 input.value = input.value.replace('.', ',');
+             }
+             input.value = formatCurrency(input.value);
+        }
+
+        if (!input.readOnly) {
+            input.addEventListener('input', function() { formatInput(this); });
+            
+            input.addEventListener('keydown', function(e) {
+                const allowed = ['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete', 'Escape', 'Enter'];
+                if (allowed.includes(e.key)) return;
+                if (e.ctrlKey || e.metaKey) return;
+                if (!/^[0-9,]$/.test(e.key)) e.preventDefault();
+            });
+
+            input.addEventListener('focus', function() {
+                let val = this.value;
+                let raw = val.replace(/\./g, ''); // Noktaları sil
+                if (raw === '0,00' || raw === '0') raw = '';
+                this.value = raw;
+                setTimeout(() => { this.select(); }, 50);
+            });
+
+            input.addEventListener('blur', function() { 
+                this.value = formatCurrency(this.value); 
+            });
+            
+            // --- SUBMIT LISTENER KALDIRILDI ---
+        }
+    });
+
+    // Zorunlu alan kontrolü ve görsel uyarı
+    const form = document.querySelector('form');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            let valid = true;
+            // Zorunlu alanlar: firma_id, yon, tarih, tutar, aciklama
+            const requiredFields = [
+                {el: form.querySelector('[name="firma_id"]'), msg: 'Firma seçilmelidir.'},
+                {el: form.querySelector('[name="yon"]'), msg: 'Yön seçilmelidir.'},
+                {el: form.querySelector('[name="tarih"]'), msg: 'Tarih girilmelidir.'},
+                {el: form.querySelector('[name="tutar"]'), msg: 'Tutar girilmelidir.'},
+                {el: form.querySelector('[name="aciklama"]'), msg: 'Açıklama girilmelidir.'}
+            ];
+            requiredFields.forEach(f => {
+                if (!f.el || !f.el.value || f.el.value === '0' || f.el.value === '') {
+                    valid = false;
+                    f.el.classList.add('is-invalid');
+                    // Uyarı mesajı ekle
+                    if (!f.el.nextElementSibling || !f.el.nextElementSibling.classList.contains('invalid-feedback')) {
+                        const div = document.createElement('div');
+                        div.className = 'invalid-feedback';
+                        div.innerText = f.msg;
+                        f.el.parentNode.appendChild(div);
+                    }
+                } else {
+                    f.el.classList.remove('is-invalid');
+                    if (f.el.nextElementSibling && f.el.nextElementSibling.classList.contains('invalid-feedback')) {
+                        f.el.nextElementSibling.remove();
+                    }
+                }
+            });
+            if (!valid) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

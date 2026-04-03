@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <h2>Kiralama Detayları</h2>
+    
+    <!-- Stil (index.html'den basitçe alındı) -->
+    <style>
+        .detail-card {
+            background-color: #fdfdfd;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        .detail-card h3 {
+            border-bottom: 2px solid #e9ecef;
+            padding-bottom: 10px;
+            margin-top: 0;
+            color: #007bff;
+        }
+        .detail-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .detail-item {
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+        }
+        .detail-item strong {
+            display: block;
+            color: #555;
+            font-size: 0.9em;
+            margin-bottom: 5px;
+        }
+        .detail-item span {
+            font-size: 1.1em;
+            color: #000;
+        }
+    </style>
+
+    <div class="detail-card">
+        <h3>Kiralama Bilgileri</h3>
+        <div class="detail-grid">
+            <div class="detail-item">
+                <strong>Form Numarası</strong>
+                <span>{{ kiralama.kiralama_form_no }}</span>
+            </div>
+            <div class="detail-item">
+                <strong>Durum</strong>
+                <span>
+                    {% if kiralama.ekipman.calisma_durumu == 'kirada' %}
+                        Aktif Kiralama
+                    {% else %}
+                        Tamamlanmış Kiralama
+                    {% endif %}
+                </span>
+            </div>
+            <div class="detail-item">
+                <strong>Kiralama Başlangıç</strong>
+                <span>{{ kiralama.kiralama_baslangici }}</span>
+            </div>
+            <div class="detail-item">
+                <strong>Kiralama Bitiş</strong>
+                <span>{{ kiralama.kiralama_bitis }}</span>
+            </div>
+            <div class="detail-item">
+                <strong>Birim Fiyat (Kira)</strong>
+                <span>{{ kiralama.kiralama_brm_fiyat }} TL</span>
+            </div>
+            <div class="detail-item">
+                <strong>Nakliye Fiyatı</strong>
+                <span>{{ kiralama.nakliye_fiyat }} TL</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="detail-card">
+        <h3>Müşteri Bilgileri</h3>
+        <div class="detail-grid">
+            <div class="detail-item">
+                <strong>Firma Adı</strong>
+                <span>{{ kiralama.musteri.firma_adi }}</span>
+            </div>
+            <div class="detail-item">
+                <strong>Yetkili Kişi</strong>
+                <span>{{ kiralama.musteri.yetkili_adi }}</span>
+            </div>
+            <div class="detail-item">
+                <strong>İletişim Bilgileri</strong>
+                <span>{{ kiralama.musteri.iletisim_bilgileri }}</span>
+            </div>
+            <div class="detail-item">
+                <strong>Vergi No</strong>
+                <span>{{ kiralama.musteri.vergi_dairesi }} - {{ kiralama.musteri.vergi_no }}</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="detail-card">
+        <h3>Ekipman Bilgileri</h3>
+        <div class="detail-grid">
+            <div class="detail-item">
+                <strong>Makine Kodu</strong>
+                <span>{{ kiralama.ekipman.kod }}</span>
+            </div>
+            <div class="detail-item">
+                <strong>Makine Tipi</strong>
+                <span>{{ kiralama.ekipman.tipi }}</span>
+            </div>
+            <div class="detail-item">
+                <strong>Marka</strong>
+                <span>{{ kiralama.ekipman.marka }}</span>
+            </div>
+            <div class="detail-item">
+                <strong>Yakıt Türü</strong>
+                <span>{{ kiralama.ekipman.yakit }}</span>
+            </div>
+            <div class="detail-item">
+                <strong>Çalışma Yüksekliği</strong>
+                <span>{{ kiralama.ekipman.calisma_yuksekligi }} m</span>
+            </div>
+            <div class="detail-item">
+                <strong>Kaldırma Kapasitesi</strong>
+                <span>{{ kiralama.ekipman.kaldirma_kapasitesi }} kg</span>
+            </div>
+        </div>
+    </div>
+
+    <p style="margin-top: 20px;">
+        <a href="{{ url_for('kiralama.index') }}" class="btn btn-secondary">Kiralama Listesine Dön</a>
+        <a href="{{ url_for('kiralama.duzelt', id=kiralama.id) }}" class="btn btn-primary" style="background-color: #17a2b8; border-color: #17a2b8;">Bu Kiralamayı Düzenle</a>
+    </p>
+
+</div>
+{% endblock %}

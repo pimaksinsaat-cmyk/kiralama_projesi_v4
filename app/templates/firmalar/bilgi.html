@@ -1,0 +1,540 @@
+{% extends "base.html" %}
+
+{% block title %}Firma Detayı: {{ firma.firma_adi }}{% endblock %}
+
+{% block content %}
+<style>
+    #custom-context-menu {
+        display: none;
+        position: absolute;
+        z-index: 1000;
+        width: 180px;
+        background-color: #fff;
+        border: 1px solid #ddd;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    #custom-context-menu ul { list-style: none; margin: 0; padding: 0; }
+    #custom-context-menu li {
+        padding: 10px 15px;
+        cursor: pointer;
+        font-size: 14px;
+        color: #333;
+        display: flex;
+        align-items: center;
+        transition: background 0.2s;
+    }
+    #custom-context-menu li:hover { background-color: #f1f3f5; color: #007bff; }
+    #custom-context-menu li i { margin-right: 10px; width: 16px; text-align: center; }
+
+    .pagination { display: flex; gap: 4px; list-style: none; padding: 0; margin: 0; }
+    .pagination .page-item .page-link { display: inline-block; padding: 6px 12px; border: 1px solid #dee2e6; border-radius: 4px; color: #667eea; text-decoration: none; font-size: 0.875rem; transition: all 0.2s; }
+    .pagination .page-item.active .page-link { background: #667eea; border-color: #667eea; color: white; }
+    .pagination .page-item.disabled .page-link { color: #adb5bd; pointer-events: none; }
+    .pagination .page-item .page-link:hover { background: #eef2ff; border-color: #a5b4fc; }
+</style>
+
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap">
+        <div>
+            <h1 class="mb-1 d-inline-block align-middle">{{ firma.firma_adi | truncate_name }}</h1>
+            <div class="d-block mt-1">
+                <span class="badge bg-{{ 'success' if firma.is_musteri else 'secondary' }}">{{ 'Müşteri' if firma.is_musteri else '' }}</span>
+                <span class="badge bg-{{ 'warning' if firma.is_tedarikci else 'secondary' }}">{{ 'Tedarikçi' if firma.is_tedarikci else '' }}</span>
+                <span class="badge bg-{{ 'primary' if firma.is_active else 'danger' }}">{{ 'Aktif' if firma.is_active else 'Pasif' }}</span>
+            </div>
+        </div>
+        
+        <div class="mt-2 mt-md-0">
+            <div class="btn-group me-2" role="group">
+                <!-- HAKEDİŞ BUTONU -->
+                <a href="{{ url_for('fatura.olustur') }}" class="btn btn-primary">
+                    <i class="fa fa-magic"></i> Hakediş Oluştur
+                </a>
+                <a href="{{ url_for('cari.odeme_ekle', firma_id=firma.id, yon='tahsilat') }}" class="btn btn-success">
+                    <i class="fa fa-arrow-down"></i> Tahsilat Al
+                </a>
+                <a href="{{ url_for('cari.odeme_ekle', firma_id=firma.id, yon='odeme') }}" class="btn btn-danger">
+                    <i class="fa fa-arrow-up"></i> Ödeme Yap
+                </a>
+                <a href="{{ url_for('cari.hizmet_ekle', firma_id=firma.id) }}" class="btn btn-info text-white">
+                    <i class="fa fa-file-invoice"></i> Fatura/Hizmet
+                </a>
+            </div>
+            <a id="yazdir-btn" href="{{ url_for('firmalar.bilgi_yazdir', id=firma.id, tab=tab) }}" class="btn btn-dark" target="_blank">
+                <i class="fa fa-print"></i>
+            </a>
+            <a href="{{ url_for('firmalar.duzelt', id=firma.id) }}" class="btn btn-warning"><i class="fa fa-edit"></i></a>
+            <a href="{{ request.referrer or url_for('firmalar.index') }}" class="btn btn-secondary">
+                <i class="fa fa-arrow-left"></i>
+            </a>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card border-primary mb-3 shadow-sm">
+                <div class="card-header bg-transparent border-primary text-primary fw-bold">Toplam Borç (Satışlar)</div>
+                <div class="card-body text-primary">
+                    <h3 class="card-title">
+                        {% if toplam_borc is defined and toplam_borc is not none %}
+                            {{ "{:,.2f}".format(toplam_borc).replace(',', 'X').replace('.', ',').replace('X', '.') }} TL
+                        {% else %}
+                            0,00 TL
+                        {% endif %}
+                    </h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-success mb-3 shadow-sm">
+                <div class="card-header bg-transparent border-success text-success fw-bold">Toplam Alacak (Ödemeler)</div>
+                <div class="card-body text-success">
+                    <h3 class="card-title">
+                        {% if toplam_alacak is defined and toplam_alacak is not none %}
+                            {{ "{:,.2f}".format(toplam_alacak | abs).replace(',', 'X').replace('.', ',').replace('X', '.') }} TL
+                        {% else %}
+                            0,00 TL
+                        {% endif %}
+                    </h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-secondary mb-3 shadow-sm bg-light">
+                <div class="card-header bg-transparent border-secondary fw-bold">GÜNCEL BAKİYE</div>
+                <div class="card-body">
+                    <h3 class="card-title {{ durum_rengi }}">
+                        {% if guncel_bakiye is defined and guncel_bakiye is not none %}
+                            {{ "{:,.2f}".format(guncel_bakiye).replace(',', 'X').replace('.', ',').replace('X', '.') }} TL
+                        {% else %}
+                            0,00 TL
+                        {% endif %}
+                    </h3>
+                    <p class="card-text fw-bold small {{ durum_rengi }}">{{ durum_metni }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <ul class="nav nav-tabs mb-3" id="firmaTab" role="tablist">
+        <li class="nav-item">
+            <button class="nav-link {{ 'active' if tab == 'hareket' else '' }}" id="hareket-tab" data-bs-toggle="tab" data-bs-target="#hareket" type="button"
+                onclick="setTab('hareket')">Cari Hareketler
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link {{ 'active' if tab == 'kiralama' else '' }}" id="kiralama-tab" data-bs-toggle="tab" data-bs-target="#kiralama" type="button"
+                onclick="setTab('kiralama')">Kiralamalar
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" id="genel-tab" data-bs-toggle="tab" data-bs-target="#genel" type="button">Firma Kartı</button>
+        </li>
+    </ul>
+
+    <div class="tab-content" id="firmaTabContent">
+        <div class="tab-pane fade {{ 'show active' if tab == 'hareket' else '' }}" id="hareket">
+            <div class="card card-body shadow-sm">
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped table-bordered table-sm mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 5%;">#</th>
+                                <th style="width: 100px;">Tarih</th>
+                                <th style="width: 150px;">İşlem Türü</th>
+                                <th style="min-width: 280px;">Açıklama</th>
+                                <th class="text-end" style="width: 120px;">Matrah</th>
+                                <th class="text-end" style="width: 100px;">KDV Oranı</th>
+                                <th class="text-end" style="width: 120px;">KDV Tutarı</th>
+                                <th class="text-end text-danger fw-bold" style="width: 120px;">Borç</th>
+                                <th class="text-end text-success fw-bold" style="width: 120px;">Alacak</th>
+                                <th class="text-end bg-light fw-bold" style="width: 150px;">Bakiye</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% set start = (hareket_pagination.page - 1) * hareket_pagination.per_page %}
+                            {% for islem in hareketler %}
+                            {% set is_kiralama = (islem.tur == 'Kiralama' and islem.ozel_id) %}
+                            {% set is_nakliye = (islem.tur == 'Nakliye' and islem.ozel_id) %}
+                            <tr class="context-row"
+                                data-id="{{ islem.id }}" 
+                                data-type="{% if is_kiralama %}kiralama{% elif is_nakliye %}nakliye{% else %}{{ islem.tur_tipi.lower() }}{% endif %}"
+                                data-ozel-id="{{ islem.ozel_id or '' }}" 
+                                data-desc="{{ islem.aciklama }}" 
+                                style="cursor: context-menu;">
+                                <td>{{ start + loop.index }}</td>
+                                <td>{{ islem.tarih.strftime('%d.%m.%Y') if islem.tarih else '-' }}</td>
+                                <td>
+                                    {% if is_kiralama %}
+                                        <span class="badge bg-warning text-dark"><i class="fa fa-key"></i> Kiralama</span>
+                                    {% elif is_nakliye %}
+                                        <span class="badge bg-primary"><i class="fa fa-truck"></i> Nakliye</span>
+                                    {% elif 'Fatura' in islem.tur or 'Hizmet' in islem.tur %}
+                                        <span class="badge bg-{% if islem.yon == 'giden' %}danger{% elif islem.yon == 'gelen' %}success{% else %}secondary{% endif %}"><i class="fa fa-file-invoice"></i> Fatura</span>
+                                    {% elif islem.tur == 'Tahsilat (Giriş)' %}
+                                        <span class="badge bg-success"><i class="fa fa-money-bill"></i> Tahsilat (Giriş)</span>
+                                    {% elif islem.tur == 'Ödeme (Çıkış)' %}
+                                        <span class="badge bg-danger"><i class="fa fa-money-bill"></i> Ödeme (Çıkış)</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary"><i class="fa fa-money-bill"></i> {{ islem.tur }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {{ islem.aciklama }}
+                                    {% if islem.belge_no %}
+                                        <br><small class="text-muted">
+                                            {% if islem.tur_tipi == 'odeme' %}
+                                                Kasa: {{ islem.belge_no }}
+                                            {% else %}
+                                                No: {{ islem.belge_no }}
+                                            {% endif %}
+                                        </small>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">
+                                    {% if islem.tur_tipi != 'odeme' and islem.tutar is defined and islem.tutar is not none and islem.tutar != 0 %}
+                                        {% if islem.tutar > 0 %}+{% elif islem.tutar < 0 %}-{% endif %}
+                                        {{ "{:,.2f}".format(islem.tutar | abs).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+                                    {% else %}-{% endif %}
+                                </td>
+                                <td class="text-end">
+                                    {% if islem.kiralama_alis_kdv is defined and islem.kiralama_alis_kdv is not none %}
+                                        {{ islem.kiralama_alis_kdv }}% (Kiralama)
+                                    {% elif islem.nakliye_alis_kdv is defined and islem.nakliye_alis_kdv is not none %}
+                                        {{ islem.nakliye_alis_kdv }}% (Nakliye)
+                                    {% elif islem.kdv_orani is defined and islem.kdv_orani is not none %}
+                                        {{ islem.kdv_orani }}%
+                                    {% else %}-{% endif %}
+                                </td>
+                                <td class="text-end">
+                                    {% if islem.kdv_tutari is defined and islem.kdv_tutari is not none %}
+                                        {{ "{:,.2f}".format(islem.kdv_tutari).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+                                    {% else %}-{% endif %}
+                                </td>
+                                <td class="text-end text-danger fw-bold">
+                                    {% if islem.borc is defined and islem.borc is not none and islem.borc != 0 %}
+                                        {% if islem.borc > 0 %}+{% endif %}{{ "{:,.2f}".format(islem.borc).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+                                    {% else %}-{% endif %}
+                                </td>
+                                <td class="text-end text-success fw-bold">
+                                    {% if islem.alacak is defined and islem.alacak is not none and islem.alacak != 0 %}
+                                        {% if islem.alacak > 0 %}+{% endif %}{{ "{:,.2f}".format(islem.alacak).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+                                    {% else %}-{% endif %}
+                                </td>
+                                <!-- Bakiye sütunu artık en sağda, fazladan sütun kaldırıldı -->
+                                <!-- Borç ve Alacak hücreleri kaldırıldı -->
+                                <td class="text-end fw-bold bg-light">
+                                    {{ "{:,.2f}".format(islem.kumulatif_bakiye).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
+                    <form method="GET" action="{{ url_for('firmalar.bilgi', id=firma.id) }}" class="d-flex align-items-center gap-2 mb-0">
+                        <input type="hidden" name="tab" value="hareket">
+                        <input type="hidden" name="kiralama_page" value="{{ kiralama_pagination.page }}">
+                        <input type="hidden" name="kiralama_per_page" value="{{ kiralama_per_page }}">
+                        <label class="small text-muted mb-0">Sayfa başına</label>
+                        <select name="hareket_per_page" class="form-select form-select-sm" style="max-width:130px;" onchange="this.form.submit()">
+                            <option value="10"  {{ 'selected' if hareket_per_page == 10 or not hareket_per_page else '' }}>10</option>
+                            <option value="25"  {{ 'selected' if hareket_per_page == 25 else '' }}>25</option>
+                            <option value="50"  {{ 'selected' if hareket_per_page == 50 else '' }}>50</option>
+                            <option value="100" {{ 'selected' if hareket_per_page == 100 else '' }}>100</option>
+                        </select>
+                    </form>
+
+                    {% if hareket_pagination %}
+                    <ul class="pagination mb-0">
+                        <li class="page-item {% if not hareket_pagination.has_prev %}disabled{% endif %}">
+                            <a class="page-link" href="{{ url_for('firmalar.bilgi', id=firma.id, tab='hareket', hareket_page=hareket_pagination.prev_num, hareket_per_page=hareket_per_page, kiralama_page=kiralama_pagination.page, kiralama_per_page=kiralama_per_page) }}">&laquo;</a>
+                        </li>
+                        {% for pn in hareket_pagination.iter_pages() %}
+                            {% if pn %}
+                            <li class="page-item {% if pn == hareket_pagination.page %}active{% endif %}">
+                                <a class="page-link" href="{{ url_for('firmalar.bilgi', id=firma.id, tab='hareket', hareket_page=pn, hareket_per_page=hareket_per_page, kiralama_page=kiralama_pagination.page, kiralama_per_page=kiralama_per_page) }}">{{ pn }}</a>
+                            </li>
+                            {% else %}
+                            <li class="page-item disabled"><span class="page-link">&hellip;</span></li>
+                            {% endif %}
+                        {% endfor %}
+                        <li class="page-item {% if not hareket_pagination.has_next %}disabled{% endif %}">
+                            <a class="page-link" href="{{ url_for('firmalar.bilgi', id=firma.id, tab='hareket', hareket_page=hareket_pagination.next_num, hareket_per_page=hareket_per_page, kiralama_page=kiralama_pagination.page, kiralama_per_page=kiralama_per_page) }}">&raquo;</a>
+                        </li>
+                    </ul>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade {{ 'show active' if tab == 'kiralama' else '' }}" id="kiralama">
+            <div class="card card-body shadow-sm">
+                 <div class="table-responsive">
+                     <table class="table table-hover align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 5%;">#</th>
+                                <th style="width: 15%;">Form No</th>
+                                <th style="width: 35%;">Ekipmanlar</th>
+                                <th style="width: 25%;">Durumları</th>
+                                <th style="width: 20%;">Genel Durum</th>
+                                <th class="text-end" style="width: 10%;">İşlem</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% set start = (kiralama_pagination.page - 1) * kiralama_pagination.per_page %}
+                            {% for kiralama in kiralamalar_sayfa %}
+                            <tr>
+                                <td>{{ start + loop.index }}</td>
+                                <td>
+                                    <a href="{{ url_for('kiralama.duzenle', kiralama_id=kiralama.id) }}">
+                                        <strong>{{ kiralama.kiralama_form_no or 'No Belirtilmemiş' }}</strong>
+                                    </a>
+                                </td>
+                                <td>
+                                    <ul class="list-unstyled mb-0 small">
+                                        {% for kalem in kiralama.kalemler %}
+                                        {% set ekipman_adi = (((kalem.ekipman.marka or '') ~ ' - ' ~ (kalem.ekipman.model or '')) | trim(' -')) if kalem.ekipman else (((kalem.harici_ekipman_marka or '') ~ ' - ' ~ (kalem.harici_ekipman_model or '')) | trim(' -')) %}
+                                        <li class="mb-3">
+                                            {% if kalem.ekipman and kalem.ekipman.kod %}
+                                                <small class="text-muted fw-bold">({{ kalem.ekipman.kod }})</small>
+                                            {% elif kalem.is_dis_tedarik_ekipman %}
+                                                <small class="text-muted">(Dış Tedarik)</small>
+                                            {% endif %}
+                                            <span class="fw-bold text-dark">{{ ekipman_adi or (kalem.ekipman.tipi if kalem.ekipman else 'Ekipman bilgisi yok') }}</span>
+                                            {% if kalem.is_dis_tedarik_ekipman and kalem.harici_tedarikci %}
+                                                <br><small class="text-muted">Tedarikçi: {{ kalem.harici_tedarikci.firma_adi | truncate_name }}</small>
+                                            {% endif %}
+                                        </li>
+                                        {% endfor %}
+                                    </ul>
+                                </td>
+                                <td>
+                                    <ul class="list-unstyled mb-0 small">
+                                        {% for kalem in kiralama.kalemler %}
+                                        <li class="mb-3">
+                                            {% if kalem.sonlandirildi %}
+                                                <span class="badge bg-secondary" style="min-width: 65px; opacity: 0.85;">Bitti</span>
+                                                <br><small class="text-muted">
+                                                    {{ kalem.kiralama_baslangici.strftime('%d.%m.%Y') }} - {{ kalem.kiralama_bitis.strftime('%d.%m.%Y') }}
+                                                </small>
+                                            {% else %}
+                                                <span class="badge bg-success" style="min-width: 65px;">Aktif</span>
+                                                <br><small class="text-primary fw-bold">
+                                                    {{ kalem.kiralama_baslangici.strftime('%d.%m.%Y') }} tarihinden beri sahada
+                                                </small>
+                                            {% endif %}
+                                        </li>
+                                        {% endfor %}
+                                    </ul>
+                                </td>
+                                <td>
+                                    {% set toplam = kiralama.kalemler | length %}
+                                    {% set biten = kiralama.kalemler | selectattr('sonlandirildi', 'equalto', true) | list | length %}
+                                   
+                                    {% if biten == 0 %}
+                                        <span class="text-success fw-bold"><i class="fa fa-play-circle"></i> Tamamı Sahada</span>
+                                    {% elif biten == toplam %}
+                                        <span class="text-secondary"><i class="fa fa-check-double"></i> Sözleşme Kapandı</span>
+                                    {% else %}
+                                        <span class="text-warning fw-bold">
+                                            <i class="fa fa-exclamation-circle"></i> Parçalı Teslimat
+                                            <br><small class="text-muted">({{ biten }}/{{ toplam }} makine döndü)</small>
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                
+                                <td class="text-end">
+                                    <a href="{{ url_for('kiralama.duzenle', kiralama_id=kiralama.id) }}" class="btn btn-sm btn-outline-primary">
+                                        <i class="fa fa-search"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
+                    <form method="GET" action="{{ url_for('firmalar.bilgi', id=firma.id) }}" class="d-flex align-items-center gap-2 mb-0">
+                        <input type="hidden" name="tab" value="kiralama">
+                        <input type="hidden" name="hareket_page" value="{{ hareket_pagination.page }}">
+                        <input type="hidden" name="hareket_per_page" value="{{ hareket_per_page }}">
+                        <label class="small text-muted mb-0">Sayfa başına</label>
+                        <select name="kiralama_per_page" class="form-select form-select-sm" style="max-width:130px;" onchange="this.form.submit()">
+                            <option value="10"  {{ 'selected' if kiralama_per_page == 10 else '' }}>10</option>
+                            <option value="25"  {{ 'selected' if kiralama_per_page == 25 else '' }}>25</option>
+                            <option value="50"  {{ 'selected' if kiralama_per_page == 50 else '' }}>50</option>
+                            <option value="100" {{ 'selected' if kiralama_per_page == 100 else '' }}>100</option>
+                        </select>
+                    </form>
+
+                    {% if kiralama_pagination %}
+                    <ul class="pagination mb-0">
+                        <li class="page-item {% if not kiralama_pagination.has_prev %}disabled{% endif %}">
+                            <a class="page-link" href="{{ url_for('firmalar.bilgi', id=firma.id, tab='kiralama', kiralama_page=kiralama_pagination.prev_num, kiralama_per_page=kiralama_per_page, hareket_page=hareket_pagination.page, hareket_per_page=hareket_per_page) }}">&laquo;</a>
+                        </li>
+                        {% for pn in kiralama_pagination.iter_pages() %}
+                            {% if pn %}
+                            <li class="page-item {% if pn == kiralama_pagination.page %}active{% endif %}">
+                                <a class="page-link" href="{{ url_for('firmalar.bilgi', id=firma.id, tab='kiralama', kiralama_page=pn, kiralama_per_page=kiralama_per_page, hareket_page=hareket_pagination.page, hareket_per_page=hareket_per_page) }}">{{ pn }}</a>
+                            </li>
+                            {% else %}
+                            <li class="page-item disabled"><span class="page-link">&hellip;</span></li>
+                            {% endif %}
+                        {% endfor %}
+                        <li class="page-item {% if not kiralama_pagination.has_next %}disabled{% endif %}">
+                            <a class="page-link" href="{{ url_for('firmalar.bilgi', id=firma.id, tab='kiralama', kiralama_page=kiralama_pagination.next_num, kiralama_per_page=kiralama_per_page, hareket_page=hareket_pagination.page, hareket_per_page=hareket_per_page) }}">&raquo;</a>
+                        </li>
+                    </ul>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="genel">
+            <div class="card card-body shadow-sm">
+                <div class="row">
+                    <div class="col-md-6">
+                        <table class="table table-borderless">
+                            <tr><th>Yetkili Kişi:</th><td>{{ firma.yetkili_adi or '-' }}</td></tr>
+                            <tr><th>Telefon:</th><td>{{ firma.telefon or '-' }}</td></tr>
+                            <tr><th>Email:</th><td>{{ firma.eposta or '-' }}</td></tr>
+                            <tr><th>Vergi No:</th><td>{{ firma.vergi_no or '-' }}</td></tr>
+                            <tr><th>İletişim:</th><td>{{ firma.iletisim_bilgileri or '-' }}</td></tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="custom-context-menu">
+    <ul>
+        <li id="menu-edit"><i class="fa fa-edit text-primary"></i> Düzenle</li>
+        <li id="menu-delete"><i class="fa fa-trash text-danger"></i> Sil</li>
+        <li id="menu-fatura-detay"><i class="fa fa-file-invoice"></i> Fatura Detayı</li>
+    </ul>
+</div>
+
+<form id="delete-form" method="POST" style="display:none;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+</form>
+
+<!-- İMZA YETKİSİ ALERTI -->
+<div class="alert {% if firma.imza_yetkisi_kontrol_edildi %}alert-success{% else %}alert-warning{% endif %} d-flex justify-content-between align-items-center mt-4 shadow-sm">
+    <div>
+        <strong>İmza Yetkisi Durumu:</strong>
+        {% if firma.imza_yetkisi_kontrol_edildi %}
+            Kontrol Edildi
+            {% if firma.imza_yetkisi_kontrol_tarihi %}
+                <small class="text-muted">({{ firma.imza_yetkisi_kontrol_tarihi.strftime('%d.%m.%Y') }})</small>
+            {% endif %}
+        {% else %}
+            Kontrol Edilmedi
+        {% endif %}
+    </div>
+    {% if not firma.imza_yetkisi_kontrol_edildi %}
+    <form method="POST" action="{{ url_for('firmalar.imza_kontrol', id=firma.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-sm btn-outline-success">İmza Yetkisini Onayla</button>
+    </form>
+    {% endif %}
+</div>
+
+<script>
+    function setTab(name) {
+        const url = new URL(window.location.href);
+        url.searchParams.set('tab', name);
+        // sayfa numarasını sıfırla ilgili sekme için
+        if (name === 'hareket') url.searchParams.set('hareket_page', '1');
+        if (name === 'kiralama') url.searchParams.set('kiralama_page', '1');
+        history.replaceState(null, '', url.toString());
+
+        // Yazdır butonunun tab parametresini güncelle
+        const yazdirBtn = document.getElementById('yazdir-btn');
+        if (yazdirBtn) {
+            const yazdirUrl = new URL(yazdirBtn.href);
+            yazdirUrl.searchParams.set('tab', name);
+            yazdirBtn.href = yazdirUrl.toString();
+        }
+    }
+
+    const contextMenu = document.getElementById('custom-context-menu');
+    let selectedId, selectedType, selectedOzelId, selectedDesc;
+
+    document.addEventListener('contextmenu', function(e) {
+        const row = e.target.closest('.context-row');
+        if (row) {
+            e.preventDefault();
+            selectedId = row.getAttribute('data-id');
+            selectedType = row.getAttribute('data-type').trim().toLowerCase();
+            selectedOzelId = row.getAttribute('data-ozel-id');
+            selectedDesc = row.getAttribute('data-desc');
+
+            if (selectedType === 'odeme') {
+                document.getElementById('menu-edit').style.display = 'block';
+                document.getElementById('menu-delete').style.display = 'block';
+            } else {
+                document.getElementById('menu-edit').style.display = 'block';
+                document.getElementById('menu-delete').style.display = 'none';
+            }
+
+            contextMenu.style.display = 'block';
+            contextMenu.style.left = e.pageX + 'px';
+            contextMenu.style.top = e.pageY + 'px';
+        }
+    });
+
+    document.addEventListener('click', () => contextMenu.style.display = 'none');
+
+    document.getElementById('menu-edit').addEventListener('click', function() {
+        const cleanOzelId = selectedOzelId ? selectedOzelId.trim() : "";
+        if (selectedType === 'kiralama') {
+            if (cleanOzelId && cleanOzelId !== 'None' && cleanOzelId !== '') {
+                window.location.href = "/kiralama/duzenle/" + cleanOzelId;
+            } else {
+                alert("Hata: Kiralama ID bulunamadı!");
+            }
+        } else if (selectedType === 'nakliye') {
+            window.location.href = "/nakliyeler/duzenle/" + cleanOzelId;
+        } else if (selectedType === 'odeme') {
+            window.location.href = "/cari/odeme/duzelt/" + selectedId;
+        } else {
+            window.location.href = "/cari/hizmet/duzelt/" + selectedId;
+        }
+    });
+
+    document.getElementById('menu-delete').addEventListener('click', function() {
+        if (selectedId && confirm('Silmek istediğinize emin misiniz?')) {
+            const form = document.getElementById('delete-form');
+            form.action = "/cari/odeme/sil/" + selectedId;
+            form.submit();
+        }
+    });
+
+    // Fatura Detayı menü öğesi
+    const menuFaturaDetay = document.getElementById('menu-fatura-detay');
+    // Sağ tık satırında fatura/hizmet ise menüye detay linki ekle
+    document.querySelectorAll('.context-row').forEach(row => {
+        row.addEventListener('contextmenu', function(e) {
+            // ...existing code...
+            const isFatura = row.querySelector('.fa-file-invoice');
+            if (isFatura && row.dataset.id) {
+                menuFaturaDetay.style.display = 'flex';
+                menuFaturaDetay.onclick = function() {
+                    window.location.href = `/cari/hizmet/detay/${row.dataset.id}`;
+                };
+            } else {
+                menuFaturaDetay.style.display = 'none';
+                menuFaturaDetay.onclick = null;
+            }
+        });
+    });
+</script>
+{% endblock %}

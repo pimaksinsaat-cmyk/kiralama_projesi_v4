@@ -1,0 +1,251 @@
+{% extends "base.html" %}
+{% block title %}Kasa/Banka Düzenle{% endblock %}
+{% block content %}
+<style>
+    .form-section {
+        background-color: #fff;
+        padding: 30px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        max-width: 600px;
+        margin: 20px auto;
+        border-top: 5px solid #ffc107;
+    }
+    
+    /* GÜNCELLENMİŞ MODAL STİLLERİ (Flexbox Merkezleme) */
+    .custom-backdrop { 
+        display: none; 
+        position: fixed; 
+        top: 0; 
+        left: 0; 
+        width: 100%; 
+        height: 100%; 
+        background: rgba(0,0,0,0.5); 
+        z-index: 1040; 
+        
+        /* İçeriği ortalamak için Flexbox */
+        justify-content: center;
+        align-items: center;
+    }
+    
+    .custom-modal { 
+        background: white; 
+        padding: 25px; 
+        border-radius: 8px; 
+        width: 90%; 
+        max-width: 500px; 
+        box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+        position: relative; /* Kapat butonu için */
+        /* Eski 'fixed' ve 'transform' özellikleri kaldırıldı, Flexbox hallediyor */
+    }
+
+    .close-btn { 
+        position: absolute; 
+        top: 15px; 
+        right: 20px; 
+        border: none; 
+        background: none; 
+        font-size: 1.5rem; 
+        cursor: pointer; 
+        color: #999; 
+    }
+    .close-btn:hover { color: #333; }
+</style>
+
+<div class="container">
+    <div class="form-section">
+        <h2 class="mb-4 text-center">Hesap Bilgilerini Düzenle</h2>
+        
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <form method="POST">
+            {{ form.hidden_tag() }}
+            
+            <div class="mb-3">
+                {{ form.kasa_adi.label(class="form-label fw-bold") }}
+                {{ form.kasa_adi(class="form-control") }}
+            </div>
+            
+            <div class="row mb-3">
+                <div class="col">
+                    {{ form.tipi.label(class="form-label fw-bold") }}
+                    {{ form.tipi(class="form-select") }}
+                </div>
+                <div class="col">
+                    {{ form.para_birimi.label(class="form-label fw-bold") }}
+                    {{ form.para_birimi(class="form-select") }}
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label fw-bold text-danger">Bakiye (Manuel Düzeltme)</label>
+                <div class="input-group">
+                    <span class="input-group-text">₺</span>
+                    <!-- Akıllı Giriş -->
+                    {{ form.bakiye(class="form-control currency-input", type="text", autocomplete="off", style="font-size: 1.2em; font-weight: bold;") }}
+                </div>
+                <small class="text-muted">Dikkat: Bakiyeyi buradan değiştirmek işlem kaydı oluşturmaz!</small>
+            </div>
+            
+            <div class="d-flex justify-content-between align-items-center mt-4 pt-3 border-top">
+                <!-- Sol Taraf: İptal ve Sil -->
+                <div>
+                    <a href="{{ url_for('cari.kasa_listesi') }}" class="btn btn-secondary me-2">İptal</a>
+                    <!-- openDeleteModal fonksiyonunu çağırıyoruz -->
+                    <button type="button" class="btn btn-danger" onclick="openDeleteModal()">
+                        <i class="fa fa-trash-alt"></i> Sil
+                    </button>
+                </div>
+                
+                <!-- Sağ Taraf: Güncelle -->
+                <button type="submit" class="btn btn-warning fw-bold">
+                    <i class="fa fa-save"></i> Güncelle
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- SİLME VE DEVİR MODALI (YENİ YAPI: İÇ İÇE) -->
+<!-- Backdrop artık ana kapsayıcıdır (Wrapper) -->
+<div id="modal-backdrop-delete" class="custom-backdrop">
+    
+    <!-- Modal içeriği backdrop'un ÇOCUĞU oldu -->
+    <div id="delete-modal" class="custom-modal">
+        <button type="button" class="close-btn" onclick="closeDeleteModal()">&times;</button>
+        
+        <h4 class="text-danger mb-3"><i class="fa fa-exclamation-triangle"></i> Hesabı Sil</h4>
+        
+        <form action="{{ url_for('cari.kasa_sil', id=kasa.id) }}" method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            
+            {% set mevcut_bakiye = kasa.bakiye | float %}
+            
+            {% if mevcut_bakiye != 0 %}
+                <!-- Bakiye Varsa Devir Seçeneği Göster -->
+                <div class="alert alert-warning">
+                    Bu hesapta <strong>{{ "{:,.2f}".format(mevcut_bakiye) }} {{ kasa.para_birimi }}</strong> bakiye bulunmaktadır.
+                    <br><br>
+                    Silme işlemini tamamlamak için lütfen bakiyeyi aktarmak istediğiniz hesabı seçiniz.
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Bakiyenin Aktarılacağı Hesap:</label>
+                    <select name="hedef_kasa_id" id="hedef-kasa-select" class="form-select" required>
+                        <option value="">-- Hedef Hesap Seçiniz --</option>
+                        {% if diger_kasalar %}
+                            {% for k in diger_kasalar %}
+                                <option value="{{ k.id }}">{{ k.kasa_adi }} ({{ k.para_birimi }})</option>
+                            {% endfor %}
+                        {% else %}
+                            <option value="" disabled>Başka uygun hesap bulunamadı!</option>
+                        {% endif %}
+                    </select>
+                    <small class="text-muted">Listede sadece aynı para birimine sahip hesaplar görünür.</small>
+                </div>
+                
+                <div class="text-end">
+                    <button type="button" class="btn btn-secondary me-2" onclick="closeDeleteModal()">İptal</button>
+                    <button type="submit" class="btn btn-danger">Bakiyeyi Devret ve Sil</button>
+                </div>
+                
+            {% else %}
+                <!-- Bakiye Yoksa Direkt Sil -->
+                <p><strong>{{ kasa.kasa_adi }}</strong> hesabını kalıcı olarak silmek istediğinizden emin misiniz?</p>
+                <p class="text-muted small">Bakiye 0 olduğu için herhangi bir devir işlemi yapılmayacaktır.</p>
+                
+                <div class="text-end mt-4">
+                    <button type="button" class="btn btn-secondary me-2" onclick="closeDeleteModal()">İptal</button>
+                    <button type="submit" class="btn btn-danger">Evet, Sil</button>
+                </div>
+            {% endif %}
+        </form>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Para birimi formatlama (Mevcut kodlar)
+    const currencyInputs = document.querySelectorAll('.currency-input');
+    function formatCurrency(value) {
+        if (!value) return '';
+        let v = value.toString().replace(/\./g, '').replace(',', '.');
+        let number = parseFloat(v);
+        if (isNaN(number)) return value;
+        return number.toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
+    function cleanCurrency(val) {
+        if (!val) return "0.00";
+        return val.toString().replace(/\./g, '').replace(',', '.');
+    }
+    function formatInput(input) {
+        let value = input.value;
+        if (value === '') return;
+        let cleanVal = value.replace(/[^\d,]/g, '');
+        let parts = cleanVal.split(',');
+        if (parts.length > 2) cleanVal = parts[0] + ',' + parts.slice(1).join('');
+        parts = cleanVal.split(',');
+        let intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+        let decimalPart = parts.length > 1 ? ',' + parts[1].substring(0, 2) : '';
+        input.value = intPart + decimalPart;
+    }
+    currencyInputs.forEach(input => {
+        if (input.value) {
+             if (input.value.indexOf('.') > -1 && input.value.indexOf(',') === -1) input.value = input.value.replace('.', ',');
+             input.value = formatCurrency(input.value);
+        }
+        input.addEventListener('input', function() { formatInput(this); });
+        input.addEventListener('keydown', function(e) {
+            if (['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete', 'Enter'].includes(e.key)) return;
+            if (!/^[0-9,]$/.test(e.key)) e.preventDefault();
+        });
+        input.addEventListener('focus', function() {
+            let val = this.value.replace(/\./g, '');
+            if (val === '0,00' || val === '0') val = '';
+            this.value = val;
+            setTimeout(() => { this.select(); }, 50);
+        });
+        input.addEventListener('blur', function() { this.value = formatCurrency(this.value); });
+        input.form.addEventListener('submit', function() { input.value = cleanCurrency(input.value); });
+    });
+
+    // --- EN GÜVENLİ MODAL KAPATMA MANTIĞI ---
+    const backdrop = document.getElementById('modal-backdrop-delete');
+    const modal = document.getElementById('delete-modal');
+
+    // 1. Backdrop'a tıklandığında kapat (Dışarı tıklama)
+    if (backdrop) {
+        backdrop.addEventListener('click', function(e) {
+            // Eğer tıklanan tam olarak backdrop'un kendisiyse kapat
+            if (e.target === this) {
+                closeDeleteModal();
+            }
+        });
+    }
+
+    // 2. Modal'ın kendisine tıklandığında olayı durdur (Propagation)
+    // Bu, modal içindeki select, input vb. öğelere tıklandığında
+    // tıklamanın yukarıya (backdrop'a) çıkmasını engeller.
+    if (modal) {
+        modal.addEventListener('click', function(e) {
+            e.stopPropagation();
+        });
+    }
+});
+
+function openDeleteModal() {
+    // Backdrop'u göstermek yeterli çünkü Flexbox ile içindeki modalı zaten gösterip ortalayacak
+    document.getElementById('modal-backdrop-delete').style.display = 'flex'; 
+}
+
+function closeDeleteModal() {
+    document.getElementById('modal-backdrop-delete').style.display = 'none';
+}
+</script>
+{% endblock %}

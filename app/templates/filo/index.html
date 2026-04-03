@@ -1,0 +1,854 @@
+{% extends "base.html" %}
+
+{% block title %}Makine Parkı (Filo) | Pimaks{% endblock %}
+
+{% block content %}
+<style>
+    /* Genel Konteyner ve Tipografi */
+    .container-fluid { max-width: 1600px; margin: 25px auto; padding: 0 30px; }
+    body { background-color: #f1f5f9; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
+
+    /* Kart ve Panel Tasarımı */
+    .filo-card { background: #fff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.06); border: none; padding: 25px; }
+    
+    /* Tablo Tasarımı */
+    .table-container { border-radius: 8px; overflow-x: auto; border: 1px solid #e2e8f0; }
+    .table thead th { background-color: #f8fafc; color: #475569; font-weight: 600; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.025em; padding: 15px; border-bottom: 2px solid #e2e8f0; }
+    .table tbody td { padding: 14px 15px; vertical-align: middle; color: #1e293b; font-size: 0.9rem; border-bottom: 1px solid #f1f5f9; }
+    
+    /* Satır Etkileşimi */
+    .ekipman-satiri { transition: all 0.2s ease; cursor: context-menu; }
+    .ekipman-satiri:hover { background-color: #f8fafc; transform: scale(1.002); }
+
+    /* Durum Rozetleri */
+    .badge-status { padding: 6px 12px; border-radius: 20px; font-weight: 600; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 5px; }
+    .bg-kirada { background-color: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; }
+    .bg-serviste { background-color: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+    .bg-bosta { background-color: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+    
+    /* Şube Rozeti İçin Yeni Stil */
+    .badge-sube { background-color: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; font-weight: 500; }
+
+    /* Sağ Tık Menüsü */
+    .context-menu { 
+        display: none; position: fixed; background: #fff; min-width: 220px; 
+        border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); 
+        border: 1px solid #e2e8f0; z-index: 9999; padding: 8px 0;
+    }
+    .context-menu-item { 
+        display: flex; align-items: center; padding: 10px 18px; color: #334155; 
+        text-decoration: none; font-size: 0.9rem; transition: all 0.1s; gap: 12px;
+    }
+    .context-menu-item:hover { background-color: #f1f5f9; color: #2563eb; }
+    .context-menu-item i { width: 18px; text-align: center; font-size: 1rem; color: #64748b; }
+    .context-menu-item.delete { color: #ef4444; border-top: 1px solid #f1f5f9; margin-top: 5px; }
+    .context-menu-item.delete:hover { background-color: #fef2f2; }
+
+    /* Arama Barı */
+    .search-input { border-radius: 8px 0 0 8px; border: 1px solid #cbd5e1; padding: 10px 15px; }
+    .search-btn { border-radius: 0 8px 8px 0; padding: 10px 25px; }
+    .search-clear-btn { border-radius: 0; padding: 10px 14px; border-left: 0; }
+
+    /* Durum + Aksiyon Satır İçi */
+    .durum-aksiyon { display: inline-flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
+    .inline-action-btn { display: inline-flex; align-items: center; gap: 3px; padding: 3px 7px; border: 1px solid #f0ad4e; border-radius: 4px; background: #fff8e8; color: #9a6700; font-size: 0.68rem; font-weight: 700; cursor: pointer; white-space: nowrap; transition: background 0.15s, border-color 0.15s; }
+    .inline-action-btn:hover { background: #fff1cc; border-color: #d39e00; }
+
+    /* Özel Modal */
+    .custom-backdrop { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); z-index: 1040; justify-content: center; align-items: center; }
+    .custom-modal { background: white; padding: 25px; border-radius: 10px; width: 90%; max-width: 500px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+
+    /* Sayfalama */
+    .pagination { display: flex; gap: 4px; list-style: none; padding: 0; margin: 0; }
+    .pagination .page-item .page-link { display: inline-block; padding: 6px 12px; border: 1px solid #dee2e6; border-radius: 4px; color: #667eea; text-decoration: none; font-size: 0.875rem; transition: all 0.2s; }
+    .pagination .page-item.active .page-link { background: #667eea; border-color: #667eea; color: white; }
+    .pagination .page-item.disabled .page-link { color: #adb5bd; pointer-events: none; }
+    .pagination .page-item .page-link:hover { background: #eef2ff; border-color: #a5b4fc; }
+
+</style>
+
+<div class="container-fluid">
+    <div class="filo-card">
+        <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+            <div>
+                <h1 class="h3 fw-bold text-slate-800 mb-1">Makine Parkı</h1>
+                <p class="text-muted small mb-0">Pimaks Filosundaki tüm aktif ekipmanların listesi</p>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="{{ url_for('filo.ekle') }}" class="btn btn-primary shadow-sm rounded-3">
+                    <i class="fas fa-plus me-2"></i>Yeni Makine
+                </a>
+                <div class="dropdown">
+                    <button class="btn btn-outline-secondary dropdown-toggle rounded-3" type="button" data-bs-toggle="dropdown">
+                        Diğer İşlemler
+                    </button>
+                    <ul class="dropdown-menu shadow border-0">
+                        <li><a class="dropdown-item" href="{{ url_for('filo.harici') }}"><i class="fas fa-external-link-alt me-2"></i>Harici Ekipmanlar</a></li>
+                        <li><a class="dropdown-item" href="{{ url_for('filo.bakimda') }}"><i class="fas fa-tools me-2"></i>Bakımdakiler</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="{{ url_for('filo.excel_disari_aktar') }}"><i class="fas fa-file-excel me-2 text-success"></i>Excel Dışa Aktar</a></li>
+                        <li><a class="dropdown-item" href="#" id="excel-ice-yukle-ac"><i class="fas fa-upload me-2 text-success"></i>Excel'den Yükle</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="{{ url_for('filo.arsiv') }}"><i class="fas fa-archive me-2"></i>Arşivlenmiş Makineler</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <form id="excel-ice-yukle-form" method="POST" action="{{ url_for('filo.excel_ice_yukle') }}" enctype="multipart/form-data" style="display:none;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="confirm_password" id="excel-confirm-password-hidden">
+            <input type="file" name="excel_file" id="excel-ice-yukle-input" accept=".xlsx">
+        </form>
+
+        <form method="GET" action="{{ url_for('filo.index') }}" class="mb-4">
+            <div class="input-group shadow-sm" style="max-width: 600px;">
+                <span class="input-group-text bg-white border-end-0"><i class="fas fa-search text-muted"></i></span>
+                <input type="text" name="q" class="form-control search-input border-start-0" 
+                       placeholder="Makine kodu, marka veya seri no ile ara..." value="{{ q or '' }}">
+                <input type="hidden" name="per_page" value="{{ per_page }}">
+                <button type="button" class="btn btn-outline-secondary search-clear-btn" id="search-clear-btn" title="Sorguyu temizle">
+                    <i class="fas fa-times"></i>
+                </button>
+                <button type="submit" class="btn btn-dark search-btn font-weight-bold">Sorgula</button>
+                <button type="button" class="btn btn-outline-primary ms-2 rounded-3" data-bs-toggle="modal" data-bs-target="#filterModal">
+                    <i class="fas fa-filter me-2"></i>Detaylı Filtre
+                </button>
+            </div>
+        </form>
+
+        <div class="table-container shadow-sm">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th style="width:4%;">#</th>
+                        <th style="width: 120px;">Kod</th>
+                        <th>Marka / Tip</th>
+                        <th>Seri No</th>
+                        <th>Teknik Özellikler</th>
+                        <th>Bulunduğu Şube</th>
+                        <th style="width: 200px;">Müşteri / Durum</th>
+                        <th style="width: 180px;">Durumu</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ekipman in ekipmanlar %}
+                        <tr class="ekipman-satiri"
+                            data-id="{{ ekipman.id }}"
+                            data-ekipman-id="{{ ekipman.id }}"
+                            data-ekipman-kod="{{ ekipman.kod }}"
+                            data-durum="{{ ekipman.calisma_durumu }}"
+                            data-duzenle-url="{{ url_for('filo.duzelt', id=ekipman.id) }}"
+                            data-sil-url="{{ url_for('filo.sil', id=ekipman.id) }}"
+                            data-bilgi-url="{{ url_for('filo.bilgi', id=ekipman.id) }}"
+                            data-kirala-url="{{ url_for('kiralama.ekle', ekipman_id=ekipman.id) }}"
+                            data-kiralama-gecmisi-url="{{ url_for('filo.kiralama_gecmisi', ekipman_id=ekipman.id) }}"
+                            data-finansal-rapor-url="{{ url_for('filo.finansal_rapor', ekipman_id=ekipman.id) }}"
+                            data-csrf-token="{{ csrf_token() }}">
+                            <td>{{ (pagination.page - 1) * pagination.per_page + loop.index }}</td>
+                        
+                        <td class="fw-bold text-primary">{{ ekipman.kod }}</td>
+                            <td>
+                            <div class="fw-bold">{{ ekipman.marka }}</div>
+                            <div class="text-muted small">{{ ekipman.tipi }}</div>
+                        </td>
+                        <td class="text-monospace">{{ ekipman.seri_no }}</td>
+                        <td>
+                            <span class="text-slate-600">{{ ekipman.calisma_yuksekligi }}m</span>
+                            <span class="mx-1 text-slate-300">|</span>
+                            <span class="text-slate-600">{{ ekipman.kaldirma_kapasitesi }}kg</span>
+                        </td>
+                        <td>
+                            {% if ekipman.sube %}
+                                <span class="badge badge-status badge-sube"><i class="fas fa-map-marker-alt"></i> {{ ekipman.sube.isim }}</span>
+                            {% else %}
+                                <span class="badge badge-status bg-light text-secondary border"><i class="fas fa-question-circle"></i> Merkez (Atanmamış)</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if ekipman.calisma_durumu == 'kirada' and ekipman.aktif_kiralama_bilgisi %}
+                                <small class="d-flex align-items-center gap-2">
+                                    <i class="fas fa-handshake text-primary"></i>
+                                    <strong>{{ ekipman.aktif_kiralama_bilgisi.kiralama.firma_musteri.firma_adi }}da çalışıyor</strong>
+                                </small>
+                            {% elif ekipman.son_musteri_adi %}
+                                <small class="text-muted d-flex align-items-center gap-2">
+                                    <i class="fas fa-undo-alt text-success"></i>
+                                    {{ ekipman.son_musteri_adi }}dan döndü
+                                </small>
+                            {% else %}
+                                <small class="text-muted">-</small>
+                            {% endif %}
+                        </td>
+
+                        <td>
+                            {% if ekipman.calisma_durumu == 'kirada' %}
+                                <div class="durum-aksiyon">
+                                    <span class="badge-status bg-kirada"><i class="fas fa-truck-loading"></i> Kirada</span>
+                                    <button type="button" class="btn btn-link btn-sm text-decoration-none sonlandir-buton ms-2 p-0" 
+                                            data-kalem-id="{{ ekipman.aktif_kiralama_bilgisi.id if ekipman.aktif_kiralama_bilgisi else '' }}"
+                                            data-baslangic="{{ ekipman.aktif_kiralama_bilgisi.kiralama_baslangici.strftime('%Y-%m-%d') if ekipman.aktif_kiralama_bilgisi and ekipman.aktif_kiralama_bilgisi.kiralama_baslangici else '' }}"
+                                            data-nakliye-satis="{{ ekipman.aktif_kiralama_bilgisi.nakliye_satis_fiyat if ekipman.aktif_kiralama_bilgisi else 0 }}"
+                                            data-donus-nakliye-satis="{{ ekipman.aktif_kiralama_bilgisi.donus_nakliye_satis_fiyat if ekipman.aktif_kiralama_bilgisi and ekipman.aktif_kiralama_bilgisi.donus_nakliye_satis_fiyat is not none else '' }}"
+                                            data-donus-fatura-et="{{ 1 if ekipman.aktif_kiralama_bilgisi and ekipman.aktif_kiralama_bilgisi.donus_nakliye_fatura_et else 0 }}"
+                                            data-kod="{{ ekipman.kod }}" title="Kiralamayı Bitir">
+                                        <i class="fas fa-sign-in-alt"></i> İade Al
+                                    </button>
+                                </div>
+                            {% elif ekipman.calisma_durumu == 'serviste' %}
+                                <span class="badge-status bg-serviste"><i class="fas fa-wrench"></i> Serviste</span>
+                            {% else %}
+                                <div class="durum-aksiyon">
+                                    <span class="badge-status bg-bosta"><i class="fas fa-check-circle"></i> Boşta</span>
+                                    {% if ekipman.iade_iptal_kalem_id %}
+                                        <button type="button" class="inline-action-btn js-filo-iade-iptal-btn"
+                                                data-kalem-id="{{ ekipman.iade_iptal_kalem_id }}"
+                                                data-csrf-token="{{ csrf_token() }}"
+                                                data-ekipman-kod="{{ ekipman.kod }}"
+                                                title="İade işlemini geri al (yalnızca 24 saat içinde)">
+                                            <i class="fas fa-undo-alt"></i> İade İptal
+                                        </button>
+                                    {% endif %}
+                                </div>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center py-5 text-muted italic"> <i class="fas fa-box-open d-block mb-3 fs-1"></i>
+                            Gösterilecek makine bulunamadı.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
+            <form method="GET" action="{{ url_for('filo.index') }}" class="d-flex align-items-center gap-2 mb-0">
+                                <input type="hidden" name="page" value="{{ pagination.page if pagination else 1 }}">
+                <input type="hidden" name="q" value="{{ q or '' }}">
+                <input type="hidden" name="sube_id" value="{{ request.args.get('sube_id', '') }}">
+                <input type="hidden" name="tip" value="{{ request.args.get('tip', '') }}">
+                <input type="hidden" name="marka" value="{{ request.args.get('marka', '') }}">
+                <input type="hidden" name="enerji" value="{{ request.args.get('enerji', '') }}">
+                <input type="hidden" name="ortam" value="{{ request.args.get('ortam', '') }}">
+                <input type="hidden" name="y_min" value="{{ request.args.get('y_min', '') }}">
+                <input type="hidden" name="k_min" value="{{ request.args.get('k_min', '') }}">
+                <input type="hidden" name="agirlik_max" value="{{ request.args.get('agirlik_max', '') }}">
+                <input type="hidden" name="genislik_max" value="{{ request.args.get('genislik_max', '') }}">
+                <input type="hidden" name="uzunluk_max" value="{{ request.args.get('uzunluk_max', '') }}">
+                <input type="hidden" name="ky_max" value="{{ request.args.get('ky_max', '') }}">
+                <label for="per-page-select" class="small text-muted mb-0">Sayfa başına</label>
+                <select id="per-page-select" name="per_page" class="form-select form-select-sm" style="max-width: 130px;" onchange="this.form.submit()">
+                    <option value="10" {{ 'selected' if per_page == 10 else '' }}>10</option>
+                    <option value="25" {{ 'selected' if per_page == 25 else '' }}>25</option>
+                    <option value="50" {{ 'selected' if per_page == 50 else '' }}>50</option>
+                    <option value="100" {{ 'selected' if per_page == 100 else '' }}>100</option>
+                </select>
+            </form>
+
+            {% if pagination %}
+            <ul class="pagination mb-0">
+                <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+                    <a class="page-link" href="{{ url_for('filo.index', page=pagination.prev_num, per_page=per_page, q=q, sube_id=request.args.get('sube_id'), tip=request.args.get('tip'), marka=request.args.get('marka'), enerji=request.args.get('enerji'), ortam=request.args.get('ortam'), y_min=request.args.get('y_min'), k_min=request.args.get('k_min'), agirlik_max=request.args.get('agirlik_max'), genislik_max=request.args.get('genislik_max'), uzunluk_max=request.args.get('uzunluk_max'), ky_max=request.args.get('ky_max')) }}">&laquo;</a>
+                </li>
+
+                {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
+                    {% if page_num %}
+                    <li class="page-item {% if page_num == pagination.page %}active{% endif %}">
+                        <a class="page-link" href="{{ url_for('filo.index', page=page_num, per_page=per_page, q=q, sube_id=request.args.get('sube_id'), tip=request.args.get('tip'), marka=request.args.get('marka'), enerji=request.args.get('enerji'), ortam=request.args.get('ortam'), y_min=request.args.get('y_min'), k_min=request.args.get('k_min'), agirlik_max=request.args.get('agirlik_max'), genislik_max=request.args.get('genislik_max'), uzunluk_max=request.args.get('uzunluk_max'), ky_max=request.args.get('ky_max')) }}">{{ page_num }}</a>
+                    </li>
+                    {% else %}
+                    <li class="page-item disabled"><span class="page-link">&hellip;</span></li>
+                    {% endif %}
+                {% endfor %}
+
+                <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+                    <a class="page-link" href="{{ url_for('filo.index', page=pagination.next_num, per_page=per_page, q=q, sube_id=request.args.get('sube_id'), tip=request.args.get('tip'), marka=request.args.get('marka'), enerji=request.args.get('enerji'), ortam=request.args.get('ortam'), y_min=request.args.get('y_min'), k_min=request.args.get('k_min'), agirlik_max=request.args.get('agirlik_max'), genislik_max=request.args.get('genislik_max'), uzunluk_max=request.args.get('uzunluk_max'), ky_max=request.args.get('ky_max')) }}">&raquo;</a>
+                </li>
+            </ul>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div id="context-menu" class="context-menu shadow-lg">
+    <a href="#" class="context-menu-item text-primary fw-bold" id="menu-kirala">
+        <i class="fas fa-plus-circle"></i> Hemen Kiraya Ver
+    </a>
+    <div class="context-menu-item text-warning" id="menu-bakim" style="cursor: pointer;">
+        <i class="fas fa-tools"></i> Bakıma/Servise Al
+    </div>
+    
+    <div class="context-menu-item text-info" id="menu-sube-degistir" style="cursor: pointer;">
+        <i class="fas fa-exchange-alt"></i> Şube Nakil Yap
+    </div>
+
+    <div class="border-bottom my-1"></div>
+    <a href="#" class="context-menu-item" id="menu-rapor">
+        <i class="fas fa-chart-line"></i> Finansal Analiz
+    </a>
+    <a href="#" class="context-menu-item" id="menu-kiralama-gecmisi">
+        <i class="fas fa-history"></i> Kiralama Geçmişi
+    </a>
+    <a href="#" class="context-menu-item" id="menu-bilgi">
+        <i class="fas fa-info-circle"></i> Teknik Detaylar
+    </a>
+    <a href="#" class="context-menu-item" id="menu-duzenle">
+        <i class="fas fa-edit"></i> Kartı Düzenle
+    </a>
+    <div class="context-menu-item delete" id="menu-sil" style="cursor: pointer;">
+        <i class="fas fa-trash-alt"></i> Makineyi Sil
+    </div>
+</div>
+
+<div class="modal fade" id="bs-sube-modal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <form method="POST" id="sube-degistir-form" action="">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header bg-info text-white border-0">
+                    <h5 class="modal-title fw-bold"><i class="fas fa-truck-moving me-2"></i>Şube Nakil: <span id="sube-kod-label"></span></h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Hedef Şube / Depo</label>
+                        <select name="yeni_sube_id" class="form-select form-select-lg" required>
+                            <option value="" disabled selected>Lütfen aktarılacak şubeyi seçin...</option>
+                            {% for s in subeler %}
+                                <option value="{{ s.id }}">{{ s.isim }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text mt-2 text-muted">Makinenin fiziksel olarak bulunduğu yeni lokasyonu seçin.</div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-info fw-bold px-4 text-white">Nakli Gerçekleştir</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="bs-bakim-modal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <form method="POST" action="{{ url_for('filo.bakima_al') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="ekipman_id" id="bakim-id">
+                <div class="modal-header bg-warning text-dark border-0">
+                    <h5 class="modal-title fw-bold"><i class="fas fa-wrench me-2"></i>Bakıma Al: <span id="bakim-kod-label"></span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Bakım Başlangıç Tarihi</label>
+                        <input type="date" name="tarih" class="form-control" id="bakim-tarihi-input" required>
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label fw-bold">Arıza veya Bakım Açıklaması</label>
+                        <textarea name="aciklama" class="form-control" rows="3" placeholder="Örn: Yağ kaçağı var, periyodik bakım..." required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Vazgeç</button>
+                    <button type="submit" class="btn btn-warning fw-bold px-4">Bakımı Başlat</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div id="modal-backdrop-sonlandir" class="custom-backdrop">
+    <div class="custom-modal border border-primary">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="mb-0 fw-bold text-dark"><i class="fas fa-stopwatch text-danger me-2"></i>Kiralamayı Sonlandır</h5>
+            <button type="button" class="btn-close" onclick="closeModals()"></button>
+        </div>
+        <p class="small text-muted mb-3"><span id="modal-ekipman-kod" class="fw-bold text-primary"></span> için sahadan çekilme ve dönüş bilgilerini girin.</p>
+        
+        <form id="sonlandir-kalem-form" method="POST" action="{{ url_for('kiralama.sonlandir_kalem') }}">
+            <input type="hidden" name="csrf_token" id="modal-csrf-token">
+            <input type="hidden" name="kalem_id" id="modal-kalem-id">
+            
+            <div class="mb-3">
+                <label class="form-label small fw-bold text-secondary"><i class="far fa-calendar-alt me-1"></i>Fiili Bitiş Tarihi:</label>
+                <input type="date" name="bitis_tarihi" id="modal-bitis-tarihi" class="form-control shadow-sm border-primary" required>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label small fw-bold text-secondary"><i class="fas fa-warehouse me-1"></i>İade Alınan Şube / Depo:</label>
+                <select name="donus_sube_id" class="form-select shadow-sm border-primary" required>
+                    <option value="" disabled selected>Lütfen dönüş yapılan yeri seçin...</option>
+                    <option value="tedarikci" class="text-danger fw-bold">🏭 Tedarikçi / Sahibine İade Edildi</option>
+                    <optgroup label="Kendi Depolarımız">
+                        {% for s in subeler %}
+                            <option value="{{ s.id }}">{{ s.isim }}</option>
+                        {% endfor %}
+                    </optgroup>
+                </select>
+            </div>
+
+            <div class="card border-secondary mb-4 shadow-sm bg-light">
+                <div class="card-body py-2 px-3">
+                    <div class="fw-bold text-secondary small mb-2 border-bottom pb-1">
+                        <i class="fas fa-truck-loading me-1"></i> Dönüş Nakliye Bilgileri
+                    </div>
+                    <div class="form-check form-switch mb-2">
+                        <input class="form-check-input" type="checkbox" id="hariciNakliyeSonlandir" name="is_harici_nakliye">
+                        <label class="form-check-label small fw-bold text-dark" for="hariciNakliyeSonlandir">Dış Nakliye (Taşeron) Kullanıldı</label>
+                    </div>
+                    <div id="ozMalAracDiv" class="mb-1">
+                        <select name="nakliye_araci_id" class="form-select form-select-sm border-secondary text-muted">
+                            <option value="">Öz Mal Araç Seçiniz (Opsiyonel)...</option>
+                            {% if nakliye_araclari %}
+                                {% for arac in nakliye_araclari %}
+                                    <option value="{{ arac.id }}">{{ arac.plaka }} - {{ arac.arac_tipi }}</option>
+                                {% endfor %}
+                            {% endif %}
+                        </select>
+                    </div>
+                    <div id="taseronFirmaDiv" class="mb-1" style="display:none;">
+                        <select id="taseronFirmaSelect" name="nakliye_tedarikci_id" class="form-select form-select-sm border-warning">
+                            <option value="" disabled selected>Nakliye firmasını seçin...</option>
+                            {% for f in nakliye_tedarikci_listesi %}
+                                <option value="{{ f.id }}">{{ f.firma_adi }}</option>
+                            {% endfor %}
+                        </select>
+                        <input type="number" id="taseronMaliyetInput" name="nakliye_alis_fiyat" class="form-control form-control-sm border-warning mt-2" step="0.01" min="0" placeholder="Nakliye firmasına ödenecek tutar (TL)">
+                        <div class="mt-1 text-warning small fw-bold"><i class="fas fa-info-circle me-1"></i>Seçilen firmanın cari hesabına nakliye kaydı düşer.</div>
+                    </div>
+
+                    <div class="mt-2">
+                        <label class="form-label small fw-bold text-secondary">Dönüş Nakliye Satış Bedeli (Müşteri):</label>
+                        <div class="input-group input-group-sm">
+                            <input type="number" id="donusNakliyeSatisInput" name="donus_nakliye_satis_fiyat" class="form-control form-control-sm" step="0.01" min="0" readonly style="background:#f8f9fa; cursor:not-allowed;">
+                            <span class="input-group-text bg-light text-muted" id="donus-lock-icon"><i class="fas fa-lock"></i></span>
+                        </div>
+                        <div class="form-check mt-2">
+                            <input class="form-check-input" type="checkbox" id="donusFiyatDegistirCheck">
+                            <label class="form-check-label small text-secondary" for="donusFiyatDegistirCheck">Dönüş nakliyesinde farklı fiyat uygula</label>
+                        </div>
+                        <div class="small text-warning fw-bold mt-1 d-none" id="donus-fark-uyari"><i class="fas fa-exclamation-triangle me-1"></i>Planlanan bedelden fark oluşursa müşteri carisine nakliye farkı işlenecektir.</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-grid">
+                <button type="submit" class="btn btn-primary fw-bold shadow"><i class="fas fa-check-circle me-2"></i> KİRALAMAYİ TAMAMLA</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<form id="delete-form" method="POST" style="display:none;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+</form>
+
+<div class="modal fade" id="excel-password-modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-light border-0">
+                <h5 class="modal-title fw-bold"><i class="fas fa-shield-alt me-2 text-warning"></i>Güvenlik Doğrulaması</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small mb-3">Excel'den toplu veritabanı kaydı için kullanıcı şifrenizi tekrar girin.</p>
+                <label for="excel-confirm-password" class="form-label fw-semibold">Şifre</label>
+                <input type="password" id="excel-confirm-password" class="form-control" autocomplete="current-password" placeholder="Şifrenizi girin">
+                <div class="form-text">Doğrulama sonrası Excel dosyası seçimi açılacaktır.</div>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">İptal</button>
+                <button type="button" class="btn btn-primary" id="excel-password-confirm-btn">Devam Et</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<form id="filo-iade-iptal-form" method="POST" action="{{ url_for('kiralama.iptal_et_kalem') }}" style="display:none;">
+    <input type="hidden" name="csrf_token" id="filo-iptal-csrf-token">
+    <input type="hidden" name="kalem_id" id="filo-iptal-kalem-id">
+</form>
+
+<!-- Filtre Modalı Dahil Ediliyor -->
+{% set g_ekipman_id = "g-ekipman-hidden" %}
+{% set filtre_redirect_url = url_for('filo.index') %}
+{% include "kiralama/_filtre_modal.html" %}
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const maintenanceModal = new bootstrap.Modal(document.getElementById('bs-bakim-modal'));
+        const subeModal = new bootstrap.Modal(document.getElementById('bs-sube-modal'));
+        const backdrop = document.getElementById('modal-backdrop-sonlandir');
+        const contextMenu = document.getElementById('context-menu');
+        let currentData = {};
+
+        function hideContextMenu() {
+            contextMenu.style.display = 'none';
+        }
+
+        function closeModals() {
+            backdrop.style.display = 'none';
+        }
+        window.closeModals = closeModals;
+
+        backdrop.addEventListener('click', function(e) {
+            if (e.target === backdrop) closeModals();
+        });
+
+        function addLongPressListener(element, callback) {
+            let timer;
+            element.addEventListener('touchstart', function(e) {
+                timer = setTimeout(function() {
+                    timer = null;
+                    const touch = e.touches[0];
+                    const mockEvent = {
+                        preventDefault: () => e.preventDefault(),
+                        stopPropagation: () => e.stopPropagation(),
+                        clientX: touch.clientX,
+                        clientY: touch.clientY
+                    };
+                    callback(mockEvent, element);
+                }, 700);
+            }, { passive: false });
+
+            function clear() { if (timer) { clearTimeout(timer); timer = null; } }
+            element.addEventListener('touchend', clear);
+            element.addEventListener('touchmove', clear);
+            element.addEventListener('touchcancel', clear);
+        }
+
+        function showMenu(e, row) {
+            if (!row || !row.dataset) return;
+            e.preventDefault();
+            e.stopPropagation();
+
+            currentData = row.dataset;
+
+            const durum = (currentData.durum || '').toLowerCase().trim();
+            const isBosta = durum === 'bosta' || durum === 'boşta';
+           
+            document.getElementById('menu-kirala').style.display = isBosta ? 'flex' : 'none';
+            document.getElementById('menu-bakim').style.display = isBosta ? 'flex' : 'none';
+            document.getElementById('menu-sube-degistir').style.display = isBosta ? 'flex' : 'none';
+
+            document.getElementById('menu-bilgi').href = currentData.bilgiUrl || '#';
+            document.getElementById('menu-duzenle').href = currentData.duzenleUrl || '#';
+            document.getElementById('menu-kirala').href = currentData.kiralaUrl || '#';
+            document.getElementById('menu-rapor').href = currentData.finansalRaporUrl || '#';
+            document.getElementById('menu-kiralama-gecmisi').href = currentData.kiralamaGecmisiUrl || '#';
+
+            // Önce ekrana al, boyutları ölç, sonra doğru konuma taşı
+            contextMenu.style.left = '-9999px';
+            contextMenu.style.top = '-9999px';
+            contextMenu.style.display = 'block';
+
+            const menuWidth = contextMenu.offsetWidth;
+            const menuHeight = contextMenu.offsetHeight;
+            const margin = 8;
+
+            // clientX/Y: viewport koordinatları (scroll'dan bağımsız)
+            const clientX = e.clientX ?? (e.touches?.[0]?.clientX ?? 0);
+            const clientY = e.clientY ?? (e.touches?.[0]?.clientY ?? 0);
+
+            // position: fixed kullandığımız için scroll offset eklenmemeli
+            let left = clientX;
+            let top = clientY;
+
+            // Sağa taşıyorsa sola kaydır
+            if (left + menuWidth + margin > window.innerWidth) {
+                left = left - menuWidth;
+            }
+
+            // Aşağıya taşıyorsa yukarı kaydır
+            if (top + menuHeight + margin > window.innerHeight) {
+                top = top - menuHeight;
+            }
+
+            // Negatife düşmesin
+            if (left < margin) left = margin;
+            if (top < margin) top = margin;
+
+            contextMenu.style.left = left + 'px';
+            contextMenu.style.top = top + 'px';
+        }
+
+        document.querySelectorAll('.ekipman-satiri').forEach(row => {
+            row.addEventListener('contextmenu', (e) => showMenu(e, row));
+            addLongPressListener(row, showMenu);
+        });
+
+        document.body.addEventListener('contextmenu', (e) => {
+            if (!e.target.closest('.ekipman-satiri')) return;
+            e.preventDefault();
+        });
+
+        contextMenu.addEventListener('click', (e) => e.stopPropagation());
+
+        document.getElementById('menu-bakim').addEventListener('click', function() {
+            document.getElementById('bakim-id').value = currentData.ekipmanId;
+            document.getElementById('bakim-kod-label').textContent = currentData.ekipmanKod;
+            document.getElementById('bakim-tarihi-input').value = new Date().toISOString().split('T')[0];
+            hideContextMenu();
+            maintenanceModal.show();
+        });
+
+        document.getElementById('menu-sube-degistir').addEventListener('click', function() {
+            document.getElementById('sube-kod-label').textContent = currentData.ekipmanKod;
+            document.getElementById('sube-degistir-form').action = "/filo/sube_degistir/" + currentData.ekipmanId;
+            hideContextMenu();
+            subeModal.show();
+        });
+
+        document.getElementById('menu-rapor').addEventListener('click', function(e) {
+            e.preventDefault();
+            window.location.href = "/filo/finansal_rapor/" + currentData.ekipmanId;
+            hideContextMenu();
+        });
+
+        document.getElementById('menu-kiralama-gecmisi').addEventListener('click', function(e) {
+            e.preventDefault();
+            window.location.href = currentData.kiralamaGecmisiUrl || '#';
+            hideContextMenu();
+        });
+
+        document.querySelectorAll('.sonlandir-buton').forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const row = this.closest('tr');
+                document.getElementById('modal-kalem-id').value = this.dataset.kalemId;
+                document.getElementById('modal-ekipman-kod').textContent = this.dataset.kod;
+                document.getElementById('modal-csrf-token').value = row ? row.dataset.csrfToken : '';
+                const bitisTarihi = document.getElementById('modal-bitis-tarihi');
+                bitisTarihi.value = new Date().toISOString().split('T')[0];
+                bitisTarihi.min = this.dataset.baslangic || '';
+                // reset nakliye fields
+                document.getElementById('hariciNakliyeSonlandir').checked = false;
+                document.getElementById('ozMalAracDiv').style.display = 'block';
+                document.getElementById('taseronFirmaDiv').style.display = 'none';
+                document.getElementById('taseronFirmaSelect').value = '';
+                document.getElementById('taseronMaliyetInput').value = '';
+                const totalNakliye = parseFloat(this.dataset.nakliyeSatis || '0');
+                const kayitliDonus = this.dataset.donusNakliyeSatis;
+                const donusFaturaEt = this.dataset.donusFaturaEt === '1';
+                const defaultDonus = kayitliDonus && kayitliDonus !== ''
+                    ? parseFloat(kayitliDonus)
+                    : (donusFaturaEt ? totalNakliye / 2 : 0);
+                document.getElementById('donusNakliyeSatisInput').value = Number.isFinite(defaultDonus) ? defaultDonus.toFixed(2) : '0.00';
+                // reset fiyat değiştir checkbox
+                const degistirCheck = document.getElementById('donusFiyatDegistirCheck');
+                if (degistirCheck) {
+                    degistirCheck.checked = false;
+                    degistirCheck.dispatchEvent(new Event('change'));
+                }
+                // Checkbox etiketini ve uyarı metnini duruma göre güncelle
+                const degistirLabel = document.querySelector('label[for="donusFiyatDegistirCheck"]');
+                const farkUyari = document.getElementById('donus-fark-uyari');
+                if (degistirLabel && farkUyari) {
+                    if (donusFaturaEt) {
+                        degistirLabel.textContent = 'Dönüş nakliyesinde farklı fiyat uygula';
+                        farkUyari.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i>Planlanan bedelden fark oluşursa müşteri carisine nakliye farkı işlenecektir.';
+                    } else {
+                        degistirLabel.textContent = 'Dönüş nakliyesi ekle';
+                        farkUyari.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i>Müşteri carisine dönüş nakliye bedeli olarak işlenecektir.';
+                    }
+                }
+                backdrop.style.display = 'flex';
+            });
+        });
+
+        // Dış Nakliye checkbox toggle
+        document.getElementById('hariciNakliyeSonlandir').addEventListener('change', function() {
+            document.getElementById('ozMalAracDiv').style.display = this.checked ? 'none' : 'block';
+            document.getElementById('taseronFirmaDiv').style.display = this.checked ? 'block' : 'none';
+            if (!this.checked) {
+                document.getElementById('taseronFirmaSelect').value = '';
+                document.getElementById('taseronMaliyetInput').value = '';
+            }
+        });
+
+        // Form gönderim validasyonu
+        document.getElementById('sonlandir-kalem-form').addEventListener('submit', function(e) {
+            const subeVal = this.querySelector('[name="donus_sube_id"]').value;
+            const donusSatis = parseFloat(document.getElementById('donusNakliyeSatisInput').value || '0');
+            if (!subeVal) {
+                e.preventDefault();
+                alert('Lütfen dönüş şubesi veya teslimat noktasını seçin.');
+                return;
+            }
+            if (donusSatis < 0) {
+                e.preventDefault();
+                alert('Dönüş nakliye satış bedeli negatif olamaz.');
+                return;
+            }
+            const harici = document.getElementById('hariciNakliyeSonlandir').checked;
+            if (harici) {
+                const sel = document.getElementById('taseronFirmaSelect');
+                const maliyetInput = document.getElementById('taseronMaliyetInput');
+                const maliyet = parseFloat(maliyetInput.value || '0');
+                if (!sel.value) {
+                    e.preventDefault();
+                    alert('Lütfen harici nakliye firmasını seçin.');
+                    return;
+                }
+                if (!(maliyet > 0)) {
+                    e.preventDefault();
+                    alert('Lütfen nakliye firmasına ödenecek tutarı girin (0\'dan büyük).');
+                    maliyetInput.focus();
+                    return;
+                }
+                const firmaAdi = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : '';
+                const msg = firmaAdi
+                    ? `"${firmaAdi}" firmasının cari hesabına ${maliyet.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TL nakliye kaydı düşecektir.\n\nOnaylıyor musunuz?`
+                    : 'Dış nakliye firması cari hesabına kayıt düşecektir.\n\nOnaylıyor musunuz?';
+                if (!confirm(msg)) { e.preventDefault(); }
+            }
+        });
+
+        document.querySelectorAll('.js-filo-iade-iptal-btn').forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                if (confirm(this.dataset.ekipmanKod + ' için iade işlemi geri alınsın mı?')) {
+                    document.getElementById('filo-iptal-kalem-id').value = this.dataset.kalemId;
+                    document.getElementById('filo-iptal-csrf-token').value = this.dataset.csrfToken;
+                    document.getElementById('filo-iade-iptal-form').submit();
+                }
+            });
+        });
+
+        document.getElementById('menu-sil').addEventListener('click', function() {
+            if (confirm(currentData.ekipmanKod + ' makinesini silmek istediğinize emin misiniz?')) {
+                const form = document.getElementById('delete-form');
+                form.action = currentData.silUrl;
+                form.querySelector('input[name="csrf_token"]').value = currentData.csrfToken;
+                form.submit();
+            }
+        });
+
+        window.addEventListener('click', (event) => {
+            if (!event.target.closest('.context-menu')) hideContextMenu();
+        });
+
+        window.addEventListener('touchstart', (event) => {
+            if (!event.target.closest('.context-menu')) hideContextMenu();
+        });
+
+        window.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') hideContextMenu();
+        });
+
+        // Dönüş fiyatı değiştir checkbox toggle
+        document.getElementById('donusFiyatDegistirCheck').addEventListener('change', function() {
+            const donusInput = document.getElementById('donusNakliyeSatisInput');
+            const lockIcon = document.getElementById('donus-lock-icon');
+            const uyari = document.getElementById('donus-fark-uyari');
+            if (this.checked) {
+                donusInput.readOnly = false;
+                donusInput.style.background = '';
+                donusInput.style.cursor = '';
+                donusInput.classList.add('border-warning');
+                lockIcon.innerHTML = '<i class="fas fa-lock-open"></i>';
+                lockIcon.className = 'input-group-text bg-warning text-white';
+                uyari.classList.remove('d-none');
+                donusInput.focus();
+            } else {
+                donusInput.readOnly = true;
+                donusInput.style.background = '#f8f9fa';
+                donusInput.style.cursor = 'not-allowed';
+                donusInput.classList.remove('border-warning');
+                lockIcon.innerHTML = '<i class="fas fa-lock"></i>';
+                lockIcon.className = 'input-group-text bg-light text-muted';
+                uyari.classList.add('d-none');
+            }
+        });
+
+        // Filo modal açılınca checkbox ve kilidi sıfırla
+        document.querySelectorAll('.js-filo-sonlandir-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const degistirCheck = document.getElementById('donusFiyatDegistirCheck');
+                if (degistirCheck) {
+                    degistirCheck.checked = false;
+                    degistirCheck.dispatchEvent(new Event('change'));
+                }
+            });
+        });
+
+        const filterApplyBtn = document.getElementById('f-apply');
+        if (filterApplyBtn) {
+            const originalOnClick = filterApplyBtn.onclick;
+            filterApplyBtn.onclick = async (e) => {
+                await originalOnClick(e);
+                const params = new URLSearchParams();
+            };
+        }
+
+        const excelImportTrigger = document.getElementById('excel-ice-yukle-ac');
+        const excelImportInput = document.getElementById('excel-ice-yukle-input');
+        const excelImportForm = document.getElementById('excel-ice-yukle-form');
+        const excelPasswordModalEl = document.getElementById('excel-password-modal');
+        const excelPasswordInput = document.getElementById('excel-confirm-password');
+        const excelPasswordHidden = document.getElementById('excel-confirm-password-hidden');
+        const excelPasswordConfirmBtn = document.getElementById('excel-password-confirm-btn');
+        const excelPasswordModal = excelPasswordModalEl ? new bootstrap.Modal(excelPasswordModalEl) : null;
+
+        if (
+            excelImportTrigger && excelImportInput && excelImportForm &&
+            excelPasswordModal && excelPasswordInput && excelPasswordHidden && excelPasswordConfirmBtn
+        ) {
+            excelImportTrigger.addEventListener('click', function(e) {
+                e.preventDefault();
+                excelPasswordInput.value = '';
+                excelPasswordHidden.value = '';
+                excelPasswordModal.show();
+            });
+
+            excelPasswordConfirmBtn.addEventListener('click', function() {
+                const pwd = (excelPasswordInput.value || '').trim();
+                if (!pwd) {
+                    excelPasswordInput.focus();
+                    return;
+                }
+                excelPasswordHidden.value = pwd;
+                excelPasswordModal.hide();
+                excelImportInput.click();
+            });
+
+            excelImportInput.addEventListener('change', function() {
+                if (this.files && this.files.length > 0) {
+                    excelImportForm.submit();
+                } else {
+                    excelPasswordHidden.value = '';
+                }
+            });
+
+            excelPasswordInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    excelPasswordConfirmBtn.click();
+                }
+            });
+        }
+
+        const searchInput = document.querySelector('input[name="q"]');
+        const searchClearBtn = document.getElementById('search-clear-btn');
+        const searchForm = searchInput ? searchInput.closest('form') : null;
+
+        if (searchInput && searchClearBtn && searchForm) {
+            searchClearBtn.addEventListener('click', function() {
+                if (!searchInput.value) {
+                    searchInput.focus();
+                    return;
+                }
+                searchInput.value = '';
+                searchForm.submit();
+            });
+        }
+    });
+</script>
+{% endblock %}

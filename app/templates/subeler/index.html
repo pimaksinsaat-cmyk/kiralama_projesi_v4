@@ -1,0 +1,525 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    :root {
+        --pimaks-blue: #0d47a1;
+        --pimaks-light-blue: #e3f2fd;
+        --success-green: #2ecc71;
+        --warning-orange: #f39c12;
+        --text-dark: #2c3e50;
+    }
+
+    .dashboard-container {
+        padding: 2rem;
+        background-color: #f4f7f9;
+        min-height: 100vh;
+    }
+
+    .page-title-section {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2.5rem;
+        border-bottom: 2px solid #dee2e6;
+        padding-bottom: 1rem;
+    }
+
+    .page-title-section h1 {
+        color: var(--text-dark);
+        font-weight: 700;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 15px;
+    }
+
+    /* Şube Kartları Izgarası */
+    .sube-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+        gap: 2rem;
+    }
+
+    .sube-card {
+        background: white;
+        border-radius: 15px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        transition: all 0.3s cubic-bezier(0.165, 0.84, 0.44, 1);
+        border: 1px solid #edf2f7;
+        overflow: hidden;
+        position: relative;
+    }
+
+    .sube-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 15px 30px rgba(0,0,0,0.1);
+    }
+
+    /* Kart Başlığı */
+    .card-header {
+        padding: 1.5rem;
+        background: linear-gradient(to right, #ffffff, #f8f9fa);
+        border-bottom: 1px solid #f1f1f1;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .sube-name {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: var(--pimaks-blue);
+    }
+
+    .status-badge {
+        width: 10px;
+        height: 10px;
+        background-color: var(--success-green);
+        border-radius: 50%;
+        box-shadow: 0 0 8px var(--success-green);
+    }
+
+    /* İstatistik Alanı */
+    .stat-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        padding: 1rem 1.5rem;
+        background-color: #fafbfc;
+        text-align: center;
+    }
+
+    .stat-item {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .stat-value {
+        font-size: 1.5rem;
+        font-weight: 800;
+        color: var(--text-dark);
+    }
+
+    .stat-label {
+        font-size: 0.75rem;
+        color: #7f8c8d;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+
+    /* İletişim Bilgileri */
+    .card-body {
+        padding: 1.5rem;
+    }
+
+    .info-line {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        margin-bottom: 0.8rem;
+        color: #5d6d7e;
+        font-size: 0.95rem;
+    }
+
+    .info-line i { width: 20px; color: var(--pimaks-blue); }
+
+    /* Alt Butonlar */
+    .card-footer {
+        padding: 1rem 1.5rem;
+        display: flex;
+        gap: 10px;
+        background-color: #f8f9fa;
+    }
+
+    .btn-pimaks {
+        flex: 1;
+        padding: 10px;
+        border-radius: 8px;
+        text-align: center;
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 0.85rem;
+        transition: 0.2s;
+    }
+
+    .btn-maps { background-color: var(--pimaks-light-blue); color: var(--pimaks-blue); }
+    .btn-manage { background-color: #eceff1; color: #455a64; }
+    .btn-pimaks:hover { filter: brightness(0.95); }
+
+    .add-button {
+        background-color: var(--pimaks-blue);
+        color: white;
+        padding: 12px 25px;
+        border-radius: 10px;
+        text-decoration: none;
+        font-weight: 600;
+        box-shadow: 0 4px 12px rgba(13, 71, 161, 0.3);
+    }
+</style>
+
+<div class="dashboard-container">
+    <div class="page-title-section">
+        <h1>🏗️ Şube ve Depo Yönetimi</h1>
+        <a href="{{ url_for('subeler.ekle') }}" class="add-button">+ Yeni Şube Tanımla</a>
+    </div>
+
+    <div class="sube-grid">
+        {% for item in sube_verileri %}
+        <div class="sube-card" data-sube-id="{{ item.detay.id }}" data-sube-adi="{{ item.detay.isim }}" style="cursor: pointer;">
+            <div class="card-header">
+                <span class="sube-name">{{ item.detay.isim }}</span>
+                <div class="status-badge" title="Aktif"></div>
+            </div>
+
+            <div class="stat-row">
+                <div class="stat-item" style="border-right: 1px solid #eee;">
+                    <span class="stat-value">{{ item.istatistik.toplam }}</span>
+                    <span class="stat-label">Ekipman</span>
+                </div>
+                <div class="stat-item" style="border-right: 1px solid #eee;">
+                    <span class="stat-value" style="color: var(--success-green);">{{ item.istatistik.kirada }}</span>
+                    <span class="stat-label">Sahada</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value" style="color: var(--warning-orange);">{{ item.istatistik.bosta }}</span>
+                    <span class="stat-label">Depoda</span>
+                </div>
+            </div>
+
+            <div class="card-body">
+                {% if item.detay.yetkili_kisi %}
+                <div class="info-line">
+                    <span>👤</span> <strong>{{ item.detay.yetkili_kisi }}</strong>
+                </div>
+                {% endif %}
+                
+                {% if item.detay.telefon %}
+                <div class="info-line">
+                    <span>📞</span> {{ item.detay.telefon }}
+                </div>
+                {% endif %}
+
+                <div class="info-line">
+                    <span>📍</span> {{ item.detay.adres or 'Adres belirtilmemiş' }}
+                </div>
+            </div>
+
+            <div class="card-footer">
+                {% if item.detay.konum_linki %}
+                <a href="{{ item.detay.konum_linki }}" target="_blank" class="btn-pimaks btn-maps">Haritada Gör</a>
+                {% endif %}
+                <a href="{{ url_for('subeler.duzenle', id=item.detay.id) }}" class="btn-pimaks btn-manage">Düzenle</a>
+            </div>
+        </div>
+        {% else %}
+        <div style="grid-column: 1/-1; text-align: center; padding: 5rem; background: white; border-radius: 15px;">
+            <div style="font-size: 4rem;">🏢</div>
+            <h3 style="color: #94a3b8;">Henüz tanımlı bir şube bulunamadı.</h3>
+            <p style="color: #94a3b8;">Operasyona başlamak için ilk şubenizi veya deponuzu ekleyin.</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Makine Listesi Modal - Excel Tablosu Stili -->
+<div id="makine-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; padding: 1rem;">
+    <div style="background: white; border-radius: 12px; box-shadow: 0 20px 60px rgba(0,0,0,0.2); width: 100%; max-width: 800px; max-height: 90vh; overflow-y: auto; display: flex; flex-direction: column;">
+        <!-- Başlık -->
+        <div style="padding: 1.5rem; background: linear-gradient(135deg, #0d47a1 0%, #1565c0 100%); color: white; display: flex; justify-content: space-between; align-items: center; border-radius: 12px 12px 0 0; flex-shrink: 0;">
+            <h3 id="modal-title" style="margin: 0; font-weight: 700;">Makine Listesi</h3>
+            <button id="modal-close" style="background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer; width: 30px; height: 30px;">&times;</button>
+        </div>
+
+        <!-- İçerik -->
+        <div style="padding: 1.5rem; flex: 1; overflow-y: auto;">
+            <!-- Boşta Makineler -->
+            <div style="margin-bottom: 2rem;">
+                <h5 style="color: #0d47a1; font-weight: 700; margin: 0 0 0.8rem 0; display: flex; align-items: center; gap: 8px; padding: 0.5rem 0.8rem; background-color: #e8f4fd; border-left: 4px solid #2ecc71; border-radius: 4px;">
+                    <span style="font-size: 1.2rem;">🟢</span> Depoda / Boşta (<span id="bosta-count">0</span>)
+                </h5>
+                <div id="bosta-table" style="overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+                        <thead>
+                            <tr style="background-color: #f5f5f5; border: 1px solid #ddd;">
+                                <th style="padding: 0.75rem; text-align: left; font-weight: 600; border-right: 1px solid #ddd; color: #333;">Kod</th>
+                                <th style="padding: 0.75rem; text-align: left; font-weight: 600; border-right: 1px solid #ddd; color: #333;">Marka</th>
+                                <th style="padding: 0.75rem; text-align: center; font-weight: 600; border-right: 1px solid #ddd; color: #333;">Yükseklik (m)</th>
+                                <th style="padding: 0.75rem; text-align: center; font-weight: 600; color: #333;">Kapasite (kg)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bosta-list"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Kirada Makineler -->
+            <div>
+                <h5 style="color: #c0392b; font-weight: 700; margin: 0 0 0.8rem 0; display: flex; align-items: center; gap: 8px; padding: 0.5rem 0.8rem; background-color: #ffeaea; border-left: 4px solid #c0392b; border-radius: 4px;">
+                    <span style="font-size: 1.2rem;">🔴</span> Sahada / Kirada (<span id="kirada-count">0</span>)
+                </h5>
+                <div id="kirada-table" style="overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+                        <thead>
+                            <tr style="background-color: #f5f5f5; border: 1px solid #ddd;">
+                                <th style="padding: 0.75rem; text-align: left; font-weight: 600; border-right: 1px solid #ddd; color: #333;">Kod</th>
+                                <th style="padding: 0.75rem; text-align: left; font-weight: 600; border-right: 1px solid #ddd; color: #333;">Marka</th>
+                                <th style="padding: 0.75rem; text-align: center; font-weight: 600; border-right: 1px solid #ddd; color: #333;">Yükseklik (m)</th>
+                                <th style="padding: 0.75rem; text-align: center; font-weight: 600; color: #333;">Kapasite (kg)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="kirada-list"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ===================== CONTEXT MENU STYLES =====================
+    const contextMenuStyle = `
+        .context-menu {
+            display: none;
+            position: fixed;
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+            z-index: 10000;
+            min-width: 220px;
+            padding: 8px 0;
+            overflow: hidden;
+        }
+
+        .context-menu-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 18px;
+            color: #334155;
+            text-decoration: none;
+            cursor: pointer;
+            user-select: none;
+            border: none;
+            background: none;
+            width: 100%;
+            text-align: left;
+            font-size: 0.9rem;
+            transition: all 0.1s;
+        }
+
+        .context-menu-item:hover {
+            background-color: #f1f5f9;
+            color: #2563eb;
+        }
+
+        .context-menu-item.delete {
+            color: #ef4444;
+            border-top: 1px solid #f1f5f9;
+            margin-top: 5px;
+        }
+
+        .context-menu-item.delete:hover {
+            background-color: #fef2f2;
+        }
+
+        .context-menu-item i {
+            width: 18px;
+            text-align: center;
+            font-size: 1rem;
+            color: #64748b;
+        }
+
+        /* Renk sınıfları */
+        .context-menu-item.text-primary {
+            color: #2563eb;
+        }
+
+        .context-menu-item.text-warning {
+            color: #f59e0b;
+        }
+
+        .context-menu-item.text-info {
+            color: #06b6d4;
+        }
+
+        .context-menu-item.text-primary:hover,
+        .context-menu-item.text-warning:hover,
+        .context-menu-item.text-info:hover {
+            background-color: #f1f5f9;
+            color: inherit;
+        }
+    `;
+
+    // Styles ekle
+    const styleEl = document.createElement('style');
+    styleEl.textContent = contextMenuStyle;
+    document.head.appendChild(styleEl);
+
+    // Context Menu HTML
+    const contextMenuHTML = `
+        <div id="sube-context-menu" class="context-menu">
+            <a href="#" class="context-menu-item text-primary" id="menu-kirala-sube">
+                <i class="fas fa-plus-circle"></i> Hemen Kiraya Ver
+            </a>
+            <div class="context-menu-item text-warning" id="menu-bakim-sube" style="cursor: pointer;">
+                <i class="fas fa-tools"></i> Bakıma/Servise Al
+            </div>
+            <div class="context-menu-item text-info" id="menu-sube-degistir-sube" style="cursor: pointer;">
+                <i class="fas fa-exchange-alt"></i> Şube Nakil Yap
+            </div>
+            <div style="border-bottom: 1px solid #f1f5f9; margin: 5px 0;"></div>
+            <a href="#" class="context-menu-item" id="menu-rapor-sube">
+                <i class="fas fa-chart-line"></i> Finansal Analiz
+            </a>
+            <a href="#" class="context-menu-item" id="menu-kiralama-gecmisi-sube">
+                <i class="fas fa-history"></i> Kiralama Geçmişi
+            </a>
+            <a href="#" class="context-menu-item" id="menu-bilgi-sube">
+                <i class="fas fa-info-circle"></i> Teknik Detaylar
+            </a>
+        </div>
+    `;
+
+    // Modal'a context menu ekle (modal açildiktan sonra)
+    let contextMenuAvailable = false;
+
+    // ===================== MAKINE MODAL EVENT HANDLERS =====================
+    const makineModal = document.getElementById('makine-modal');
+    const modalClose = document.getElementById('modal-close');
+
+    // Kapat butonu
+    modalClose.addEventListener('click', () => {
+        makineModal.style.display = 'none';
+    });
+
+    // Modal dışında tıkla kapat
+    makineModal.addEventListener('click', (e) => {
+        if (e.target === makineModal) {
+            makineModal.style.display = 'none';
+        }
+    });
+
+    // Tablo satırı render fonksiyonu (Excel stilinde)
+    const renderTableRow = (e, index) => `
+        <tr style="border: 1px solid #eee; background-color: ${index % 2 === 0 ? '#ffffff' : '#f9f9f9'}; transition: background-color 0.2s; cursor: context-menu;" 
+            class="makine-satiri"
+            data-ekipman-id="${e.id}"
+            data-kod="${e.kod}"
+            data-durum="bosta"
+            data-kirala-url="/kiralama/yeni/${e.id}"
+            data-finansal-rapor-url="/filo/finansal_rapor/${e.id}"
+            data-kiralama-gecmisi-url="/filo/kiralama_gecmisi/${e.id}"
+            data-bilgi-url="/filo/bilgi/${e.id}"
+            data-duzenle-url="/filo/duzenle/${e.id}">
+            <td style="padding: 0.75rem; border-right: 1px solid #eee; font-weight: 500; color: #0d47a1;">${e.kod}</td>
+            <td style="padding: 0.75rem; border-right: 1px solid #eee; color: #555;">${e.marka}</td>
+            <td style="padding: 0.75rem; border-right: 1px solid #eee; text-align: center; color: #555;">${e.yukseklik}</td>
+            <td style="padding: 0.75rem; text-align: center; color: #555;">${e.kapasite}</td>
+        </tr>
+    `;
+
+    // Context Menu göster/gizle fonksiyonları
+    function hideContextMenu() {
+        const ctxMenu = document.getElementById('sube-context-menu');
+        if (ctxMenu) ctxMenu.style.display = 'none';
+    }
+
+    function showContextMenu(e, row) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (!contextMenuAvailable) {
+            document.body.insertAdjacentHTML('beforeend', contextMenuHTML);
+            contextMenuAvailable = true;
+        }
+
+        const ctxMenu = document.getElementById('sube-context-menu');
+        const currentData = row.dataset;
+
+        // Link'leri ayarla
+        document.getElementById('menu-kirala-sube').href = currentData.kiralaUrl || '#';
+        document.getElementById('menu-rapor-sube').href = currentData.finansalRaporUrl || '#';
+        document.getElementById('menu-kiralama-gecmisi-sube').href = currentData.kiralamaGecmisiUrl || '#';
+        document.getElementById('menu-bilgi-sube').href = currentData.bilgiUrl || '#';
+
+        // Position ve göster
+        ctxMenu.style.left = e.clientX + 'px';
+        ctxMenu.style.top = e.clientY + 'px';
+        ctxMenu.style.display = 'block';
+    }
+
+    // Context menu kapatma (dışında tıkla)
+    document.addEventListener('click', () => {
+        hideContextMenu();
+    });
+
+    document.addEventListener('contextmenu', (e) => {
+        if (!e.target.closest('#sube-context-menu')) {
+            hideContextMenu();
+        }
+    });
+
+    // Şube kartlarına tıkla
+    document.querySelectorAll('.sube-card').forEach(card => {
+        card.addEventListener('click', async function() {
+            const subeId = this.dataset.subeId;
+            const subeAdi = this.dataset.subeAdi;
+            
+            document.getElementById('modal-title').textContent = `${subeAdi} - Makine Listesi`;
+            
+            try {
+                const url = `/subeler/${subeId}/makineler`;
+                console.log('Fetching:', url);
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                console.log('Veri geldi:', data);
+                
+                // Boşta makineler
+                const bostaList = document.getElementById('bosta-list');
+                const bostaCount = document.getElementById('bosta-count');
+                bostaCount.textContent = data.bosta.length;
+                
+                if (data.bosta.length === 0) {
+                    bostaList.innerHTML = '<tr><td colspan="4" style="padding: 1rem; text-align: center; color: #999;">Depoda makine bulunmuyor</td></tr>';
+                } else {
+                    bostaList.innerHTML = data.bosta.map((e, i) => renderTableRow(e, i)).join('');
+                    
+                    // Context menu listeners ekle
+                    document.querySelectorAll('#bosta-list .makine-satiri').forEach(row => {
+                        row.addEventListener('contextmenu', (e) => showContextMenu(e, row));
+                    });
+                }
+                
+                // Kirada makineler
+                const kiradaList = document.getElementById('kirada-list');
+                const kiradaCount = document.getElementById('kirada-count');
+                kiradaCount.textContent = data.kirada.length;
+                
+                if (data.kirada.length === 0) {
+                    kiradaList.innerHTML = '<tr><td colspan="4" style="padding: 1rem; text-align: center; color: #999;">Sahada makine bulunmuyor</td></tr>';
+                } else {
+                    kiradaList.innerHTML = data.kirada.map((e, i) => renderTableRow(e, i)).join('');
+                    
+                    // Context menu listeners ekle
+                    document.querySelectorAll('#kirada-list .makine-satiri').forEach(row => {
+                        row.addEventListener('contextmenu', (e) => showContextMenu(e, row));
+                    });
+                }
+                
+                // Modal'ı aç
+                makineModal.style.display = 'flex';
+                
+            } catch (error) {
+                console.error('Hata:', error);
+                alert('Makineler yüklenirken bir hata oluştu: ' + error.message);
+            }
+        });
+    });
+</script>
+{% endblock %}

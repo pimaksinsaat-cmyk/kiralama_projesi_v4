@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+
+{% block title %}Ödeme Yap / Tediye{% endblock %}
+
+{% block content %}
+<style>
+    /* Genel form düzeni */
+    .form-section {
+        background-color: #fff;
+        padding: 30px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        max-width: 800px;
+        margin: 20px auto;
+    }
+    .form-title {
+        color: #ff0101; 
+        text-align: center;
+        margin-bottom: 25px;
+        font-weight: bold;
+    }
+    .btn-success {
+        background-color: #ff0000;
+        border-color: #c14747;
+        padding: 10px 30px;
+        font-weight: bold;
+    }
+    .btn-secondary {
+        padding: 10px 20px;
+    }
+</style>
+
+<div class="container">
+    <div class="form-section">
+        <h2 class="form-title"><i class="fa fa-money-bill-wave"></i> Ödeme Yap </h2>
+        
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <form method="POST" novalidate>
+            {{ form.hidden_tag() }}
+            
+            <!-- 1. Satır: Müşteri ve Kasa -->
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    {{ form.firma_musteri_id.label(class="form-label fw-bold") }}
+                    {{ form.firma_musteri_id(class="form-select form-control") }}
+                    {% for error in form.firma_musteri_id.errors %}<span class="text-danger small">{{ error }}</span>{% endfor %}
+                </div>
+                <div class="col-md-6">
+                    <!-- Kasa Tanımlama Kısayolu -->
+                    <div class="d-flex justify-content-between">
+                        {{ form.kasa_id.label(class="form-label fw-bold") }}
+                        <a href="{{ url_for('cari.kasa_ekle') }}" class="text-decoration-none small" style="color: #007bff;">
+                            <i class="fa fa-plus-circle"></i> Yeni Hesap Tanımla
+                        </a>
+                    </div>
+                    
+                    {{ form.kasa_id(class="form-select form-control") }}
+                    {% for error in form.kasa_id.errors %}<span class="text-danger small">{{ error }}</span>{% endfor %}
+                </div>
+            </div>
+
+            <!-- 2. Satır: Tarih ve Tutar -->
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    {{ form.tarih.label(class="form-label fw-bold") }}
+                    {{ form.tarih(class="form-control", type="date") }}
+                    {% for error in form.tarih.errors %}<span class="text-danger small">{{ error }}</span>{% endfor %}
+                </div>
+                <div class="col-md-6">
+                    {{ form.tutar.label(class="form-label fw-bold") }}
+                    <!-- Akıllı Giriş İçin: type="text", autocomplete="off" ve currency-input sınıfı -->
+                    <div class="input-group">
+                        <span class="input-group-text">₺</span>
+                        {{ form.tutar(class="form-control currency-input", placeholder="0,00", type="text", autocomplete="off", style="font-size: 1.2em; font-weight: bold;") }}
+                    </div>
+                    {% for error in form.tutar.errors %}<span class="text-danger small">{{ error }}</span>{% endfor %}
+                </div>
+            </div>
+
+            <!-- 3. Satır: Fatura No ve Vade -->
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    {{ form.fatura_no.label(class="form-label fw-bold") }}
+                    {{ form.fatura_no(class="form-control", placeholder="Varsa Makbuz/Dekont No") }}
+                </div>
+                <div class="col-md-6">
+                    {{ form.vade_tarihi.label(class="form-label fw-bold") }}
+                    {{ form.vade_tarihi(class="form-control", type="date") }}
+                    <small class="text-muted">Çek/Senet ise vade tarihini giriniz.</small>
+                </div>
+            </div>
+
+            <!-- 4. Satır: Açıklama -->
+            <div class="mb-4">
+                {{ form.aciklama.label(class="form-label fw-bold") }}
+                {{ form.aciklama(class="form-control", placeholder="Örn: Kasım ayı kiralama bedeli tahsilatı (EFT)") }}
+            </div>
+
+            <!-- Butonlar -->
+            <div class="d-flex justify-content-between">
+                <a href="javascript:history.back()" class="btn btn-secondary">
+                    <i class="fa fa-arrow-left"></i> İptal
+                </a>
+                {{ form.submit(class="btn btn-success") }}
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- AKILLI FİNANSAL GİRİŞ SCRİPTİ (DÜZELTİLMİŞ VERSİYON) -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const currencyInputs = document.querySelectorAll('.currency-input');
+
+    function formatCurrency(value) {
+        if (!value) return '';
+        
+        // --- KRİTİK DÜZELTME: Önce TÜM noktaları sil, sonra virgülü nokta yap ---
+        // Böylece "1.500" -> "1500" olur ve parseFloat doğru çalışır.
+        let v = value.toString().replace(/\./g, '').replace(',', '.');
+        
+        let number = parseFloat(v);
+        if (isNaN(number)) return value;
+        return number.toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
+
+    function cleanCurrency(val) {
+        if (!val) return "0.00";
+        // DB'ye gönderirken de aynı temizliği yap
+        return val.toString().replace(/\./g, '').replace(',', '.');
+    }
+
+    function formatInput(input) {
+        let value = input.value;
+        if (value === '') return;
+
+        let selectionStart = input.selectionStart;
+        
+        // Sadece rakam ve virgül bırak
+        let cleanVal = value.replace(/[^\d,]/g, '');
+        
+        // Birden fazla virgül varsa engelle (sadece ilkini tut)
+        let parts = cleanVal.split(',');
+        if (parts.length > 2) cleanVal = parts[0] + ',' + parts.slice(1).join('');
+        
+        parts = cleanVal.split(',');
+        let integerPart = parts[0];
+        let decimalPart = parts.length > 1 ? ',' + parts[1].substring(0, 2) : ''; 
+        
+        // Binlik ayracı ekle (görsel)
+        let formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+        let formattedValue = formattedInteger + decimalPart;
+        
+        if (cleanVal === ',') formattedValue = '0,';
+
+        input.value = formattedValue;
+    }
+
+    currencyInputs.forEach(input => {
+        // Sayfa açılışında
+        if (input.value) input.value = formatCurrency(input.value);
+
+        // Yazarken formatla
+        input.addEventListener('input', function() { formatInput(this); });
+        
+        // Tuş kısıtlaması
+        input.addEventListener('keydown', function(e) {
+            const allowed = ['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete', 'Escape', 'Enter'];
+            if (allowed.includes(e.key)) return;
+            // Ctrl+A, Ctrl+C, Ctrl+V, Ctrl+X izin ver
+            if (e.ctrlKey || e.metaKey) return;
+            
+            if (!/^[0-9,]$/.test(e.key)) e.preventDefault();
+        });
+
+        // Odaklandığında ham değeri göster (düzenleme kolaylığı için)
+        input.addEventListener('focus', function() {
+            let val = this.value;
+            // 1.500,00 -> 1500,00 yap (noktaları sil, virgül kalsın)
+            let raw = val.replace(/\./g, '');
+            if (raw === '0,00' || raw === '0') raw = '';
+            this.value = raw;
+            setTimeout(() => { this.select(); }, 50);
+        });
+
+        // Odaktan çıkınca "1.500,00" formatına geri dön
+        input.addEventListener('blur', function() {
+            this.value = formatCurrency(this.value);
+        });
+
+        
+    });
+});
+</script>
+{% endblock %}

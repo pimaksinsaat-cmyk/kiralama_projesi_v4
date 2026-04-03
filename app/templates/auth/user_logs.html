@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+
+{% block title %}Kullanıcı Logları - Pimaks{% endblock %}
+
+{% block content %}
+<style>
+    /* Sayfalama */
+    .pagination { display: flex; gap: 4px; list-style: none; padding: 0; margin: 0; }
+    .pagination .page-item .page-link { display: inline-block; padding: 6px 12px; border: 1px solid #dee2e6; border-radius: 4px; color: #667eea; text-decoration: none; font-size: 0.875rem; transition: all 0.2s; }
+    .pagination .page-item.active .page-link { background: #667eea; border-color: #667eea; color: white; }
+    .pagination .page-item.disabled .page-link { color: #adb5bd; pointer-events: none; }
+    .pagination .page-item .page-link:hover { background: #eef2ff; border-color: #a5b4fc; }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h4 class="fw-bold mb-0"><i class="fas fa-clipboard-list me-2"></i>{{ user.username }} - İşlem Logları</h4>
+        <small class="text-muted">Kullanıcının sistem üzerinde yaptığı operasyon kayıtları</small>
+    </div>
+    <a href="{{ url_for('auth.kullanici_listesi') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="fas fa-arrow-left me-1"></i> Kullanıcı Yönetimi
+    </a>
+</div>
+
+<div class="card border-0 shadow-sm mb-3">
+    <div class="card-header bg-light fw-semibold">Filtreler</div>
+    <div class="card-body">
+        <form method="GET" id="filter-form" class="row g-3 align-items-end">
+            <input type="hidden" name="per_page" value="{{ per_page }}">
+            <input type="hidden" name="sort" id="sort_input" value="{{ sort }}">
+            <div class="col-md-4">
+                <label class="form-label">Başlangıç Tarihi</label>
+                <input type="date" name="start_date" id="start_date" value="{{ start_date }}" class="form-control">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Bitiş Tarihi</label>
+                <input type="date" name="end_date" id="end_date" value="{{ end_date }}" class="form-control">
+            </div>
+            <div class="col-md-4 d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-filter me-1"></i> Uygula
+                </button>
+            </div>
+        </form>
+
+        <div class="d-flex gap-2 mt-3 flex-wrap">
+            <span class="text-muted small align-self-center">Hızlı:</span>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="setDateRange(30)">Son 30 Gün</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="setDateRange(60)">Son 60 Gün</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="setDateRange(90)">Son 90 Gün</button>
+            <button type="button" class="btn btn-sm btn-outline-info" onclick="setYTD()">Yılbaşından Bu Yana</button>
+        </div>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+        <span><i class="fas fa-list me-1"></i> Log Kayıtları</span>
+        <span class="small">Toplam: {{ pagination.total }}</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover table-sm mb-0 align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th style="min-width: 150px; cursor:pointer; user-select:none;" onclick="toggleSort()">
+                        Tarih
+                        {% if sort == 'desc' %}
+                            <i class="fas fa-sort-down text-primary ms-1"></i>
+                        {% else %}
+                            <i class="fas fa-sort-up text-primary ms-1"></i>
+                        {% endif %}
+                    </th>
+                    <th>Modül</th>
+                    <th>Aksiyon</th>
+                    <th>Kayıt</th>
+                    <th>Durum</th>
+                    <th>Açıklama</th>
+                    <th>IP</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in logs %}
+                <tr>
+                    <td class="text-nowrap">{{ log.created_at.strftime('%d.%m.%Y %H:%M:%S') if log.created_at else '-' }}</td>
+                    <td><span class="badge bg-secondary">{{ log.module }}</span></td>
+                    <td>{{ log.action }}</td>
+                    <td>
+                        {% if log.entity_type %}
+                            {{ log.entity_type }}{% if log.entity_id %} #{{ log.entity_id }}{% endif %}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if log.success %}
+                            <span class="badge bg-success">Başarılı</span>
+                        {% else %}
+                            <span class="badge bg-danger">Hata</span>
+                        {% endif %}
+                    </td>
+                    <td class="small">{{ log.description or '-' }}</td>
+                    <td class="small text-muted">{{ log.ip_address or '-' }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="7" class="text-center text-muted py-4">Seçilen filtreye ait kayıt bulunamadı.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="card-footer bg-white">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <form method="GET" action="{{ url_for('auth.kullanici_loglari', user_id=user.id) }}" class="d-flex align-items-center gap-2 mb-0">
+                <input type="hidden" name="start_date" value="{{ start_date }}">
+                <input type="hidden" name="end_date" value="{{ end_date }}">
+                <input type="hidden" name="sort" value="{{ sort }}">
+                <label class="small text-muted mb-0">Sayfa başına</label>
+                <select name="per_page" class="form-select form-select-sm" style="max-width:130px;" onchange="this.form.submit()">
+                    <option value="10" {{ 'selected' if per_page == 10 else '' }}>10</option>
+                    <option value="20" {{ 'selected' if per_page == 20 else '' }}>20</option>
+                    <option value="50" {{ 'selected' if per_page == 50 else '' }}>50</option>
+                    <option value="100" {{ 'selected' if per_page == 100 else '' }}>100</option>
+                </select>
+            </form>
+
+            <ul class="pagination mb-0">
+                <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+                    <a class="page-link" href="{{ url_for('auth.kullanici_loglari', user_id=user.id, page=pagination.prev_num, start_date=start_date, end_date=end_date, sort=sort, per_page=per_page) }}">&laquo;</a>
+                </li>
+                {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
+                    {% if p %}
+                        <li class="page-item {% if p == pagination.page %}active{% endif %}">
+                            <a class="page-link" href="{{ url_for('auth.kullanici_loglari', user_id=user.id, page=p, start_date=start_date, end_date=end_date, sort=sort, per_page=per_page) }}">{{ p }}</a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">&hellip;</span></li>
+                    {% endif %}
+                {% endfor %}
+                <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+                    <a class="page-link" href="{{ url_for('auth.kullanici_loglari', user_id=user.id, page=pagination.next_num, start_date=start_date, end_date=end_date, sort=sort, per_page=per_page) }}">&raquo;</a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleSort() {
+    const inp = document.getElementById('sort_input');
+    inp.value = (inp.value === 'desc') ? 'asc' : 'desc';
+    document.getElementById('filter-form').submit();
+}
+
+function setDateRange(days) {
+    const today = new Date();
+    const from = new Date();
+    from.setDate(today.getDate() - days);
+    document.getElementById('end_date').value = today.toISOString().split('T')[0];
+    document.getElementById('start_date').value = from.toISOString().split('T')[0];
+    document.getElementById('filter-form').submit();
+}
+
+function setYTD() {
+    const today = new Date();
+    const jan1 = new Date(today.getFullYear(), 0, 1);
+    document.getElementById('start_date').value = jan1.toISOString().split('T')[0];
+    document.getElementById('end_date').value = today.toISOString().split('T')[0];
+    document.getElementById('filter-form').submit();
+}
+</script>
+{% endblock %}
+

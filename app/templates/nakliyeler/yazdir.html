@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <title>Nakliye Listesi - Yazdır</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            font-size: 12px;
+            color: #222;
+            background: #f4f6f8;
+        }
+
+        .page-wrapper {
+            max-width: 1100px;
+            margin: 30px auto;
+            background: white;
+            padding: 24px 28px;
+            border-radius: 6px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.10);
+        }
+
+        @media print {
+            body { background: white; }
+            .page-wrapper {
+                max-width: 100%;
+                margin: 0;
+                padding: 0;
+                box-shadow: none;
+                border-radius: 0;
+            }
+        }
+
+        @page {
+            size: A4 landscape;
+            margin: 8mm 10mm;
+        }
+
+        /* HEADER */
+        .print-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            border-bottom: 2px solid #333;
+            padding-bottom: 6px;
+            margin-bottom: 10px;
+        }
+        .print-header h1 {
+            font-size: 16px;
+            font-weight: 700;
+            color: #111;
+        }
+        .print-header .meta {
+            font-size: 9px;
+            color: #666;
+            text-align: right;
+            line-height: 1.5;
+        }
+        .print-header .meta .meta-highlight {
+            font-size: 10px;
+            font-weight: 600;
+            color: #2d3e50;
+        }
+
+        /* TABLO */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        col.col-no     { width: 3%; }
+        col.col-tarih  { width: 9%; }
+        col.col-firma  { width: 17%; }
+        col.col-guzergah { width: 20%; }
+        col.col-plaka  { width: 12%; }
+        col.col-matrah { width: 10%; }
+        col.col-kdvpct { width: 5%; }
+        col.col-kdv    { width: 9%; }
+        col.col-tutar  { width: 10%; }
+        col.col-durum  { width: 7%; }
+
+        thead th {
+            background: #dbe7f3;
+            color: #18324a;
+            padding: 9px 10px;
+            text-align: left;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            border-top: 2px solid #18324a;
+            border-bottom: 2px solid #18324a;
+        }
+        thead tr {
+            box-shadow: inset 0 1px 0 #f7fbff, inset 0 -1px 0 #b7c9db;
+        }
+        thead th.text-end { text-align: right; }
+        thead th.text-center { text-align: center; }
+
+        tbody tr { border-bottom: 1px solid #dee2e6; }
+        tbody tr:nth-child(odd) { background: #f8f9fa; }
+        tbody tr:nth-child(even) { background: white; }
+        tbody tr:hover { background: rgba(13, 110, 253, 0.04); }
+        tbody td {
+            padding: 7px 10px;
+            vertical-align: middle;
+        }
+        .text-end { text-align: right; }
+        .text-center { text-align: center; }
+        .fw-bold { font-weight: 700; }
+        .text-muted { color: #6c757d; font-size: 11px; }
+
+        .firma-adi { font-weight: 600; }
+        .guzergah { max-width: 240px; }
+        .aciklama { font-size: 10px; color: #6c757d; display: block; margin-top: 2px; }
+        .plaka-badge {
+            display: inline-block;
+            border: 1px solid #bbb;
+            border-radius: 3px;
+            padding: 1px 5px;
+            font-size: 9px;
+            font-weight: 600;
+        }
+        .taseron-badge {
+            display: inline-block;
+            background: #e8f4fd;
+            border: 1px solid #b3d9f2;
+            border-radius: 3px;
+            padding: 1px 5px;
+            font-size: 9px;
+            color: #1a6fa0;
+            font-weight: 600;
+        }
+        .durum-badge {
+            display: inline-block;
+            border-radius: 3px;
+            padding: 1px 6px;
+            font-size: 8px;
+            font-weight: 700;
+        }
+        .durum-islendi { background: #d1e7dd; color: #0f5132; border: 1px solid #a3cfbb; }
+        .durum-bekliyor { background: #f8f9fa; color: #6c757d; border: 1px solid #dee2e6; }
+
+        /* TOPLAM SATIRI */
+        tfoot td {
+            padding: 6px;
+            border-top: 2px solid #333;
+            font-weight: 700;
+            font-size: 11px;
+            background: #f0f0f0;
+        }
+
+        /* FOOTER */
+        .print-footer {
+            margin-top: 12px;
+            padding-top: 6px;
+            border-top: 1px solid #ccc;
+            display: flex;
+            justify-content: space-between;
+            font-size: 8px;
+            color: #999;
+        }
+
+        /* YAZDIR BUTONU - Sadece ekranda gorunur */
+        .print-actions {
+            position: fixed;
+            top: 15px;
+            right: 15px;
+            z-index: 9999;
+            display: flex;
+            gap: 8px;
+        }
+        .print-actions button, .print-actions a {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-print { background: #2c3e50; color: white; }
+        .btn-print:hover { background: #1a252f; }
+        .btn-excel { background: #1f7a3f; color: white; }
+        .btn-excel:hover { background: #186132; }
+        .btn-back { background: #e9ecef; color: #333; }
+        .btn-back:hover { background: #dee2e6; }
+
+        @media print {
+            .print-actions { display: none !important; }
+            body { padding: 0; }
+            thead { display: table-header-group; }
+            thead th {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="print-actions">
+    <button class="btn-print" onclick="window.print()">
+        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M2.5 8a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1z"/><path d="M5 1a2 2 0 0 0-2 2v2H2a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h1v1a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-1h1a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-1V3a2 2 0 0 0-2-2H5zM4 3a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2H4V3zm1 10a1 1 0 0 1-1-1V9h8v3a1 1 0 0 1-1 1H5z"/></svg>
+        Yazdır / PDF
+    </button>
+    <a class="btn-excel" href="{{ url_for('nakliyeler.excel_aktar', baslangic=baslangic, bitis=bitis, plaka=secili_plaka, taseron_id=secili_taseron_id, firma_id=secili_firma_id) }}">
+        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.884 6.68a.5.5 0 1 0-.768.64L6.347 8.8 5.116 10.28a.5.5 0 0 0 .768.64L7 9.601l1.116 1.319a.5.5 0 0 0 .768-.64L7.653 8.8l1.231-1.48a.5.5 0 1 0-.768-.64L7 7.999 5.884 6.68z"/><path d="M14 4.5V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h5.5L14 4.5zM9.5 1.5V4a1 1 0 0 0 1 1H13"/></svg>
+        Excel'e Aktar
+    </a>
+    <button class="btn-back" onclick="window.close()">
+        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M15 8a.5.5 0 0 0-.5-.5H2.707l3.147-3.146a.5.5 0 1 0-.708-.708l-4 4a.5.5 0 0 0 0 .708l4 4a.5.5 0 0 0 .708-.708L2.707 8.5H14.5A.5.5 0 0 0 15 8z"/></svg>
+        Kapat
+    </button>
+</div>
+
+<div class="page-wrapper">
+
+<!-- HEADER -->
+<div class="print-header">
+    <div>
+        <h1 id="export-title">Nakliye Sefer Listesi</h1>
+    </div>
+    <div class="meta">
+        {% set baslangic_tr = baslangic[8:10] ~ '.' ~ baslangic[5:7] ~ '.' ~ baslangic[0:4] if baslangic and baslangic|length == 10 and '-' in baslangic else baslangic %}
+        {% set bitis_tr = bitis[8:10] ~ '.' ~ bitis[5:7] ~ '.' ~ bitis[0:4] if bitis and bitis|length == 10 and '-' in bitis else bitis %}
+        <div id="export-date-range" class="meta-highlight">Tarih Araligi: {{ baslangic_tr }} - {{ bitis_tr }}</div>
+        {% if secili_plaka %}<div id="export-plate">Plaka: {{ secili_plaka }}</div>{% endif %}
+        <div id="export-report-date" class="meta-highlight">Rapor Tarihi: {{ rapor_tarihi }}</div>
+    </div>
+</div>
+
+<!-- TABLO -->
+<table>
+    <colgroup>
+        <col class="col-no">
+        <col class="col-tarih">
+        <col class="col-firma">
+        <col class="col-guzergah">
+        <col class="col-plaka">
+        <col class="col-matrah">
+        <col class="col-kdvpct">
+        <col class="col-kdv">
+        <col class="col-tutar">
+        <col class="col-durum">
+    </colgroup>
+    <thead>
+        <tr>
+            <th>#</th>
+            <th>Tarih</th>
+            <th>Müşteri Firma</th>
+            <th>Güzergah / Açıklama</th>
+            <th>Plaka / Tedarikçi</th>
+            <th class="text-end">Matrah</th>
+            <th class="text-end">KDV %</th>
+            <th class="text-end">KDV</th>
+            <th class="text-end">Tutar</th>
+            <th class="text-center">Durum</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% set toplam_matrah = namespace(val=0) %}
+        {% set toplam_kdv = namespace(val=0) %}
+        {% set toplam_tutar = namespace(val=0) %}
+
+        {% for nakliye in nakliyeler %}
+            {% if nakliye.kiralama_id and nakliye.kiralama and nakliye.kiralama.kalemler %}
+                {% set kdv_orani = nakliye.kiralama.kalemler[0].nakliye_satis_kdv or 0 %}
+            {% else %}
+                {% set kdv_orani = nakliye.kdv_orani or 0 %}
+            {% endif %}
+            {% set matrah = nakliye.tutar|float or 0 %}
+            {% set kdv = matrah * (kdv_orani / 100.0) %}
+            {% set tutar = matrah + kdv %}
+            {% set toplam_matrah.val = toplam_matrah.val + matrah %}
+            {% set toplam_kdv.val = toplam_kdv.val + kdv %}
+            {% set toplam_tutar.val = toplam_tutar.val + tutar %}
+
+            <tr>
+                <td>{{ loop.index }}</td>
+                <td>{{ nakliye.tarih.strftime('%d.%m.%Y') }}</td>
+                <td class="firma-adi">
+                    {{ nakliye.firma.firma_adi | truncate_name if nakliye.firma else '-' }}
+                </td>
+                <td class="guzergah">
+                    {{ nakliye.guzergah }}
+                    {% if nakliye.aciklama %}
+                        <div class="aciklama">{{ nakliye.aciklama }}</div>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if nakliye.nakliye_tipi == 'taseron' and nakliye.taseron_firma %}
+                        <span class="taseron-badge">{{ nakliye.taseron_firma.firma_adi | truncate_name }}</span>
+                        {% if nakliye.plaka %}
+                            <div class="text-muted" style="font-size:8px;">{{ nakliye.plaka }}</div>
+                        {% endif %}
+                    {% else %}
+                        <span class="plaka-badge">{{ nakliye.plaka or '-' }}</span>
+                    {% endif %}
+                </td>
+                <td class="text-end">{{ "{:,.2f}".format(matrah).replace(',', 'X').replace('.', ',').replace('X', '.') }}</td>
+                <td class="text-end">{% if kdv_orani %}%{{ kdv_orani }}{% else %}-{% endif %}</td>
+                <td class="text-end">{{ "{:,.2f}".format(kdv).replace(',', 'X').replace('.', ',').replace('X', '.') }}</td>
+                <td class="text-end fw-bold">{{ "{:,.2f}".format(tutar).replace(',', 'X').replace('.', ',').replace('X', '.') }}</td>
+                <td class="text-center">
+                    {% if nakliye.cari_islendi_mi %}
+                        <span class="durum-badge durum-islendi">Islendi</span>
+                    {% else %}
+                        <span class="durum-badge durum-bekliyor">Bekliyor</span>
+                    {% endif %}
+                </td>
+            </tr>
+        {% else %}
+            <tr><td colspan="10" class="text-center" style="padding:20px;">Kayit bulunamadi.</td></tr>
+        {% endfor %}
+    </tbody>
+    {% if nakliyeler %}
+    <tfoot>
+        <tr>
+            <td colspan="5" class="text-end">TOPLAM:</td>
+            <td class="text-end">{{ "{:,.2f}".format(toplam_matrah.val).replace(',', 'X').replace('.', ',').replace('X', '.') }} TL</td>
+            <td></td>
+            <td class="text-end">{{ "{:,.2f}".format(toplam_kdv.val).replace(',', 'X').replace('.', ',').replace('X', '.') }} TL</td>
+            <td class="text-end">{{ "{:,.2f}".format(toplam_tutar.val).replace(',', 'X').replace('.', ',').replace('X', '.') }} TL</td>
+            <td></td>
+        </tr>
+    </tfoot>
+    {% endif %}
+</table>
+
+<!-- FOOTER -->
+<div class="print-footer">
+    <div>{{ stats.sefer_sayisi }} kayıt listelendi</div>
+    <div>Bu belge bilgi amacıyla hazırlanmıştır.</div>
+</div>
+
+</div><!-- /page-wrapper -->
+
+</body>
+</html>

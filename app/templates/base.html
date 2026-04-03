@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Pimaks Kiralama{% endblock %}</title>
+    
+    <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .navbar {
+            padding-top: 1rem;
+            padding-bottom: 1rem;
+        }
+        .navbar-brand {
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            color: #333 !important;
+        }
+        .navbar-logo {
+            height: 58px;
+            width: auto;
+            margin-right: 10px;
+            object-fit: contain;
+        }
+        .nav-report-btn {
+            border: none;
+            border-radius: 0;
+            color: #0d6efd !important;
+            font-weight: 600;
+            padding: 0.4rem 0.9rem !important;
+            transition: all 0.2s ease;
+            background: transparent;
+            box-shadow: none;
+        }
+        .nav-report-btn:hover,
+        .nav-report-btn:focus {
+            color: #0a58ca !important;
+            background: transparent;
+            transform: none;
+            box-shadow: none;
+            text-decoration: underline;
+        }
+        .nav-calendar-btn {
+            color: #dc3545 !important;
+        }
+        .nav-calendar-btn:hover,
+        .nav-calendar-btn:focus {
+            color: #b02a37 !important;
+            text-decoration: underline;
+        }
+        .nav-db-btn {
+            border: none !important;
+            background: transparent !important;
+            color: #198754 !important;
+            font-weight: 600;
+            padding: 0.4rem 0.9rem !important;
+            box-shadow: none !important;
+        }
+        .nav-db-btn:hover,
+        .nav-db-btn:focus {
+            color: #146c43 !important;
+            text-decoration: underline;
+        }
+        @media (max-width: 991.98px) {
+            .nav-report-btn {
+                display: inline-block;
+                margin: 0.35rem 0;
+            }
+        }
+        .main-content {
+            flex: 1;
+            padding-bottom: 40px;
+            padding-top: 10px;
+        }
+        footer {
+            background-color: transparent;
+            color: #868e96;
+            padding: 20px 0;
+            text-align: center;
+            font-size: 0.85em;
+            margin-top: auto;
+            border: none;
+        }
+    </style>
+    
+    {% block head %}{% endblock %}
+</head>
+<body>
+
+    <nav class="navbar navbar-expand-lg navbar-light mb-4 shadow-sm bg-white">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('main.index') }}">
+                <img src="{{ url_for('static', filename=(system_settings.logo_path if system_settings and system_settings.logo_path else 'img/logo.JPG')) }}"
+                     alt="{{ system_settings.company_name if system_settings and system_settings.company_name else 'Pimaks Logo' }}"
+                     class="navbar-logo"
+                     onerror="this.onerror=null; this.src='/static/img/placeholder.png';">
+            </a>
+
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+
+
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('kiralama.index') }}">
+                            <i class="fa fa-file-contract"></i> Kiralama
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('nakliyeler.index') }}">
+                            <i class="fas fa-route"></i> Nakliyeler
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('firmalar.index') }}">
+                            <i class="fas fa-building"></i> Firmalar
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('araclar.index') }}">
+                            <i class="fas fa-truck-moving"></i> Araçlar
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('filo.index') }}">
+                            <i class="fas fa-tractor"></i> Makine Parkı
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('subeler.index') }}">
+                            <i class="fas fa-warehouse"></i> Şubeler
+                        </a>
+                    </li>
+
+                    <!-- Finans Dropdown -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="finansDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="fa fa-wallet"></i> Finans
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0">
+                            <!-- HAKEDİŞ MENÜSÜ BURAYA TAŞINDI -->
+                            <li><a class="dropdown-item fw-semibold" href="{{ url_for('fatura.index') }}"><i class="fas fa-file-invoice-dollar me-2 text-primary"></i>Hakedişler</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{{ url_for('cari.odeme_ekle', yon='tahsilat') }}">Ödeme Al (Tahsilat)</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('cari.odeme_ekle', yon='odeme') }}">Ödeme Yap (Tediye)</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('cari.hizmet_ekle') }}">Fatura/Hizmet Gir</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{{ url_for('cari.kasa_listesi') }}">Kasa & Banka Hesapları</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('cari.cari_durum_raporu') }}">Cari Döküm</a></li>
+                        </ul>
+                    </li>
+
+                    <li class="nav-item d-none d-lg-block mx-2 border-end border-secondary-subtle"></li>
+
+                    <li class="nav-item">
+                        <a class="nav-link nav-report-btn nav-calendar-btn" href="{{ url_for('takvim.takvim') }}">
+                            <i class="fas fa-calendar-alt me-1"></i> Takvim
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a class="nav-link nav-report-btn" href="{{ url_for('raporlama.index') }}">
+                            <i class="fas fa-chart-line me-1"></i> Raporlama
+                        </a>
+                    </li>
+
+                    <!-- Kullanıcı Dropdown -->
+                    {% if current_user.is_authenticated %}
+                    {% if current_user.is_admin() %}
+                    <li class="nav-item me-2">
+                        <button
+                            type="button"
+                            class="btn btn-sm mt-1 nav-db-btn"
+                            data-bs-toggle="modal"
+                            data-bs-target="#dbBackupModal"
+                        >
+                            <i class="fas fa-database me-1"></i> DB Yedek
+                        </button>
+                    </li>
+                    {% endif %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-user-circle"></i>
+                            {{ current_user.username }}
+                            {% if current_user.is_admin() %}
+                                <span class="badge bg-danger ms-1">Admin</span>
+                            {% endif %}
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0">
+                            {% if current_user.is_admin() %}
+                            <li>
+                                <a class="dropdown-item" href="{{ url_for('auth.kullanici_listesi') }}">
+                                    <i class="fas fa-users-cog me-1"></i> Kullanıcı Yönetimi
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="{{ url_for('ayarlar.index') }}">
+                                    <i class="fas fa-sliders-h me-1"></i> Genel Ayarlar
+                                </a>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            {% endif %}
+                            <li>
+                                <a class="dropdown-item text-danger" href="{{ url_for('auth.logout') }}">
+                                    <i class="fas fa-sign-out-alt me-1"></i> Çıkış Yap
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+                    {% endif %}
+
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container main-content">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show shadow-sm" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Kapat"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </div>
+
+    {% include 'db_menu/_modal.html' %}
+
+    <footer>
+        <div class="container">
+            &copy; 2026 Pimaks Kiralama Yönetim Sistemi
+        </div>
+    </footer>
+
+    <script src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
+    {% block scripts %}{% endblock %}
+
+<script>
+        function bindContextMenuAndLongPress(elements, callback) {
+            elements.forEach(el => {
+                // 1. Masaüstü Sağ Tık Olayı (Burası zaten çalışıyor)
+                el.addEventListener('contextmenu', function(e) {
+                    e.preventDefault(); 
+                    e.stopPropagation();
+                    callback(e.pageX, e.pageY, this);
+                });
+
+                // 2. Mobil Uzun Basma (Long Press) Olayı - GÜÇLENDİRİLMİŞ VERSİYON
+                let pressTimer = null;
+                let isDragging = false; // Kullanıcı sayfayı kaydırıyorsa iptal edeceğiz
+
+                // Dokunma başladığında sayacı başlat
+                el.addEventListener('touchstart', function(e) {
+                    isDragging = false; 
+                    
+                    if (e.touches.length === 1) { 
+                        // e.stopPropagation() BURADAN KALDIRILDI! (Bazen dokunmayı tamamen öldürüyor)
+                        const touch = e.touches[0];
+                        const pageX = touch.pageX;
+                        const pageY = touch.pageY;
+                        const targetEl = this; // O an dokunulan satır/kalem
+                        
+                        // Önceki sayaç varsa temizle
+                        if (pressTimer) clearTimeout(pressTimer);
+                        
+                        pressTimer = setTimeout(() => {
+                            if (!isDragging) { // Eğer sayfa kaydırılmıyorsa menüyü aç
+                                e.preventDefault(); // Menü açılırken başka bir şeye tıklanmasını engelle
+                                if (navigator.vibrate) navigator.vibrate(50);
+                                callback(pageX, pageY, targetEl);
+                            }
+                        }, 500); // 500ms bekle
+                    }
+                }, { passive: false }); // passive: false YAPILDI (preventDefault kullanabilmek için)
+
+                // Kullanıcı parmağını hareket ettirirse (sayfayı kaydırıyorsa) iptal et
+                el.addEventListener('touchmove', function(e) {
+                    isDragging = true;
+                    if (pressTimer) clearTimeout(pressTimer);
+                }, { passive: true });
+
+                // Kullanıcı parmağını çekerse veya dokunma iptal olursa iptal et
+                el.addEventListener('touchend', function(e) {
+                    if (pressTimer) clearTimeout(pressTimer);
+                    // Not: Eğer 500ms dolmadan parmak çekilirse normal tıklama sayılır
+                });
+
+                el.addEventListener('touchcancel', function(e) {
+                    if (pressTimer) clearTimeout(pressTimer);
+                });
+            });
+        }
+    </script>
+</body>
+</html>

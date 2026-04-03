@@ -1,0 +1,238 @@
+{% extends "base.html" %}
+
+{% block title %}Makine Bilgilerini Düzelt{% endblock %}
+
+{% block head %}
+    {{ super() }}
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 20px; background-color: #f8f9fa; }
+        .container { max-width: 550px; margin: auto; padding: 25px; background-color: #fff; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        h2 { color: #343a40; text-align: center; margin-bottom: 20px;} 
+        .form-group { margin-bottom: 0.7rem; }
+        label { display: block; margin-bottom: .4rem; font-weight: 500; color: #495057; }
+        input.form-control, select.form-control, textarea.form-control { width: 100%; padding: .5rem; border: 1px solid #ced4da; border-radius: .25rem; box-sizing: border-box; font-size: 1rem; font-family: inherit; resize: vertical; }
+        .alert { padding: 1rem; margin-bottom: 1rem; border: 1px solid transparent; border-radius: .25rem; }
+        .alert-danger { color: #721c24; background-color: #f8d7da; border-color: #f5c6cb; }
+        .alert-success { color: #155724; background-color: #d4edda; border-color: #c3e6cb; }
+        .butonlar { display: flex; justify-content: flex-start; gap: 40px; margin-top: 30px; }
+        .buton { display: inline-block; padding: 10px 10px; background-color: #007BFF; color: white; text-decoration: none; border-radius: 5px; font-weight: bold; border: none; cursor: pointer; transition: background-color 0.3s ease; font-size: 1.1rem; }
+        .buton:hover { background-color: #0056b3; }
+        .buton.iptal { background-color: #6c757d; }
+        .buton.iptal:hover { background-color: #5a6268; }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h2>"{{ ekipman.kod }}" Makinesini Düzelt</h2>
+    
+    <div class="alert alert-info text-center py-2 mb-4">
+        <strong>Mevcut Durumu:</strong> 
+        {% if ekipman.calisma_durumu == 'kirada' %}
+            <span class="badge bg-success">Kirada (Sahada)</span>
+        {% elif ekipman.calisma_durumu == 'bosta' %}
+            <span class="badge bg-secondary">Boşta (Depoda)</span>
+        {% elif ekipman.calisma_durumu == 'serviste' %}
+            <span class="badge bg-warning text-dark">Serviste</span>
+        {% else %}
+            <span class="badge bg-danger">{{ ekipman.calisma_durumu|upper }}</span>
+        {% endif %}
+    </div>
+    
+    <form action="" method="POST" novalidate>
+        {{ form.hidden_tag() }} 
+        
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        <div class="form-group">
+            {{ form.kod.label(text="Makine Kodu :") }}
+            {{ form.kod(class="form-control") }}
+            {% for error in form.kod.errors %}<span style="color: red;">[{{ error }}]</span>{% endfor %}
+        </div>
+
+        <div class="form-group p-3 bg-light border rounded mb-3">
+            <label for="sube_id" class="text-primary" style="font-weight: 700;">Bulunduğu Şube / Depo :</label>
+            <select name="sube_id" id="sube_id" class="form-control border-primary" {% if ekipman.calisma_durumu == 'kirada' %}disabled{% endif %}>
+                <option value="" {% if not ekipman.sube_id %}selected{% endif %}>Bilinmiyor / Şube Dışı</option>
+                {% for sube in subeler %}
+                    <option value="{{ sube.id }}" {% if ekipman.sube_id == sube.id %}selected{% endif %}>{{ sube.isim }}</option>
+                {% endfor %}
+            </select>
+            {% if ekipman.calisma_durumu == 'kirada' %}
+                <small class="text-danger mt-1 d-block fw-bold"><i class="fas fa-exclamation-triangle"></i> Makine şu an sahada (kirada) olduğu için şubesi değiştirilemez!</small>
+            {% else %}
+                <small class="text-muted mt-1 d-block">Makineyi manuel olarak başka bir depoya transfer edebilirsiniz.</small>
+            {% endif %}
+        </div>
+
+        <div class="form-group">
+             {{ form.yakit.label(text="Yakıt Tipi :") }}
+             {{ form.yakit(id="yakit", class="form-control", list="yakit-listesi") }}
+            <datalist id="yakit-listesi">
+                <option value="Elektrikli">
+                <option value="Dizel">
+                <option value="Hybrid"> 
+            </datalist>
+            {% for error in form.yakit.errors %}<span style="color: red;">[{{ error }}]</span>{% endfor %}
+        </div>    
+
+        <div class="form-group">
+             {{ form.tipi.label(text="Makine Tipi:") }}
+             {{ form.tipi(id="tipi", class="form-control", list="tip-listesi") }}
+            <datalist id="tip-listesi">
+                <option value="Manlift">
+                <option value="Eklemli">
+                <option value="Teleskopik sepet">
+                <option value="Forklift">   
+            </datalist>
+            {% for error in form.tipi.errors %}<span style="color: red;">[{{ error }}]</span>{% endfor %}
+        </div>
+
+         <div class="form-group">
+             {{ form.marka.label(text="Markası :") }}
+             {{ form.marka(id="marka", class="form-control", list="marka-listesi") }}
+            <datalist id="marka-listesi">
+                <option value="Dingli">
+                <option value="Sinoboom">
+                <option value="Zoomlion">
+                <option value="Haulotte">
+                <option value="JLG">
+                <option value="Genie">
+                <option value="Skyjack">
+            </datalist>
+            {% for error in form.marka.errors %}<span style="color: red;">[{{ error }}]</span>{% endfor %}
+        </div>
+
+        <div class="form-group">
+             {{ form.model.label(text="Modeli :") }}
+             {{ form.model(id="model", class="form-control") }}
+            {% for error in form.model.errors %}<span style="color: red;">[{{ error }}]</span>{% endfor %}
+        </div>
+
+       <div class="form-group">
+            {{ form.seri_no.label(text="Seri No :") }}   
+            {{ form.seri_no(id="seri_no", class="form-control") }}
+            {% for error in form.seri_no.errors %}<span style="color: red;">[{{ error }}]</span>{% endfor %}
+        </div>
+
+        <div class="form-group">
+            {{ form.calisma_yuksekligi.label(text="Çalışma Yüksekliği (m):") }}
+            {{ form.calisma_yuksekligi(id="calisma_yuksekligi", class="form-control", type="number", step="1") }}     
+            {% for error in form.calisma_yuksekligi.errors %}<span style="color: red;">[{{ error }}]</span>{% endfor %}
+        </div>
+
+        <div class="form-group">
+            {{ form.kaldirma_kapasitesi.label(text="Kaldırma Kapasitesi (kg):") }}
+            {{ form.kaldirma_kapasitesi(id="kaldirma_kapasitesi", class="form-control", type="number") }}
+            {% for error in form.kaldirma_kapasitesi.errors %}<span style="color: red;">[{{ error }}]</span>{% endfor %}
+        </div>
+        
+        <div class="form-group">
+            {{ form.uretim_yili.label(text="Üretim Tarihi (Yıl):") }}
+            {{ form.uretim_yili(id="uretim_yili", class="form-control", type="number", step="1", min="1990") }}
+            {% for error in form.uretim_yili.errors %}<span style="color: red;">[{{ error }}]</span>{% endfor %}
+        </div>
+        <div class="form-group">
+            {{ form.sube_id.label(text="Kayıt Şubesi :") }}
+            {{ form.sube_id(class="form-control") }}
+            <small style="color: #666;">Makinenin fiziksel olarak bağlı olduğu depoyu seçiniz.</small>
+            {% for error in form.sube_id.errors %}<span style="color: red;">[{{ error }}]</span>{% endfor %}
+        </div>
+        <fieldset class="form-group" style="border: 1px solid #dee2e6; padding: 1.5rem; margin-top: 20px; border-radius: 5px;">
+            <legend style="font-size: 1.2em; font-weight: 500; width: auto; padding: 0 10px; margin-left: 5px;">Makine Maliyeti</legend>
+            <div class="row">
+                <div class="col-md-8 form-group">
+                    {{ form.giris_maliyeti.label(text="Giriş Maliyeti (Satın Alma Fiyatı):") }}
+                    
+                    {{ form.giris_maliyeti(class="form-control", placeholder="Örn: 15000 veya 15000,50", id="giris_maliyeti", autocomplete="off") }} 
+                    
+                    <small style="color: #555; margin-top: 5px; display: block;">
+                        Kuruş ayracı olarak <strong>virgül</strong> kullanabilirsiniz (Örn: 15000,50).
+                    </small>
+                    {% for error in form.giris_maliyeti.errors %}<span style="color: red;">[{{ error }}]</span>{% endfor %}
+                </div>
+                
+                <div class="col-md-4 form-group">
+                    {{ form.para_birimi.label(text="Para Birimi:") }}
+                    {{ form.para_birimi(class="form-control") }}
+                </div>
+            </div>
+        </fieldset>
+
+        <div class="butonlar">
+         {{ form.submit(class="buton", value="Güncelle") }}
+         <a href="{{ url_for('filo.index') }}" class="buton iptal">İptal</a>
+         </div>
+    </form>
+</div>
+
+<script>
+    const yilInput = document.getElementById('uretim_yili');
+    // Mevcut bir değer yoksa bugünün yılını koy (düzenlemede değer varsa dokunma)
+    if (yilInput && !yilInput.value) { 
+        const bugunYil = new Date().getFullYear();
+        yilInput.value = bugunYil; 
+    }
+
+    // Teknik olculer/agrlik alanlarinda 1,25 girisini 1.25 formatina cevir.
+    (function () {
+        const decimalFields = ['agirlik', 'genislik', 'uzunluk', 'kapali_yukseklik'];
+        const form = document.querySelector('form');
+
+        function normalizeDecimal(rawValue) {
+            if (rawValue === null || rawValue === undefined) {
+                return rawValue;
+            }
+
+            let value = String(rawValue).trim().replace(/\s+/g, '');
+            if (!value) {
+                return value;
+            }
+
+            if (value.includes(',') && value.includes('.')) {
+                if (value.lastIndexOf(',') > value.lastIndexOf('.')) {
+                    value = value.replace(/\./g, '').replace(',', '.');
+                } else {
+                    value = value.replace(/,/g, '');
+                }
+            } else if (value.includes(',')) {
+                value = value.replace(',', '.');
+            }
+
+            return value;
+        }
+
+        decimalFields.forEach((fieldName) => {
+            const input = document.getElementById(fieldName);
+            if (!input) {
+                return;
+            }
+
+            input.setAttribute('inputmode', 'decimal');
+            input.setAttribute('lang', 'tr');
+
+            input.addEventListener('blur', function () {
+                this.value = normalizeDecimal(this.value);
+            });
+        });
+
+        if (form) {
+            form.addEventListener('submit', function () {
+                decimalFields.forEach((fieldName) => {
+                    const input = document.getElementById(fieldName);
+                    if (input) {
+                        input.value = normalizeDecimal(input.value);
+                    }
+                });
+            });
+        }
+    })();
+
+</script>
+{% endblock %}
