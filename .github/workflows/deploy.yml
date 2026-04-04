@@ -25,10 +25,19 @@ jobs:
             git pull origin main
             source venv/bin/activate
             pip install -r requirements.txt
-            export FLASK_APP=run.py
 
-            echo ">>> Alembic migration uygulanıyor..."
-            python -m flask db upgrade
-            echo ">>> Migration tamamlandi."
+            # Tablolar yoksa veya firma tablosu boşsa SQLite → PostgreSQL migration çalıştır
+            FIRMA_COUNT=$(psql "$DATABASE_URL" -t -c "SELECT COUNT(*) FROM firma;" 2>/dev/null | tr -d ' \n' || echo "0")
+            if [ -z "$FIRMA_COUNT" ]; then FIRMA_COUNT=0; fi
+            echo ">>> PostgreSQL firma kayit sayisi: $FIRMA_COUNT"
+            if [ "$FIRMA_COUNT" -eq "0" ]; then
+              echo ">>> Veritabani bos, migration baslatiliyor..."
+              sqlite3 app.db < yedek_db.sql
+              python migrate_sqlite_to_pg.py
+              rm -f app.db
+              echo ">>> Migration tamamlandi."
+            else
+              echo ">>> Veritabaninda veri var, migration atlandi."
+            fi
 
             systemctl restart kiralama_test.service
