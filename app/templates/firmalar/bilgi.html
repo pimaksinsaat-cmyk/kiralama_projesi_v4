@@ -241,7 +241,7 @@
                         <input type="hidden" name="kiralama_per_page" value="{{ kiralama_per_page }}">
                         <label class="small text-muted mb-0">Sayfa başına</label>
                         <select name="hareket_per_page" class="form-select form-select-sm" style="max-width:130px;" onchange="this.form.submit()">
-                            <option value="10"  {{ 'selected' if hareket_per_page == 10 or not hareket_per_page else '' }}>10</option>
+                            <option value="10"  {{ 'selected' if hareket_per_page == 10 else '' }}>10</option>
                             <option value="25"  {{ 'selected' if hareket_per_page == 25 else '' }}>25</option>
                             <option value="50"  {{ 'selected' if hareket_per_page == 50 else '' }}>50</option>
                             <option value="100" {{ 'selected' if hareket_per_page == 100 else '' }}>100</option>
@@ -367,7 +367,7 @@
                         <label class="small text-muted mb-0">Sayfa başına</label>
                         <select name="kiralama_per_page" class="form-select form-select-sm" style="max-width:130px;" onchange="this.form.submit()">
                             <option value="10"  {{ 'selected' if kiralama_per_page == 10 else '' }}>10</option>
-                            <option value="25"  {{ 'selected' if kiralama_per_page == 25 else '' }}>25</option>
+                            <option value="25"  {{ 'selected' if kiralama_per_page == 25 or not kiralama_per_page else '' }}>25</option>
                             <option value="50"  {{ 'selected' if kiralama_per_page == 50 else '' }}>50</option>
                             <option value="100" {{ 'selected' if kiralama_per_page == 100 else '' }}>100</option>
                         </select>

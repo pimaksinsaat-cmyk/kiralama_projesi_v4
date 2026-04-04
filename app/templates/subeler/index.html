@@ -425,6 +425,33 @@
         if (ctxMenu) ctxMenu.style.display = 'none';
     }
 
+    function getContextMenuPosition(event, menuElement) {
+        const padding = 8;
+        const clickX = typeof event.clientX === 'number'
+            ? event.clientX
+            : event.pageX - window.scrollX;
+        const clickY = typeof event.clientY === 'number'
+            ? event.clientY
+            : event.pageY - window.scrollY;
+        const menuWidth = menuElement.offsetWidth || 220;
+        const menuHeight = menuElement.offsetHeight || 180;
+
+        let left = clickX;
+        let top = clickY;
+
+        if (left + menuWidth > window.innerWidth - padding) {
+            left = window.innerWidth - menuWidth - padding;
+        }
+        if (top + menuHeight > window.innerHeight - padding) {
+            top = window.innerHeight - menuHeight - padding;
+        }
+
+        return {
+            left: Math.max(padding, left),
+            top: Math.max(padding, top)
+        };
+    }
+
     function showContextMenu(e, row) {
         e.preventDefault();
         e.stopPropagation();
@@ -444,9 +471,10 @@
         document.getElementById('menu-bilgi-sube').href = currentData.bilgiUrl || '#';
 
         // Position ve göster
-        ctxMenu.style.left = e.clientX + 'px';
-        ctxMenu.style.top = e.clientY + 'px';
         ctxMenu.style.display = 'block';
+        const position = getContextMenuPosition(e, ctxMenu);
+        ctxMenu.style.left = position.left + 'px';
+        ctxMenu.style.top = position.top + 'px';
     }
 
     // Context menu kapatma (dışında tıkla)

@@ -501,6 +501,35 @@
 
         let currentDeleteUrl = "";
 
+        function getContextMenuPosition(event, menuElement) {
+            const padding = 8;
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+            const clickX = typeof event.clientX === 'number'
+                ? event.clientX
+                : event.pageX - window.scrollX;
+            const clickY = typeof event.clientY === 'number'
+                ? event.clientY
+                : event.pageY - window.scrollY;
+            const menuWidth = menuElement.offsetWidth || 200;
+            const menuHeight = menuElement.offsetHeight || 180;
+
+            let posX = clickX;
+            let posY = clickY;
+
+            if (posX + menuWidth > viewportWidth - padding) {
+                posX = viewportWidth - menuWidth - padding;
+            }
+            if (posY + menuHeight > viewportHeight - padding) {
+                posY = viewportHeight - menuHeight - padding;
+            }
+
+            return {
+                x: Math.max(padding, posX),
+                y: Math.max(padding, posY)
+            };
+        }
+
         // SAĞ TIK MANTIĞI
         const rows = document.querySelectorAll('.sag-tik-satir');
         rows.forEach(row => {
@@ -525,18 +554,10 @@
                 }
 
                 menu.style.display = 'block';
-                
-                // Ekran sınırlarını kontrol et
-                let posX = e.pageX;
-                let posY = e.pageY;
-                const menuWidth = 200;
-                const menuHeight = 180;
-                
-                if (posX + menuWidth > window.innerWidth) posX -= menuWidth;
-                if (posY + menuHeight > window.innerHeight) posY -= menuHeight;
 
-                menu.style.left = posX + 'px';
-                menu.style.top = posY + 'px';
+                const position = getContextMenuPosition(e, menu);
+                menu.style.left = position.x + 'px';
+                menu.style.top = position.y + 'px';
             });
         });
 

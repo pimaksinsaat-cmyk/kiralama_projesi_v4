@@ -31,7 +31,7 @@
     /* Sağ Tık Menüsü (Context Menu) */
     .context-menu { 
         display: none; 
-        position: absolute; 
+        position: fixed; 
         background-color: #ffffff; 
         border: 1px solid #e2e8f0; 
         box-shadow: 0 10px 25px rgba(0,0,0,0.1); 
@@ -399,6 +399,33 @@ document.addEventListener('DOMContentLoaded', function() {
     
     let activeData = {};
 
+    const getContextMenuPosition = (event, menuElement) => {
+        const padding = 8;
+        const clickX = typeof event.clientX === 'number'
+            ? event.clientX
+            : event.pageX - window.scrollX;
+        const clickY = typeof event.clientY === 'number'
+            ? event.clientY
+            : event.pageY - window.scrollY;
+        const menuWidth = menuElement.offsetWidth || 240;
+        const menuHeight = menuElement.offsetHeight || 240;
+
+        let left = clickX;
+        let top = clickY;
+
+        if (left + menuWidth > window.innerWidth - padding) {
+            left = window.innerWidth - menuWidth - padding;
+        }
+        if (top + menuHeight > window.innerHeight - padding) {
+            top = window.innerHeight - menuHeight - padding;
+        }
+
+        return {
+            left: Math.max(padding, left),
+            top: Math.max(padding, top)
+        };
+    };
+
     const openContextMenu = (e, row) => {
         e.preventDefault();
         e.stopPropagation(); // Sağ tık yapıldığında satır tıklama olayını engelle
@@ -465,8 +492,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Pozisyon ayarla
         contextMenu.style.display = 'block';
-        contextMenu.style.left = e.pageX + 'px';
-        contextMenu.style.top = e.pageY + 'px';
+        const position = getContextMenuPosition(e, contextMenu);
+        contextMenu.style.left = position.left + 'px';
+        contextMenu.style.top = position.top + 'px';
     };
 
     // Satır Dinleyicileri

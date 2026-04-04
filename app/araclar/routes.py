@@ -11,9 +11,9 @@ from app.utils import normalize_turkish_upper
 @araclar_bp.route('/')
 def index():
     page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 10, type=int)
+    per_page = request.args.get('per_page', 25, type=int)
     if per_page not in {10, 20, 25, 50, 100}:
-        per_page = 10
+        per_page = 25
 
     pagination = Arac.query.order_by(Arac.plaka).paginate(page=page, per_page=per_page, error_out=False)
     araclar = pagination.items

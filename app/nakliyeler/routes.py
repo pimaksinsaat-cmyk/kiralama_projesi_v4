@@ -82,9 +82,9 @@ def _turkce_tarih(iso_date):
 def index():
     # Filtreleme parametrelerini yakala
     page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 20, type=int)
+    per_page = request.args.get('per_page', 25, type=int)
     if per_page not in {10, 25, 50, 100}:
-        per_page = 10
+        per_page = 25
 
     bugun = date.today()
     varsayilan_baslangic = (bugun - timedelta(days=15)).isoformat()
@@ -393,8 +393,8 @@ def ekle():
 
     # Form seçeneklerini dinamik doldur
     firmalar = Firma.query.filter_by(is_active=True).order_by(Firma.firma_adi).all()
-    form.firma_id.choices = [(f.id, f.firma_adi) for f in firmalar]
-    form.taseron_firma_id.choices = [(0, '--- Öz Mal (Kendi Aracımız) ---')] + [(f.id, f.firma_adi) for f in firmalar if f.is_tedarikci]
+    form.firma_id.choices = [(0, '-- Seçiniz --')] + [(f.id, f.firma_adi) for f in firmalar]
+    form.taseron_firma_id.choices = [(0, '--- Taşeron Seçiniz ---')] + [(f.id, f.firma_adi) for f in firmalar if f.is_tedarikci]
 
     araclar = Arac.query.filter_by(is_active=True).all()
     form.arac_id.choices = [(0, '--- Dış Nakliye / Belirtilmemiş ---')] + [(a.id, a.plaka) for a in araclar]
@@ -410,16 +410,31 @@ def ekle():
         try:
             nakliye = Nakliye()
             form.populate_obj(nakliye)
+            nakliye.tevkifat_orani = form.tevkifat_orani.data or None
+
+            if not nakliye.arac_id or nakliye.arac_id <= 0:
+                nakliye.arac_id = None
+            if not nakliye.taseron_firma_id or nakliye.taseron_firma_id <= 0:
+                nakliye.taseron_firma_id = None
             
             # Öz mal araç seçildiyse plaka senkronize et
-            if nakliye.arac_id and nakliye.arac_id > 0:
-                secili_arac = Arac.query.get(nakliye.arac_id)
-                if secili_arac:
-                    nakliye.plaka = secili_arac.plaka
+            if nakliye.nakliye_tipi == 'oz_mal':
+                nakliye.taseron_firma_id = None
+                if nakliye.arac_id:
+                    secili_arac = Arac.query.get(nakliye.arac_id)
+                    if secili_arac:
+                        nakliye.plaka = secili_arac.plaka
+                    else:
+                        nakliye.arac_id = None
+                        nakliye.plaka = None
+                else:
+                    nakliye.plaka = None
+            else:
+                nakliye.arac_id = None
 
             # Decimal dönüşümleri
             nakliye.tutar = to_decimal(form.tutar.data)
-            nakliye.taseron_maliyet = to_decimal(form.taseron_maliyet.data)
+            nakliye.taseron_maliyet = to_decimal(form.taseron_maliyet.data) if nakliye.nakliye_tipi == 'taseron' else Decimal('0.00')
             if kiralama_id: nakliye.kiralama_id = kiralama_id
             
             nakliye.hesapla_ve_guncelle()
@@ -505,8 +520,8 @@ def duzenle(id):
     
     # Seçenekleri doldur
     firmalar = Firma.query.filter_by(is_active=True).all()
-    form.firma_id.choices = [(f.id, f.firma_adi) for f in firmalar]
-    form.taseron_firma_id.choices = [(0, '--- Öz Mal ---')] + [(f.id, f.firma_adi) for f in firmalar if f.is_tedarikci]
+    form.firma_id.choices = [(0, '-- Seçiniz --')] + [(f.id, f.firma_adi) for f in firmalar]
+    form.taseron_firma_id.choices = [(0, '--- Taşeron Seçiniz ---')] + [(f.id, f.firma_adi) for f in firmalar if f.is_tedarikci]
     
     araclar = Arac.query.filter_by(is_active=True).all()
     form.arac_id.choices = [(0, '--- Dış Nakliye / Belirtilmemiş ---')] + [(a.id, a.plaka) for a in araclar]
@@ -514,13 +529,28 @@ def duzenle(id):
     if form.validate_on_submit():
         try:
             form.populate_obj(nakliye)
+            nakliye.tevkifat_orani = form.tevkifat_orani.data or None
+            if not nakliye.arac_id or nakliye.arac_id <= 0:
+                nakliye.arac_id = None
+            if not nakliye.taseron_firma_id or nakliye.taseron_firma_id <= 0:
+                nakliye.taseron_firma_id = None
             
-            if nakliye.nakliye_tipi == 'oz_mal' and nakliye.arac_id:
-                secili_arac = Arac.query.get(nakliye.arac_id)
-                if secili_arac: nakliye.plaka = secili_arac.plaka
+            if nakliye.nakliye_tipi == 'oz_mal':
+                nakliye.taseron_firma_id = None
+                if nakliye.arac_id:
+                    secili_arac = Arac.query.get(nakliye.arac_id)
+                    if secili_arac:
+                        nakliye.plaka = secili_arac.plaka
+                    else:
+                        nakliye.arac_id = None
+                        nakliye.plaka = None
+                else:
+                    nakliye.plaka = None
+            else:
+                nakliye.arac_id = None
 
             nakliye.tutar = to_decimal(form.tutar.data)
-            nakliye.taseron_maliyet = to_decimal(form.taseron_maliyet.data)
+            nakliye.taseron_maliyet = to_decimal(form.taseron_maliyet.data) if nakliye.nakliye_tipi == 'taseron' else Decimal('0.00')
             
             nakliye.hesapla_ve_guncelle()
             

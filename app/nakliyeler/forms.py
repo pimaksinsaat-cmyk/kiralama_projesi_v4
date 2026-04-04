@@ -45,7 +45,7 @@ class NakliyeForm(FlaskForm):
     nakliye_tipi = SelectField('Nakliye Tipi', choices=[('oz_mal', 'Öz Mal'), ('taseron', 'Taşeron')], default='oz_mal')
     
     # Öz Mal ise Araç Seçimi
-    arac_id = SelectField('Bizim Araç (Plaka)', coerce=int, validators=[Optional()])
+    arac_id = SelectField('Filo Aracı (Plaka)', coerce=int, validators=[Optional()])
     
     # Taşeron ise Detaylar
     taseron_firma_id = SelectField('Taşeron Firma (Tedarikçi)', coerce=int, validators=[Optional()])
@@ -60,6 +60,11 @@ class NakliyeForm(FlaskForm):
     # DÜZELTME: Standart StringField yerine yazdığımız TurkishDecimalField'ı kullanıyoruz
     tutar = TurkishDecimalField('Navlun Satış Tutarı (KDV Hariç)', validators=[DataRequired(), validate_currency])
     kdv_orani = IntegerField('KDV (%)', default=20)
+    tevkifat_orani = SelectField(
+        'Tevkifat Oranı',
+        choices=[('', 'Seçiniz...'), ('2/10', '2/10'), ('2/5', '2/5'), ('3/10', '3/10')],
+        validators=[Optional()]
+    )
     
     submit = SubmitField('Nakliye İşlemini Kaydet')
 
@@ -72,7 +77,7 @@ class NakliyeForm(FlaskForm):
             Firma.firma_adi.notilike('%Dahili%')
         ).order_by(Firma.firma_adi).all()
         
-        self.firma_id.choices = [(f.id, f.firma_adi) for f in firmalar]
+        self.firma_id.choices = [(0, '-- Seçiniz --')] + [(f.id, f.firma_adi) for f in firmalar]
         
         # TAŞERONLAR: Sadece tedarikçi olan firmalar
         self.taseron_firma_id.choices = [(0, '--- Taşeron Seçiniz ---')] + \

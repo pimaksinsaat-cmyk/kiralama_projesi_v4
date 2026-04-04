@@ -1,5 +1,9 @@
 {% extends "base.html" %}
-
+{% block title %}Yeni Nakliye Girişi{% endblock %}
+{% block head %}
+<link href="https://cdn.jsdelivr.net/npm/tom-select@2/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2/dist/js/tom-select.complete.min.js"></script>
+{% endblock %}
 {% block content %}
 <div class="container mt-4">
     <div class="row">
@@ -22,7 +26,7 @@
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label fw-bold">Müşteri / Firma</label>
-                                {{ form.firma_id(class="form-select") }}
+                                {{ form.firma_id(class="form-select", id="firma_id") }}
                             </div>
                         </div>
 
@@ -31,11 +35,11 @@
                                 <label class="form-label d-block fw-bold mb-3 text-center">Nakliye Nasıl Yapılıyor?</label>
                                 <div class="d-flex justify-content-center gap-4">
                                     <div class="form-check form-check-inline">
-                                        <input class="form-check-input" type="radio" name="nakliye_tipi" id="tip_ozmal" value="oz_mal" checked>
-                                        <label class="form-check-label" for="tip_ozmal">Öz Mal (Bizim Araç)</label>
+                                        <input class="form-check-input" type="radio" name="nakliye_tipi" id="tip_ozmal" value="oz_mal" {{ 'checked' if form.nakliye_tipi.data != 'taseron' else '' }}>
+                                        <label class="form-check-label" for="tip_ozmal">Öz Mal (Filo Aracı)</label>
                                     </div>
                                     <div class="form-check form-check-inline">
-                                        <input class="form-check-input" type="radio" name="nakliye_tipi" id="tip_taseron" value="taseron">
+                                        <input class="form-check-input" type="radio" name="nakliye_tipi" id="tip_taseron" value="taseron" {{ 'checked' if form.nakliye_tipi.data == 'taseron' else '' }}>
                                         <label class="form-check-label" for="tip_taseron">Taşeron (Aracılık)</label>
                                     </div>
                                 </div>
@@ -72,20 +76,23 @@
 
                         <hr>
 
-                        <div class="row mb-3">
-                            <div class="col-md-4">
+                        <div class="row g-3 align-items-end mb-3">
+                            <div class="col-md-5">
                                 <label class="form-label fw-bold text-success">Müşteri Satış Tutarı (₺)</label>
                                 {{ form.tutar(class="form-control border-success", id="tutar_input", placeholder="0.00") }}
                             </div>
-                            <div class="col-md-4">
-                                <label class="form-label fw-bold">KDV Oranı (%) <small class="text-muted fw-normal">— Fatura kesilirken uygulanır</small></label>
+                            <div class="col-md-3">
+                                <label class="form-label fw-bold">KDV Oranı (%)</label>
                                 {{ form.kdv_orani(class="form-control", id="kdv_input") }}
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label fw-bold text-muted">Bilgi</label>
-                                <div class="form-control bg-light text-muted small d-flex align-items-center" style="height:38px;">
-                                    <i class="fas fa-info-circle me-1"></i> KDV fatura aşamasında hesaplanır
+                                <div class="d-flex align-items-center justify-content-between mb-2">
+                                    <label class="form-label fw-bold mb-0">Tevkifatlı</label>
+                                    <div class="form-check form-switch mb-0">
+                                        <input class="form-check-input" type="checkbox" id="tevkifat-toggle" title="Tevkifat oranı uygula">
+                                    </div>
                                 </div>
+                                {{ form.tevkifat_orani(class="form-select", id="tevkifat_orani", style="display:none;") }}
                             </div>
                         </div>
 
@@ -107,11 +114,25 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    const musteriSelect = document.getElementById('firma_id');
     const tipOzmal = document.getElementById('tip_ozmal');
     const tipTaseron = document.getElementById('tip_taseron');
     const ozmalAlani = document.getElementById('ozmal_alani');
     const taseronAlaniPlaka = document.getElementById('taseron_alani_plaka');
     const taseronDetayAlani = document.getElementById('taseron_detay_alani');
+    const tevkifatToggle = document.getElementById('tevkifat-toggle');
+    const tevkifatSelect = document.getElementById('tevkifat_orani');
+
+    if (musteriSelect) {
+        new TomSelect(musteriSelect, {
+            create: false,
+            maxOptions: null,
+            openOnFocus: true,
+            allowEmptyOption: true,
+            searchField: ['text'],
+            sortField: [{ field: 'text', direction: 'asc' }],
+        });
+    }
 
     // 1. Tip Değişimini Dinle
     function toggleFields() {
@@ -129,13 +150,24 @@ document.addEventListener('DOMContentLoaded', function() {
     tipOzmal.addEventListener('change', toggleFields);
     tipTaseron.addEventListener('change', toggleFields);
 
-    // 2. Anlık Tutar Hesaplama
-    const tutarInput = document.getElementById('tutar_input');
-    const kdvInput = document.getElementById('kdv_input');
-    const toplamLabel = document.getElementById('toplam_tutar_label');
+    function toggleTevkifat() {
+        if (!tevkifatToggle || !tevkifatSelect) {
+            return;
+        }
+        tevkifatSelect.style.display = tevkifatToggle.checked ? 'block' : 'none';
+        if (!tevkifatToggle.checked) {
+            tevkifatSelect.value = '';
+        }
+    }
 
-    // KDV hesaplaması fatura aşamasında yapılacağından canlı hesaplama kaldırıldı.
-    tutarInput.addEventListener('input', function() {});
+    if (tevkifatToggle && tevkifatSelect) {
+        tevkifatToggle.checked = !!tevkifatSelect.value;
+        tevkifatToggle.addEventListener('change', toggleTevkifat);
+        toggleTevkifat();
+    }
+
+    // 2. Anlık Tutar Hesaplama
+    toggleFields();
 });
 </script>
 {% endblock %}

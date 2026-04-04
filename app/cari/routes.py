@@ -647,7 +647,7 @@ def _get_cari_durum_raporu_verisi(sort_by, sort_dir, q):
 def cari_durum_raporu():
     try:
         page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 10, type=int)
+        per_page = request.args.get('per_page', 25, type=int)
         sort_by = request.args.get('sort_by', 'firma_adi', type=str)
         sort_dir = request.args.get('sort_dir', 'asc', type=str)
         q = (request.args.get('q', '', type=str) or '').strip()
@@ -657,7 +657,7 @@ def cari_durum_raporu():
         allowed_sort_dir = {'asc', 'desc'}
 
         if per_page not in allowed_per_page:
-            per_page = 10
+            per_page = 25
         if sort_by not in allowed_sort_by:
             sort_by = 'firma_adi'
         if sort_dir not in allowed_sort_dir:

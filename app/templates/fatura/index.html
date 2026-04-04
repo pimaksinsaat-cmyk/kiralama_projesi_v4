@@ -292,6 +292,33 @@
 <script>
     const menu = document.getElementById('sagTikMenusi');
 
+    function getContextMenuPosition(event, menuElement) {
+        const padding = 8;
+        const clickX = typeof event.clientX === 'number'
+            ? event.clientX
+            : event.pageX - window.scrollX;
+        const clickY = typeof event.clientY === 'number'
+            ? event.clientY
+            : event.pageY - window.scrollY;
+        const menuWidth = menuElement.offsetWidth || 210;
+        const menuHeight = menuElement.offsetHeight || 180;
+
+        let left = clickX;
+        let top = clickY;
+
+        if (left + menuWidth > window.innerWidth - padding) {
+            left = window.innerWidth - menuWidth - padding;
+        }
+        if (top + menuHeight > window.innerHeight - padding) {
+            top = window.innerHeight - menuHeight - padding;
+        }
+
+        return {
+            left: Math.max(padding, left),
+            top: Math.max(padding, top)
+        };
+    }
+
     function sagTikMenu(e, id, durum) {
 
         // Linkleri güncelle
@@ -337,19 +364,9 @@
 
         // Menüyü konumlandır
         menu.style.display = 'block';
-        menu.style.left    = e.pageX + 'px';
-        menu.style.top     = e.pageY + 'px';
-
-        // Ekran taşmasını önle
-        requestAnimationFrame(() => {
-            const rect = menu.getBoundingClientRect();
-            if (rect.right > window.innerWidth) {
-                menu.style.left = (e.pageX - rect.width) + 'px';
-            }
-            if (rect.bottom > window.innerHeight) {
-                menu.style.top = (e.pageY - rect.height) + 'px';
-            }
-        });
+        const position = getContextMenuPosition(e, menu);
+        menu.style.left = position.left + 'px';
+        menu.style.top = position.top + 'px';
     }
 
     function kapatMenu() {

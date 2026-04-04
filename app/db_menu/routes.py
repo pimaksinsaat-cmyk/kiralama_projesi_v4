@@ -1,7 +1,6 @@
 # app/db_menu/routes.py
 import os
-import sqlite3
-import atexit
+import subprocess
 from datetime import datetime, timedelta
 from io import BytesIO
 
@@ -28,20 +27,73 @@ MAX_YEDEK_GUN = 7  # Kaç günlük otomatik yedek saklanacak
 # Yardımcı fonksiyonlar
 # ---------------------------------------------------------------------------
 
-def _db_dosya_yolu():
-    """SQLite DB dosyasının mutlak yolunu döndürür."""
-    database = db.engine.url.database
-    if database and database != ':memory:':
-        return os.path.normpath(str(database))
-    return None
+def _db_backend_name():
+    return db.engine.url.get_backend_name()
 
 
-def _sql_dump(db_path: str) -> bytes:
-    """SQLite veritabanını SQL dump formatında bytes olarak döndürür."""
-    conn = sqlite3.connect(db_path)
-    sql = '\n'.join(conn.iterdump())
-    conn.close()
-    return sql.encode('utf-8')
+def _postgres_env(url):
+    env = os.environ.copy()
+    if url.password:
+        env['PGPASSWORD'] = url.password
+    return env
+
+
+def _postgres_dump_command(*, output_path=None):
+    url = db.engine.url
+    command = [
+        os.environ.get('PG_DUMP_BIN', 'pg_dump'),
+        '--host', url.host or 'localhost',
+        '--port', str(url.port or 5432),
+        '--username', url.username or 'postgres',
+        '--dbname', url.database or '',
+        '--encoding=UTF8',
+        '--no-owner',
+        '--no-privileges',
+        '--clean',
+        '--if-exists',
+    ]
+    if output_path:
+        command.extend(['--file', output_path])
+    return command, _postgres_env(url)
+
+
+def _sql_dump() -> bytes:
+    """Aktif veritabanı için SQL dump çıktısını bytes olarak döndürür."""
+    backend = _db_backend_name()
+    if backend == 'postgresql':
+        command, env = _postgres_dump_command()
+        try:
+            completed = subprocess.run(
+                command,
+                check=True,
+                capture_output=True,
+                env=env,
+            )
+        except FileNotFoundError as exc:
+            raise RuntimeError('pg_dump komutu bulunamadı. Uygulama ortamına postgresql-client kurulmalı.') from exc
+        except subprocess.CalledProcessError as exc:
+            stderr = exc.stderr.decode('utf-8', errors='ignore').strip()
+            raise RuntimeError(stderr or 'pg_dump başarısız oldu.') from exc
+
+        return completed.stdout
+
+    raise RuntimeError(f'Bu yedekleme akışı sadece PostgreSQL için yapılandırıldı. Aktif veritabanı: {backend}')
+
+
+def _write_backup_file(target_path: str):
+    backend = _db_backend_name()
+    if backend == 'postgresql':
+        command, env = _postgres_dump_command(output_path=target_path)
+        try:
+            subprocess.run(command, check=True, capture_output=True, env=env)
+        except FileNotFoundError as exc:
+            raise RuntimeError('pg_dump komutu bulunamadı. Uygulama ortamına postgresql-client kurulmalı.') from exc
+        except subprocess.CalledProcessError as exc:
+            stderr = exc.stderr.decode('utf-8', errors='ignore').strip()
+            raise RuntimeError(stderr or 'pg_dump başarısız oldu.') from exc
+        return
+
+    raise RuntimeError(f'Bu yedekleme akışı sadece PostgreSQL için yapılandırıldı. Aktif veritabanı: {backend}')
 
 
 def _eski_yedekleri_temizle():
@@ -86,22 +138,16 @@ def _yedek_listesi():
 def otomatik_yedek_al(app):
     """Günlük otomatik SQL yedeği alır (APScheduler tarafından çağrılır)."""
     with app.app_context():
-        db_path = _db_dosya_yolu()
-        if not db_path or not os.path.exists(db_path):
-            return
         os.makedirs(BACKUP_DIR, exist_ok=True)
         bugun = datetime.now().strftime('%Y%m%d')
         hedef = os.path.join(BACKUP_DIR, f'oto_{bugun}.sql')
         if os.path.exists(hedef):
             return  # Bugün zaten alınmış
         try:
-            conn = sqlite3.connect(db_path)
-            with open(hedef, 'w', encoding='utf-8') as f:
-                for line in conn.iterdump():
-                    f.write(line + '\n')
-            conn.close()
-        except Exception:
-            pass
+            _write_backup_file(hedef)
+        except Exception as exc:
+            app.logger.warning('Otomatik veritabanı yedeği alınamadı: %s', exc)
+            return
         _eski_yedekleri_temizle()
 
 
@@ -129,14 +175,10 @@ def inject_admin_db_backup_info():
 @login_required
 @admin_required
 def db_yedek_sql():
-    db_path = _db_dosya_yolu()
-    if not db_path or not os.path.exists(db_path):
-        flash('SQLite veritabanı dosyası bulunamadı.', 'danger')
-        return redirect(url_for('main.index'))
     try:
-        veri = _sql_dump(db_path)
+        veri = _sql_dump()
     except Exception as exc:
-        flash(f'SQL yedeği alınırken hata oluştu: {exc}', 'danger')
+        flash(f'Veritabanı yedeği alınırken hata oluştu: {exc}', 'danger')
         return redirect(url_for('main.index'))
 
     dosya_adi = f"db_yedek_{datetime.now().strftime('%Y%m%d_%H%M%S')}.sql"

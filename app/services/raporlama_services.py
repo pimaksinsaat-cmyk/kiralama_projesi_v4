@@ -549,6 +549,7 @@ class RaporlamaService:
         secenekler = []
         sort_values = {}
         groups = defaultdict(list)
+        period_days = max(cls._days_between(start_date, end_date), 1)
 
         for ekipman in ekipmanlar:
             group_label, sort_val = cls._projection_group_key(ekipman, projection_mode)
@@ -557,9 +558,11 @@ class RaporlamaService:
 
         for group_label, group_machines in groups.items():
             _, totals = cls._calculate_machine_metrics(group_machines, start_date, end_date)
-            revenue_per_available_day = (
-                totals["revenue"] / totals["available_days"] if totals["available_days"] else 0.0
+            revenue_per_work_day = (
+                totals["revenue"] / totals["work_days"] if totals["work_days"] else 0.0
             )
+            projected_work_days = period_days * (totals["utilization_pct"] / 100.0)
+            projected_revenue = revenue_per_work_day * projected_work_days
 
             secenekler.append(
                 {
@@ -567,21 +570,28 @@ class RaporlamaService:
                     "makine_sayisi": totals["machine_count"],
                     "kullanim_pct": totals["utilization_pct"],
                     "gelir": totals["revenue"],
-                    "gelir_musait_gun": revenue_per_available_day,
+                    "gelir_aktif_gun": revenue_per_work_day,
+                    "tahmini_calisma_gun": projected_work_days,
+                    "tahmini_ek_gelir": projected_revenue,
                     "skor": 0.0,
                 }
             )
 
-        max_util = max((item["kullanim_pct"] for item in secenekler), default=0.0)
-        max_rev = max((item["gelir_musait_gun"] for item in secenekler), default=0.0)
+        max_projected_revenue = max((item["tahmini_ek_gelir"] for item in secenekler), default=0.0)
 
         for item in secenekler:
-            util_score = (item["kullanim_pct"] / max_util * 100.0) if max_util else 0.0
-            rev_score = (item["gelir_musait_gun"] / max_rev * 100.0) if max_rev else 0.0
-            item["skor"] = (util_score * 0.6) + (rev_score * 0.4)
+            item["skor"] = (
+                item["tahmini_ek_gelir"] / max_projected_revenue * 100.0 if max_projected_revenue else 0.0
+            )
 
-        secenekler.sort(key=lambda item: (sort_values.get(item["kriter"], 0), item["skor"]))
-        secenekler = list(reversed(secenekler))
+        secenekler.sort(
+            key=lambda item: (
+                item["skor"],
+                item["kullanim_pct"],
+                sort_values.get(item["kriter"], 0),
+            ),
+            reverse=True,
+        )
         onerilen = secenekler[0] if secenekler else None
 
         return {
@@ -589,6 +599,7 @@ class RaporlamaService:
             "onerilen": onerilen,
             "projection_mode": projection_mode,
             "mode_options": mode_options,
+            "formula_label": "Aktif gunluk gelir x donem gunu x kullanim orani",
         }
 
     @classmethod
@@ -681,6 +692,9 @@ class RaporlamaService:
         sube_id=None,
         calisma_yuksekligi=None,
         projection_mode="yukseklik",
+        machine_search="",
+        machine_sube_id=None,
+        machine_limit=50,
     ):
         aktif_subeler = Sube.query.filter(Sube.is_active.is_(True)).order_by(Sube.isim.asc()).all()
         sube_lookup = {sube.id: sube.isim for sube in aktif_subeler}
@@ -697,6 +711,25 @@ class RaporlamaService:
             ]
         else:
             rapor_makineler = tum_kapsam_makineler
+
+        if machine_sube_id:
+            rapor_makineler = [item for item in rapor_makineler if item.sube_id == machine_sube_id]
+
+        machine_code_options = sorted(
+            {(item.kod or "").strip() for item in rapor_makineler if (item.kod or "").strip()},
+            key=lambda value: value.lower(),
+        )
+
+        normalized_machine_search = (machine_search or "").strip().lower()
+        if normalized_machine_search:
+            rapor_makineler = [
+                item for item in rapor_makineler
+                if normalized_machine_search in (item.kod or "").lower()
+            ]
+
+        allowed_machine_limits = {25, 50, 100, 99999}
+        if machine_limit not in allowed_machine_limits:
+            machine_limit = 50
 
         metrics_by_machine, machine_totals = cls._calculate_machine_metrics(
             rapor_makineler, start_date, end_date
@@ -789,6 +822,8 @@ class RaporlamaService:
                 },
             )
             transport_row = transport_metrics["branch_rows"].get(branch_id, cls._default_branch_transport_row())
+            toplam_gelir = machine_row["gelir"] + transport_row["gelir"]
+            toplam_katki = machine_row["gelir"] + transport_row["net"]
 
             branch_name = sube_lookup.get(branch_id, "Sube Atanmamis")
             branch_rows.append(
@@ -807,11 +842,20 @@ class RaporlamaService:
                     "nakliye_maliyeti": transport_row["maliyet"],
                     "nakliye_net": transport_row["net"],
                     "nakliye_karlilik": transport_row["karlilik_pct"],
+                    "toplam_gelir": toplam_gelir,
+                    "toplam_katki": toplam_katki,
                 }
             )
 
-        branch_rows.sort(key=lambda item: item["makine_geliri"] + item["nakliye_net"], reverse=True)
+        branch_total_gelir = sum(item["toplam_gelir"] for item in branch_rows)
+        for item in branch_rows:
+            item["gelir_payi"] = (item["toplam_gelir"] / branch_total_gelir * 100.0) if branch_total_gelir else 0.0
+
+        branch_rows.sort(key=lambda item: item["toplam_gelir"], reverse=True)
         machine_rows.sort(key=lambda item: item["work_days"], reverse=True)
+        machine_total_count = len(machine_rows)
+        machine_rows = machine_rows[:machine_limit]
+        machine_shown_count = len(machine_rows)
 
         projection = cls._build_projection(
             tum_kapsam_makineler,
@@ -852,6 +896,12 @@ class RaporlamaService:
                 "sube_id": sube_id,
                 "calisma_yuksekligi": calisma_yuksekligi,
                 "projection_mode": projection["projection_mode"],
+                "machine_search": machine_search,
+                "machine_sube_id": machine_sube_id,
+                "machine_limit": machine_limit,
+                "machine_total_count": machine_total_count,
+                "machine_shown_count": machine_shown_count,
             },
             "subeler": [{"id": sube.id, "isim": sube.isim} for sube in aktif_subeler],
+            "machine_code_options": machine_code_options,
         }

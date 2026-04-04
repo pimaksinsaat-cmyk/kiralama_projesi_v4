@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y \
     libreoffice \
     libxrender1 \
     libxext6 \
+    postgresql-client \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 

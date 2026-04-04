@@ -87,7 +87,7 @@
     .supplier-info { font-size: 0.75rem; color: #0d6efd; font-weight: 600; margin-top: 2px; display: block; }
     .supplier-label { color: #6c757d; font-weight: normal; font-style: italic; margin-right: 3px; }
 
-    .context-menu, .context-menu-kalem { display: none; position: absolute; background-color: white; border: 1px solid #ccc; box-shadow: 0 4px 12px rgba(0,0,0,0.2); border-radius: 6px; z-index: 1000; min-width: 200px; padding: 5px 0; }
+    .context-menu, .context-menu-kalem { display: none; position: fixed; background-color: white; border: 1px solid #ccc; box-shadow: 0 4px 12px rgba(0,0,0,0.2); border-radius: 6px; z-index: 1000; min-width: 200px; padding: 5px 0; }
     .context-menu-item { display: block; padding: 10px 15px; color: #333; text-decoration: none; font-size: 0.9em; cursor: pointer; transition: 0.2s; }
     .context-menu-item:hover { background-color: #f8f9fa; color: #007bff; }
     
@@ -546,6 +546,42 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     window.closeModals = closeModals;
 
+    function getContextMenuPosition(event, menuElement) {
+        const padding = 8;
+        const touch = event.touches?.[0] || event.changedTouches?.[0];
+        const clickX = typeof event.clientX === 'number'
+            ? event.clientX
+            : typeof event.pageX === 'number'
+                ? event.pageX - window.scrollX
+                : touch
+                    ? touch.clientX
+                    : 0;
+        const clickY = typeof event.clientY === 'number'
+            ? event.clientY
+            : typeof event.pageY === 'number'
+                ? event.pageY - window.scrollY
+                : touch
+                    ? touch.clientY
+                    : 0;
+        const menuWidth = menuElement.offsetWidth || 200;
+        const menuHeight = menuElement.offsetHeight || 180;
+
+        let left = clickX;
+        let top = clickY;
+
+        if (left + menuWidth > window.innerWidth - padding) {
+            left = window.innerWidth - menuWidth - padding;
+        }
+        if (top + menuHeight > window.innerHeight - padding) {
+            top = window.innerHeight - menuHeight - padding;
+        }
+
+        return {
+            left: Math.max(padding, left),
+            top: Math.max(padding, top)
+        };
+    }
+
     function openTarihGuncelleModal() {
         document.getElementById('modal-tarih-guncelle-kalem-id').value = state.kId;
         document.getElementById('modal-tarih-guncelle-kod').innerText = state.eKod;
@@ -615,8 +651,10 @@ document.addEventListener('DOMContentLoaded', function() {
             state.rentalId = this.dataset.kiralamaId;
             
             document.getElementById('menu-form-title').innerText = state.fNo;
-            contextMenu.style.top = e.pageY + 'px'; contextMenu.style.left = e.pageX + 'px';
             contextMenu.style.display = 'block';
+            const position = getContextMenuPosition(e, contextMenu);
+            contextMenu.style.left = position.left + 'px';
+            contextMenu.style.top = position.top + 'px';
         });
     });
 
@@ -662,9 +700,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 document.getElementById('menu-degisim-iptal').style.display = 'block';
             }
 
-            contextMenuKalem.style.top = e.pageY + 'px';
-            contextMenuKalem.style.left = e.pageX + 'px';
             contextMenuKalem.style.display = 'block';
+            const position = getContextMenuPosition(e, contextMenuKalem);
+            contextMenuKalem.style.left = position.left + 'px';
+            contextMenuKalem.style.top = position.top + 'px';
         });
     });
 
@@ -680,11 +719,10 @@ document.addEventListener('DOMContentLoaded', function() {
         state.rentalId = row.dataset.kiralamaId;
         
         document.getElementById('menu-form-title').innerText = state.fNo;
-        const x = e.pageX || (e.touches ? e.touches[0].pageX : 0);
-        const y = e.pageY || (e.touches ? e.touches[0].pageY : 0);
-        contextMenu.style.left = x + 'px';
-        contextMenu.style.top = y + 'px';
         contextMenu.style.display = 'block';
+        const position = getContextMenuPosition(e, contextMenu);
+        contextMenu.style.left = position.left + 'px';
+        contextMenu.style.top = position.top + 'px';
     };
 
     const openItemMenu = (e, item) => {
@@ -702,11 +740,10 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('menu-tarih-guncelle').style.display = !done ? 'block' : 'none';
         document.getElementById('menu-iptal').style.display = done ? 'block' : 'none';
 
-        const x = e.pageX || (e.touches ? e.touches[0].pageX : 0);
-        const y = e.pageY || (e.touches ? e.touches[0].pageY : 0);
-        contextMenuKalem.style.left = x + 'px';
-        contextMenuKalem.style.top = y + 'px';
         contextMenuKalem.style.display = 'block';
+        const position = getContextMenuPosition(e, contextMenuKalem);
+        contextMenuKalem.style.left = position.left + 'px';
+        contextMenuKalem.style.top = position.top + 'px';
     };
 
     // --- OLAY DİNLEYİCİLERİ (iPHONE İÇİN PASSIVE FALSE YAPILDI) ---

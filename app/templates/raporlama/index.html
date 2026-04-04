@@ -17,6 +17,10 @@
                 <input type="hidden" id="projectionModeHiddenInput" name="projection_mode" value="{{ dashboard.filters.projection_mode }}">
                 <input type="hidden" id="subeIdHiddenInput" name="sube_id" value="{{ dashboard.filters.sube_id or '' }}">
                 <input type="hidden" id="calismaYuksekligiHiddenInput" name="calisma_yuksekligi" value="{{ dashboard.filters.calisma_yuksekligi or '' }}">
+                <input type="hidden" id="machineSearchHiddenInput" name="machine_search" value="{{ dashboard.filters.machine_search or '' }}">
+                <input type="hidden" id="machineSubeHiddenInput" name="machine_sube_id" value="{{ dashboard.filters.machine_sube_id or '' }}">
+                <input type="hidden" id="machineLimitHiddenInput" name="machine_limit" value="{{ dashboard.filters.machine_limit or 50 }}">
+                <input type="hidden" id="activeTabHiddenInput" name="active_tab" value="{{ dashboard.filters.active_tab or 'genel' }}">
                 <div class="col-md-3">
                     <label class="form-label">Baslangic</label>
                     <input id="startDateInput" class="form-control" type="date" name="start_date" value="{{ dashboard.filters.start_date }}">
@@ -64,29 +68,29 @@
 
     <ul class="nav nav-tabs mb-3" id="raporlamaTabs" role="tablist">
         <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="genel-tab" data-bs-toggle="tab" data-bs-target="#genel-tab-pane" type="button" role="tab" aria-controls="genel-tab-pane" aria-selected="true">Genel Bakis</button>
+            <button class="nav-link {{ 'active' if (dashboard.filters.active_tab or 'genel') == 'genel' else '' }}" id="genel-tab" data-tab-value="genel" data-bs-toggle="tab" data-bs-target="#genel-tab-pane" type="button" role="tab" aria-controls="genel-tab-pane" aria-selected="{{ 'true' if (dashboard.filters.active_tab or 'genel') == 'genel' else 'false' }}">Genel Bakis</button>
         </li>
         <li class="nav-item" role="presentation">
-            <button class="nav-link" id="sube-tab" data-bs-toggle="tab" data-bs-target="#sube-tab-pane" type="button" role="tab" aria-controls="sube-tab-pane" aria-selected="false">Sube Bazli Ozet</button>
+            <button class="nav-link {{ 'active' if dashboard.filters.active_tab == 'sube' else '' }}" id="sube-tab" data-tab-value="sube" data-bs-toggle="tab" data-bs-target="#sube-tab-pane" type="button" role="tab" aria-controls="sube-tab-pane" aria-selected="{{ 'true' if dashboard.filters.active_tab == 'sube' else 'false' }}">Sube Bazli Ozet</button>
         </li>
         <li class="nav-item" role="presentation">
-            <button class="nav-link" id="nakliye-tab" data-bs-toggle="tab" data-bs-target="#nakliye-tab-pane" type="button" role="tab" aria-controls="nakliye-tab-pane" aria-selected="false">Nakliye</button>
+            <button class="nav-link {{ 'active' if dashboard.filters.active_tab == 'nakliye' else '' }}" id="nakliye-tab" data-tab-value="nakliye" data-bs-toggle="tab" data-bs-target="#nakliye-tab-pane" type="button" role="tab" aria-controls="nakliye-tab-pane" aria-selected="{{ 'true' if dashboard.filters.active_tab == 'nakliye' else 'false' }}">Nakliye</button>
         </li>
         <li class="nav-item" role="presentation">
-            <button class="nav-link" id="makine-tab" data-bs-toggle="tab" data-bs-target="#makine-tab-pane" type="button" role="tab" aria-controls="makine-tab-pane" aria-selected="false">Makine Verimlilik</button>
+            <button class="nav-link {{ 'active' if dashboard.filters.active_tab == 'makine' else '' }}" id="makine-tab" data-tab-value="makine" data-bs-toggle="tab" data-bs-target="#makine-tab-pane" type="button" role="tab" aria-controls="makine-tab-pane" aria-selected="{{ 'true' if dashboard.filters.active_tab == 'makine' else 'false' }}">Makine Verimlilik</button>
         </li>
         <li class="nav-item" role="presentation">
-            <button class="nav-link" id="harici-kiralama-tab" data-bs-toggle="tab" data-bs-target="#harici-kiralama-tab-pane" type="button" role="tab" aria-controls="harici-kiralama-tab-pane" aria-selected="false">Harici Kiralama</button>
+            <button class="nav-link {{ 'active' if dashboard.filters.active_tab == 'harici-kiralama' else '' }}" id="harici-kiralama-tab" data-tab-value="harici-kiralama" data-bs-toggle="tab" data-bs-target="#harici-kiralama-tab-pane" type="button" role="tab" aria-controls="harici-kiralama-tab-pane" aria-selected="{{ 'true' if dashboard.filters.active_tab == 'harici-kiralama' else 'false' }}">Harici Kiralama</button>
         </li>
         <li class="nav-item" role="presentation">
-            <button class="nav-link" id="projeksiyon-tab" data-bs-toggle="tab" data-bs-target="#projeksiyon-tab-pane" type="button" role="tab" aria-controls="projeksiyon-tab-pane" aria-selected="false">Projeksiyon</button>
+            <button class="nav-link {{ 'active' if dashboard.filters.active_tab == 'projeksiyon' else '' }}" id="projeksiyon-tab" data-tab-value="projeksiyon" data-bs-toggle="tab" data-bs-target="#projeksiyon-tab-pane" type="button" role="tab" aria-controls="projeksiyon-tab-pane" aria-selected="{{ 'true' if dashboard.filters.active_tab == 'projeksiyon' else 'false' }}">Projeksiyon</button>
         </li>
     </ul>
 
     <div class="tab-content" id="raporlamaTabsContent">
-        <div class="tab-pane fade show active" id="genel-tab-pane" role="tabpanel" aria-labelledby="genel-tab" tabindex="0">
+        <div class="tab-pane fade {{ 'show active' if (dashboard.filters.active_tab or 'genel') == 'genel' else '' }}" id="genel-tab-pane" role="tabpanel" aria-labelledby="genel-tab" tabindex="0">
             <div class="row g-3 mb-4">
-                <div class="col-md-3">
+                <div class="col-md-4">
                     <div class="card border-0 shadow-sm h-100">
                         <div class="card-body">
                             <small class="text-muted d-block">Makine Kullanim Orani</small>
@@ -95,7 +99,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-4">
                     <div class="card border-0 shadow-sm h-100">
                         <div class="card-body">
                             <small class="text-muted d-block">Makine Geliri</small>
@@ -104,16 +108,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="col-md-3">
-                    <div class="card border-0 shadow-sm h-100">
-                        <div class="card-body">
-                            <small class="text-muted d-block">Nakliye Net Getiri</small>
-                            <h4 class="mb-0">{{ '{:,.0f}'.format(dashboard.summary.transport_net) }} TL</h4>
-                            <small class="text-muted">Karlilik: {{ '%.1f'|format(dashboard.summary.transport_margin_pct) }}%</small>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3">
+                <div class="col-md-4">
                     <div class="card border-0 shadow-sm h-100">
                         <div class="card-body">
                             <small class="text-muted d-block">Nakliye Ciro / Sefer</small>
@@ -188,7 +183,7 @@
             </div>
         </div>
 
-        <div class="tab-pane fade" id="harici-kiralama-tab-pane" role="tabpanel" aria-labelledby="harici-kiralama-tab" tabindex="0">
+        <div class="tab-pane fade {{ 'show active' if dashboard.filters.active_tab == 'harici-kiralama' else '' }}" id="harici-kiralama-tab-pane" role="tabpanel" aria-labelledby="harici-kiralama-tab" tabindex="0">
             <div class="card border-0 shadow-sm mb-4">
                 <div class="card-header bg-white fw-semibold">Dis Tedarik Islemleri</div>
                 <div class="card-body table-responsive">
@@ -232,49 +227,41 @@
             </div>
         </div>
 
-        <div class="tab-pane fade" id="makine-tab-pane" role="tabpanel" aria-labelledby="makine-tab" tabindex="0">
+        <div class="tab-pane fade {{ 'show active' if dashboard.filters.active_tab == 'makine' else '' }}" id="makine-tab-pane" role="tabpanel" aria-labelledby="makine-tab" tabindex="0">
             <div class="card border-0 shadow-sm mb-4">
                 <div class="card-header bg-white fw-semibold">Makine Bazli Verimlilik</div>
                 <div class="card-body">
                     <div class="row g-2 align-items-end mb-2">
                         <div class="col-md-3">
-                            <label class="form-label form-label-sm mb-1">Calisma Yuksekligi (Donem Filtresi)</label>
-                            <div class="d-flex gap-2">
-                                <input id="machinePeriodHeightInput" type="number" min="1" step="1" class="form-control form-control-sm" placeholder="Orn: 8" value="{{ dashboard.filters.calisma_yuksekligi or '' }}">
-                                <button id="machinePeriodHeightApply" type="button" class="btn btn-outline-primary btn-sm">Uygula</button>
-                            </div>
+                            <label class="form-label form-label-sm mb-1">Calisma Yuksekligi</label>
+                            <input id="machinePeriodHeightInput" type="number" min="1" step="1" class="form-control form-control-sm" placeholder="Orn: 8" value="{{ dashboard.filters.calisma_yuksekligi or '' }}">
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label form-label-sm mb-1">PM / Sube Ara</label>
-                            <input id="machineSearchInput" type="text" class="form-control form-control-sm" placeholder="Orn: PM01 veya Ankara">
+                            <label class="form-label form-label-sm mb-1">Makine Kodu</label>
+                            <input id="machineSearchInput" type="text" list="machineCodeOptions" class="form-control form-control-sm" placeholder="Orn: PM01" value="{{ dashboard.filters.machine_search or '' }}">
+                            <datalist id="machineCodeOptions">
+                                {% for machine_code in dashboard.machine_code_options %}
+                                <option value="{{ machine_code }}"></option>
+                                {% endfor %}
+                            </datalist>
                         </div>
                         <div class="col-md-3">
                             <label class="form-label form-label-sm mb-1">Sube</label>
                             <select id="machineSubeFilter" class="form-select form-select-sm">
                                 <option value="">Tum Subeler</option>
                                 {% for sube in dashboard.subeler %}
-                                <option value="{{ sube.isim|lower }}">{{ sube.isim }}</option>
+                                <option value="{{ sube.id }}" {% if dashboard.filters.machine_sube_id == sube.id %}selected{% endif %}>{{ sube.isim }}</option>
                                 {% endfor %}
                             </select>
                         </div>
                         <div class="col-md-2">
-                            <label class="form-label form-label-sm mb-1">Yukseklik</label>
-                            <input id="machineHeightFilter" type="number" min="1" class="form-control form-control-sm" placeholder="mt">
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label form-label-sm mb-1">Maks Satir</label>
-                            <div class="d-flex gap-2">
-                                <select id="machineLimitFilter" class="form-select form-select-sm">
-                                    <option value="25">25</option>
-                                    <option value="50" selected>50</option>
-                                    <option value="100">100</option>
-                                    <option value="99999">Tumunu Goster</option>
-                                </select>
-                                <button id="machineFilterReset" type="button" class="btn btn-outline-secondary btn-sm">Temizle</button>
+                            <label class="form-label form-label-sm mb-1 d-none d-md-block">&nbsp;</label>
+                            <div class="d-flex gap-2 justify-content-md-end">
+                                <button id="machinePeriodHeightApply" type="button" class="btn btn-outline-primary btn-sm">Uygula</button>
+                                <button id="machineFilterReset" type="button" class="btn btn-outline-secondary btn-sm" title="Filtreleri Sifirla" aria-label="Filtreleri Sifirla">
+                                    <i class="fas fa-sync-alt"></i>
+                                </button>
                             </div>
-                        </div>
-                        <div class="col-12">
-                            <small id="machineFilterInfo" class="text-muted">Makine listesi yukleniyor...</small>
                         </div>
                     </div>
 
@@ -293,7 +280,7 @@
                         </thead>
                         <tbody>
                             {% for row in dashboard.machine_rows %}
-                            <tr class="machine-row" data-kod="{{ row.kod|lower }}" data-sube="{{ row.sube|lower }}" data-yukseklik="{{ row.yukseklik }}" data-utilization="{{ '%.1f'|format(row.utilization_pct) }}">
+                            <tr>
                                 <td>{{ row.kod }}</td>
                                 <td>{{ row.sube }}</td>
                                 <td class="text-end">{{ row.yukseklik }} mt</td>
@@ -307,17 +294,26 @@
                                 <td colspan="7" class="text-center text-muted py-3">Bu filtrede makine kaydi yok.</td>
                             </tr>
                             {% endfor %}
-                            <tr id="machineNoResultRow" class="d-none">
-                                <td colspan="7" class="text-center text-muted py-3">Filtreye uygun kayit bulunamadi.</td>
-                            </tr>
                         </tbody>
                     </table>
+                    </div>
+                    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-end gap-2 mt-3">
+                        <div class="w-100" style="max-width: 220px;">
+                            <label class="form-label form-label-sm mb-1">Maks Satir Goster</label>
+                            <select id="machineLimitFilter" class="form-select form-select-sm">
+                                <option value="25" {% if dashboard.filters.machine_limit == 25 %}selected{% endif %}>25</option>
+                                <option value="50" {% if dashboard.filters.machine_limit == 50 %}selected{% endif %}>50</option>
+                                <option value="100" {% if dashboard.filters.machine_limit == 100 %}selected{% endif %}>100</option>
+                                <option value="99999" {% if dashboard.filters.machine_limit == 99999 %}selected{% endif %}>Tumunu Goster</option>
+                            </select>
+                        </div>
+                        <small id="machineFilterInfo" class="text-muted">Gosterilen {{ dashboard.filters.machine_shown_count }} / {{ dashboard.filters.machine_total_count }} kayit</small>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="tab-pane fade" id="nakliye-tab-pane" role="tabpanel" aria-labelledby="nakliye-tab" tabindex="0">
+        <div class="tab-pane fade {{ 'show active' if dashboard.filters.active_tab == 'nakliye' else '' }}" id="nakliye-tab-pane" role="tabpanel" aria-labelledby="nakliye-tab" tabindex="0">
             <div class="card border-0 shadow-sm mb-4">
                 <div class="card-header bg-white fw-semibold">Nakliye Araci Getirileri</div>
                 <div class="card-body table-responsive" style="max-height: 520px;">
@@ -403,6 +399,7 @@
                     </select>
                 </div>
                 <div class="card-body">
+                    <p class="text-muted small mb-2">Formul: {{ dashboard.projection.formula_label }}</p>
                     <div class="table-responsive mb-2">
                         <table class="table table-sm mb-0">
                             <thead>
@@ -410,7 +407,8 @@
                                     <th>Kriter</th>
                                     <th class="text-end">Makine</th>
                                     <th class="text-end">Kullanim %</th>
-                                    <th class="text-end">Gelir / Musait Gun</th>
+                                    <th class="text-end">Aktif Gunluk Gelir</th>
+                                    <th class="text-end">Tahmini Ek Donem Geliri</th>
                                     <th class="text-end">Skor</th>
                                 </tr>
                             </thead>
@@ -420,12 +418,13 @@
                                     <td>{{ secenek.kriter }}</td>
                                     <td class="text-end">{{ secenek.makine_sayisi }}</td>
                                     <td class="text-end">{{ '%.1f'|format(secenek.kullanim_pct) }}%</td>
-                                    <td class="text-end">{{ '{:,.0f}'.format(secenek.gelir_musait_gun) }} TL</td>
+                                    <td class="text-end">{{ '{:,.0f}'.format(secenek.gelir_aktif_gun) }} TL</td>
+                                    <td class="text-end">{{ '{:,.0f}'.format(secenek.tahmini_ek_gelir) }} TL</td>
                                     <td class="text-end">{{ '%.1f'|format(secenek.skor) }}</td>
                                 </tr>
                                 {% else %}
                                 <tr>
-                                    <td colspan="5" class="text-center text-muted py-3">Projeksiyon verisi bulunamadi.</td>
+                                    <td colspan="6" class="text-center text-muted py-3">Projeksiyon verisi bulunamadi.</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -433,14 +432,14 @@
                     </div>
                     {% if dashboard.projection.onerilen %}
                     <div class="alert alert-info mb-0 py-2">
-                        Oneri: Secilen kiyas tipinde <strong>{{ dashboard.projection.onerilen.kriter }}</strong> grubu daha verimli gorunuyor.
+                        Oneri: Secilen kiyas tipinde <strong>{{ dashboard.projection.onerilen.kriter }}</strong> grubu, benzer bir donemde ek bir makinede yaklasik <strong>{{ '{:,.0f}'.format(dashboard.projection.onerilen.tahmini_ek_gelir) }} TL</strong> gelir potansiyeli gosteriyor.
                     </div>
                     {% endif %}
                 </div>
             </div>
         </div>
 
-        <div class="tab-pane fade" id="sube-tab-pane" role="tabpanel" aria-labelledby="sube-tab" tabindex="0">
+        <div class="tab-pane fade {{ 'show active' if dashboard.filters.active_tab == 'sube' else '' }}" id="sube-tab-pane" role="tabpanel" aria-labelledby="sube-tab" tabindex="0">
             <div class="card border-0 shadow-sm mb-3">
                 <div class="card-body py-3">
                     <div class="row g-2 align-items-end">
@@ -470,10 +469,10 @@
                                 <th class="text-end">Makine</th>
                                 <th class="text-end">Calisma / Musait</th>
                                 <th class="text-end">Calisma %</th>
-                                <th class="text-end">Sirket Payi %</th>
+                                <th class="text-end">Makine Geliri</th>
                                 <th class="text-end">Nakliye Sefer</th>
                                 <th class="text-end">Nakliye Gelir</th>
-                                <th class="text-end">Nakliye Net</th>
+                                <th class="text-end">Toplam Gelir</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -483,10 +482,10 @@
                                 <td class="text-end">{{ row.makine_sayisi }}</td>
                                 <td class="text-end">{{ row.work_days }} / {{ row.available_days }}</td>
                                 <td class="text-end">{{ '%.1f'|format(row.utilization_pct) }}%</td>
-                                <td class="text-end">{{ '%.1f'|format(row.makine_calisma_payi) }}%</td>
+                                <td class="text-end">{{ '{:,.0f}'.format(row.makine_geliri) }} TL</td>
                                 <td class="text-end">{{ row.nakliye_sefer }}</td>
                                 <td class="text-end">{{ '{:,.0f}'.format(row.nakliye_geliri) }} TL</td>
-                                <td class="text-end">{{ '{:,.0f}'.format(row.nakliye_net) }} TL</td>
+                                <td class="text-end fw-semibold">{{ '{:,.0f}'.format(row.toplam_gelir) }} TL</td>
                             </tr>
                             {% else %}
                             <tr>
@@ -499,13 +498,13 @@
             </div>
 
             <div class="card border-0 shadow-sm mb-4">
-                <div class="card-header bg-white fw-semibold">Subelerin Sirket Toplamina Orani</div>
+                <div class="card-header bg-white fw-semibold">Subelerin Toplam Gelir Icindeki Payi</div>
                 <div class="card-body">
                     {% if dashboard.branch_rows %}
                     <div class="mx-auto" style="max-width: 460px;">
                         <canvas id="branchSharePieChart"></canvas>
                         <script id="branchShareLabelsJson" type="application/json">{{ dashboard.branch_rows | map(attribute='sube') | list | tojson }}</script>
-                        <script id="branchShareValuesJson" type="application/json">{{ dashboard.branch_rows | map(attribute='makine_calisma_payi') | list | tojson }}</script>
+                        <script id="branchShareValuesJson" type="application/json">{{ dashboard.branch_rows | map(attribute='gelir_payi') | list | tojson }}</script>
                     </div>
                     {% else %}
                     <p class="text-muted mb-0">Grafik icin sube verisi bulunamadi.</p>
@@ -529,9 +528,19 @@
         const projectionModeHiddenInput = document.getElementById('projectionModeHiddenInput');
         const subeIdHiddenInput = document.getElementById('subeIdHiddenInput');
         const calismaYuksekligiHiddenInput = document.getElementById('calismaYuksekligiHiddenInput');
+        const machineSearchHiddenInput = document.getElementById('machineSearchHiddenInput');
+        const machineSubeHiddenInput = document.getElementById('machineSubeHiddenInput');
+        const machineLimitHiddenInput = document.getElementById('machineLimitHiddenInput');
+        const activeTabHiddenInput = document.getElementById('activeTabHiddenInput');
         const branchSubeSelect = document.getElementById('branchSubeSelect');
         const machinePeriodHeightInput = document.getElementById('machinePeriodHeightInput');
         const machinePeriodHeightApply = document.getElementById('machinePeriodHeightApply');
+        const machineSearchInput = document.getElementById('machineSearchInput');
+        const machineSubeFilter = document.getElementById('machineSubeFilter');
+        const machineLimitFilter = document.getElementById('machineLimitFilter');
+        const machineFilterReset = document.getElementById('machineFilterReset');
+        const tabButtons = document.querySelectorAll('#raporlamaTabs [data-bs-toggle="tab"]');
+        const parentForm = startInput.closest('form');
 
         if (!startInput || !endInput || !buttons.length) {
             return;
@@ -543,11 +552,18 @@
         }
 
         function submitParentForm() {
-            const form = startInput.closest('form');
-            if (form) {
-                form.submit();
+            if (parentForm) {
+                parentForm.submit();
             }
         }
+
+        tabButtons.forEach((button) => {
+            button.addEventListener('shown.bs.tab', function () {
+                if (activeTabHiddenInput) {
+                    activeTabHiddenInput.value = button.dataset.tabValue || 'genel';
+                }
+            });
+        });
 
         buttons.forEach((button) => {
             button.addEventListener('click', function () {
@@ -583,11 +599,30 @@
             });
         }
 
+        function syncMachineFilterInputs() {
+            if (machineSearchHiddenInput && machineSearchInput) {
+                machineSearchHiddenInput.value = (machineSearchInput.value || '').trim();
+            }
+            if (machineSubeHiddenInput && machineSubeFilter) {
+                machineSubeHiddenInput.value = machineSubeFilter.value || '';
+            }
+            if (machineLimitHiddenInput && machineLimitFilter) {
+                machineLimitHiddenInput.value = machineLimitFilter.value || '50';
+            }
+        }
+
+        if (parentForm) {
+            parentForm.addEventListener('submit', function () {
+                syncMachineFilterInputs();
+            });
+        }
+
         function applyMachinePeriodHeightFilter() {
             if (!machinePeriodHeightInput || !calismaYuksekligiHiddenInput) {
                 return;
             }
             calismaYuksekligiHiddenInput.value = (machinePeriodHeightInput.value || '').trim();
+            syncMachineFilterInputs();
             submitParentForm();
         }
 
@@ -603,86 +638,52 @@
                 }
             });
         }
-    })();
 
-    (function () {
-        const searchInput = document.getElementById('machineSearchInput');
-        const subeFilter = document.getElementById('machineSubeFilter');
-        const heightFilter = document.getElementById('machineHeightFilter');
-        const limitFilter = document.getElementById('machineLimitFilter');
-        const resetButton = document.getElementById('machineFilterReset');
-        const infoText = document.getElementById('machineFilterInfo');
-        const rows = Array.from(document.querySelectorAll('#machineTable .machine-row'));
-        const noResultRow = document.getElementById('machineNoResultRow');
-
-        if (!rows.length) {
-            return;
-        }
-
-        function applyMachineFilters() {
-            const q = (searchInput.value || '').trim().toLowerCase();
-            const sube = (subeFilter.value || '').trim().toLowerCase();
-            const height = parseInt((heightFilter.value || '').trim(), 10);
-            const maxRows = parseInt(limitFilter.value || '50', 10);
-
-            let matched = 0;
-            let shown = 0;
-
-            rows.forEach((row) => {
-                const kod = row.dataset.kod || '';
-                const rowSube = row.dataset.sube || '';
-                const rowHeight = parseInt(row.dataset.yukseklik || '0', 10);
-
-                const qPass = !q || kod.includes(q) || rowSube.includes(q);
-                const subePass = !sube || rowSube === sube;
-                const heightPass = Number.isNaN(height) || rowHeight === height;
-                const match = qPass && subePass && heightPass;
-
-                if (match) {
-                    matched += 1;
-                    if (shown < maxRows) {
-                        row.classList.remove('d-none');
-                        shown += 1;
-                    } else {
-                        row.classList.add('d-none');
-                    }
-                } else {
-                    row.classList.add('d-none');
+        if (machineSearchInput) {
+            machineSearchInput.addEventListener('keydown', function (event) {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    syncMachineFilterInputs();
+                    submitParentForm();
                 }
             });
-
-            if (infoText) {
-                infoText.textContent = 'Gosterilen ' + shown + ' / ' + matched + ' kayit';
-            }
-
-            if (noResultRow) {
-                if (matched === 0) {
-                    noResultRow.classList.remove('d-none');
-                } else {
-                    noResultRow.classList.add('d-none');
-                }
-            }
         }
 
-        [searchInput, subeFilter, heightFilter, limitFilter].forEach((el) => {
-            if (!el) {
-                return;
-            }
-            el.addEventListener('input', applyMachineFilters);
-            el.addEventListener('change', applyMachineFilters);
-        });
-
-        if (resetButton) {
-            resetButton.addEventListener('click', function () {
-                searchInput.value = '';
-                subeFilter.value = '';
-                heightFilter.value = '';
-                limitFilter.value = '50';
-                applyMachineFilters();
+        if (machineSubeFilter) {
+            machineSubeFilter.addEventListener('change', function () {
+                syncMachineFilterInputs();
+                submitParentForm();
             });
         }
 
-        applyMachineFilters();
+        if (machineLimitFilter) {
+            machineLimitFilter.addEventListener('change', function () {
+                syncMachineFilterInputs();
+                submitParentForm();
+            });
+        }
+
+        if (machineFilterReset) {
+            machineFilterReset.addEventListener('click', function () {
+                if (machinePeriodHeightInput) {
+                    machinePeriodHeightInput.value = '';
+                }
+                if (machineSearchInput) {
+                    machineSearchInput.value = '';
+                }
+                if (machineSubeFilter) {
+                    machineSubeFilter.value = '';
+                }
+                if (machineLimitFilter) {
+                    machineLimitFilter.value = '50';
+                }
+                if (calismaYuksekligiHiddenInput) {
+                    calismaYuksekligiHiddenInput.value = '';
+                }
+                syncMachineFilterInputs();
+                submitParentForm();
+            });
+        }
     })();
 
     (function () {

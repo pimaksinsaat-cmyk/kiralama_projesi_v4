@@ -1,37 +1,67 @@
 import json
-import sqlite3
-from pathlib import Path
+import os
+import sys
+
+from sqlalchemy import inspect, text
 
 
-DB_PATH = Path(__file__).resolve().parents[1] / 'app.db'
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
+
+from app import create_app
+from app.extensions import db
 
 
 def quote(name: str) -> str:
     return '"' + name.replace('"', '""') + '"'
 
 
-def get_tables(cursor):
-    rows = cursor.execute(
-        "select name from sqlite_master where type='table' and name not like 'sqlite_%' order by name"
-    ).fetchall()
-    return [row[0] for row in rows]
+def get_tables(inspector):
+    return sorted(inspector.get_table_names())
 
 
-def delete_fk_orphans(cursor):
+def get_single_primary_key(inspector, table):
+    columns = inspector.get_pk_constraint(table).get('constrained_columns') or []
+    if len(columns) == 1:
+        return columns[0]
+    return None
+
+
+def get_simple_foreign_keys(inspector, table):
+    for fk in inspector.get_foreign_keys(table):
+        child_columns = fk.get('constrained_columns') or []
+        parent_columns = fk.get('referred_columns') or []
+        parent_table = fk.get('referred_table')
+
+        if len(child_columns) != 1 or len(parent_columns) != 1 or not parent_table:
+            continue
+
+        yield {
+            'child_col': child_columns[0],
+            'parent_table': parent_table,
+            'parent_col': parent_columns[0],
+        }
+
+
+def delete_fk_orphans(connection, inspector):
     deleted = []
-    tables = get_tables(cursor)
+    tables = get_tables(inspector)
 
     changed = True
     while changed:
         changed = False
         for table in tables:
-            fks = cursor.execute(f"PRAGMA foreign_key_list({quote(table)})").fetchall()
-            for fk in fks:
-                child_col = fk[3]
-                parent_table = fk[2]
-                parent_col = fk[4]
+            pk_col = get_single_primary_key(inspector, table)
+            if not pk_col:
+                continue
 
-                count_query = f'''
+            for fk in get_simple_foreign_keys(inspector, table):
+                child_col = fk['child_col']
+                parent_table = fk['parent_table']
+                parent_col = fk['parent_col']
+
+                count_query = text(f'''
                     select count(*)
                     from {quote(table)} c
                     where c.{quote(child_col)} is not null
@@ -39,15 +69,15 @@ def delete_fk_orphans(cursor):
                           select 1 from {quote(parent_table)} p
                           where p.{quote(parent_col)} = c.{quote(child_col)}
                       )
-                '''
-                count = cursor.execute(count_query).fetchone()[0]
+                ''')
+                count = connection.execute(count_query).scalar_one()
                 if not count:
                     continue
 
-                delete_query = f'''
+                delete_query = text(f'''
                     delete from {quote(table)}
-                    where rowid in (
-                        select c.rowid
+                    where {quote(pk_col)} in (
+                        select c.{quote(pk_col)}
                         from {quote(table)} c
                         where c.{quote(child_col)} is not null
                           and not exists (
@@ -55,8 +85,8 @@ def delete_fk_orphans(cursor):
                               where p.{quote(parent_col)} = c.{quote(child_col)}
                           )
                     )
-                '''
-                cursor.execute(delete_query)
+                ''')
+                connection.execute(delete_query)
                 deleted.append({
                     'type': 'foreign_key',
                     'table': table,
@@ -69,7 +99,7 @@ def delete_fk_orphans(cursor):
     return deleted
 
 
-def delete_logical_orphans(cursor):
+def delete_logical_orphans(connection):
     deleted = []
 
     logical_rules = [
@@ -112,10 +142,10 @@ def delete_logical_orphans(cursor):
     ]
 
     for rule in logical_rules:
-        count = cursor.execute(rule['count_sql']).fetchone()[0]
+        count = connection.execute(text(rule['count_sql'])).scalar_one()
         if not count:
             continue
-        cursor.execute(rule['delete_sql'])
+        connection.execute(text(rule['delete_sql']))
         deleted.append({
             'type': 'logical',
             'rule': rule['name'],
@@ -125,22 +155,49 @@ def delete_logical_orphans(cursor):
     return deleted
 
 
+def find_remaining_fk_issues(connection, inspector):
+    issues = []
+
+    for table in get_tables(inspector):
+        for fk in get_simple_foreign_keys(inspector, table):
+            count_query = text(f'''
+                select count(*)
+                from {quote(table)} c
+                where c.{quote(fk['child_col'])} is not null
+                  and not exists (
+                      select 1 from {quote(fk['parent_table'])} p
+                      where p.{quote(fk['parent_col'])} = c.{quote(fk['child_col'])}
+                  )
+            ''')
+            count = connection.execute(count_query).scalar_one()
+            if count:
+                issues.append({
+                    'table': table,
+                    'column': fk['child_col'],
+                    'parent_table': fk['parent_table'],
+                    'count': count,
+                })
+
+    return issues
+
+
 def main():
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
+    app = create_app()
 
-    fk_deleted = delete_fk_orphans(cursor)
-    logical_deleted = delete_logical_orphans(cursor)
+    with app.app_context():
+        inspector = inspect(db.engine)
 
-    conn.commit()
-    remaining_fk = cursor.execute('PRAGMA foreign_key_check').fetchall()
-    conn.close()
+        with db.engine.begin() as connection:
+            fk_deleted = delete_fk_orphans(connection, inspector)
+            logical_deleted = delete_logical_orphans(connection)
+            remaining_fk = find_remaining_fk_issues(connection, inspector)
 
-    print(json.dumps({
-        'db_path': str(DB_PATH),
-        'deleted': fk_deleted + logical_deleted,
-        'remaining_foreign_key_issues': remaining_fk,
-    }, ensure_ascii=False, indent=2, default=str))
+        print(json.dumps({
+            'database_backend': db.engine.url.get_backend_name(),
+            'database_name': db.engine.url.database,
+            'deleted': fk_deleted + logical_deleted,
+            'remaining_foreign_key_issues': remaining_fk,
+        }, ensure_ascii=False, indent=2, default=str))
 
 
 if __name__ == '__main__':

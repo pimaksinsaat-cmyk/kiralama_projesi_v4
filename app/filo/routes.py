@@ -108,9 +108,9 @@ def _to_decimal(value, default='0'):
 def index():
     try:
         page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 10, type=int)
+        per_page = request.args.get('per_page', 25, type=int)
         if per_page not in {10, 25, 50, 100}:
-            per_page = 10
+            per_page = 25
         q = request.args.get('q', '', type=str)
 
         # Detayli filtre parametreleri (filo/index modal filtresi)
@@ -239,7 +239,7 @@ def index():
         flash(f"Hata: {str(e)}", "danger")
         ekipmanlar = []
         pagination = None
-        per_page = 10
+        per_page = 25
         subeler = []
         tipler = []
         markalar = []
@@ -1006,9 +1006,9 @@ def kiralama_gecmisi(ekipman_id):
     
     # Sayfalama
     _ALLOWED_PER_PAGE = {10, 20, 25, 50, 100}
-    per_page = request.args.get('per_page', 20, type=int)
+    per_page = request.args.get('per_page', 25, type=int)
     if per_page not in _ALLOWED_PER_PAGE:
-        per_page = 20
+        per_page = 25
     page = request.args.get('page', 1, type=int)
     pagination = ListPagination(kiralama_detaylari_tumu, page, per_page)
     

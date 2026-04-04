@@ -507,11 +507,9 @@ class KiralamaService(BaseService):
 
         toplam_tahakkuk = Decimal('0.00')
         toplam_sozlesme = Decimal('0.00')
-        aktif_kalem_var = False
         for kalem in kiralama.kalemler:
-            if not kalem.is_active:
+            if getattr(kalem, 'is_deleted', False):
                 continue
-            aktif_kalem_var = True
             toplam_tahakkuk += KiralamaService._hesapla_bekleyen_kalem_tutari(kalem)
             toplam_sozlesme += KiralamaService._hesapla_sozlesme_kalem_tutari(kalem)
 

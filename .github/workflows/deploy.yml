@@ -20,29 +20,10 @@ jobs:
             git pull origin main
             source venv/bin/activate
             pip install -r requirements.txt
+            export FLASK_APP=run.py
 
-            # Veritabanı migration: firma tablosu boşsa (ilk deploy) çalıştır
-            FIRMA_COUNT=$(python -c "
-            import os, sys
-            os.environ['FLASK_RUN_FROM_CLI'] = 'false'
-            try:
-                from app import create_app
-                from app.extensions import db
-                app = create_app()
-                with app.app_context():
-                    result = db.session.execute(db.text('SELECT COUNT(*) FROM firma')).scalar()
-                    print(result)
-            except Exception:
-                print(0)
-            " 2>/dev/null || echo "0")
-
-            if [ "$FIRMA_COUNT" -eq "0" ]; then
-              echo ">>> Veritabani bos, migration baslatiliyor..."
-              sqlite3 app.db < yedek_db.sql
-              python migrate_sqlite_to_pg.py
-              echo ">>> Migration tamamlandi."
-            else
-              echo ">>> Veritabaninda $FIRMA_COUNT firma kaydi var, migration atlandi."
-            fi
+            echo ">>> Alembic migration uygulanıyor..."
+            python -m flask db upgrade
+            echo ">>> Migration tamamlandi."
 
             systemctl restart kiralama_test.service

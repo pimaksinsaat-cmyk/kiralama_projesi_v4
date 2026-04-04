@@ -32,7 +32,7 @@ class MakineDegisimService(BaseService):
     @classmethod
     def degisim_uygula(cls, eski_kalem_id, data, actor_id=None):
         """Aktif makineyi sahadan çeker, yeni makineyi sahaya sürer ve finansal kayıtları oluşturur."""
-        eski_kalem = KiralamaKalemi.query.get(eski_kalem_id)
+        eski_kalem = db.session.get(KiralamaKalemi, eski_kalem_id)
         if not eski_kalem or not eski_kalem.is_active:
             raise ValidationError("Sadece aktif makine üzerinden değişim yapılabilir.")
 
@@ -61,6 +61,10 @@ class MakineDegisimService(BaseService):
 
         # İşlemleri başlat (Transaction)
         try:
+            swap_nakliye = None
+            swap_taseron_hizmeti = None
+            swap_kira_hizmeti = None
+
             # 3. AKTİFİ PASİF YAP VE ESKİ MAKİNEYİ YÖNLENDİR
             eski_bitis = secilen_tarih - timedelta(days=1)
             aktif_kalem.is_active = False
@@ -70,7 +74,7 @@ class MakineDegisimService(BaseService):
             aktif_kalem.degisim_nedeni = data['neden']
 
             if aktif_kalem.ekipman_id:
-                eski_makine_obj = Ekipman.query.get(aktif_kalem.ekipman_id)
+                eski_makine_obj = db.session.get(Ekipman, aktif_kalem.ekipman_id)
                 if eski_makine_obj:
                     donus_sube = data.get('donus_sube_val')
                     if donus_sube == 'tedarikci':
@@ -108,7 +112,7 @@ class MakineDegisimService(BaseService):
                 yeni_kalem.kiralama_alis_fiyat = data.get('kiralama_alis_fiyat') or Decimal('0.00')
             elif data.get('yeni_ekipman_id'):
                 yeni_kalem.ekipman_id = data['yeni_ekipman_id']
-                yeni_makine_obj = Ekipman.query.get(yeni_kalem.ekipman_id)
+                yeni_makine_obj = db.session.get(Ekipman, yeni_kalem.ekipman_id)
                 if yeni_makine_obj:
                     yeni_makine_obj.calisma_durumu = 'kirada'
                     # YENİ GİDEN MAKİNENİN MERKEZİ (ŞUBESİ) ARTIK SİLİNMİYOR
@@ -138,7 +142,7 @@ class MakineDegisimService(BaseService):
             # --- MAKİNE İSİMLERİNİ TEMİZCE BULALIM ---
             eski_makine_ad = ""
             if aktif_kalem.ekipman_id:
-                e_obj = Ekipman.query.get(aktif_kalem.ekipman_id)
+                e_obj = db.session.get(Ekipman, aktif_kalem.ekipman_id)
                 if e_obj:
                     eski_makine_ad = e_obj.kod
             if not eski_makine_ad:
@@ -146,7 +150,7 @@ class MakineDegisimService(BaseService):
 
             yeni_makine_ad = ""
             if yeni_kalem.ekipman_id:
-                y_obj = Ekipman.query.get(yeni_kalem.ekipman_id)
+                y_obj = db.session.get(Ekipman, yeni_kalem.ekipman_id)
                 if y_obj:
                     yeni_makine_ad = y_obj.kod
             if not yeni_makine_ad:
@@ -166,7 +170,7 @@ class MakineDegisimService(BaseService):
             # PLAKAYI BUL (Arac modelinden)
             plaka_str = None
             if not is_harici and arac_id:
-                secili_arac = Arac.query.get(arac_id)
+                secili_arac = db.session.get(Arac, arac_id)
                 if secili_arac:
                     plaka_str = secili_arac.plaka
 
@@ -192,6 +196,7 @@ class MakineDegisimService(BaseService):
                 yeni_nakliye.hesapla_ve_guncelle()
                 db.session.add(yeni_nakliye)
                 db.session.flush()
+                swap_nakliye = yeni_nakliye
 
                 # Cari Servis Entegrasyonu (Eğer ekliyse)
                 if CariServis and hasattr(CariServis, 'musteri_nakliye_senkronize_et'):
@@ -199,10 +204,16 @@ class MakineDegisimService(BaseService):
                         CariServis.musteri_nakliye_senkronize_et(yeni_nakliye)
                     if is_harici and alis_fiyat > 0:
                         CariServis.taseron_maliyet_senkronize_et(yeni_nakliye)
+                        if HizmetKaydi:
+                            db.session.flush()
+                            swap_taseron_hizmeti = HizmetKaydi.query.filter_by(
+                                ozel_id=yeni_nakliye.id,
+                                yon='gelen'
+                            ).order_by(HizmetKaydi.id.desc()).first()
                 else:
                     # Manuel Hizmet Kaydı (Fallback)
                     if is_harici and alis_fiyat > 0 and HizmetKaydi and yeni_nakliye.taseron_firma_id:
-                        db.session.add(HizmetKaydi(
+                        swap_taseron_hizmeti = HizmetKaydi(
                             firma_id=yeni_nakliye.taseron_firma_id,
                             nakliye_id=yeni_nakliye.id,
                             tarih=secilen_tarih,
@@ -210,21 +221,25 @@ class MakineDegisimService(BaseService):
                             yon='gelen',
                             aciklama=ozel_guzergah,
                             fatura_no=form_no,
-                            ozel_id=ana_kiralama_id
-                        ))
+                            ozel_id=yeni_nakliye.id
+                        )
+                        db.session.add(swap_taseron_hizmeti)
 
             # Dış Tedarik Kira Cari Kaydı
             if yeni_kalem.is_dis_tedarik_ekipman and yeni_kalem.kiralama_alis_fiyat and yeni_kalem.kiralama_alis_fiyat > 0:
                 if HizmetKaydi and yeni_kalem.harici_ekipman_tedarikci_id:
-                    db.session.add(HizmetKaydi(
+                    swap_kira_hizmeti = HizmetKaydi(
                         firma_id=yeni_kalem.harici_ekipman_tedarikci_id,
                         tarih=secilen_tarih,
                         tutar=yeni_kalem.kiralama_alis_fiyat, 
                         yon='gelen',  
                         aciklama=f"{musteri_firma_adi} projesi {yeni_makine_ad} makinesi kira bedeli",
                         fatura_no=form_no,
-                        ozel_id=ana_kiralama_id
-                    ))
+                        ozel_id=yeni_kalem.id
+                    )
+                    db.session.add(swap_kira_hizmeti)
+
+            db.session.flush()
 
             # 6. LOG OLUŞTURMA
             degisim_log = MakineDegisim(
@@ -233,6 +248,9 @@ class MakineDegisimService(BaseService):
                 yeni_kalem_id=yeni_kalem.id,
                 eski_ekipman_id=aktif_kalem.ekipman_id,
                 yeni_ekipman_id=yeni_kalem.ekipman_id,
+                swap_nakliye_id=swap_nakliye.id if swap_nakliye else None,
+                swap_taseron_hizmet_id=swap_taseron_hizmeti.id if swap_taseron_hizmeti else None,
+                swap_kira_hizmet_id=swap_kira_hizmeti.id if swap_kira_hizmeti else None,
                 neden=data['neden'],
                 tarih=datetime.combine(secilen_tarih, datetime.min.time())
             )
@@ -249,7 +267,7 @@ class MakineDegisimService(BaseService):
     @classmethod
     def iptal_et(cls, kalem_id, actor_id=None):
         """Makine değişimini iptal eder, cari hareketleri temizler ve makineleri eski konumlarına çeker."""
-        eski_kalem = KiralamaKalemi.query.get(kalem_id)
+        eski_kalem = db.session.get(KiralamaKalemi, kalem_id)
         if not eski_kalem:
             raise ValidationError("Kayıt bulunamadı.")
 
@@ -258,46 +276,64 @@ class MakineDegisimService(BaseService):
             raise ValidationError("İptal edilecek aktif değişim bulunamadı.")
 
         try:
+            degisim_log = MakineDegisim.query.filter_by(yeni_kalem_id=aktif_child.id).first()
+
             # 1. OTOMATİK OLUŞAN NAKLİYE VE CARİ KAYDINI SİL 
             tarih_sorgu = aktif_child.degisim_tarihi.date() if aktif_child.degisim_tarihi else aktif_child.kiralama_baslangici
-            
-            silinecek_nakliye = Nakliye.query.filter(
-                Nakliye.kiralama_id == eski_kalem.kiralama_id,
-                Nakliye.tarih == tarih_sorgu,
-                Nakliye.aciklama.like(f"Makine Değişim (Swap) Operasyonu [Ref:{aktif_child.id}]%")
-            ).first()
+
+            silinecek_nakliye = None
+            if degisim_log and degisim_log.swap_nakliye_id:
+                silinecek_nakliye = db.session.get(Nakliye, degisim_log.swap_nakliye_id)
+
+            if silinecek_nakliye is None:
+                silinecek_nakliye = Nakliye.query.filter(
+                    Nakliye.kiralama_id == eski_kalem.kiralama_id,
+                    Nakliye.tarih == tarih_sorgu,
+                    Nakliye.aciklama.like(f"Makine Değişim (Swap) Operasyonu [Ref:{aktif_child.id}]%")
+                ).first()
 
             if silinecek_nakliye:
                 if CariServis and hasattr(CariServis, 'nakliye_cari_temizle'):
                     CariServis.nakliye_cari_temizle(silinecek_nakliye.id)
                 db.session.delete(silinecek_nakliye)
+            elif degisim_log and degisim_log.swap_taseron_hizmet_id and HizmetKaydi:
+                taseron_hizmeti = db.session.get(HizmetKaydi, degisim_log.swap_taseron_hizmet_id)
+                if taseron_hizmeti:
+                    db.session.delete(taseron_hizmeti)
 
             # 2. DIŞ TEDARİK MAKİNE KİRASINI İPTAL ET
             if HizmetKaydi and aktif_child.is_dis_tedarik_ekipman and aktif_child.harici_ekipman_tedarikci_id:
-                iptal_makine_ad = f"{aktif_child.harici_ekipman_marka} {aktif_child.harici_ekipman_model}".strip()
-                musteri_firma_adi = eski_kalem.kiralama.firma_musteri.firma_adi if eski_kalem.kiralama.firma_musteri else "Bilinmeyen"
-                aciklama_metni_kira = f"{musteri_firma_adi} projesi {iptal_makine_ad} makinesi kira bedeli"
-                
-                HizmetKaydi.query.filter_by(
-                    ozel_id=eski_kalem.kiralama_id,
-                    firma_id=aktif_child.harici_ekipman_tedarikci_id,
-                    yon='gelen', aciklama=aciklama_metni_kira
-                ).delete()
+                kira_hizmeti = None
+                if degisim_log and degisim_log.swap_kira_hizmet_id:
+                    kira_hizmeti = db.session.get(HizmetKaydi, degisim_log.swap_kira_hizmet_id)
+
+                if kira_hizmeti:
+                    db.session.delete(kira_hizmeti)
+                else:
+                    iptal_makine_ad = f"{aktif_child.harici_ekipman_marka} {aktif_child.harici_ekipman_model}".strip()
+                    musteri_firma_adi = eski_kalem.kiralama.firma_musteri.firma_adi if eski_kalem.kiralama.firma_musteri else "Bilinmeyen"
+                    aciklama_metni_kira = f"{musteri_firma_adi} projesi {iptal_makine_ad} makinesi kira bedeli"
+                    
+                    HizmetKaydi.query.filter_by(
+                        ozel_id=aktif_child.id,
+                        firma_id=aktif_child.harici_ekipman_tedarikci_id,
+                        yon='gelen',
+                        aciklama=aciklama_metni_kira
+                    ).delete(synchronize_session=False)
 
             # 3. YENİ MAKİNEYİ BOŞA ÇEK, ESKİ MAKİNEYİ SAHAYA DÖNDÜR
             if aktif_child.ekipman_id:
-                yeni_makine = Ekipman.query.get(aktif_child.ekipman_id)
+                yeni_makine = db.session.get(Ekipman, aktif_child.ekipman_id)
                 if yeni_makine: yeni_makine.calisma_durumu = 'bosta'
 
             if eski_kalem.ekipman_id:
-                eski_makine = Ekipman.query.get(eski_kalem.ekipman_id)
+                eski_makine = db.session.get(Ekipman, eski_kalem.ekipman_id)
                 if eski_makine:
                     eski_makine.calisma_durumu = 'kirada'
                     # İPTAL İŞLEMİNDE SAHAYA DÖNEN MAKİNENİN DE MERKEZİ SİLİNMİYOR
                     # eski_makine.sube_id = None
 
             # 4. MAKİNE DEĞİŞİM (SWAP) LOGUNU SİL (FOREIGN KEY HATASINI ÖNLER)
-            degisim_log = MakineDegisim.query.filter_by(yeni_kalem_id=aktif_child.id).first()
             if degisim_log:
                 db.session.delete(degisim_log)
 

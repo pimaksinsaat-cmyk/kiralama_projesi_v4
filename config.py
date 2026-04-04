@@ -19,10 +19,8 @@ class Config:
     
     # --- Veritabanı Ayarları ---
     
-    # Veritabanımızın konumu (SQLite için)
-    # 'app.db' adında bir dosya oluşturacak (ana dizinde)
-    # SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
-    #    'sqlite:///' + os.path.join(basedir, 'app.db')
+    # Veritabanı bağlantısı öncelikle ortam değişkeninden alınır.
+    # Ortam değişkeni yoksa PostgreSQL varsayılanları kullanılır.
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
     'postgresql://postgres:gizlisifre@db:5432/kiralama_db'  
     # Veritabanında değişiklik olduğunda sinyal göndermeyi kapat (performans)

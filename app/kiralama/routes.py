@@ -135,9 +135,9 @@ def index():
     """Kiralama ana listesi ve arama."""
     try:
         page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 10, type=int)
+        per_page = request.args.get('per_page', 25, type=int)
         if per_page not in {10, 25, 50, 100}:
-            per_page = 10
+            per_page = 25
         q = request.args.get('q', '', type=str)
         
         query = Kiralama.query.options(

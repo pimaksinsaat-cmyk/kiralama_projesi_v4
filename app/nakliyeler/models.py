@@ -41,6 +41,7 @@ class Nakliye(db.Model):
     # --- Parasal Veriler (Müşteriye Kestiğimiz / Gelir) ---
     tutar = db.Column(db.Numeric(15, 2), nullable=False, default=Decimal('0.00')) 
     kdv_orani = db.Column(db.Integer, default=20) 
+    tevkifat_orani = db.Column(db.String(10), nullable=True, default=None)
     toplam_tutar = db.Column(db.Numeric(15, 2), nullable=False, default=Decimal('0.00')) 
     
     # --- TAŞERON MALİYETİ (Dışarıya Yaptırıyorsak Bizim Giderimiz) ---

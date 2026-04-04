@@ -1,6 +1,10 @@
 {% extends "base.html" %}
 
 {% block title %}Nakliye Kaydını Düzenle{% endblock %}
+{% block head %}
+<link href="https://cdn.jsdelivr.net/npm/tom-select@2/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2/dist/js/tom-select.complete.min.js"></script>
+{% endblock %}
 
 {% block content %}
 <div class="container py-4">
@@ -25,7 +29,7 @@
                             </div>
                             <div class="col-md-8">
                                 <label class="form-label fw-bold small text-muted">Müşteri Firma (Kime Fatura Kesilecek?)</label>
-                                {{ form.firma_id(class="form-select") }}
+                                {{ form.firma_id(class="form-select", id="firma_id") }}
                                 {% for error in form.firma_id.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
                             </div>
                         </div>
@@ -91,6 +95,15 @@
                                     <span class="input-group-text small">%</span>
                                 </div>
                             </div>
+                            <div class="col-md-4">
+                                <div class="d-flex align-items-center justify-content-between mb-2">
+                                    <label class="form-label fw-bold small text-muted mb-0">Tevkifatlı</label>
+                                    <div class="form-check form-switch mb-0">
+                                        <input class="form-check-input" type="checkbox" id="tevkifat-toggle" title="Tevkifat oranı uygula">
+                                    </div>
+                                </div>
+                                {{ form.tevkifat_orani(class="form-select", id="tevkifat_orani", style="display:none;") }}
+                            </div>
                             <div class="col-md-4 shadow-sm rounded p-2 bg-danger-subtle" id="maliyet_section" style="display: none;">
                                 <label class="form-label fw-bold text-danger small">Taşeron Maliyeti (Gider)</label>
                                 <div class="input-group">
@@ -124,12 +137,26 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    const musteriSelect = document.getElementById('firma_id');
     const ozMalSection = document.getElementById('oz_mal_section');
     const taseronSection = document.getElementById('taseron_section');
     const maliyetSection = document.getElementById('maliyet_section');
+    const tevkifatToggle = document.getElementById('tevkifat-toggle');
+    const tevkifatSelect = document.getElementById('tevkifat_orani');
     
     // Açılır kutuyu yakala
     const tipiSelect = document.getElementById('nakliye_tipi_select');
+
+    if (musteriSelect) {
+        new TomSelect(musteriSelect, {
+            create: false,
+            maxOptions: null,
+            openOnFocus: true,
+            allowEmptyOption: true,
+            searchField: ['text'],
+            sortField: [{ field: 'text', direction: 'asc' }],
+        });
+    }
 
     function toggleSections() {
         if (!tipiSelect) return;
@@ -146,9 +173,24 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    function toggleTevkifat() {
+        if (!tevkifatToggle || !tevkifatSelect) {
+            return;
+        }
+        tevkifatSelect.style.display = tevkifatToggle.checked ? 'block' : 'none';
+        if (!tevkifatToggle.checked) {
+            tevkifatSelect.value = '';
+        }
+    }
+
     // Seçim değiştiğinde tetikle
     if (tipiSelect) {
         tipiSelect.addEventListener('change', toggleSections);
+    }
+    if (tevkifatToggle && tevkifatSelect) {
+        tevkifatToggle.checked = !!tevkifatSelect.value;
+        tevkifatToggle.addEventListener('change', toggleTevkifat);
+        toggleTevkifat();
     }
 
     // Sayfa yüklendiğinde mevcut seçime göre durumu ayarla
