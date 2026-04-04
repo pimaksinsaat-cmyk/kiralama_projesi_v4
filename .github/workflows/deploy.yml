@@ -16,6 +16,11 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
+            # pg_dump için postgresql-client kurulu değilse kur
+            if ! command -v pg_dump &> /dev/null; then
+              apt-get install -y postgresql-client -q
+            fi
+
             cd /root/kiralama_projesi_v4
             git pull origin main
             source venv/bin/activate
