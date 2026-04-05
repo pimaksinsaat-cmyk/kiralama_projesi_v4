@@ -91,7 +91,7 @@
                     <select name="ekipman_id" id="ekipman_select" required>
                         <option value="">-- Makine Seçiniz --</option>
                         {% for ekipman in aktif_makineler %}
-                        <option value="{{ ekipman.id }}">{{ ekipman.kod }} - {{ ekipman.marka }} {{ ekipman.model }}</option>
+                        <option value="{{ ekipman.id }}" data-durum="{{ ekipman.calisma_durumu }}">{{ ekipman.kod }} - {{ ekipman.marka }} {{ ekipman.model }}</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -295,6 +295,40 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         contextMenu.style.display = 'none';
+    });
+
+    // Makine seçildiğinde servis türü dropdown'u kontrol et
+    const ekipmanSelect = document.getElementById('ekipman_select');
+    const servisTipiSelect = document.getElementById('servis_tipi_select');
+
+    ekipmanSelect.addEventListener('change', function() {
+        const selectedOption = this.options[this.selectedIndex];
+        const durum = selectedOption.dataset.durum;
+
+        // Boş seçim yapıldıysa, tüm seçenekleri aktifleştir
+        if (!this.value) {
+            Array.from(servisTipiSelect.options).forEach(opt => {
+                opt.disabled = false;
+            });
+            return;
+        }
+
+        // Makine aktif ise (serviste değilse), sadece yerinde_servis seçilebilir
+        if (durum !== 'serviste') {
+            Array.from(servisTipiSelect.options).forEach(opt => {
+                if (opt.value === 'yerinde_servis') {
+                    opt.disabled = false;
+                } else if (opt.value) {
+                    opt.disabled = true;
+                }
+            });
+            servisTipiSelect.value = 'yerinde_servis';
+        } else {
+            // Serviste ise tüm seçenekleri aktifleştir
+            Array.from(servisTipiSelect.options).forEach(opt => {
+                opt.disabled = false;
+            });
+        }
     });
 });
 </script>

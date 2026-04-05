@@ -233,7 +233,7 @@ def index():
             .order_by(Ekipman.yakit)
             .all()
         ]
-        nakliye_araclari = NakliyeAraci.query.filter_by(is_active=True).all()
+        nakliye_araclari = NakliyeAraci.aktif_nakliye_query().order_by(NakliyeAraci.plaka).all()
         nakliye_tedarikci_listesi = Firma.query.filter_by(is_tedarikci=True).order_by(Firma.firma_adi).all()
     
     except Exception as e:

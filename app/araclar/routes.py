@@ -69,6 +69,8 @@ def ekle():
             arac_tipi=form.arac_tipi.data,
             marka_model=form.marka_model.data,
             sube_id=(form.sube_id.data or None),
+            is_nakliye_araci=form.is_nakliye_araci.data,
+            is_hizmet_araci=form.is_hizmet_araci.data,
             muayene_tarihi=form.muayene_tarihi.data,
             sigorta_tarihi=form.sigorta_tarihi.data
         )
@@ -100,6 +102,8 @@ def duzenle(arac_id):
         arac.arac_tipi = form.arac_tipi.data
         arac.marka_model = form.marka_model.data
         arac.sube_id = form.sube_id.data or None
+        arac.is_nakliye_araci = form.is_nakliye_araci.data
+        arac.is_hizmet_araci = form.is_hizmet_araci.data
         arac.muayene_tarihi = form.muayene_tarihi.data
         arac.sigorta_tarihi = form.sigorta_tarihi.data
         arac.is_active = form.is_active.data

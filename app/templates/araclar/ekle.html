@@ -10,7 +10,7 @@
                 <div class="card-header {{ 'bg-warning text-dark' if arac else 'bg-success text-white' }} d-flex align-items-center">
                     <h4 class="mb-0">
                         <i class="fas fa-{{ 'edit' if arac else 'truck-pickup' }} me-2"></i>
-                        {{ arac.plaka + ' - Düzenle' if arac else 'Yeni Nakliye Aracı Tanımla' }}
+                        {{ arac.plaka + ' - Düzenle' if arac else 'Yeni Araç Tanımla' }}
                     </h4>
                 </div>
                 <div class="card-body p-4">
@@ -39,6 +39,29 @@
                         <div class="mb-3">
                             <label class="form-label fw-bold">Bağlı Şube</label>
                             {{ form.sube_id(class="form-select") }}
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label fw-bold d-block">Kullanım Alanı</label>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="form-check form-switch p-3 bg-light rounded border h-100">
+                                        {{ form.is_nakliye_araci(class="form-check-input ms-0", type="checkbox", id="isNakliyeAraci") }}
+                                        <label class="form-check-label fw-bold ms-2" for="isNakliyeAraci">Nakliye Aracı</label>
+                                        <div class="small text-muted mt-2">Nakliye operasyonlarında ve öz mal nakliye seçimlerinde görünür.</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-check form-switch p-3 bg-light rounded border h-100">
+                                        {{ form.is_hizmet_araci(class="form-check-input ms-0", type="checkbox", id="isHizmetAraci") }}
+                                        <label class="form-check-label fw-bold ms-2" for="isHizmetAraci">Hizmet Aracı</label>
+                                        <div class="small text-muted mt-2">Servis ve saha operasyonları için hizmet aracı olarak işaretlenir.</div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% for error in form.is_nakliye_araci.errors %}
+                                <div class="text-danger small mt-2">{{ error }}</div>
+                            {% endfor %}
                         </div>
 
                         <hr class="my-4">
@@ -73,7 +96,7 @@
             </div>
             
             <div class="mt-3 text-center text-muted small">
-                <i class="fas fa-info-circle"></i> Buraya eklediğiniz araçlar, nakliye seferleri ve kiralama formlarında seçim listesine gelecektir.
+                <i class="fas fa-info-circle"></i> Burada seçtiğiniz kullanım alanı, aracın hangi operasyon ekranlarında listeleneceğini belirler.
             </div>
         </div>
     </div>

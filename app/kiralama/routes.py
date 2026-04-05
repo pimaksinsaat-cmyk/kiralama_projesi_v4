@@ -61,7 +61,7 @@ def get_cached_subeler():
     return cache['data']
 
 def get_cached_aktif_araclar():
-    """Aktif araçları thread-safe ve bağımsız bir kilitle bellekten getirir."""
+    """Aktif nakliye araçlarını thread-safe ve bağımsız bir kilitle bellekten getirir."""
     now = datetime.now()
     cache = _CACHE_DATA['aktif_araclar']
     
@@ -71,7 +71,7 @@ def get_cached_aktif_araclar():
     with _ARAC_CACHE_LOCK:
         if cache['data'] is None or (datetime.now() - cache['last_update']) > timedelta(minutes=_CACHE_TIMEOUT_MINUTES):
             try:
-                cache['data'] = NakliyeAraci.query.filter_by(is_active=True).all()
+                cache['data'] = NakliyeAraci.aktif_nakliye_query().order_by(NakliyeAraci.plaka).all()
                 cache['last_update'] = datetime.now()
             except Exception as e:
                 current_app.logger.error(f"Arac Cache Hatası: {e}")

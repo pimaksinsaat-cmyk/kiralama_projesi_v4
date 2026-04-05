@@ -29,6 +29,7 @@
                             <th>Plaka</th>
                             <th>Araç Tipi</th>
                             <th>Marka / Model</th>
+                            <th>Kullanım</th>
                             <th class="text-center">Muayene / Sigorta</th>
                             <th class="text-center">Durum</th>
                             <th class="text-center">İşlem</th>
@@ -46,6 +47,17 @@
                             </td>
                             <td class="align-middle">{{ arac.arac_tipi or '-' }}</td>
                             <td class="align-middle">{{ arac.marka_model or '-' }}</td>
+                            <td class="align-middle">
+                                {% if arac.kullanim_alanlari %}
+                                    <div class="d-flex flex-wrap gap-1">
+                                        {% for alan in arac.kullanim_alanlari %}
+                                            <span class="badge {{ 'bg-primary-subtle text-primary border border-primary' if alan == 'Nakliye' else 'bg-info-subtle text-info border border-info' }}">{{ alan }}</span>
+                                        {% endfor %}
+                                    </div>
+                                {% else %}
+                                    <span class="badge bg-secondary">Tanımsız</span>
+                                {% endif %}
+                            </td>
                             <td class="align-middle text-center small">
                                 <div class="d-flex flex-column gap-1 align-items-center">
                                     {% if arac.muayene_durum == 'gecmis' %}
@@ -87,9 +99,9 @@
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="7" class="text-center py-5 text-muted">
+                            <td colspan="8" class="text-center py-5 text-muted">
                                 <i class="fas fa-info-circle mb-2 fa-2x"></i><br>
-                                Henüz filoda kayıtlı nakliye aracı yok.
+                                Henüz filoda kayıtlı araç yok.
                             </td>
                         </tr>
                         {% endfor %}

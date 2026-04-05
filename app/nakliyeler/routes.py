@@ -15,6 +15,10 @@ from datetime import datetime, date, timedelta
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
+
+def _get_nakliye_araclari():
+    return Arac.aktif_nakliye_query().order_by(Arac.plaka).all()
+
 def _actor():
     return current_user.id if current_user.is_authenticated else None
 
@@ -396,7 +400,7 @@ def ekle():
     form.firma_id.choices = [(0, '-- Seçiniz --')] + [(f.id, f.firma_adi) for f in firmalar]
     form.taseron_firma_id.choices = [(0, '--- Taşeron Seçiniz ---')] + [(f.id, f.firma_adi) for f in firmalar if f.is_tedarikci]
 
-    araclar = Arac.query.filter_by(is_active=True).all()
+    araclar = _get_nakliye_araclari()
     form.arac_id.choices = [(0, '--- Dış Nakliye / Belirtilmemiş ---')] + [(a.id, a.plaka) for a in araclar]
 
     kiralama_id = request.args.get('kiralama_id', type=int)
@@ -421,7 +425,7 @@ def ekle():
             if nakliye.nakliye_tipi == 'oz_mal':
                 nakliye.taseron_firma_id = None
                 if nakliye.arac_id:
-                    secili_arac = Arac.query.get(nakliye.arac_id)
+                    secili_arac = Arac.aktif_nakliye_query().filter(Arac.id == nakliye.arac_id).first()
                     if secili_arac:
                         nakliye.plaka = secili_arac.plaka
                     else:
@@ -523,7 +527,7 @@ def duzenle(id):
     form.firma_id.choices = [(0, '-- Seçiniz --')] + [(f.id, f.firma_adi) for f in firmalar]
     form.taseron_firma_id.choices = [(0, '--- Taşeron Seçiniz ---')] + [(f.id, f.firma_adi) for f in firmalar if f.is_tedarikci]
     
-    araclar = Arac.query.filter_by(is_active=True).all()
+    araclar = _get_nakliye_araclari()
     form.arac_id.choices = [(0, '--- Dış Nakliye / Belirtilmemiş ---')] + [(a.id, a.plaka) for a in araclar]
 
     if form.validate_on_submit():
@@ -538,7 +542,7 @@ def duzenle(id):
             if nakliye.nakliye_tipi == 'oz_mal':
                 nakliye.taseron_firma_id = None
                 if nakliye.arac_id:
-                    secili_arac = Arac.query.get(nakliye.arac_id)
+                    secili_arac = Arac.aktif_nakliye_query().filter(Arac.id == nakliye.arac_id).first()
                     if secili_arac:
                         nakliye.plaka = secili_arac.plaka
                     else:

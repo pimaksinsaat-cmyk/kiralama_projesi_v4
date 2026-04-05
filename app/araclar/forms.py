@@ -8,10 +8,21 @@ class AracForm(FlaskForm):
     arac_tipi = StringField('Araç Tipi (Örn: Çekici)')
     marka_model = StringField('Marka / Model')
     sube_id = SelectField('Bağlı Şube', coerce=int, validators=[Optional()])
+    is_nakliye_araci = BooleanField('Nakliye aracı olarak kullanılır')
+    is_hizmet_araci = BooleanField('Hizmet aracı olarak kullanılır')
     muayene_tarihi = DateField('Muayene Bitiş Tarihi', validators=[Optional()])
     sigorta_tarihi = DateField('Sigorta Bitiş Tarihi', validators=[Optional()])
     is_active = BooleanField('Aktif mi?', default=True)
     submit = SubmitField('Aracı Kaydet')
+
+    def validate(self, extra_validators=None):
+        if not super().validate(extra_validators=extra_validators):
+            return False
+        if not self.is_nakliye_araci.data and not self.is_hizmet_araci.data:
+            hata = 'En az bir kullanım alanı seçmelisiniz.'
+            self.is_nakliye_araci.errors.append(hata)
+            return False
+        return True
 
 
 BAKIM_TURLERI = [

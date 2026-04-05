@@ -11,7 +11,7 @@
             <div class="card shadow border-0">
                 <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
                     <h4 class="mb-0"><i class="fas fa-truck"></i> Yeni Nakliye Girişi</h4>
-                    <a href="{{ url_for('nakliyeler.arac_ekle') }}" class="btn btn-sm btn-light text-primary fw-bold">
+                    <a href="{{ url_for('araclar.ekle') }}" class="btn btn-sm btn-light text-primary fw-bold">
                         <i class="fas fa-plus"></i> Yeni Araç Tanımla
                     </a>
                 </div>
@@ -55,6 +55,7 @@
                             <div class="col-md-4" id="ozmal_alani">
                                 <label class="form-label fw-bold">Araç Plakası</label>
                                 {{ form.arac_id(class="form-select") }}
+                                <div class="form-text">Sadece nakliye aracı olarak işaretli aktif araçlar listelenir.</div>
                             </div>
 
                             <div class="col-md-4 d-none" id="taseron_alani_plaka">

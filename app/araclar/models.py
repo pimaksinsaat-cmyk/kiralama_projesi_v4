@@ -11,6 +11,8 @@ class Arac(BaseModel):
     marka_model = db.Column(db.String(100))
     sube_id = db.Column(db.Integer, db.ForeignKey('subeler.id'), nullable=True)
     sube = db.relationship('Sube', backref='araclar')
+    is_nakliye_araci = db.Column(db.Boolean, default=False, nullable=False, index=True)
+    is_hizmet_araci = db.Column(db.Boolean, default=False, nullable=False, index=True)
 
     # Gelecek için şimdiden eklediğimiz kritik tarihler (Şimdilik opsiyonel)
     muayene_tarihi = db.Column(db.Date, nullable=True)
@@ -20,6 +22,27 @@ class Arac(BaseModel):
 
     is_active = db.Column(db.Boolean, default=True)
     kayit_tarihi = db.Column(db.DateTime, default=datetime.utcnow)
+
+    @classmethod
+    def aktif_query(cls):
+        return cls.query.filter(cls.is_active.is_(True))
+
+    @classmethod
+    def aktif_nakliye_query(cls):
+        return cls.aktif_query().filter(cls.is_nakliye_araci.is_(True))
+
+    @classmethod
+    def aktif_hizmet_query(cls):
+        return cls.aktif_query().filter(cls.is_hizmet_araci.is_(True))
+
+    @property
+    def kullanim_alanlari(self):
+        alanlar = []
+        if self.is_nakliye_araci:
+            alanlar.append('Nakliye')
+        if self.is_hizmet_araci:
+            alanlar.append('Hizmet')
+        return alanlar
 
     def __repr__(self):
         return f'<Arac {self.plaka}>'

@@ -57,7 +57,7 @@ def makine_degistir(kalem_id):
     form.yeni_ekipman_id.choices = [(0, '-- Seçiniz --')] + [(m.id, f"{m.kod} - {m.marka} {m.model}") for m in musait_makineler]
     
     # NAKLİYE ARAÇLARI ARTIK KENDİ MODELİNDEN (ARAC) ÇEKİLİYOR
-    aktif_araclar = Arac.query.filter_by(is_active=True).all()
+    aktif_araclar = Arac.aktif_nakliye_query().order_by(Arac.plaka).all()
     form.nakliye_araci_id.choices = [(0, '-- Araç Seçiniz --')] + [(a.id, f"{a.plaka} ({a.marka_model})") for a in aktif_araclar]
 
     tedarikci_listesi = Firma.query.filter_by(is_tedarikci=True, is_active=True).all()
