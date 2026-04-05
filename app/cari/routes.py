@@ -533,8 +533,14 @@ def kasa_duzelt(id):
     if not kasa or kasa.is_deleted:
         flash("Kasa bulunamadı", "danger")
         return redirect(url_for('cari.kasa_listesi'))
-        
+
     form = KasaForm(obj=kasa)
+    diger_kasalar = Kasa.query.filter(
+        Kasa.id != kasa.id,
+        Kasa.para_birimi == kasa.para_birimi,
+        Kasa.is_active == True,
+        Kasa.is_deleted == False,
+    ).order_by(Kasa.kasa_adi).all()
 
     if form.validate_on_submit():
         try:
@@ -542,6 +548,7 @@ def kasa_duzelt(id):
             kasa.tipi = form.tipi.data
             kasa.para_birimi = form.para_birimi.data
             kasa.banka_sube_adi = (form.banka_sube_adi.data or '').strip() or None
+            kasa.bakiye = form.bakiye.data or 0
             KasaService.save(kasa, is_new=False, actor_id=get_actor())
             OperationLogService.log(
                 module='cari', action='kasa_duzelt',
@@ -561,8 +568,8 @@ def kasa_duzelt(id):
                 success=False
             )
             flash(str(e), "warning")
-            
-    return render_template('cari/kasa_ekle.html', form=form, title="Kasa Düzenle")
+
+    return render_template('cari/kasa_duzelt.html', form=form, kasa=kasa, diger_kasalar=diger_kasalar)
 
 @cari_bp.route('/kasa/sil/<int:id>', methods=['POST'])
 def kasa_sil(id):
