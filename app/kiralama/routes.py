@@ -45,13 +45,13 @@ def get_cached_subeler():
     now = datetime.now()
     cache = _CACHE_DATA['subeler']
     
-    # 1. Hızlı Okuma
-    if cache['data'] is not None and (now - cache['last_update']) < timedelta(minutes=_CACHE_TIMEOUT_MINUTES):
+    # 1. Hızlı Okuma (last_update None kontrolü: thread race condition'ı önler)
+    if cache['data'] is not None and cache['last_update'] is not None and (now - cache['last_update']) < timedelta(minutes=_CACHE_TIMEOUT_MINUTES):
         return cache['data']
 
     # 2. Kaynağa Özel Kilit
     with _SUBE_CACHE_LOCK:
-        if cache['data'] is None or (datetime.now() - cache['last_update']) > timedelta(minutes=_CACHE_TIMEOUT_MINUTES):
+        if cache['data'] is None or cache['last_update'] is None or (datetime.now() - cache['last_update']) > timedelta(minutes=_CACHE_TIMEOUT_MINUTES):
             try:
                 cache['data'] = Sube.query.all()
                 cache['last_update'] = datetime.now()
@@ -65,11 +65,11 @@ def get_cached_aktif_araclar():
     now = datetime.now()
     cache = _CACHE_DATA['aktif_araclar']
     
-    if cache['data'] is not None and (now - cache['last_update']) < timedelta(minutes=_CACHE_TIMEOUT_MINUTES):
+    if cache['data'] is not None and cache['last_update'] is not None and (now - cache['last_update']) < timedelta(minutes=_CACHE_TIMEOUT_MINUTES):
         return cache['data']
 
     with _ARAC_CACHE_LOCK:
-        if cache['data'] is None or (datetime.now() - cache['last_update']) > timedelta(minutes=_CACHE_TIMEOUT_MINUTES):
+        if cache['data'] is None or cache['last_update'] is None or (datetime.now() - cache['last_update']) > timedelta(minutes=_CACHE_TIMEOUT_MINUTES):
             try:
                 cache['data'] = NakliyeAraci.aktif_nakliye_query().order_by(NakliyeAraci.plaka).all()
                 cache['last_update'] = datetime.now()

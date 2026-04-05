@@ -32,6 +32,11 @@ class Config:
     'postgresql://postgres:gizlisifre@db:5432/kiralama_db'  
     # Veritabanında değişiklik olduğunda sinyal göndermeyi kapat (performans)
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    # PostgreSQL bağlantı kopması / stale connection sorununu önler
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        "pool_pre_ping": True,   # Her istekte bağlantıyı test et, kopuksa yenile
+        "pool_recycle": 280,     # 280 saniyede bir bağlantıyı yenile (PG idle timeout < 300s)
+    }
 
     # Oturum Güvenliği
     PERMANENT_SESSION_LIFETIME = 1800  # 1 saat hareketsizlikte oturum kapanır (saniye)

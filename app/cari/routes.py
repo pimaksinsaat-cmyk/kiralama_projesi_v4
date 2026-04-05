@@ -607,7 +607,7 @@ def kasa_hareketleri(id):
 
     hareketler = Odeme.query.filter_by(kasa_id=kasa.id, is_deleted=False)\
                       .order_by(Odeme.tarih.desc(), Odeme.id.desc()).all()
-    return render_template('cari/kasa_hareketleri.html', kasa=kasa, hareketler=hareketler)
+    return render_template('cari/kasa_hareketleri.html', kasa=kasa, hareketler=hareketler, now=datetime.now())
 
 # -------------------------------------------------------------------------
 # 4. RAPORLAR VE MENÜ
