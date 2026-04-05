@@ -16,6 +16,7 @@ def create_app(config_class=Config):
 
     app = Flask(__name__)
     app.config.from_object(config_class)
+    app.jinja_env.auto_reload = app.config.get('TEMPLATES_AUTO_RELOAD', False)
 
     # Özel Jinja filtresini kaydet
     from .utils import truncate_name
@@ -49,6 +50,10 @@ def create_app(config_class=Config):
 
     # extensions'dan gelen nesneleri başlatıyoruz
     db.init_app(app)
+
+    # Import MakineDegisim before Ekipman to avoid relationship resolution issues
+    from app.makinedegisim.models import MakineDegisim
+    from app.filo.models import Ekipman
 
     ensure_admin()
     # Sadece ana uygulama çalışırken migrate başlatılsın, scriptlerde gerek yok
@@ -98,6 +103,10 @@ def create_app(config_class=Config):
     from app.filo import filo_bp
     app.register_blueprint(filo_bp, url_prefix='/filo')
 
+    # 3.1 Servis Kayitlari
+    from app.servis import servis_bp
+    app.register_blueprint(servis_bp, url_prefix='/servis')
+
     # 4. Kiralama (Sözleşmeler)
     from app.kiralama import kiralama_bp
     app.register_blueprint(kiralama_bp, url_prefix='/kiralama')
@@ -137,6 +146,10 @@ def create_app(config_class=Config):
     # 13. Raporlama Merkezi
     from app.raporlama import raporlama_bp
     app.register_blueprint(raporlama_bp, url_prefix='/raporlama')
+
+    # 13.1 Personel Yonetimi
+    from app.personel import personel_bp
+    app.register_blueprint(personel_bp, url_prefix='/personel')
 
     # 14. Takvim ve Hatırlatmalar
     from app.takvim import takvim_bp

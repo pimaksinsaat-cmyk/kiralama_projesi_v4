@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    :root {
+        --primary-blue: #667eea;
+        --text-dark: #2c3e50;
+    }
+
+    .container-main { padding: 2rem; background-color: #f4f7f9; min-height: 100vh; }
+    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; border-bottom: 2px solid #dee2e6; padding-bottom: 1rem; }
+    .page-header h1 { color: var(--text-dark); font-weight: 700; margin: 0; display: flex; align-items: center; gap: 10px; }
+    .back-btn { padding: 8px 16px; background-color: #eceff1; color: #455a64; border: none; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 0.85rem; }
+    .back-btn:hover { background-color: #cfd8dc; }
+    .summary-card { background: white; border-radius: 10px; padding: 1.5rem; margin-bottom: 2rem; box-shadow: 0 2px 6px rgba(0,0,0,0.05); border-top: 3px solid var(--primary-blue); }
+    .summary-info { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1.5rem; }
+    .info-item { display: flex; flex-direction: column; }
+    .info-label { font-size: 0.75rem; color: #7f8c8d; text-transform: uppercase; font-weight: 600; margin-bottom: 0.4rem; }
+    .info-value { font-size: 1rem; color: var(--text-dark); font-weight: 600; }
+    .form-panel { background: white; border-radius: 10px; padding: 2rem; box-shadow: 0 2px 6px rgba(0,0,0,0.05); max-width: 600px; }
+    .form-panel h2 { margin: 0 0 2rem 0; color: var(--text-dark); font-weight: 700; display: flex; align-items: center; gap: 8px; }
+    .form-group { margin-bottom: 1.5rem; }
+    .form-group label { display: block; font-weight: 600; color: #555; margin-bottom: 0.5rem; font-size: 0.9rem; }
+    .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 0.7rem; border: 1px solid #ddd; border-radius: 6px; font-size: 0.9rem; font-family: inherit; }
+    .form-group textarea { resize: vertical; min-height: 100px; }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: var(--primary-blue); box-shadow: 0 0 0 3px #f0f4ff; }
+    .form-buttons { display: flex; gap: 1rem; margin-top: 2rem; }
+    .btn-kaydet { flex: 1; padding: 0.8rem; background-color: var(--primary-blue); color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; }
+    .btn-kaydet:hover { background-color: #5568d3; }
+    .btn-iptal { flex: 1; padding: 0.8rem; background-color: #eceff1; color: #455a64; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
+    .btn-iptal:hover { background-color: #cfd8dc; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    @media (max-width: 768px) { .form-grid { grid-template-columns: 1fr; } .summary-info { grid-template-columns: 1fr; } }
+</style>
+
+<div class="container-main">
+    <div class="page-header">
+        <h1><i class="fas fa-edit"></i> Bakım Kaydını Düzenle</h1>
+        <a href="{{ url_for('araclar.bakim_gecmisi', arac_id=bakim.arac_id) }}" class="back-btn">← Geri Dön</a>
+    </div>
+
+    <!-- Özet Kartı -->
+    <div class="summary-card">
+        <div class="summary-info">
+            <div class="info-item">
+                <div class="info-label">Plaka</div>
+                <div class="info-value">{{ bakim.arac.plaka }}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Bakım Tarihi</div>
+                <div class="info-value">{{ bakim.tarih.strftime('%d.%m.%Y') }}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Maliyet</div>
+                <div class="info-value">{{ '{:,.0f}'.format(bakim.maliyet) }} ₺</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Düzenleme Formu -->
+    <div class="form-panel">
+        <h2><i class="fas fa-wrench"></i> Bakım Detaylarını Düzenle</h2>
+
+        <form method="POST" action="{{ url_for('araclar.bakim_duzenle', bakim_id=bakim.id) }}">
+            {{ form.csrf_token() }}
+            <div class="form-grid">
+                <div class="form-group">
+                    {{ form.tarih.label }}
+                    {{ form.tarih() }}
+                </div>
+
+                <div class="form-group">
+                    {{ form.bakim_tipi.label }}
+                    {{ form.bakim_tipi() }}
+                </div>
+            </div>
+
+            <div class="form-group">
+                {{ form.yapilan_islem.label }}
+                {{ form.yapilan_islem() }}
+            </div>
+
+            <div class="form-grid">
+                <div class="form-group">
+                    {{ form.kilometre.label }}
+                    {{ form.kilometre() }}
+                </div>
+
+                <div class="form-group">
+                    {{ form.maliyet.label }}
+                    {{ form.maliyet() }}
+                </div>
+            </div>
+
+            <div class="form-group">
+                {{ form.yapan_yer.label }}
+                {{ form.yapan_yer() }}
+            </div>
+
+            <div class="form-group">
+                {{ form.sonraki_bakim_turu.label }}
+                {{ form.sonraki_bakim_turu(onchange="toggleBakimField()") }}
+            </div>
+
+            <div class="form-group" id="km-group">
+                {{ form.sonraki_bakim_km.label }}
+                {{ form.sonraki_bakim_km() }}
+            </div>
+
+            <div class="form-group" id="tarih-group" style="display: none;">
+                {{ form.sonraki_bakim_tarihi.label }}
+                {{ form.sonraki_bakim_tarihi() }}
+            </div>
+
+            <div class="form-group">
+                {{ form.notlar.label }}
+                {{ form.notlar() }}
+            </div>
+
+            <script>
+                function toggleBakimField() {
+                    const turu = document.querySelector('[name="sonraki_bakim_turu"]').value;
+                    const kmGroup = document.getElementById('km-group');
+                    const tarihGroup = document.getElementById('tarih-group');
+
+                    if (turu === 'km') {
+                        kmGroup.style.display = 'block';
+                        tarihGroup.style.display = 'none';
+                    } else {
+                        kmGroup.style.display = 'none';
+                        tarihGroup.style.display = 'block';
+                    }
+                }
+                toggleBakimField();
+            </script>
+
+            <div class="form-buttons">
+                <button type="submit" class="btn-kaydet">
+                    <i class="fas fa-check"></i> Kaydet
+                </button>
+                <a href="{{ url_for('araclar.bakim_gecmisi', arac_id=bakim.arac_id) }}" class="btn-iptal">
+                    <i class="fas fa-times"></i> İptal
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}

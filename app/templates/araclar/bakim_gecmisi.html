@@ -1,0 +1,471 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    :root {
+        --primary-blue: #667eea;
+        --danger-red: #e74c3c;
+        --success-green: #27ae60;
+        --warning-orange: #f39c12;
+        --text-dark: #2c3e50;
+    }
+
+    .container-main {
+        padding: 2rem;
+        background-color: #f4f7f9;
+        min-height: 100vh;
+    }
+
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+        border-bottom: 2px solid #dee2e6;
+        padding-bottom: 1rem;
+    }
+
+    .page-header h1 {
+        color: var(--text-dark);
+        font-weight: 700;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .back-btn {
+        padding: 8px 16px;
+        background-color: #eceff1;
+        color: #455a64;
+        border: none;
+        border-radius: 6px;
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 0.85rem;
+    }
+
+    .back-btn:hover {
+        background-color: #cfd8dc;
+    }
+
+    .summary-cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .summary-card {
+        background: white;
+        border-radius: 10px;
+        padding: 1rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        border-left: 4px solid var(--primary-blue);
+        text-align: center;
+    }
+
+    .card-label {
+        font-size: 0.75rem;
+        color: #7f8c8d;
+        text-transform: uppercase;
+        margin-bottom: 0.3rem;
+    }
+
+    .card-value {
+        font-size: 1.8rem;
+        font-weight: 800;
+        color: var(--primary-blue);
+    }
+
+    .content-wrapper {
+        display: grid;
+        grid-template-columns: 1fr 380px;
+        gap: 2rem;
+    }
+
+    @media (max-width: 1024px) {
+        .content-wrapper {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .bakim-card {
+        background: white;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+        border-top: 3px solid var(--primary-blue);
+    }
+
+    .card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: start;
+        margin-bottom: 1rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid #f0f0f0;
+    }
+
+    .card-title {
+        font-size: 1rem;
+        font-weight: 700;
+        color: var(--text-dark);
+    }
+
+    .card-subtitle {
+        font-size: 0.8rem;
+        color: #7f8c8d;
+        margin-top: 0.2rem;
+    }
+
+    .card-info {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+        font-size: 0.85rem;
+        margin-bottom: 1rem;
+    }
+
+    .info-row {
+        color: #555;
+    }
+
+    .info-label {
+        font-weight: 600;
+        color: var(--primary-blue);
+        font-size: 0.75rem;
+        text-transform: uppercase;
+    }
+
+    .bakim-tipi-badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        margin-top: 0.3rem;
+        background-color: #f0f4ff;
+        color: var(--primary-blue);
+    }
+
+    .card-actions {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .btn-sm {
+        padding: 0.4rem 0.8rem;
+        font-size: 0.75rem;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: 600;
+        transition: all 0.2s;
+    }
+
+    .btn-edit {
+        background-color: #e3f2fd;
+        color: var(--primary-blue);
+    }
+
+    .btn-edit:hover {
+        background-color: #bbdefb;
+    }
+
+    .btn-delete {
+        background-color: #ffebee;
+        color: var(--danger-red);
+    }
+
+    .btn-delete:hover {
+        background-color: #ffcdd2;
+    }
+
+    .form-panel {
+        background: white;
+        border-radius: 10px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+        height: fit-content;
+        position: sticky;
+        top: 100px;
+    }
+
+    .form-panel h3 {
+        margin: 0 0 1.5rem 0;
+        color: var(--text-dark);
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .form-group {
+        margin-bottom: 1.2rem;
+    }
+
+    .form-group label {
+        display: block;
+        font-weight: 600;
+        color: #555;
+        margin-bottom: 0.4rem;
+        font-size: 0.9rem;
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+        width: 100%;
+        padding: 0.6rem;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        font-size: 0.9rem;
+        font-family: inherit;
+    }
+
+    .form-group textarea {
+        resize: vertical;
+        min-height: 80px;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus {
+        outline: none;
+        border-color: var(--primary-blue);
+        box-shadow: 0 0 0 3px #f0f4ff;
+    }
+
+    .form-panel button {
+        width: 100%;
+        padding: 0.8rem;
+        background-color: var(--primary-blue);
+        color: white;
+        border: none;
+        border-radius: 6px;
+        font-weight: 600;
+        cursor: pointer;
+    }
+
+    .form-panel button:hover {
+        background-color: #5568d3;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 3rem;
+        background: white;
+        border-radius: 10px;
+    }
+
+    .empty-icon {
+        font-size: 2.5rem;
+        margin-bottom: 1rem;
+    }
+
+    .empty-state h3 {
+        color: #94a3b8;
+        margin: 0;
+    }
+</style>
+
+<div class="container-main">
+    <div class="page-header">
+        <h1><i class="fas fa-wrench"></i> {{ arac.plaka }} — Bakım Geçmişi</h1>
+        <a href="{{ url_for('araclar.index') }}" class="back-btn">← Geri Dön</a>
+    </div>
+
+    <!-- Özet Kartları -->
+    <div class="summary-cards">
+        <div class="summary-card">
+            <div class="card-label">Toplam Bakım</div>
+            <div class="card-value">{{ bakim_kayitlari|length }}</div>
+        </div>
+        <div class="summary-card" style="border-left-color: var(--warning-orange);">
+            <div class="card-label">Toplam Maliyet</div>
+            <div class="card-value" style="color: var(--warning-orange); font-size: 1.3rem;">
+                {{ '{:,.0f}'.format(bakim_kayitlari|map(attribute='maliyet')|select|sum) }} ₺
+            </div>
+        </div>
+        <div class="summary-card" style="border-left-color: var(--success-green);">
+            <div class="card-label">Son Bakım</div>
+            <div class="card-value" style="color: var(--success-green); font-size: 1rem;">
+                {% if bakim_kayitlari %}
+                    {{ bakim_kayitlari[0].tarih.strftime('%d.%m.%Y') }}
+                {% else %}
+                    -
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="content-wrapper">
+        <!-- Sol: Bakım Listesi -->
+        <div>
+            {% if bakim_kayitlari %}
+                {% for bakim in bakim_kayitlari %}
+                <div class="bakim-card">
+                    <div class="card-header">
+                        <div>
+                            <div class="card-title">{{ bakim.tarih.strftime('%d.%m.%Y') }}</div>
+                            <div class="card-subtitle">
+                                {% set tipi_labels = {'rutin': 'Rutin Bakım', 'acil': 'Acil Tamir', 'degisim': 'Yağ/Filtre Değişimi', 'elektrik': 'Elektrik Tamiri', 'lastik': 'Lastik Değişimi', 'fren': 'Fren Bakımı', 'diger': 'Diğer'} %}
+                                {{ tipi_labels.get(bakim.bakim_tipi, bakim.bakim_tipi) }}
+                            </div>
+                            <span class="bakim-tipi-badge">{{ bakim.bakim_tipi.upper() }}</span>
+                        </div>
+                        <div style="text-align: right; color: #7f8c8d; font-size: 0.85rem;">
+                            {% if bakim.maliyet %}
+                                <strong style="color: var(--warning-orange);">{{ '{:,.0f}'.format(bakim.maliyet) }} ₺</strong>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="card-info">
+                        {% if bakim.yapilan_islem %}
+                        <div class="info-row">
+                            <div class="info-label">Yapılan İşlem</div>
+                            {{ bakim.yapilan_islem }}
+                        </div>
+                        {% endif %}
+                        {% if bakim.kilometre %}
+                        <div class="info-row">
+                            <div class="info-label">Kilometre</div>
+                            {{ bakim.kilometre }} km
+                        </div>
+                        {% endif %}
+                        {% if bakim.yapan_yer %}
+                        <div class="info-row">
+                            <div class="info-label">Yapan Kişi/Servis</div>
+                            {{ bakim.yapan_yer }}
+                        </div>
+                        {% endif %}
+                        {% if bakim.sonraki_bakim_turu == 'km' and bakim.sonraki_bakim_km %}
+                        <div class="info-row">
+                            <div class="info-label">Sonraki Bakım (KM)</div>
+                            <strong style="color: var(--success-green);">{{ bakim.sonraki_bakim_km }} km</strong>
+                        </div>
+                        {% elif bakim.sonraki_bakim_turu == 'tarih' and bakim.sonraki_bakim_tarihi %}
+                        <div class="info-row">
+                            <div class="info-label">Sonraki Bakım (Tarih)</div>
+                            <strong style="color: var(--success-green);">{{ bakim.sonraki_bakim_tarihi.strftime('%d.%m.%Y') }}</strong>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    {% if bakim.notlar %}
+                    <div style="background: #f9f9f9; padding: 0.8rem; border-radius: 6px; margin-bottom: 1rem; font-size: 0.9rem;">
+                        <strong style="color: #2c3e50;">Notlar:</strong>
+                        <p style="margin: 0.3rem 0 0 0; color: #555;">{{ bakim.notlar }}</p>
+                    </div>
+                    {% endif %}
+
+                    <!-- İşlemler -->
+                    <div class="card-actions">
+                        <a href="{{ url_for('araclar.bakim_duzenle', bakim_id=bakim.id) }}" class="btn-sm btn-edit" style="text-decoration: none; display: inline-block;">
+                            <i class="fas fa-edit"></i> Düzenle
+                        </a>
+                        <form method="POST" action="{{ url_for('araclar.bakim_sil', bakim_id=bakim.id) }}" style="display: inline;" onsubmit="return confirm('Bu bakım kaydını silmek istediğiniz emin misiniz?');">
+                            <button type="submit" class="btn-sm btn-delete">
+                                <i class="fas fa-trash"></i> Sil
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+            <div class="empty-state">
+                <div class="empty-icon">🔧</div>
+                <h3>Henüz bakım kaydı yok</h3>
+                <p style="color: #94a3b8;">Bu araç için kaydedilmiş bakım bulunmuyor. Sağdaki formdan ekleyebilirsiniz.</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Sağ: Sticky Form -->
+        <div class="form-panel">
+            <h3><i class="fas fa-plus-circle"></i> Yeni Bakım Kaydı</h3>
+
+            <form method="POST" action="{{ url_for('araclar.bakim_ekle', arac_id=arac.id) }}">
+                {{ form.csrf_token() }}
+                <div class="form-group">
+                    {{ form.tarih.label }}
+                    {{ form.tarih() }}
+                </div>
+
+                <div class="form-group">
+                    {{ form.bakim_tipi.label }}
+                    {{ form.bakim_tipi() }}
+                </div>
+
+                <div class="form-group">
+                    {{ form.yapilan_islem.label }}
+                    {{ form.yapilan_islem(placeholder="Ne yapıldı?") }}
+                </div>
+
+                <div class="form-group">
+                    {{ form.kilometre.label }}
+                    {{ form.kilometre(placeholder="km cinsinden") }}
+                </div>
+
+                <div class="form-group">
+                    {{ form.maliyet.label }}
+                    {{ form.maliyet(placeholder="0.00") }}
+                </div>
+
+                <div class="form-group">
+                    {{ form.yapan_yer.label }}
+                    {{ form.yapan_yer(placeholder="Servis/Usta adı") }}
+                </div>
+
+                <div class="form-group">
+                    {{ form.sonraki_bakim_turu.label }}
+                    {{ form.sonraki_bakim_turu(onchange="toggleBakimField()") }}
+                </div>
+
+                <div class="form-group" id="km-group">
+                    {{ form.sonraki_bakim_km.label }}
+                    {{ form.sonraki_bakim_km(placeholder="Örn: 5000") }}
+                </div>
+
+                <div class="form-group" id="tarih-group" style="display: none;">
+                    {{ form.sonraki_bakim_tarihi.label }}
+                    {{ form.sonraki_bakim_tarihi() }}
+                </div>
+
+                <div class="form-group">
+                    {{ form.notlar.label }}
+                    {{ form.notlar(placeholder="Detaylı notlar...") }}
+                </div>
+
+                <script>
+                    function toggleBakimField() {
+                        const turu = document.querySelector('[name="sonraki_bakim_turu"]').value;
+                        const kmGroup = document.getElementById('km-group');
+                        const tarihGroup = document.getElementById('tarih-group');
+
+                        if (turu === 'km') {
+                            kmGroup.style.display = 'block';
+                            tarihGroup.style.display = 'none';
+                        } else {
+                            kmGroup.style.display = 'none';
+                            tarihGroup.style.display = 'block';
+                        }
+                    }
+                    // Sayfayı yüklendiğinde de ayarla
+                    toggleBakimField();
+                </script>
+
+                <div class="form-group">
+                    {{ form.submit() }}
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
