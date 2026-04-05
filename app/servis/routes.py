@@ -222,21 +222,22 @@ def sil(id):
 @servis_bp.route('/bakimda')
 @login_required
 def bakimda():
-    """Serviste olan (bakımda) makinelerin listesi"""
+    """Serviste olan (bakımda) makinelerin listesi ve aktif makineler"""
     try:
         page = request.args.get('page', 1, type=int)
         q = request.args.get('q', '', type=str)
 
-        base_query = Ekipman.query.filter(
+        # Serviste olan makineler (bakımda)
+        serviste_query = Ekipman.query.filter(
             Ekipman.firma_tedarikci_id.is_(None),
             Ekipman.is_active == True,
             Ekipman.calisma_durumu == 'serviste'
         ).options(subqueryload(Ekipman.bakim_kayitlari))
 
         if q:
-            base_query = base_query.filter(Ekipman.kod.ilike(f'%{q}%'))
+            serviste_query = serviste_query.filter(Ekipman.kod.ilike(f'%{q}%'))
 
-        pagination = base_query.order_by(Ekipman.kod).paginate(page=page, per_page=25, error_out=False)
+        pagination = serviste_query.order_by(Ekipman.kod).paginate(page=page, per_page=25, error_out=False)
         for ekipman in pagination.items:
             acik_bakimlar = [
                 kayit for kayit in ekipman.bakim_kayitlari
@@ -244,10 +245,90 @@ def bakimda():
             ]
             ekipman.aktif_bakim_kaydi = max(acik_bakimlar, key=lambda kayit: (kayit.tarih or date.min, kayit.id)) if acik_bakimlar else None
 
-        return render_template('servis/bakimda.html', ekipmanlar=pagination.items, pagination=pagination, q=q)
+        # Aktif makineler (sahadaki, kullanımda olan) - sayfalanmaz
+        aktif_query = Ekipman.query.filter(
+            Ekipman.firma_tedarikci_id.is_(None),
+            Ekipman.is_active == True,
+            Ekipman.calisma_durumu != 'serviste'
+        ).order_by(Ekipman.kod)
+
+        if q:
+            aktif_query = aktif_query.filter(Ekipman.kod.ilike(f'%{q}%'))
+
+        aktif_makineler = aktif_query.all()
+
+        return render_template('servis/bakimda.html',
+                             ekipmanlar=pagination.items,
+                             pagination=pagination,
+                             aktif_makineler=aktif_makineler,
+                             q=q)
     except Exception as e:
         flash(f"Hata: {str(e)}", "danger")
-        return render_template('servis/bakimda.html', ekipmanlar=[], pagination=None, q='')
+        return render_template('servis/bakimda.html',
+                             ekipmanlar=[],
+                             pagination=None,
+                             aktif_makineler=[],
+                             q='')
+
+
+@servis_bp.route('/hizli_servis_ac', methods=['POST'])
+@login_required
+def hizli_servis_ac():
+    """Aktif makineler için hızlı servis kaydı aç (servis türüne göre makine durumunu ayarla)"""
+    try:
+        ekipman_id = request.form.get('ekipman_id', type=int)
+        servis_tipi = request.form.get('servis_tipi', 'ic_servis')
+
+        if not ekipman_id:
+            flash('Makine seçiniz.', 'warning')
+            return redirect(url_for('servis.bakimda'))
+
+        ekipman = EkipmanService.get_by_id(ekipman_id)
+        if not ekipman:
+            flash('Makine bulunamadı.', 'danger')
+            return redirect(url_for('servis.bakimda'))
+
+        # Servis kaydı oluştur
+        bakim_verileri = {
+            'tarih': date.today(),
+            'bakim_tipi': 'ariza',
+            'servis_tipi': servis_tipi,
+            'servis_veren_firma_id': None,
+            'servis_veren_kisi': None,
+            'aciklama': 'Hızlı servis kaydı açıldı.',
+            'calisma_saati': None,
+            'sonraki_bakim_tarihi': None,
+            'toplam_iscilik_maliyeti': Decimal('0'),
+            'durum': 'acik',
+        }
+
+        bakim_id = BakimService.bakim_kaydet(ekipman_id, bakim_verileri, actor_id=get_actor_id())
+
+        # Servis türüne göre makine durumunu ayarla
+        # Yerinde servis = makine durumu değişmez (aktif kalır)
+        # İç/Dış servis = makine serviste geçer
+        if servis_tipi != 'yerinde_servis':
+            ekipman.calisma_durumu = 'serviste'
+            from app.extensions import db
+            db.session.commit()
+
+        OperationLogService.log(
+            module='servis', action='hizli_servis_ac',
+            user_id=get_actor_id(),
+            username=getattr(current_user, 'username', None),
+            entity_type='Ekipman', entity_id=ekipman_id,
+            description=f"{ekipman.kod} için servis kaydı açıldı ({servis_tipi}).",
+            success=True
+        )
+
+        flash(f"'{ekipman.kod}' için servis kaydı açıldı.", "success")
+        return redirect(url_for('servis.duzenle', id=bakim_id))
+    except ValidationError as e:
+        flash(str(e), "warning")
+        return redirect(url_for('servis.bakimda'))
+    except Exception as e:
+        flash(f"Hata: {str(e)}", "danger")
+        return redirect(url_for('servis.bakimda'))
 
 
 @servis_bp.route('/bakim_bitir/<int:id>', methods=['POST'])

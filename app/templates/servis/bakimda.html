@@ -12,10 +12,22 @@
     a:hover { text-decoration: underline; }
     .btn { display: inline-block; padding: 6px 12px; border-radius: 5px; text-decoration: none; font-weight: bold; color: white; transition: background-color 0.2s; border: none; cursor: pointer; font-size: 0.9em; }
     .btn-secondary { background-color: #6c757d; }
+    .btn-success { background-color: #28a745; }
+    .btn-success:hover { background-color: #218838; }
     .alert { padding: 1rem; margin-bottom: 1rem; border: 1px solid transparent; border-radius: .25rem; }
     .alert-info { color: #0c5460; background-color: #d1ecf1; border-color: #bee5eb; }
     .badge { display: inline-block; padding: .45em .75em; font-size: .8em; font-weight: 700; line-height: 1; color: #fff; text-align: center; white-space: nowrap; vertical-align: baseline; border-radius: .25rem; }
     .bg-secondary { background-color: #6c757d; }
+    .bg-success { background-color: #28a745; }
+    .bg-info { background-color: #17a2b8; }
+
+    /* Tabs */
+    .nav-tabs { border-bottom: 2px solid #dee2e6; display: flex; gap: 1rem; margin-bottom: 2rem; }
+    .nav-tabs .nav-link { padding: 10px 15px; border: none; background: none; color: #667eea; font-weight: 600; cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.2s; }
+    .nav-tabs .nav-link.active { border-bottom-color: #667eea; color: #667eea; }
+    .nav-tabs .nav-link:hover { color: #5568d3; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
 
     /* Arama ve Sayfalama */
     .search-form { display: flex; gap: 10px; margin-bottom: 15px; }
@@ -41,17 +53,27 @@
     .context-menu-item.manage:hover { background-color: #dbeafe; color: #0a58ca; }
     .context-menu-divider { height: 1px; margin: 5px 0; background-color: #eee; }
 
+    /* Aktif makineler stili */
+    .aktif-satiri { cursor: pointer; transition: background-color 0.15s ease; }
+    .aktif-satiri:hover { background-color: #f0f7ff; }
+    .servis-turu-form { display: none; padding: 15px; background: #f8f9fa; border-radius: 5px; margin-top: 1rem; }
+    .servis-turu-form.show { display: block; }
+    .form-group { margin-bottom: 10px; }
+    .form-group label { display: block; font-weight: 600; margin-bottom: 5px; color: #333; }
+    .form-group select { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 5px; font-size: 0.9rem; }
+
     /* Mobil Uyumluluk */
     @media (max-width: 768px) {
         .container { padding: 10px; }
         table { font-size: 0.8em; }
         th, td { padding: 8px; }
+        .nav-tabs { flex-direction: column; }
     }
 </style>
 
 <div class="container">
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <h1>Bakımdaki (Serviste) Makineler</h1>
+        <h1>Servis Yönetimi</h1>
         <div class="d-flex gap-2">
             <a href="{{ url_for('servis.index') }}" class="btn btn-secondary">← Servis Kayıtları</a>
             <a href="{{ url_for('filo.index') }}" class="btn btn-secondary">← Filo Listesi</a>
@@ -68,79 +90,158 @@
         {% endif %}
     {% endwith %}
 
-    <!-- Arama Formu -->
-    <form method="GET" action="{{ url_for('servis.bakimda') }}" class="search-form">
-        <input type="text" name="q" placeholder="Makine Kodu, Tipi veya Seri No ile ara..." value="{{ q or '' }}">
-        <button type="submit">Bul</button>
-    </form>
-
-    <div style="overflow-x: auto;">
-        <table>
-            <thead>
-                <tr>
-                    <th>
-                        Makine Kodu
-                        <br>
-                        <small class="text-muted" style="font-weight: normal;">(İşlemler için sağ tık, basılı tut veya satıra tıkla)</small>
-                    </th>
-                    <th>Marka / Model</th>
-                    <th>Seri No</th>
-                    <th>Servise Giriş / Sayaç</th>
-                    <th>Durum</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for ekipman in ekipmanlar %}
-                <tr class="bakim-satiri"
-                    data-ekipman-kod="{{ ekipman.kod }}"
-                    data-duzenle-url="{{ url_for('servis.duzenle', id=ekipman.aktif_bakim_kaydi.id) if ekipman.aktif_bakim_kaydi else url_for('servis.index', q=ekipman.kod) }}"
-                    data-bilgi-url="{{ url_for('servis.index', q=ekipman.kod) }}"
-                    data-bitir-url="{{ url_for('servis.bakim_bitir', id=ekipman.id) }}"
-                    data-csrf-token="{{ csrf_token() }}"
-                    >
-                    <td><strong>{{ ekipman.kod }}</strong></td>
-                    <td>{{ ekipman.marka }} / {{ ekipman.model }}</td>
-                    <td>{{ ekipman.seri_no }}</td>
-                    <td>
-                        {% if ekipman.aktif_bakim_kaydi %}
-                            <div>{{ ekipman.aktif_bakim_kaydi.tarih.strftime('%d.%m.%Y') if ekipman.aktif_bakim_kaydi.tarih else '-' }}</div>
-                            <small class="text-muted">{{ ekipman.aktif_bakim_kaydi.calisma_saati if ekipman.aktif_bakim_kaydi.calisma_saati is not none else '-' }} saat/km</small>
-                        {% else %}
-                            -
-                        {% endif %}
-                    </td>
-                    <td><span class="badge bg-secondary">Serviste</span></td>
-                </tr>
-                {% else %}
-                <tr>
-                    <td colspan="5" class="text-center text-muted" style="padding: 20px;">
-                        Şu anda bakımda (serviste) olan makine bulunmamaktadır.
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+    <!-- Tab Navigation -->
+    <div class="nav-tabs">
+        <button class="nav-link active" data-tab="serviste">
+            <i class="fas fa-tools"></i> Serviste Olanlar ({{ ekipmanlar|length }})
+        </button>
+        <button class="nav-link" data-tab="aktif">
+            <i class="fas fa-check-circle"></i> Aktif Makineler ({{ aktif_makineler|length }})
+        </button>
     </div>
 
-    <!-- Sayfalama -->
-    {% if pagination %}
-    <div class="pagination">
-        <a href="{{ url_for('servis.bakimda', page=pagination.prev_num, q=q) if pagination.has_prev else '#' }}" class="{{ 'disabled' if not pagination.has_prev else '' }}">&laquo; Önceki</a>
-        {% for page_num in pagination.iter_pages() %}
-            {% if page_num %}
-                {% if page_num != pagination.page %}
-                    <a href="{{ url_for('servis.bakimda', page=page_num, q=q) }}">{{ page_num }}</a>
+    <!-- TAB 1: Serviste Olan Makineler -->
+    <div id="serviste" class="tab-content active">
+        <form method="GET" action="{{ url_for('servis.bakimda') }}" class="search-form">
+            <input type="text" name="q" placeholder="Makine Kodu, Tipi veya Seri No ile ara..." value="{{ q or '' }}">
+            <button type="submit">Bul</button>
+        </form>
+
+        <div style="overflow-x: auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>
+                            Makine Kodu
+                            <br>
+                            <small class="text-muted" style="font-weight: normal;">(İşlemler için sağ tık, basılı tut veya satıra tıkla)</small>
+                        </th>
+                        <th>Marka / Model</th>
+                        <th>Seri No</th>
+                        <th>Servise Giriş / Sayaç</th>
+                        <th>Durum</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ekipman in ekipmanlar %}
+                    <tr class="bakim-satiri"
+                        data-ekipman-kod="{{ ekipman.kod }}"
+                        data-duzenle-url="{{ url_for('servis.duzenle', id=ekipman.aktif_bakim_kaydi.id) if ekipman.aktif_bakim_kaydi else url_for('servis.index', q=ekipman.kod) }}"
+                        data-bilgi-url="{{ url_for('servis.index', q=ekipman.kod) }}"
+                        data-bitir-url="{{ url_for('servis.bakim_bitir', id=ekipman.id) }}"
+                        data-csrf-token="{{ csrf_token() }}"
+                        >
+                        <td><strong>{{ ekipman.kod }}</strong></td>
+                        <td>{{ ekipman.marka }} / {{ ekipman.model }}</td>
+                        <td>{{ ekipman.seri_no }}</td>
+                        <td>
+                            {% if ekipman.aktif_bakim_kaydi %}
+                                <div>{{ ekipman.aktif_bakim_kaydi.tarih.strftime('%d.%m.%Y') if ekipman.aktif_bakim_kaydi.tarih else '-' }}</div>
+                                <small class="text-muted">{{ ekipman.aktif_bakim_kaydi.calisma_saati if ekipman.aktif_bakim_kaydi.calisma_saati is not none else '-' }} saat/km</small>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td><span class="badge bg-secondary">Serviste</span></td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="text-center text-muted" style="padding: 20px;">
+                            Şu anda bakımda (serviste) olan makine bulunmamaktadır.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Sayfalama -->
+        {% if pagination %}
+        <div class="pagination">
+            <a href="{{ url_for('servis.bakimda', page=pagination.prev_num, q=q) if pagination.has_prev else '#' }}" class="{{ 'disabled' if not pagination.has_prev else '' }}">&laquo; Önceki</a>
+            {% for page_num in pagination.iter_pages() %}
+                {% if page_num %}
+                    {% if page_num != pagination.page %}
+                        <a href="{{ url_for('servis.bakimda', page=page_num, q=q) }}">{{ page_num }}</a>
+                    {% else %}
+                        <span class="active">{{ page_num }}</span>
+                    {% endif %}
                 {% else %}
-                    <span class="active">{{ page_num }}</span>
+                    <span class="disabled">...</span>
                 {% endif %}
-            {% else %}
-                <span class="disabled">...</span>
-            {% endif %}
-        {% endfor %}
-        <a href="{{ url_for('servis.bakimda', page=pagination.next_num, q=q) if pagination.has_next else '#' }}" class="{{ 'disabled' if not pagination.has_next else '' }}">Sonraki &raquo;</a>
+            {% endfor %}
+            <a href="{{ url_for('servis.bakimda', page=pagination.next_num, q=q) if pagination.has_next else '#' }}" class="{{ 'disabled' if not pagination.has_next else '' }}">Sonraki &raquo;</a>
+        </div>
+        {% endif %}
     </div>
-    {% endif %}
 
+    <!-- TAB 2: Aktif Makineler - Hızlı Servis -->
+    <div id="aktif" class="tab-content">
+        <h3>Aktif Makineler (Sahada Kullanımda)</h3>
+
+        <div style="overflow-x: auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Makine Kodu</th>
+                        <th>Marka / Model</th>
+                        <th>Seri No</th>
+                        <th>Durum</th>
+                        <th>İşlem</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ekipman in aktif_makineler %}
+                    <tr class="aktif-satiri" data-ekipman-id="{{ ekipman.id }}" data-ekipman-kod="{{ ekipman.kod }}">
+                        <td><strong>{{ ekipman.kod }}</strong></td>
+                        <td>{{ ekipman.marka }} / {{ ekipman.model }}</td>
+                        <td>{{ ekipman.seri_no }}</td>
+                        <td>
+                            {% if ekipman.calisma_durumu == 'bosta' %}
+                                <span class="badge bg-info">Boşta</span>
+                            {% elif ekipman.calisma_durumu == 'kullanimda' %}
+                                <span class="badge bg-success">Kullanımda</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ ekipman.calisma_durumu }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <button class="btn btn-success btn-sm" onclick="toggleServisForm(this)" style="padding: 4px 10px; font-size: 0.8rem;">
+                                <i class="fas fa-plus-circle"></i> Servis Aç
+                            </button>
+                        </td>
+                    </tr>
+                    <tr class="servis-turu-form">
+                        <td colspan="5">
+                            <form method="POST" action="{{ url_for('servis.hizli_servis_ac') }}" style="display: inline;">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="ekipman_id" value="{{ ekipman.id }}">
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label for="servis_tipi_{{ ekipman.id }}">Servis Türü:</label>
+                                    <div style="display: flex; gap: 10px; align-items: center;">
+                                        <select name="servis_tipi" id="servis_tipi_{{ ekipman.id }}" required style="flex: 1;">
+                                            <option value="yerinde_servis">Yerinde Servis (Makine aktif kalır)</option>
+                                            <option value="ic_servis">İç Servis (Makine serviste geçer)</option>
+                                            <option value="dis_servis">Dış Servis (Makine serviste geçer)</option>
+                                        </select>
+                                        <button type="submit" class="btn btn-success" style="padding: 6px 15px;">Aç</button>
+                                        <button type="button" class="btn btn-secondary" onclick="toggleServisForm(this.parentElement.parentElement.parentElement.previousElementSibling)" style="padding: 6px 15px;">İptal</button>
+                                    </div>
+                                </div>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="text-center text-muted" style="padding: 20px;">
+                            Aktif makine bulunmamaktadır.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
 </div>
 
 <!-- Gizli Sağ Tık Menüsü -->
@@ -164,6 +265,31 @@
 </form>
 
 <script>
+// Tab switching
+document.querySelectorAll('.nav-link').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const tabName = this.dataset.tab;
+
+        // Hide all tabs
+        document.querySelectorAll('.tab-content').forEach(tab => {
+            tab.classList.remove('active');
+        });
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.classList.remove('active');
+        });
+
+        // Show selected tab
+        document.getElementById(tabName).classList.add('active');
+        this.classList.add('active');
+    });
+});
+
+// Toggle servis form
+function toggleServisForm(btn) {
+    const form = btn.nextElementSibling;
+    form.classList.toggle('show');
+}
+
 document.addEventListener('DOMContentLoaded', function() {
 
     // Mobil Uzun Basma (Long Press)
