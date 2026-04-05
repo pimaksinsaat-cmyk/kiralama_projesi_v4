@@ -100,6 +100,7 @@ def _to_decimal(value, default='0'):
     except (InvalidOperation, ValueError, TypeError):
         return Decimal(default)
 
+
 # -------------------------------------------------------------------------
 # 1. Makine Parkı Listeleme (Sadece Aktifler)
 # -------------------------------------------------------------------------
@@ -757,12 +758,18 @@ def bakimda():
             Ekipman.firma_tedarikci_id.is_(None),
             Ekipman.is_active == True,
             Ekipman.calisma_durumu == 'serviste'
-        )
+        ).options(subqueryload(Ekipman.bakim_kayitlari))
         
         if q:
             base_query = base_query.filter(Ekipman.kod.ilike(f'%{q}%'))
             
         pagination = base_query.order_by(Ekipman.kod).paginate(page=page, per_page=25, error_out=False)
+        for ekipman in pagination.items:
+            acik_bakimlar = [
+                kayit for kayit in ekipman.bakim_kayitlari
+                if not kayit.is_deleted and kayit.durum in {'acik', 'parca_bekliyor'}
+            ]
+            ekipman.aktif_bakim_kaydi = max(acik_bakimlar, key=lambda kayit: (kayit.tarih or date.min, kayit.id)) if acik_bakimlar else None
         return render_template('filo/bakimda.html', ekipmanlar=pagination.items, pagination=pagination, q=q)
     except Exception as e:
         flash(f"Hata: {str(e)}", "danger")
@@ -773,19 +780,25 @@ def bakima_al():
     try:
         ekipman_id = request.form.get('ekipman_id', type=int)
         tarih = request.form.get('tarih')
-        aciklama = request.form.get('aciklama')
+        calisma_saati = request.form.get('calisma_saati', type=int)
         
-        if not (ekipman_id and tarih):
-            flash('Eksik bilgi! Lütfen tarih seçiniz.', 'danger')
+        if ekipman_id is None or not tarih:
+            flash('Eksik bilgi! Lütfen bakım başlangıç tarihini giriniz.', 'danger')
             return redirect(url_for('filo.index'))
 
         bakim_verileri = {
             'tarih': tarih,
-            'aciklama': aciklama or "Listeden servise alındı.",
-            'calisma_saati': 0
+            'bakim_tipi': 'ariza',
+            'servis_tipi': 'ic_servis',
+            'servis_veren_firma_id': None,
+            'servis_veren_kisi': None,
+            'aciklama': 'Filo listesinden bakıma alındı. Detaylar bakımdaki makine kartından yönetilecek.',
+            'calisma_saati': calisma_saati,
+            'sonraki_bakim_tarihi': None,
+            'toplam_iscilik_maliyeti': Decimal('0'),
+            'durum': 'acik',
         }
         
-        EkipmanService.update(ekipman_id, {'calisma_durumu': 'serviste'}, actor_id=get_actor_id())
         BakimService.bakim_kaydet(ekipman_id, bakim_verileri, actor_id=get_actor_id())
         OperationLogService.log(
             module='filo', action='bakima_al',
@@ -795,7 +808,7 @@ def bakima_al():
             description=f"Makine #{ekipman_id} bakıma alındı.",
             success=True
         )
-        flash("Makine başarıyla bakıma alındı.", 'success')
+        flash("Makine başarıyla bakıma alındı ve servis kaydı oluşturuldu.", 'success')
     except ValidationError as e:
         OperationLogService.log(
             module='filo', action='bakima_al',
@@ -824,7 +837,7 @@ def bakim_bitir(id):
     try:
         ekipman = EkipmanService.get_by_id(id)
         if ekipman and ekipman.calisma_durumu == 'serviste':
-            EkipmanService.update(id, {'calisma_durumu': 'bosta'}, actor_id=get_actor_id())
+            BakimService.ekipman_bakimini_tamamla(id, actor_id=get_actor_id())
             OperationLogService.log(
                 module='filo', action='bakim_bitir',
                 user_id=get_actor_id(),

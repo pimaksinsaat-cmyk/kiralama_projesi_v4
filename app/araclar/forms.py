@@ -29,7 +29,7 @@ class AracBakimForm(BaseForm):
     tarih = StringField('Bakım Tarihi', validators=[DataRequired()], render_kw={"type": "date"})
     bakim_tipi = SelectField('Bakım Türü', choices=BAKIM_TURLERI, validators=[DataRequired()])
     yapilan_islem = StringField('Yapılan İşlem', validators=[Optional()])
-    maliyet = MoneyField('Maliyet (₺)', validators=[Optional()])
+    maliyet = MoneyField('Maliyet (TL)', validators=[Optional()])
     kilometre = IntegerField('Kilometre', validators=[Optional(), NumberRange(min=0)])
     yapan_yer = StringField('Yapan Kişi/Servis', validators=[Optional()])
     notlar = TextAreaField('Notlar', validators=[Optional()])

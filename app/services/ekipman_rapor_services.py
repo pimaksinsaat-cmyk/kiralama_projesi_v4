@@ -6,8 +6,9 @@ Makinenin satın alma maliyeti, kiralama geliri, servis masrafları ve ROI hesap
 from decimal import Decimal
 from datetime import datetime, date
 from sqlalchemy import func, and_, or_
+from sqlalchemy.orm import joinedload
 from app.extensions import db
-from app.filo.models import Ekipman, BakimKaydi, KullanilanParca
+from app.filo.models import Ekipman, BakimKaydi, KullanilanParca, StokHareket
 from app.kiralama.models import Kiralama, KiralamaKalemi
 
 
@@ -280,31 +281,35 @@ class EkipmanRaporuService:
         """
         Makinenin belirtilen tarih aralığında yapılan servis masraflarını hesaplar.
         """
-        # BakimKaydi → KullanilanParca → StokKarti → StokHareket
-        query = db.session.query(
-            func.sum(KullanilanParca.kullanilan_adet).label('total_adet')
-        ).join(
-            BakimKaydi, KullanilanParca.bakim_kaydi_id == BakimKaydi.id
-        ).filter(
-            BakimKaydi.ekipman_id == ekipman_id
+        query = BakimKaydi.query.filter(
+            BakimKaydi.ekipman_id == ekipman_id,
+            BakimKaydi.is_deleted == False,
+        ).options(
+            joinedload(BakimKaydi.kullanilan_parcalar)
         )
-        
+
         if start_date:
             query = query.filter(BakimKaydi.tarih >= start_date)
         if end_date:
             query = query.filter(BakimKaydi.tarih <= end_date)
-        
-        result = query.first()
-        
-        # TODO: Parça birim fiyatları ile çarpılıp toplamı hesaplanmalı
-        # Şimdilik sadece adet sayısı alıyoruz, gerçek implementasyonda:
-        # SUM(KullanilanParca.kullanilan_adet * StokKarti.birim_fiyat)
-        
-        if not result or result.total_adet is None:
-            return Decimal(0)
-        
-        # Örnek: Adet başına 100 TRY varsayalım (gerçek fiyat StokHareket'den gelmeliydi)
-        return Decimal(result.total_adet or 0) * Decimal(100)
+
+        toplam_gider = Decimal('0')
+        for bakim_kaydi in query.all():
+            toplam_gider += Decimal(bakim_kaydi.toplam_iscilik_maliyeti or 0)
+
+            for parca in bakim_kaydi.kullanilan_parcalar:
+                birim_fiyat = Decimal(parca.birim_fiyat or 0)
+
+                if birim_fiyat <= 0 and parca.stok_karti_id:
+                    son_stok_hareketi = StokHareket.query.filter(
+                        StokHareket.stok_karti_id == parca.stok_karti_id,
+                        StokHareket.hareket_tipi == 'giris',
+                    ).order_by(StokHareket.tarih.desc(), StokHareket.id.desc()).first()
+                    birim_fiyat = Decimal(son_stok_hareketi.birim_fiyat or 0) if son_stok_hareketi else Decimal('0')
+
+                toplam_gider += Decimal(parca.kullanilan_adet or 0) * birim_fiyat
+
+        return toplam_gider
     
     @staticmethod
     def _calculate_nakliye_giderleri(ekipman_id: int, start_date: date = None, end_date: date = None) -> Decimal:

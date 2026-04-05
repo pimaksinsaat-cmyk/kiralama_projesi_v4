@@ -493,8 +493,8 @@ function liveCalc() {
     if (bas && bit && infoDiv) {
         const gun = hesaplaGun(bas, bit);
         const toplam = (gun * gunluk) + nakToplam;
-        const nakStr = nakBirim > 0 ? ` + ${sefer} sefer x ${formatTRCurrency(nakBirim)} ₺` : '';
-        infoDiv.innerHTML = `<i class="fas fa-calculator me-2"></i> Tahmini: ${gun} Gün x ${formatTRCurrency(gunluk)} ₺${nakStr} = <span class="text-success">${formatTRCurrency(toplam)} ₺</span>`;
+        const nakStr = nakBirim > 0 ? ` + ${sefer} sefer x ${formatTRCurrency(nakBirim)} TL` : '';
+        infoDiv.innerHTML = `<i class="fas fa-calculator me-2"></i> Tahmini: ${gun} Gün x ${formatTRCurrency(gunluk)} TL${nakStr} = <span class="text-success">${formatTRCurrency(toplam)} TL</span>`;
     } else if (infoDiv) { infoDiv.innerHTML = ""; }
 }
 

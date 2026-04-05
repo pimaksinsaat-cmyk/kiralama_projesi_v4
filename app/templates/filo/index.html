@@ -344,18 +344,23 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body p-4">
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Bakım Başlangıç Tarihi</label>
-                        <input type="date" name="tarih" class="form-control" id="bakim-tarihi-input" required>
+                    <div class="alert alert-warning border-0 small mb-3">
+                        Bu adım sadece makineyi servise almak içindir. Diğer tüm detayları bakımdakiler ekranından makinenin üstüne tıklayarak veya sağ tıklayarak yöneteceksiniz.
                     </div>
-                    <div class="mb-0">
-                        <label class="form-label fw-bold">Arıza veya Bakım Açıklaması</label>
-                        <textarea name="aciklama" class="form-control" rows="3" placeholder="Örn: Yağ kaçağı var, periyodik bakım..." required></textarea>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Bakım Başlangıç Tarihi</label>
+                            <input type="date" name="tarih" class="form-control" id="bakim-tarihi-input" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Makine Çalışma Saati / Km</label>
+                            <input type="number" name="calisma_saati" class="form-control" min="0" step="1" placeholder="Örn: 4521">
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer border-0">
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">Vazgeç</button>
-                    <button type="submit" class="btn btn-warning fw-bold px-4">Bakımı Başlat</button>
+                    <button type="submit" class="btn btn-warning fw-bold px-4">Servise Al</button>
                 </div>
             </form>
         </div>

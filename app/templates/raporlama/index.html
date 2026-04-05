@@ -138,14 +138,39 @@
                                 <small class="text-muted d-block">Bakim Icin Yapilan Harcama</small>
                                 <h5 class="mb-0 text-warning">{{ '{:,.0f}'.format(dashboard.summary.maintenance_cost) }} TL</h5>
                             </div>
-                            <small class="text-muted">Donemsel yedek parca maliyeti</small>
+                            <small class="text-muted">Makine {{ '{:,.0f}'.format(dashboard.summary.equipment_maintenance_cost) }} TL | Arac {{ '{:,.0f}'.format(dashboard.summary.vehicle_maintenance_cost) }} TL</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card border-0 shadow-sm h-100">
+                        <div class="card-body py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                            {% set manuel_sube_gideri_toplam = dashboard.monthly_revenue_rows | sum(attribute='manuel_sube_gideri') %}
+                            {% set personel_gideri_toplam = dashboard.monthly_revenue_rows | sum(attribute='personel_gideri') %}
+                            {% set sabit_gideri_toplam = dashboard.monthly_revenue_rows | sum(attribute='sabit_gideri') %}
+                            <div>
+                                <small class="text-muted d-block">Sube Giderleri</small>
+                                <h5 class="mb-0" style="color: #E74C3C;">{{ '{:,.0f}'.format(dashboard.summary.sube_gideri_toplam) }} TL</h5>
+                            </div>
+                            <small class="text-muted">Manuel {{ '{:,.0f}'.format(manuel_sube_gideri_toplam) }} TL | Personel {{ '{:,.0f}'.format(personel_gideri_toplam) }} TL | Sabit {{ '{:,.0f}'.format(sabit_gideri_toplam) }} TL</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card border-0 shadow-sm h-100">
+                        <div class="card-body py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                            <div>
+                                <small class="text-muted d-block">Net Kalan</small>
+                                <h5 class="mb-0 {% if dashboard.summary.net_katki_toplam >= 0 %}text-primary{% else %}text-danger{% endif %}">{{ '{:,.0f}'.format(dashboard.summary.net_katki_toplam) }} TL</h5>
+                            </div>
+                            <small class="text-muted">Kiralama + harici kar + nakliye gelirinden bakim ve sube giderleri dusulmus toplam</small>
                         </div>
                     </div>
                 </div>
             </div>
 
             <div class="card border-0 shadow-sm mb-4">
-                <div class="card-header bg-white fw-semibold">Aylara Gore Gelir Dagilimi</div>
+                <div class="card-header bg-white fw-semibold">Aylara Gore Gelir / Gider Dagilimi</div>
                 <div class="card-body">
                     {% if dashboard.monthly_revenue_rows %}
                     <div class="table-responsive mb-3">
@@ -157,6 +182,10 @@
                                     <th class="text-end" style="color: #6D597A;">Harici Islem Kari</th>
                                     <th class="text-end" style="color: #2A6F97;">Nakliye Geliri</th>
                                     <th class="text-end">Toplam Gelir</th>
+                                    <th class="text-end" style="color: #B45309;">Arac Bakim</th>
+                                    <th class="text-end" style="color: #C0392B;">Makine Bakim</th>
+                                    <th class="text-end" style="color: #E74C3C;">Sube Giderleri</th>
+                                    <th class="text-end">Net Katki</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -167,6 +196,10 @@
                                     <td class="text-end" style="color: #6D597A;">{{ '{:,.0f}'.format(row.harici_kar) }} TL</td>
                                     <td class="text-end" style="color: #2A6F97;">{{ '{:,.0f}'.format(row.nakliye_geliri) }} TL</td>
                                     <td class="text-end fw-semibold">{{ '{:,.0f}'.format(row.gelir) }} TL</td>
+                                    <td class="text-end" style="color: #B45309;">{{ '{:,.0f}'.format(row.arac_bakim_gideri) }} TL</td>
+                                    <td class="text-end" style="color: #C0392B;">{{ '{:,.0f}'.format(row.bakim_gideri) }} TL</td>
+                                    <td class="text-end" style="color: #E74C3C;">{{ '{:,.0f}'.format(row.sube_gideri) }} TL</td>
+                                    <td class="text-end fw-semibold {% if row.net_katki >= 0 %}text-primary{% else %}text-danger{% endif %}">{{ '{:,.0f}'.format(row.net_katki) }} TL</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -276,6 +309,9 @@
                                 <th class="text-end">Musait</th>
                                 <th class="text-end">Calisma %</th>
                                 <th class="text-end">Calisma Payi %</th>
+                                <th class="text-end">Makine Geliri</th>
+                                <th class="text-end" style="color: #C0392B;">Bakim Gideri</th>
+                                <th class="text-end">Net Katki</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -288,10 +324,13 @@
                                 <td class="text-end">{{ row.available_days }}</td>
                                 <td class="text-end">{{ '%.1f'|format(row.utilization_pct) }}%</td>
                                 <td class="text-end">{{ '%.1f'|format(row.calisma_payi) }}%</td>
+                                <td class="text-end">{{ '{:,.0f}'.format(row.gelir) }} TL</td>
+                                <td class="text-end" style="color: #C0392B;">{{ '{:,.0f}'.format(row.bakim_gideri) }} TL</td>
+                                <td class="text-end fw-semibold {% if row.net_katki >= 0 %}text-primary{% else %}text-danger{% endif %}">{{ '{:,.0f}'.format(row.net_katki) }} TL</td>
                             </tr>
                             {% else %}
                             <tr>
-                                <td colspan="7" class="text-center text-muted py-3">Bu filtrede makine kaydi yok.</td>
+                                <td colspan="10" class="text-center text-muted py-3">Bu filtrede makine kaydi yok.</td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -472,6 +511,9 @@
                                 <th class="text-end">Makine Geliri</th>
                                 <th class="text-end">Nakliye Sefer</th>
                                 <th class="text-end">Nakliye Gelir</th>
+                                <th class="text-end" style="color: #B45309;">Arac Bakim</th>
+                                <th class="text-end" style="color: #C0392B;">Makine Bakim</th>
+                                <th class="text-end" style="color: #E74C3C;">Sube Giderleri</th>
                                 <th class="text-end">Toplam Gelir</th>
                             </tr>
                         </thead>
@@ -485,15 +527,58 @@
                                 <td class="text-end">{{ '{:,.0f}'.format(row.makine_geliri) }} TL</td>
                                 <td class="text-end">{{ row.nakliye_sefer }}</td>
                                 <td class="text-end">{{ '{:,.0f}'.format(row.nakliye_geliri) }} TL</td>
+                                <td class="text-end" style="color: #B45309;">{{ '{:,.0f}'.format(row.arac_bakim_gideri) }} TL</td>
+                                <td class="text-end" style="color: #C0392B;">{{ '{:,.0f}'.format(row.bakim_gideri) }} TL</td>
+                                <td class="text-end" style="color: #E74C3C;">
+                                    <div class="fw-semibold">{{ '{:,.0f}'.format(row.sube_gideri) }} TL</div>
+                                    <small class="text-muted d-block">Manuel {{ '{:,.0f}'.format(row.manuel_sube_gideri) }}</small>
+                                    <small class="text-muted d-block">Personel {{ '{:,.0f}'.format(row.personel_gideri) }}</small>
+                                    <small class="text-muted d-block">Sabit {{ '{:,.0f}'.format(row.sabit_gideri) }}</small>
+                                </td>
                                 <td class="text-end fw-semibold">{{ '{:,.0f}'.format(row.toplam_gelir) }} TL</td>
                             </tr>
                             {% else %}
                             <tr>
-                                <td colspan="8" class="text-center text-muted py-3">Bu filtre ile sube verisi bulunamadi.</td>
+                                <td colspan="11" class="text-center text-muted py-3">Bu filtre ile sube verisi bulunamadi.</td>
                             </tr>
                             {% endfor %}
                         </tbody>
                     </table>
+                </div>
+            </div>
+
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-white fw-semibold">Sube Gider Kalemleri Dagilimi</div>
+                <div class="card-body">
+                    {% set branch_expense_total = dashboard.branch_rows | sum(attribute='sube_gideri') %}
+                    {% if dashboard.branch_rows and branch_expense_total > 0 %}
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <div class="border rounded-3 p-3 h-100 bg-light-subtle">
+                                <small class="text-muted d-block">Manuel Sube Gideri</small>
+                                <div class="fw-semibold" style="color: #7C3AED;">{{ '{:,.0f}'.format(dashboard.branch_rows | sum(attribute='manuel_sube_gideri')) }} TL</div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="border rounded-3 p-3 h-100 bg-light-subtle">
+                                <small class="text-muted d-block">Personel Gideri</small>
+                                <div class="fw-semibold" style="color: #0F766E;">{{ '{:,.0f}'.format(dashboard.branch_rows | sum(attribute='personel_gideri')) }} TL</div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="border rounded-3 p-3 h-100 bg-light-subtle">
+                                <small class="text-muted d-block">Sabit Gider</small>
+                                <div class="fw-semibold" style="color: #C2410C;">{{ '{:,.0f}'.format(dashboard.branch_rows | sum(attribute='sabit_gideri')) }} TL</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mx-auto" style="width: 90%; min-width: 280px; max-width: 980px;">
+                        <canvas id="branchExpenseBreakdownChart"></canvas>
+                        <script id="branchExpenseChartRowsJson" type="application/json">{{ dashboard.branch_rows | tojson }}</script>
+                    </div>
+                    {% else %}
+                    <p class="text-muted mb-0">Secili filtre icin sube gider kalemi verisi bulunamadi.</p>
+                    {% endif %}
                 </div>
             </div>
 
@@ -824,6 +909,9 @@
         const kiralamaValues = rows.map((item) => Number(item.kiralama_geliri || 0));
         const hariciValues = rows.map((item) => Number(item.harici_kar || 0));
         const nakliyeValues = rows.map((item) => Number(item.nakliye_geliri || 0));
+        const makineBakimValues = rows.map((item) => Number((item.bakim_gideri || 0) - (item.arac_bakim_gideri || 0)) * -1);
+        const aracBakimValues = rows.map((item) => Number(item.arac_bakim_gideri || 0) * -1);
+        const subeGideriValues = rows.map((item) => Number(item.sube_gideri || 0) * -1);
 
         new Chart(canvas, {
             type: 'bar',
@@ -848,13 +936,30 @@
                         backgroundColor: '#2A6F97',
                         borderRadius: 6,
                     },
+                    {
+                        label: 'Makine Bakim',
+                        data: makineBakimValues,
+                        backgroundColor: '#C0392B',
+                        borderRadius: 6,
+                    },
+                    {
+                        label: 'Arac Bakim',
+                        data: aracBakimValues,
+                        backgroundColor: '#B45309',
+                        borderRadius: 6,
+                    },
+                    {
+                        label: 'Sube Giderleri',
+                        data: subeGideriValues,
+                        backgroundColor: '#E74C3C',
+                        borderRadius: 6,
+                    },
                 ],
             },
             options: {
                 responsive: true,
                 scales: {
                     y: {
-                        beginAtZero: true,
                         ticks: {
                             callback: function (value) {
                                 return value.toLocaleString('tr-TR') + ' TL';
@@ -870,7 +975,89 @@
                     tooltip: {
                         callbacks: {
                             label: function (context) {
-                                return context.dataset.label + ': ' + Number(context.parsed.y || 0).toLocaleString('tr-TR') + ' TL';
+                                const rawValue = Number(context.raw || 0);
+                                return context.dataset.label + ': ' + Math.abs(rawValue).toLocaleString('tr-TR') + ' TL';
+                            },
+                        },
+                    },
+                },
+            },
+        });
+    })();
+
+    (function () {
+        const canvas = document.getElementById('branchExpenseBreakdownChart');
+        const dataJson = document.getElementById('branchExpenseChartRowsJson');
+        if (!canvas || !dataJson || typeof Chart === 'undefined') {
+            return;
+        }
+
+        let rows = [];
+        try {
+            rows = JSON.parse(dataJson.textContent || '[]');
+        } catch (error) {
+            return;
+        }
+
+        if (!rows.length) {
+            return;
+        }
+
+        const labels = rows.map((item) => item.sube);
+        const manuelValues = rows.map((item) => Number(item.manuel_sube_gideri || 0));
+        const personelValues = rows.map((item) => Number(item.personel_gideri || 0));
+        const sabitValues = rows.map((item) => Number(item.sabit_gideri || 0));
+
+        new Chart(canvas, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Manuel',
+                        data: manuelValues,
+                        backgroundColor: '#7C3AED',
+                        borderRadius: 6,
+                    },
+                    {
+                        label: 'Personel',
+                        data: personelValues,
+                        backgroundColor: '#0F766E',
+                        borderRadius: 6,
+                    },
+                    {
+                        label: 'Sabit',
+                        data: sabitValues,
+                        backgroundColor: '#C2410C',
+                        borderRadius: 6,
+                    },
+                ],
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    x: {
+                        stacked: true,
+                    },
+                    y: {
+                        stacked: true,
+                        ticks: {
+                            callback: function (value) {
+                                return value.toLocaleString('tr-TR') + ' TL';
+                            },
+                        },
+                    },
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'bottom',
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function (context) {
+                                const rawValue = Number(context.raw || 0);
+                                return context.dataset.label + ': ' + rawValue.toLocaleString('tr-TR') + ' TL';
                             },
                         },
                     },

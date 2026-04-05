@@ -1,0 +1,846 @@
+{% extends "base.html" %}
+
+{% block title %}Personel Yonetimi{% endblock %}
+
+{% block content %}
+<style>
+    :root {
+        --personel-teal: #0f766e;
+        --personel-teal-soft: #e6fffb;
+        --personel-gold: #c68a13;
+        --personel-danger: #c0392b;
+        --personel-text: #1f2937;
+    }
+
+    .personel-page {
+        padding: 1.5rem 0 2.5rem;
+    }
+
+    .personel-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .personel-header h1 {
+        margin: 0;
+        color: var(--personel-text);
+        font-weight: 800;
+    }
+
+    .personel-header p {
+        margin: 0.4rem 0 0;
+        color: #64748b;
+    }
+
+    .header-actions {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+    }
+
+    .header-link {
+        padding: 0.7rem 1rem;
+        border-radius: 999px;
+        text-decoration: none;
+        font-weight: 700;
+        color: var(--personel-teal);
+        background: var(--personel-teal-soft);
+        border: 1px solid #bfeee8;
+    }
+
+    .header-link:hover {
+        color: #0a5c56;
+        background: #d6faf4;
+    }
+
+    .toolbar {
+        background: linear-gradient(135deg, #ffffff 0%, #f8fffd 50%, #fff7e8 100%);
+        border: 1px solid #dbe9e7;
+        border-radius: 18px;
+        box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+        padding: 1.2rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .toolbar form {
+        display: grid;
+        grid-template-columns: 1.3fr 1fr 1fr auto auto;
+        gap: 0.9rem;
+        align-items: end;
+    }
+
+    .toolbar label,
+    .form-panel label,
+    .izin-form label {
+        display: block;
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: #475569;
+        margin-bottom: 0.35rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+
+    .toolbar input,
+    .toolbar select,
+    .form-panel input,
+    .form-panel select,
+    .izin-form input,
+    .izin-form select {
+        width: 100%;
+        border: 1px solid #d0d7de;
+        border-radius: 10px;
+        padding: 0.7rem 0.85rem;
+        font-size: 0.94rem;
+        background: #fff;
+    }
+
+    .toolbar input:focus,
+    .toolbar select:focus,
+    .form-panel input:focus,
+    .form-panel select:focus,
+    .izin-form input:focus,
+    .izin-form select:focus {
+        outline: none;
+        border-color: var(--personel-teal);
+        box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12);
+    }
+
+    .izin-form input[readonly] {
+        background: #f1f5f9;
+        color: #475569;
+        cursor: not-allowed;
+    }
+
+    .conditional-field {
+        display: none;
+    }
+
+    .conditional-field.is-visible {
+        display: block;
+    }
+
+    .toolbar button,
+    .form-panel button,
+    .izin-form button,
+    .mini-action {
+        border: none;
+        border-radius: 10px;
+        padding: 0.75rem 1rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: 0.18s ease;
+    }
+
+    .toolbar button,
+    .form-panel button,
+    .izin-form button {
+        background: var(--personel-teal);
+        color: #fff;
+    }
+
+    .toolbar button:hover,
+    .form-panel button:hover,
+    .izin-form button:hover {
+        background: #0b5f59;
+    }
+
+    .toolbar .secondary-link {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.75rem 1rem;
+        border-radius: 10px;
+        text-decoration: none;
+        font-weight: 700;
+        color: #475569;
+        background: #edf2f7;
+    }
+
+    .toolbar .secondary-link:hover {
+        background: #e2e8f0;
+    }
+
+    .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .summary-card {
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 16px;
+        padding: 1rem 1.1rem;
+        box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
+    }
+
+    .summary-card .label {
+        font-size: 0.75rem;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        margin-bottom: 0.35rem;
+    }
+
+    .summary-card .value {
+        font-size: 1.8rem;
+        font-weight: 800;
+        color: var(--personel-text);
+    }
+
+    .content-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 360px;
+        gap: 1.5rem;
+        align-items: start;
+    }
+
+    .personel-list {
+        display: grid;
+        gap: 1rem;
+    }
+
+    .personel-card {
+        background: #fff;
+        border: 1px solid #e7ecef;
+        border-radius: 18px;
+        box-shadow: 0 12px 24px rgba(15, 23, 42, 0.05);
+        overflow: hidden;
+    }
+
+    .personel-top {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 1.2rem 1.2rem 1rem;
+        border-bottom: 1px solid #eef2f7;
+        background: linear-gradient(135deg, #ffffff 0%, #f8fffd 100%);
+    }
+
+    .personel-name {
+        font-size: 1.15rem;
+        font-weight: 800;
+        color: var(--personel-text);
+    }
+
+    .personel-role {
+        margin-top: 0.2rem;
+        color: #64748b;
+        font-size: 0.92rem;
+    }
+
+    .sube-pill,
+    .durum-pill {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        padding: 0.35rem 0.8rem;
+        font-size: 0.78rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+
+    .sube-pill {
+        background: #eff6ff;
+        color: #1d4ed8;
+    }
+
+    .sube-pill.empty {
+        background: #f1f5f9;
+        color: #475569;
+    }
+
+    .durum-pill.active {
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .durum-pill.inactive {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+
+    .durum-pill.leave {
+        background: #fef3c7;
+        color: #92400e;
+    }
+
+    .personel-note {
+        margin-top: 0.35rem;
+        color: #9a3412;
+        font-size: 0.85rem;
+        font-weight: 700;
+    }
+
+    .personel-body {
+        padding: 1.1rem 1.2rem 1.2rem;
+    }
+
+    .info-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 0.85rem;
+        margin-bottom: 1rem;
+    }
+
+    .info-box {
+        background: #f8fafc;
+        border-radius: 12px;
+        padding: 0.75rem 0.85rem;
+    }
+
+    .info-box .label {
+        font-size: 0.7rem;
+        font-weight: 700;
+        color: #64748b;
+        text-transform: uppercase;
+        margin-bottom: 0.25rem;
+    }
+
+    .info-box .value {
+        color: var(--personel-text);
+        font-weight: 700;
+    }
+
+    .izin-summary {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+    }
+
+    .izin-summary .tile {
+        background: #f8fafc;
+        border-radius: 12px;
+        padding: 0.75rem;
+        text-align: center;
+    }
+
+    .izin-summary .tile strong {
+        display: block;
+        font-size: 1.2rem;
+    }
+
+    .izin-list {
+        display: grid;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+    }
+
+    .izin-item {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        align-items: center;
+        padding: 0.65rem 0.8rem;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        background: #fffdf8;
+    }
+
+    .izin-item small {
+        color: #64748b;
+        display: block;
+    }
+
+    .mini-action {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        text-decoration: none;
+        background: #e6fffb;
+        color: var(--personel-teal);
+    }
+
+    .mini-action:hover {
+        background: #d6faf4;
+        color: #0a5c56;
+    }
+
+    .mini-action.danger {
+        background: #fee2e2;
+        color: #b91c1c;
+    }
+
+    .mini-action.danger:hover {
+        background: #fecaca;
+        color: #991b1b;
+    }
+
+    .card-actions {
+        display: flex;
+        gap: 0.6rem;
+        flex-wrap: wrap;
+        margin-bottom: 1rem;
+    }
+
+    .izin-form {
+        display: none;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        padding: 1rem;
+    }
+
+    .izin-form.is-open {
+        display: block;
+    }
+
+    .izin-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.85rem;
+        margin-bottom: 0.85rem;
+    }
+
+    .form-panel {
+        position: sticky;
+        top: 90px;
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 18px;
+        box-shadow: 0 14px 28px rgba(15, 23, 42, 0.06);
+        padding: 1.25rem;
+    }
+
+    .form-panel h3 {
+        margin: 0 0 0.4rem;
+        color: var(--personel-text);
+        font-weight: 800;
+    }
+
+    .form-panel p {
+        margin: 0 0 1rem;
+        color: #64748b;
+        font-size: 0.92rem;
+    }
+
+    .empty-state {
+        text-align: center;
+        background: #fff;
+        border: 1px dashed #cbd5e1;
+        border-radius: 18px;
+        padding: 3rem 1.5rem;
+        color: #64748b;
+    }
+
+    @media (max-width: 1100px) {
+        .content-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .form-panel {
+            position: static;
+        }
+    }
+
+    @media (max-width: 900px) {
+        .toolbar form {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @media (max-width: 640px) {
+        .personel-header,
+        .personel-top {
+            flex-direction: column;
+        }
+
+        .izin-grid,
+        .izin-summary {
+            grid-template-columns: 1fr;
+        }
+
+        .card-actions {
+            flex-direction: column;
+        }
+    }
+</style>
+
+<div class="personel-page">
+    <div class="personel-header">
+        <div>
+            <h1><i class="fas fa-users me-2" style="color: var(--personel-teal);"></i>Personel Yonetimi</h1>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <form method="GET" action="{{ url_for('personel.index') }}">
+            <div>
+                <label for="personel-q">Ara</label>
+                <input id="personel-q" type="text" name="q" value="{{ q }}" placeholder="Ad, soyad, telefon, meslek veya sube">
+            </div>
+            <div>
+                <label for="personel-sube-filter">Sube Filtresi</label>
+                <select id="personel-sube-filter" name="sube_id">
+                    <option value="0">Tum subeler</option>
+                    {% for sube in subeler %}
+                    <option value="{{ sube.id }}" {{ 'selected' if selected_sube_id == sube.id else '' }}>{{ sube.isim }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label for="personel-durum-filter">Durum</label>
+                <select id="personel-durum-filter" name="durum">
+                    <option value="tum" {{ 'selected' if durum == 'tum' else '' }}>Tum personeller</option>
+                    <option value="izinli" {{ 'selected' if durum == 'izinli' else '' }}>Su an izinli</option>
+                    <option value="calismada" {{ 'selected' if durum == 'calismada' else '' }}>Bugun calismada</option>
+                </select>
+            </div>
+            <button type="submit">Listele</button>
+            {% if selected_sube_id or q or durum != 'tum' %}
+            <a class="secondary-link" href="{{ url_for('personel.index') }}">Temizle</a>
+            {% else %}
+            <span></span>
+            {% endif %}
+        </form>
+    </div>
+
+    <div class="summary-grid">
+        <div class="summary-card">
+            <div class="label">Toplam Personel</div>
+            <div class="value">{{ toplam_personel }}</div>
+        </div>
+        <div class="summary-card">
+            <div class="label">Aktif Personel</div>
+            <div class="value">{{ aktif_personel }}</div>
+        </div>
+        <div class="summary-card">
+            <div class="label">Su An Izinli</div>
+            <div class="value">{{ izinli_personel }}</div>
+        </div>
+        <div class="summary-card">
+            <div class="label">Bugun Calismada</div>
+            <div class="value">{{ calismada_personel }}</div>
+        </div>
+        <div class="summary-card">
+            <div class="label">Subeye Bagli</div>
+            <div class="value">{{ personeller|rejectattr('sube_id', 'none')|list|length }}</div>
+        </div>
+        <div class="summary-card">
+            <div class="label">Toplam Maas</div>
+            <div class="value" style="font-size: 1.35rem; color: var(--personel-gold);">
+                {{ '{:,.0f}'.format(personeller|map(attribute='maas')|select|sum) }} TL
+            </div>
+        </div>
+        <div class="summary-card">
+            <div class="label">Toplam Yemek</div>
+            <div class="value" style="font-size: 1.35rem; color: var(--personel-teal);">
+                {{ '{:,.0f}'.format(personeller|map(attribute='yemek_ucreti')|select|sum) }} TL
+            </div>
+        </div>
+        <div class="summary-card">
+            <div class="label">Toplam Yol</div>
+            <div class="value" style="font-size: 1.35rem; color: #2563eb;">
+                {{ '{:,.0f}'.format(personeller|map(attribute='yol_ucreti')|select|sum) }} TL
+            </div>
+        </div>
+    </div>
+
+    <div class="content-grid">
+        <div class="personel-list">
+            {% if personeller %}
+                {% for personel in personeller %}
+                {% set aktif_izinler = personel.izinler|rejectattr('is_deleted')|list %}
+                <div class="personel-card">
+                    <div class="personel-top">
+                        <div>
+                            <div class="personel-name">{{ personel.tam_ad }}</div>
+                            <div class="personel-role">{{ personel.meslek or 'Pozisyon belirtilmedi' }}</div>
+                            {% if personel.is_izinli and personel.current_izin %}
+                            <div class="personel-note">
+                                {{ dict(izin_turleri).get(personel.current_izin.izin_turu, personel.current_izin.izin_turu) }} | {{ personel.current_izin.bitis_tarihi.strftime('%d.%m.%Y') }} tarihine kadar izinli
+                            </div>
+                            {% endif %}
+                        </div>
+                        <div style="display:flex; gap:0.5rem; flex-wrap:wrap; justify-content:flex-end;">
+                            <span class="sube-pill {{ 'empty' if not personel.sube else '' }}">
+                                {{ personel.sube.isim if personel.sube else 'Sube atanmamis' }}
+                            </span>
+                            <span class="durum-pill {{ 'inactive' if personel.is_ayrildi else 'active' }}">
+                                {{ 'Ayrildi' if personel.is_ayrildi else 'Aktif' }}
+                            </span>
+                            {% if personel.is_izinli %}
+                            <span class="durum-pill leave">Izinli</span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="personel-body">
+                        <div class="info-grid">
+                            <div class="info-box">
+                                <div class="label">Telefon</div>
+                                <div class="value">{{ personel.telefon or '-' }}</div>
+                            </div>
+                            <div class="info-box">
+                                <div class="label">TC No</div>
+                                <div class="value">{{ personel.tc_no or '-' }}</div>
+                            </div>
+                            <div class="info-box">
+                                <div class="label">Ise Giris</div>
+                                <div class="value">{{ personel.ise_giris_tarihi.strftime('%d.%m.%Y') if personel.ise_giris_tarihi else '-' }}</div>
+                            </div>
+                            <div class="info-box">
+                                <div class="label">Maas</div>
+                                <div class="value">{{ '{:,.0f}'.format(personel.maas) ~ ' TL' if personel.maas else '-' }}</div>
+                            </div>
+                            <div class="info-box">
+                                <div class="label">Yemek</div>
+                                <div class="value">{{ '{:,.0f}'.format(personel.yemek_ucreti) ~ ' TL' if personel.yemek_ucreti else '-' }}</div>
+                            </div>
+                            <div class="info-box">
+                                <div class="label">Yol</div>
+                                <div class="value">{{ '{:,.0f}'.format(personel.yol_ucreti) ~ ' TL' if personel.yol_ucreti else '-' }}</div>
+                            </div>
+                        </div>
+
+                        <div class="izin-summary">
+                            <div class="tile">
+                                <strong style="color:#15803d;">{{ personel.izinler|selectattr('izin_turu', 'equalto', 'yillik')|rejectattr('is_deleted')|map(attribute='gun_sayisi')|sum }}</strong>
+                                <span>Yillik Izin</span>
+                            </div>
+                            <div class="tile">
+                                <strong style="color:#b45309;">{{ personel.izinler|selectattr('izin_turu', 'equalto', 'ucretsiz')|rejectattr('is_deleted')|map(attribute='gun_sayisi')|sum }}</strong>
+                                <span>Ucretsiz</span>
+                            </div>
+                            <div class="tile">
+                                <strong style="color:#b91c1c;">{{ personel.izinler|selectattr('izin_turu', 'equalto', 'hastalik')|rejectattr('is_deleted')|map(attribute='gun_sayisi')|sum }}</strong>
+                                <span>Hastalik</span>
+                            </div>
+                        </div>
+
+                        {% if aktif_izinler %}
+                        <div class="izin-list">
+                            {% for izin in aktif_izinler %}
+                            <div class="izin-item">
+                                <div>
+                                    <strong>{{ dict(izin_turleri).get(izin.izin_turu, izin.izin_turu) }}</strong>
+                                    <small>{{ izin.baslangic_tarihi.strftime('%d.%m.%Y') }} - {{ izin.bitis_tarihi.strftime('%d.%m.%Y') }} | {{ izin.gun_sayisi }} gun</small>
+                                    {% if izin.aciklama %}
+                                    <small>{{ izin.aciklama }}</small>
+                                    {% endif %}
+                                </div>
+                                <form method="POST" action="{{ url_for('personel.izin_sil', izin_id=izin.id) }}" onsubmit="return confirm('Bu izin kaydi silinsin mi?');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <input type="hidden" name="redirect_sube_id" value="{{ selected_sube_id }}">
+                                    <button type="submit" class="mini-action danger">Sil</button>
+                                </form>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+
+                        <div class="card-actions">
+                            <button type="button" class="mini-action izin-toggle" data-target="izin-form-{{ personel.id }}">Izin Ekle</button>
+                            <a href="{{ url_for('personel.duzenle', personel_id=personel.id, sube_id=selected_sube_id) }}" class="mini-action">Duzenle</a>
+                            <form method="POST" action="{{ url_for('personel.sil', personel_id=personel.id) }}" onsubmit="return confirm('Bu personel kaydi silinsin mi?');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="redirect_sube_id" value="{{ selected_sube_id }}">
+                                <button type="submit" class="mini-action danger">Sil</button>
+                            </form>
+                        </div>
+
+                        <form id="izin-form-{{ personel.id }}" class="izin-form" method="POST" action="{{ url_for('personel.izin_ekle', personel_id=personel.id) }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="personel_id" value="{{ personel.id }}">
+                            <input type="hidden" name="redirect_sube_id" value="{{ selected_sube_id }}">
+                            <div class="izin-grid">
+                                <div>
+                                    <label>Izin Turu</label>
+                                    <select name="izin_turu">
+                                        {% for value, label in izin_turleri %}
+                                        <option value="{{ value }}">{{ label }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label>Gun Sayisi</label>
+                                    <input
+                                        type="number"
+                                        name="gun_sayisi"
+                                        min="1"
+                                        step="1"
+                                        value="7"
+                                        readonly
+                                        tabindex="-1"
+                                        data-izin-gun-sayisi
+                                    >
+                                </div>
+                                <div>
+                                    <label>Baslangic Tarihi</label>
+                                    <input type="date" name="baslangic_tarihi" value="{{ izin_default_baslangic }}" data-izin-baslangic>
+                                </div>
+                                <div>
+                                    <label>Bitis Tarihi</label>
+                                    <input type="date" name="bitis_tarihi" value="{{ izin_default_bitis }}" data-izin-bitis>
+                                </div>
+                            </div>
+                            <div style="margin-bottom:0.85rem;">
+                                <label>Aciklama</label>
+                                <input type="text" name="aciklama" placeholder="Opsiyonel not">
+                            </div>
+                            <button type="submit">Izin Kaydet</button>
+                        </form>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="empty-state">
+                    <h3 style="margin-top:0; color:var(--personel-text);">Personel kaydi bulunamadi</h3>
+                    <p style="margin-bottom:0;">Secili filtrelerle eslesen personel yok. Sag taraftaki formdan yeni kayit ekleyebilirsiniz.</p>
+                </div>
+            {% endif %}
+        </div>
+
+        <aside class="form-panel">
+            <h3>Yeni Personel Ekle</h3>
+
+            <form method="POST" action="{{ url_for('personel.ekle') }}" data-prevent-double-submit>
+                {{ form.hidden_tag() }}
+                <input type="hidden" name="redirect_sube_id" value="{{ selected_sube_id }}">
+
+                <div style="margin-bottom:0.95rem;">
+                    {{ form.sube_id.label }}
+                    {{ form.sube_id() }}
+                </div>
+                <div style="margin-bottom:0.95rem;">
+                    {{ form.ad.label }}
+                    {{ form.ad(placeholder='Adi') }}
+                </div>
+                <div style="margin-bottom:0.95rem;">
+                    {{ form.soyad.label }}
+                    {{ form.soyad(placeholder='Soyadi') }}
+                </div>
+                <div style="margin-bottom:0.95rem;">
+                    {{ form.tc_no.label }}
+                    {{ form.tc_no(placeholder='11 haneli') }}
+                </div>
+                <div style="margin-bottom:0.95rem;">
+                    {{ form.telefon.label }}
+                    {{ form.telefon(placeholder='05XX XXX XX XX') }}
+                </div>
+                <div style="margin-bottom:0.95rem;">
+                    {{ form.meslek.label }}
+                    {{ form.meslek(data_meslek_select='yeni-personel') }}
+                </div>
+                <div style="margin-bottom:0.95rem;" class="conditional-field" data-meslek-other-wrapper="yeni-personel">
+                    {{ form.meslek_diger.label }}
+                    {{ form.meslek_diger(placeholder='Meslegi yaziniz') }}
+                </div>
+                <div style="margin-bottom:0.95rem;">
+                    {{ form.maas.label }}
+                    {{ form.maas(placeholder='0.00', step='100') }}
+                </div>
+                <div style="margin-bottom:0.95rem;">
+                    {{ form.yemek_ucreti.label }}
+                    {{ form.yemek_ucreti(placeholder='0.00', step='50') }}
+                </div>
+                <div style="margin-bottom:0.95rem;">
+                    {{ form.yol_ucreti.label }}
+                    {{ form.yol_ucreti(placeholder='0.00', step='50') }}
+                </div>
+                <div style="margin-bottom:0.95rem;">
+                    {{ form.ise_giris_tarihi.label }}
+                    {{ form.ise_giris_tarihi() }}
+                </div>
+
+                <button type="submit" data-submitting-text="Kaydediliyor...">Kaydet</button>
+            </form>
+        </aside>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    function calculateDayDifference(startValue, endValue) {
+        if (!startValue || !endValue) {
+            return '';
+        }
+
+        const startDate = new Date(startValue + 'T00:00:00');
+        const endDate = new Date(endValue + 'T00:00:00');
+        const diffMs = endDate - startDate;
+        const diffDays = Math.floor(diffMs / 86400000);
+
+        if (Number.isNaN(diffDays)) {
+            return '';
+        }
+
+        return Math.max(1, diffDays);
+    }
+
+    document.querySelectorAll('.izin-form').forEach(function (form) {
+        const baslangicInput = form.querySelector('[data-izin-baslangic]');
+        const bitisInput = form.querySelector('[data-izin-bitis]');
+        const gunSayisiInput = form.querySelector('[data-izin-gun-sayisi]');
+
+        if (!baslangicInput || !bitisInput || !gunSayisiInput) {
+            return;
+        }
+
+        const syncGunSayisi = function () {
+            gunSayisiInput.value = calculateDayDifference(baslangicInput.value, bitisInput.value);
+        };
+
+        baslangicInput.addEventListener('change', syncGunSayisi);
+        bitisInput.addEventListener('change', syncGunSayisi);
+        syncGunSayisi();
+    });
+
+    function syncMeslekOtherField(scopeKey) {
+        const select = document.querySelector('[data-meslek-select="' + scopeKey + '"]');
+        const wrapper = document.querySelector('[data-meslek-other-wrapper="' + scopeKey + '"]');
+        if (!select || !wrapper) {
+            return;
+        }
+
+        wrapper.classList.toggle('is-visible', select.value === 'Diger');
+    }
+
+    document.querySelectorAll('[data-meslek-select]').forEach(function (select) {
+        const scopeKey = select.getAttribute('data-meslek-select');
+        select.addEventListener('change', function () {
+            syncMeslekOtherField(scopeKey);
+        });
+        syncMeslekOtherField(scopeKey);
+    });
+
+    document.querySelectorAll('form[data-prevent-double-submit]').forEach(function (form) {
+        form.addEventListener('submit', function (event) {
+            if (form.dataset.submitting === 'true') {
+                event.preventDefault();
+                return;
+            }
+
+            form.dataset.submitting = 'true';
+
+            const submitButton = event.submitter || form.querySelector('button[type="submit"], input[type="submit"]');
+            if (submitButton) {
+                if (submitButton.dataset.submittingText) {
+                    submitButton.dataset.originalText = submitButton.textContent;
+                    submitButton.textContent = submitButton.dataset.submittingText;
+                }
+                submitButton.disabled = true;
+            }
+        });
+    });
+
+    document.querySelectorAll('.izin-toggle').forEach(function (button) {
+        button.addEventListener('click', function () {
+            const formId = button.getAttribute('data-target');
+            const form = document.getElementById(formId);
+            if (!form) {
+                return;
+            }
+
+            form.classList.toggle('is-open');
+        });
+    });
+});
+</script>
+{% endblock %}

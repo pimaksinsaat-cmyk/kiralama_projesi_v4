@@ -31,10 +31,14 @@
     .context-menu { display: none; position: absolute; background-color: white; border: 1px solid #ccc; box-shadow: 0 4px 12px rgba(0,0,0,0.2); border-radius: 5px; z-index: 1000; min-width: 200px; padding: 5px 0; }
     .context-menu-item { display: block; padding: 12px 15px; color: #333; text-decoration: none; font-size: 1em; }
     .context-menu-item:hover { background-color: #f5f5f5; color: #000; text-decoration: none; }
+    .bakim-satiri { cursor: context-menu; transition: background-color 0.15s ease; }
+    .bakim-satiri:hover { background-color: #f8fafc; }
     
     /* 'Bakımı Bitir' için yeşil stil */
     .context-menu-item.bitir { color: #28a745; font-weight: bold; }
     .context-menu-item.bitir:hover { background-color: #d4edda; color: #155724; }
+    .context-menu-item.manage { color: #0d6efd; font-weight: bold; }
+    .context-menu-item.manage:hover { background-color: #dbeafe; color: #0a58ca; }
     .context-menu-divider { height: 1px; margin: 5px 0; background-color: #eee; }
     
     /* Mobil Uyumluluk */
@@ -74,10 +78,11 @@
                     <th>
                         Makine Kodu
                         <br>
-                        <small class="text-muted" style="font-weight: normal;">(İşlemler için sağ tık/basılı tut)</small>
+                        <small class="text-muted" style="font-weight: normal;">(İşlemler için sağ tık, basılı tut veya satıra tıkla)</small>
                     </th>
                     <th>Marka / Model</th>
                     <th>Seri No</th>
+                    <th>Servise Giriş / Sayaç</th>
                     <th>Durum</th>
                 </tr>
             </thead>
@@ -85,18 +90,27 @@
                 {% for ekipman in ekipmanlar %}
                 <tr class="bakim-satiri"
                     data-ekipman-kod="{{ ekipman.kod }}"
-                    data-bilgi-url="{{ url_for('filo.bilgi', id=ekipman.id) }}"
+                    data-duzenle-url="{{ url_for('servis.duzenle', id=ekipman.aktif_bakim_kaydi.id) if ekipman.aktif_bakim_kaydi else url_for('servis.index', q=ekipman.kod) }}"
+                    data-bilgi-url="{{ url_for('servis.index', q=ekipman.kod) }}"
                     data-bitir-url="{{ url_for('filo.bakim_bitir', id=ekipman.id) }}"
                     data-csrf-token="{{ csrf_token() }}"
                     >
                     <td><strong>{{ ekipman.kod }}</strong></td>
                     <td>{{ ekipman.marka }} / {{ ekipman.model }}</td>
                     <td>{{ ekipman.seri_no }}</td>
+                    <td>
+                        {% if ekipman.aktif_bakim_kaydi %}
+                            <div>{{ ekipman.aktif_bakim_kaydi.tarih.strftime('%d.%m.%Y') if ekipman.aktif_bakim_kaydi.tarih else '-' }}</div>
+                            <small class="text-muted">{{ ekipman.aktif_bakim_kaydi.calisma_saati if ekipman.aktif_bakim_kaydi.calisma_saati is not none else '-' }} saat/km</small>
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
                     <td><span class="badge bg-secondary">Serviste</span></td>
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="4" class="text-center text-muted" style="padding: 20px;">
+                    <td colspan="5" class="text-center text-muted" style="padding: 20px;">
                         Şu anda bakımda (serviste) olan makine bulunmamaktadır.
                     </td>
                 </tr>
@@ -128,12 +142,16 @@
 
 <!-- Gizli Sağ Tık Menüsü -->
 <div id="context-menu" class="context-menu">
+    <a href="#" class="context-menu-item manage" id="menu-duzenle">
+        <i class="fa fa-pen"></i> Servis Kartını Yönet
+    </a>
+    <div class="context-menu-divider"></div>
     <a href="#" class="context-menu-item bitir" id="menu-bitir">
         <i class="fa fa-check-circle"></i> Bakımı Bitir (Boşa Al)
     </a>
     <div class="context-menu-divider"></div>
     <a href="#" class="context-menu-item" id="menu-bilgi">
-        <i class="fa fa-file-invoice"></i> Bakım Kayıtları / Detay
+        <i class="fa fa-file-invoice"></i> Servis Geçmişini Aç
     </a>
 </div>
 
@@ -169,28 +187,44 @@ document.addEventListener('DOMContentLoaded', function() {
     const contextMenu = document.getElementById('context-menu');
     const bitirForm = document.getElementById('bitir-form');
     const menuBilgi = document.getElementById('menu-bilgi');
+    const menuDuzenle = document.getElementById('menu-duzenle');
     const menuBitir = document.getElementById('menu-bitir');
     
+    let currentDuzenleUrl = null;
     let currentBitirUrl = null;
     let currentCsrfToken = null;
     let currentEkipmanKod = null;
 
     const showMenu = (event, row) => {
-        event.preventDefault();
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
         
+        currentDuzenleUrl = row.dataset.duzenleUrl;
         currentBitirUrl = row.dataset.bitirUrl;
         currentCsrfToken = row.dataset.csrfToken;
         currentEkipmanKod = row.dataset.ekipmanKod;
         
+        menuDuzenle.href = currentDuzenleUrl;
         menuBilgi.href = row.dataset.bilgiUrl;
-        
-        contextMenu.style.left = event.pageX + 'px';
-        contextMenu.style.top = event.pageY + 'px';
+
+        const pageX = event && typeof event.pageX === 'number' ? event.pageX : row.getBoundingClientRect().left + window.scrollX + 24;
+        const pageY = event && typeof event.pageY === 'number' ? event.pageY : row.getBoundingClientRect().top + window.scrollY + row.offsetHeight;
+
+        contextMenu.style.left = pageX + 'px';
+        contextMenu.style.top = pageY + 'px';
         contextMenu.style.display = 'block';
     };
 
     document.querySelectorAll('.bakim-satiri').forEach(row => {
         row.addEventListener('contextmenu', (e) => showMenu(e, row));
+        row.addEventListener('click', (e) => {
+            if (e.target.closest('a, button, form, input, select, textarea')) {
+                return;
+            }
+            showMenu(e, row);
+        });
         addLongPressListener(row, showMenu);
     });
 

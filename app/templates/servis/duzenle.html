@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+
+{% block title %}Servis Kaydı Düzenle{% endblock %}
+
+{% block content %}
+<style>
+    .service-form-shell { max-width: 1080px; margin: 0 auto; }
+    .service-form-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 18px; box-shadow: 0 14px 36px rgba(15, 23, 42, 0.06); overflow: hidden; }
+    .service-form-header { background: linear-gradient(135deg, #fff8e8 0%, #fff 55%, #eef7ff 100%); border-bottom: 1px solid #ead9a8; padding: 1.4rem 1.6rem; }
+    .muted-note { color: #64748b; font-size: 0.9rem; }
+    .parts-table thead th { background: #f8fafc; }
+    .parts-actions { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+    .parts-hint { color: #64748b; font-size: 0.82rem; }
+</style>
+
+<div class="service-form-shell">
+    <div class="service-form-card">
+        <div class="service-form-header d-flex justify-content-between align-items-start gap-3">
+            <div>
+                <h2 class="h4 fw-bold mb-1">Servis Kaydı Düzenle</h2>
+                <div class="muted-note">
+                    {{ kayit.ekipman.kod if kayit.ekipman else '-' }}
+                    {% if kayit.ekipman %}
+                    | {{ kayit.ekipman.marka }} {{ kayit.ekipman.model or '' }}
+                    {% endif %}
+                </div>
+            </div>
+            <a href="{{ url_for('servis.index', q=kayit.ekipman.kod if kayit.ekipman else '') }}" class="btn btn-outline-secondary">Listeye Dön</a>
+        </div>
+
+        <form method="POST" class="p-4">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold">Başlangıç Tarihi</label>
+                    <input type="date" name="tarih" class="form-control" required value="{{ kayit.tarih.strftime('%Y-%m-%d') if kayit.tarih else '' }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold">Makine Çalışma Saati / Km</label>
+                    <input type="number" name="calisma_saati" class="form-control" min="0" step="1" value="{{ kayit.calisma_saati if kayit.calisma_saati is not none else '' }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold">Bakım Tipi</label>
+                    <select name="bakim_tipi" class="form-select">
+                        {% for key, label in bakim_tipi_labels.items() %}
+                        <option value="{{ key }}" {{ 'selected' if kayit.bakim_tipi == key else '' }}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold">Durum</label>
+                    <select name="durum" class="form-select">
+                        {% for key, label in durum_labels.items() %}
+                        <option value="{{ key }}" {{ 'selected' if kayit.durum == key else '' }}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold">Servis Tipi</label>
+                    <select name="servis_tipi" class="form-select">
+                        {% for key, label in servis_tipi_labels.items() %}
+                        <option value="{{ key }}" {{ 'selected' if kayit.servis_tipi == key else '' }}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold">Dış Servis Firması</label>
+                    <select name="servis_veren_firma_id" class="form-select">
+                        <option value="">Seçiniz...</option>
+                        {% for firma in servis_firmalari %}
+                        <option value="{{ firma.id }}" {{ 'selected' if kayit.servis_veren_firma_id == firma.id else '' }}>{{ firma.firma_adi }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold">Teknisyen / Usta</label>
+                    <input type="text" name="servis_veren_kisi" class="form-control" value="{{ kayit.servis_veren_kisi or '' }}">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Sonraki Bakım Tarihi</label>
+                    <input type="date" name="sonraki_bakim_tarihi" class="form-control" value="{{ kayit.sonraki_bakim_tarihi.strftime('%Y-%m-%d') if kayit.sonraki_bakim_tarihi else '' }}">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">İşçilik Maliyeti (TL)</label>
+                    <input type="number" name="toplam_iscilik_maliyeti" step="0.01" min="0" class="form-control" value="{{ kayit.toplam_iscilik_maliyeti or 0 }}">
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-semibold">Açıklama</label>
+                    <textarea name="aciklama" class="form-control" rows="4">{{ kayit.aciklama or '' }}</textarea>
+                </div>
+            </div>
+
+            <div class="mt-4">
+                <div class="parts-actions mb-2">
+                    <label class="form-label fw-semibold mb-0">Kullanılan Parçalar</label>
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <span class="muted-note">Boş satırlar kaydedilmez. Güncelleme sırasında stok farkı otomatik işlenir.</span>
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="add-part-row">+ Parça Ekle</button>
+                    </div>
+                </div>
+                <div class="parts-hint mb-2">Stokta olan malzemeyi soldaki listeden seçin. Stokta olmayan malzeme için ortadaki alana serbest ad yazın.</div>
+                <div class="table-responsive border rounded">
+                    <table class="table table-sm align-middle mb-0 parts-table">
+                        <thead>
+                            <tr>
+                                <th>Stok Kartı</th>
+                                <th>Serbest Malzeme</th>
+                                <th style="width: 140px;">Adet</th>
+                                <th style="width: 150px;">Birim Fiyat</th>
+                                <th style="width: 80px;"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="parts-table-body">
+                            {% set mevcut_parcalar = kayit.kullanilan_parcalar|list %}
+                            {% for idx in range((mevcut_parcalar|length) if (mevcut_parcalar|length) > 0 else 1) %}
+                            {% set parca = mevcut_parcalar[idx] if idx < (mevcut_parcalar|length) else None %}
+                            <tr class="part-row">
+                                <td>
+                                    <select name="parca_stok_karti_id" class="form-select form-select-sm">
+                                        <option value="">Seçiniz...</option>
+                                        {% for stok_karti in stok_kartlari %}
+                                        <option value="{{ stok_karti.id }}" {{ 'selected' if parca and parca.stok_karti_id == stok_karti.id else '' }}>{{ stok_karti.parca_adi }}{% if stok_karti.parca_kodu %} ({{ stok_karti.parca_kodu }}){% endif %} | stok: {{ stok_karti.mevcut_stok }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </td>
+                                <td>
+                                    <input type="text" name="parca_malzeme_adi" class="form-control form-control-sm" value="{{ parca.malzeme_adi if parca and parca.malzeme_adi else '' }}" placeholder="Örn: Kaynak teli, kelepçe">
+                                </td>
+                                <td>
+                                    <input type="number" name="parca_kullanilan_adet" class="form-control form-control-sm" min="1" step="1" value="{{ parca.kullanilan_adet if parca else '' }}">
+                                </td>
+                                <td>
+                                    <input type="number" name="parca_birim_fiyat" class="form-control form-control-sm" min="0" step="0.01" value="{{ parca.birim_fiyat if parca and parca.birim_fiyat is not none else '' }}" placeholder="0.00">
+                                </td>
+                                <td class="text-center">
+                                    <button type="button" class="btn btn-sm btn-outline-danger remove-part-row">Sil</button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end gap-2 border-top mt-4 pt-3">
+                <a href="{{ url_for('servis.index', q=kayit.ekipman.kod if kayit.ekipman else '') }}" class="btn btn-light">Vazgeç</a>
+                <button type="submit" class="btn btn-primary px-4">Kaydet</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<template id="part-row-template">
+    <tr class="part-row">
+        <td>
+            <select name="parca_stok_karti_id" class="form-select form-select-sm">
+                <option value="">Seçiniz...</option>
+                {% for stok_karti in stok_kartlari %}
+                <option value="{{ stok_karti.id }}">{{ stok_karti.parca_adi }}{% if stok_karti.parca_kodu %} ({{ stok_karti.parca_kodu }}){% endif %} | stok: {{ stok_karti.mevcut_stok }}</option>
+                {% endfor %}
+            </select>
+        </td>
+        <td>
+            <input type="text" name="parca_malzeme_adi" class="form-control form-control-sm" value="" placeholder="Örn: Kaynak teli, kelepçe">
+        </td>
+        <td>
+            <input type="number" name="parca_kullanilan_adet" class="form-control form-control-sm" min="1" step="1" value="">
+        </td>
+        <td>
+            <input type="number" name="parca_birim_fiyat" class="form-control form-control-sm" min="0" step="0.01" value="" placeholder="0.00">
+        </td>
+        <td class="text-center">
+            <button type="button" class="btn btn-sm btn-outline-danger remove-part-row">Sil</button>
+        </td>
+    </tr>
+</template>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const addButton = document.getElementById('add-part-row');
+    const tableBody = document.getElementById('parts-table-body');
+    const rowTemplate = document.getElementById('part-row-template');
+
+    function attachRemoveHandler(button) {
+        button.addEventListener('click', function () {
+            const rows = tableBody.querySelectorAll('.part-row');
+            if (rows.length === 1) {
+                const row = rows[0];
+                row.querySelector('select[name="parca_stok_karti_id"]').value = '';
+                row.querySelector('input[name="parca_malzeme_adi"]').value = '';
+                row.querySelector('input[name="parca_kullanilan_adet"]').value = '';
+                row.querySelector('input[name="parca_birim_fiyat"]').value = '';
+                return;
+            }
+
+            button.closest('.part-row').remove();
+        });
+    }
+
+    tableBody.querySelectorAll('.remove-part-row').forEach(attachRemoveHandler);
+
+    addButton.addEventListener('click', function () {
+        const newRow = rowTemplate.content.firstElementChild.cloneNode(true);
+        attachRemoveHandler(newRow.querySelector('.remove-part-row'));
+        tableBody.appendChild(newRow);
+    });
+});
+</script>
+{% endblock %}

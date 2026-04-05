@@ -1,19 +1,149 @@
 from collections import defaultdict
 from datetime import date, timedelta
 
-from sqlalchemy import func
+from sqlalchemy import func, inspect, or_
 from sqlalchemy.orm import joinedload
 
 from app.extensions import db
-from app.araclar.models import Arac
-from app.filo.models import Ekipman, BakimKaydi, KullanilanParca, StokHareket
+from app.araclar.models import Arac, AracBakim
+from app.filo.models import Ekipman, BakimKaydi, StokHareket
 from app.kiralama.models import KiralamaKalemi
 from app.nakliyeler.models import Nakliye
-from app.subeler.models import Sube
+from app.personel.models import PersonelMaasDonemi
+from app.subeler.models import Sube, SubeGideri
+from app.subeler.models import SubeSabitGiderDonemi
 
 
 class RaporlamaService:
     """Sirket ve sube bazli raporlama hesaplarini merkezden yonetir."""
+
+    @staticmethod
+    def _sube_giderleri_table_exists():
+        return inspect(db.engine).has_table(SubeGideri.__tablename__)
+
+    @staticmethod
+    def _personel_maas_donemleri_table_exists():
+        return inspect(db.engine).has_table(PersonelMaasDonemi.__tablename__)
+
+    @staticmethod
+    def _sube_sabit_gider_donemleri_table_exists():
+        return inspect(db.engine).has_table(SubeSabitGiderDonemi.__tablename__)
+
+    @staticmethod
+    def _arac_bakim_table_exists():
+        return inspect(db.engine).has_table(AracBakim.__tablename__)
+
+    @staticmethod
+    def _resolve_latest_stock_prices(stok_karti_ids):
+        if not stok_karti_ids:
+            return {}
+
+        price_map = {}
+        stok_hareketleri = (
+            StokHareket.query
+            .filter(
+                StokHareket.stok_karti_id.in_(stok_karti_ids),
+                StokHareket.hareket_tipi == 'giris',
+            )
+            .order_by(StokHareket.stok_karti_id.asc(), StokHareket.tarih.desc(), StokHareket.id.desc())
+            .all()
+        )
+
+        for hareket in stok_hareketleri:
+            if hareket.stok_karti_id not in price_map:
+                price_map[hareket.stok_karti_id] = float(hareket.birim_fiyat or 0)
+
+        return price_map
+
+    @classmethod
+    def _build_maintenance_cost_rows(cls, start_date, end_date, sube_id=None, ekipman_ids=None):
+        query = (
+            BakimKaydi.query.options(
+                joinedload(BakimKaydi.kullanilan_parcalar),
+                joinedload(BakimKaydi.ekipman),
+            )
+            .join(Ekipman, BakimKaydi.ekipman_id == Ekipman.id)
+            .filter(
+                BakimKaydi.is_deleted == False,
+                Ekipman.is_active == True,
+                BakimKaydi.tarih >= start_date,
+                BakimKaydi.tarih <= end_date,
+            )
+        )
+
+        if sube_id:
+            query = query.filter(Ekipman.sube_id == sube_id)
+
+        if ekipman_ids is not None:
+            if not ekipman_ids:
+                return []
+            query = query.filter(BakimKaydi.ekipman_id.in_(ekipman_ids))
+
+        bakim_kayitlari = query.all()
+
+        fiyat_gereken_stok_ids = {
+            parca.stok_karti_id
+            for bakim_kaydi in bakim_kayitlari
+            for parca in bakim_kaydi.kullanilan_parcalar
+            if parca.stok_karti_id and float(parca.birim_fiyat or 0) <= 0
+        }
+        latest_price_map = cls._resolve_latest_stock_prices(fiyat_gereken_stok_ids)
+
+        cost_rows = []
+        for bakim_kaydi in bakim_kayitlari:
+            labor_cost = float(bakim_kaydi.toplam_iscilik_maliyeti or 0)
+            material_cost = 0.0
+
+            for parca in bakim_kaydi.kullanilan_parcalar:
+                birim_fiyat = float(parca.birim_fiyat or 0)
+                if birim_fiyat <= 0 and parca.stok_karti_id:
+                    birim_fiyat = latest_price_map.get(parca.stok_karti_id, 0.0)
+                material_cost += float(parca.kullanilan_adet or 0) * birim_fiyat
+
+            cost_rows.append(
+                {
+                    "tarih": bakim_kaydi.tarih,
+                    "ekipman_id": bakim_kaydi.ekipman_id,
+                    "sube_id": bakim_kaydi.ekipman.sube_id if bakim_kaydi.ekipman else None,
+                    "labor_cost": labor_cost,
+                    "material_cost": material_cost,
+                    "total_cost": labor_cost + material_cost,
+                }
+            )
+
+        return cost_rows
+
+    @classmethod
+    def _build_vehicle_maintenance_cost_rows(cls, start_date, end_date, sube_id=None):
+        if not cls._arac_bakim_table_exists():
+            return []
+
+        query = (
+            AracBakim.query.options(joinedload(AracBakim.arac))
+            .join(Arac, AracBakim.arac_id == Arac.id)
+            .filter(
+                AracBakim.is_deleted == False,
+                Arac.is_active == True,
+                AracBakim.tarih >= start_date,
+                AracBakim.tarih <= end_date,
+            )
+        )
+
+        if sube_id:
+            query = query.filter(Arac.sube_id == sube_id)
+
+        cost_rows = []
+        for bakim_kaydi in query.all():
+            cost_rows.append(
+                {
+                    "tarih": bakim_kaydi.tarih,
+                    "arac_id": bakim_kaydi.arac_id,
+                    "sube_id": bakim_kaydi.arac.sube_id if bakim_kaydi.arac else None,
+                    "total_cost": float(bakim_kaydi.maliyet or 0),
+                }
+            )
+
+        return cost_rows
 
     @staticmethod
     def _overlap_range(start_a, end_a, start_b, end_b):
@@ -40,6 +170,109 @@ class RaporlamaService:
                 current = date(current.year + 1, 1, 1)
             else:
                 current = date(current.year, current.month + 1, 1)
+
+    @staticmethod
+    def _month_end(month_start):
+        if month_start.month == 12:
+            return date(month_start.year + 1, 1, 1) - timedelta(days=1)
+        return date(month_start.year, month_start.month + 1, 1) - timedelta(days=1)
+
+    @classmethod
+    def _allocate_monthly_amount(cls, amount, overlap_start, overlap_end, month_start, month_end):
+        if not amount:
+            return 0.0
+
+        overlap_days = cls._days_between(overlap_start, overlap_end)
+        month_days = cls._days_between(month_start, month_end)
+        if overlap_days <= 0 or month_days <= 0:
+            return 0.0
+
+        return float(amount or 0) * (overlap_days / month_days)
+
+    @staticmethod
+    def _personel_period_total_amount(donem):
+        return (
+            float(donem.aylik_maas or 0)
+            + float(getattr(donem, 'aylik_yemek_ucreti', 0) or 0)
+            + float(getattr(donem, 'aylik_yol_ucreti', 0) or 0)
+            + float(donem.sgk_isveren_tutari or 0)
+            + float(donem.yan_haklar_tutari or 0)
+            + float(donem.diger_gider_tutari or 0)
+        )
+
+    @classmethod
+    def _calculate_personel_cost(cls, start_date, end_date, sube_id=None):
+        if not cls._personel_maas_donemleri_table_exists():
+            return 0.0
+
+        total_cost = 0.0
+        query = PersonelMaasDonemi.query.filter(
+            PersonelMaasDonemi.baslangic_tarihi <= end_date,
+            or_(PersonelMaasDonemi.bitis_tarihi.is_(None), PersonelMaasDonemi.bitis_tarihi >= start_date),
+        )
+        if sube_id:
+            query = query.filter(PersonelMaasDonemi.sube_id == sube_id)
+
+        for donem in query.all():
+            effective_end = donem.bitis_tarihi or end_date
+            for month_start in cls._iterate_month_starts(start_date, end_date):
+                month_end = cls._month_end(month_start)
+                overlap = cls._overlap_range(donem.baslangic_tarihi, effective_end, month_start, month_end)
+                if not overlap:
+                    continue
+                total_cost += cls._allocate_monthly_amount(
+                    cls._personel_period_total_amount(donem),
+                    overlap[0],
+                    overlap[1],
+                    month_start,
+                    month_end,
+                )
+
+        return total_cost
+
+    @classmethod
+    def _calculate_sabit_gider_cost(cls, start_date, end_date, sube_id=None):
+        if not cls._sube_sabit_gider_donemleri_table_exists():
+            return 0.0
+
+        total_cost = 0.0
+        query = SubeSabitGiderDonemi.query.filter(
+            SubeSabitGiderDonemi.baslangic_tarihi <= end_date,
+            or_(SubeSabitGiderDonemi.bitis_tarihi.is_(None), SubeSabitGiderDonemi.bitis_tarihi >= start_date),
+        )
+        if sube_id:
+            query = query.filter(SubeSabitGiderDonemi.sube_id == sube_id)
+
+        for donem in query.all():
+            effective_end = donem.bitis_tarihi or end_date
+            for month_start in cls._iterate_month_starts(start_date, end_date):
+                month_end = cls._month_end(month_start)
+                overlap = cls._overlap_range(donem.baslangic_tarihi, effective_end, month_start, month_end)
+                if not overlap:
+                    continue
+                total_cost += cls._allocate_monthly_amount(
+                    donem.aylik_tutar,
+                    overlap[0],
+                    overlap[1],
+                    month_start,
+                    month_end,
+                )
+
+        return total_cost
+
+    @classmethod
+    def _calculate_manual_sube_gider_cost(cls, start_date, end_date, sube_id=None):
+        if not cls._sube_giderleri_table_exists():
+            return 0.0
+
+        query = SubeGideri.query.filter(
+            SubeGideri.tarih >= start_date,
+            SubeGideri.tarih <= end_date,
+        )
+        if sube_id:
+            query = query.filter(SubeGideri.sube_id == sube_id)
+
+        return float(sum(float(gider.tutar or 0) for gider in query.all()))
 
     @classmethod
     def _calculate_monthly_revenue_series(
@@ -73,7 +306,15 @@ class RaporlamaService:
                 "harici_odeme": 0.0,
                 "harici_kar": 0.0,
                 "nakliye_geliri": 0.0,
+                "ekipman_bakim_gideri": 0.0,
+                "arac_bakim_gideri": 0.0,
+                "bakim_gideri": 0.0,
+                "manuel_sube_gideri": 0.0,
+                "personel_gideri": 0.0,
+                "sabit_gideri": 0.0,
+                "sube_gideri": 0.0,
                 "gelir": 0.0,
+                "net_katki": 0.0,
             }
             month_rows.append(row)
             month_index[key] = idx
@@ -174,13 +415,114 @@ class RaporlamaService:
                 continue
             month_rows[idx]["nakliye_geliri"] += float(sefer.toplam_tutar or 0)
 
+        maintenance_rows = cls._build_maintenance_cost_rows(
+            start_date=start_date,
+            end_date=end_date,
+            sube_id=sube_id,
+            ekipman_ids=ekipman_ids,
+        )
+        for maintenance_row in maintenance_rows:
+            month_key = maintenance_row["tarih"].strftime("%Y-%m")
+            idx = month_index.get(month_key)
+            if idx is None:
+                continue
+            month_rows[idx]["ekipman_bakim_gideri"] += maintenance_row["total_cost"]
+
+        vehicle_maintenance_rows = cls._build_vehicle_maintenance_cost_rows(
+            start_date=start_date,
+            end_date=end_date,
+            sube_id=sube_id,
+        )
+        for maintenance_row in vehicle_maintenance_rows:
+            month_key = maintenance_row["tarih"].strftime("%Y-%m")
+            idx = month_index.get(month_key)
+            if idx is None:
+                continue
+            month_rows[idx]["arac_bakim_gideri"] += maintenance_row["total_cost"]
+
+        if cls._sube_giderleri_table_exists():
+            gider_query = SubeGideri.query.filter(
+                SubeGideri.tarih >= start_date,
+                SubeGideri.tarih <= end_date,
+            )
+            if sube_id:
+                gider_query = gider_query.filter(SubeGideri.sube_id == sube_id)
+
+            for gider in gider_query.all():
+                month_key = gider.tarih.strftime("%Y-%m")
+                idx = month_index.get(month_key)
+                if idx is None:
+                    continue
+                month_rows[idx]["manuel_sube_gideri"] += float(gider.tutar or 0)
+
+        if cls._personel_maas_donemleri_table_exists():
+            query = PersonelMaasDonemi.query.filter(
+                PersonelMaasDonemi.baslangic_tarihi <= end_date,
+                or_(PersonelMaasDonemi.bitis_tarihi.is_(None), PersonelMaasDonemi.bitis_tarihi >= start_date),
+            )
+            if sube_id:
+                query = query.filter(PersonelMaasDonemi.sube_id == sube_id)
+
+            for donem in query.all():
+                effective_end = donem.bitis_tarihi or end_date
+                for month_row in month_rows:
+                    month_overlap = cls._overlap_range(
+                        donem.baslangic_tarihi,
+                        effective_end,
+                        month_row["month_start"],
+                        month_row["month_end"],
+                    )
+                    if not month_overlap:
+                        continue
+                    month_row["personel_gideri"] += cls._allocate_monthly_amount(
+                        cls._personel_period_total_amount(donem),
+                        month_overlap[0],
+                        month_overlap[1],
+                        month_row["month_start"],
+                        month_row["month_end"],
+                    )
+
+        if cls._sube_sabit_gider_donemleri_table_exists():
+            query = SubeSabitGiderDonemi.query.filter(
+                SubeSabitGiderDonemi.baslangic_tarihi <= end_date,
+                or_(SubeSabitGiderDonemi.bitis_tarihi.is_(None), SubeSabitGiderDonemi.bitis_tarihi >= start_date),
+            )
+            if sube_id:
+                query = query.filter(SubeSabitGiderDonemi.sube_id == sube_id)
+
+            for donem in query.all():
+                effective_end = donem.bitis_tarihi or end_date
+                for month_row in month_rows:
+                    month_overlap = cls._overlap_range(
+                        donem.baslangic_tarihi,
+                        effective_end,
+                        month_row["month_start"],
+                        month_row["month_end"],
+                    )
+                    if not month_overlap:
+                        continue
+                    month_row["sabit_gideri"] += cls._allocate_monthly_amount(
+                        donem.aylik_tutar,
+                        month_overlap[0],
+                        month_overlap[1],
+                        month_row["month_start"],
+                        month_row["month_end"],
+                    )
+
         for month_row in month_rows:
+            month_row["bakim_gideri"] = month_row["ekipman_bakim_gideri"] + month_row["arac_bakim_gideri"]
+            month_row["sube_gideri"] = (
+                month_row["manuel_sube_gideri"]
+                + month_row["personel_gideri"]
+                + month_row["sabit_gideri"]
+            )
             month_row["harici_kar"] = month_row["harici_gelir"] - month_row["harici_odeme"]
             month_row["gelir"] = (
                 month_row["kiralama_geliri"]
                 + month_row["harici_kar"]
                 + month_row["nakliye_geliri"]
             )
+            month_row["net_katki"] = month_row["gelir"] - month_row["bakim_gideri"] - month_row["sube_gideri"]
             month_row.pop("month_start", None)
             month_row.pop("month_end", None)
 
@@ -306,44 +648,14 @@ class RaporlamaService:
         }
 
     @classmethod
-    def _calculate_maintenance_cost(cls, start_date, end_date, sube_id=None):
-        # Yedek parca maliyeti: Kullanilan adet x stok kartinin son alis birim fiyati.
-        latest_price_subquery = (
-            db.session.query(StokHareket.birim_fiyat)
-            .filter(
-                StokHareket.stok_karti_id == KullanilanParca.stok_karti_id,
-                StokHareket.hareket_tipi == 'giris',
-            )
-            .order_by(StokHareket.tarih.desc(), StokHareket.id.desc())
-            .limit(1)
-            .correlate(KullanilanParca)
-            .scalar_subquery()
+    def _calculate_maintenance_cost(cls, start_date, end_date, sube_id=None, ekipman_ids=None):
+        maintenance_rows = cls._build_maintenance_cost_rows(
+            start_date=start_date,
+            end_date=end_date,
+            sube_id=sube_id,
+            ekipman_ids=ekipman_ids,
         )
-
-        query = (
-            db.session.query(
-                func.coalesce(
-                    func.sum(
-                        KullanilanParca.kullanilan_adet * func.coalesce(latest_price_subquery, 0)
-                    ),
-                    0,
-                )
-            )
-            .join(BakimKaydi, KullanilanParca.bakim_kaydi_id == BakimKaydi.id)
-            .join(Ekipman, BakimKaydi.ekipman_id == Ekipman.id)
-            .filter(
-                BakimKaydi.is_deleted == False,
-                Ekipman.is_active == True,
-                BakimKaydi.tarih >= start_date,
-                BakimKaydi.tarih <= end_date,
-            )
-        )
-
-        if sube_id:
-            query = query.filter(Ekipman.sube_id == sube_id)
-
-        total = query.scalar() or 0
-        return float(total)
+        return float(sum(item["total_cost"] for item in maintenance_rows))
 
     @classmethod
     def _calculate_transport_metrics(cls, start_date, end_date, sube_id=None):
@@ -736,6 +1048,31 @@ class RaporlamaService:
         )
 
         toplam_calisma = machine_totals["work_days"]
+        equipment_maintenance_cost_rows = cls._build_maintenance_cost_rows(
+            start_date=start_date,
+            end_date=end_date,
+            sube_id=sube_id,
+            ekipman_ids=[item.id for item in rapor_makineler],
+        )
+        vehicle_maintenance_cost_rows = cls._build_vehicle_maintenance_cost_rows(
+            start_date=start_date,
+            end_date=end_date,
+            sube_id=sube_id,
+        )
+        equipment_maintenance_cost = float(sum(item["total_cost"] for item in equipment_maintenance_cost_rows))
+        vehicle_maintenance_cost = float(sum(item["total_cost"] for item in vehicle_maintenance_cost_rows))
+        maintenance_cost = equipment_maintenance_cost + vehicle_maintenance_cost
+        maintenance_cost_by_machine = defaultdict(float)
+        maintenance_cost_by_branch = defaultdict(float)
+        equipment_maintenance_cost_by_branch = defaultdict(float)
+        vehicle_maintenance_cost_by_branch = defaultdict(float)
+        for maintenance_row in equipment_maintenance_cost_rows:
+            maintenance_cost_by_machine[maintenance_row["ekipman_id"]] += maintenance_row["total_cost"]
+            maintenance_cost_by_branch[maintenance_row["sube_id"]] += maintenance_row["total_cost"]
+            equipment_maintenance_cost_by_branch[maintenance_row["sube_id"]] += maintenance_row["total_cost"]
+        for maintenance_row in vehicle_maintenance_cost_rows:
+            maintenance_cost_by_branch[maintenance_row["sube_id"]] += maintenance_row["total_cost"]
+            vehicle_maintenance_cost_by_branch[maintenance_row["sube_id"]] += maintenance_row["total_cost"]
 
         branch_machine_rows = defaultdict(
             lambda: {
@@ -755,6 +1092,8 @@ class RaporlamaService:
             available_days = machine_stat.get("available_days", 0)
             utilization_pct = machine_stat.get("utilization_pct", 0.0)
             revenue = machine_stat.get("revenue", 0.0)
+            maintenance_cost_for_machine = maintenance_cost_by_machine.get(ekipman.id, 0.0)
+            net_contribution = revenue - maintenance_cost_for_machine
 
             sube_name = sube_lookup.get(ekipman.sube_id, "Subesiz")
             calisma_payi = (work_days / toplam_calisma * 100.0) if toplam_calisma else 0.0
@@ -776,6 +1115,8 @@ class RaporlamaService:
                     "utilization_pct": utilization_pct,
                     "calisma_payi": calisma_payi,
                     "gelir": revenue,
+                    "bakim_gideri": maintenance_cost_for_machine,
+                    "net_katki": net_contribution,
                 }
             )
 
@@ -787,7 +1128,7 @@ class RaporlamaService:
         transport_metrics = cls._calculate_transport_metrics(start_date, end_date, sube_id=sube_id)
         transport_totals = transport_metrics["totals"]
         external_rental_metrics = cls._calculate_external_rental_metrics(start_date, end_date, sube_id=sube_id)
-        maintenance_cost = cls._calculate_maintenance_cost(start_date, end_date, sube_id=sube_id)
+
         monthly_revenue_rows = cls._calculate_monthly_revenue_series(
             start_date=start_date,
             end_date=end_date,
@@ -808,6 +1149,30 @@ class RaporlamaService:
             # Yalnizca subesi tanimli kayitlari birlestir.
             branch_ids |= {bid for bid in branch_machine_rows.keys() if bid is not None}
             branch_ids |= {bid for bid in transport_metrics["branch_rows"].keys() if bid is not None}
+            branch_ids |= {row["sube_id"] for row in vehicle_maintenance_cost_rows if row.get("sube_id") is not None}
+
+        sube_gideri_by_branch = defaultdict(float)
+        personel_gideri_by_branch = defaultdict(float)
+        sabit_gider_by_branch = defaultdict(float)
+        manuel_sube_gideri_by_branch = defaultdict(float)
+        if branch_ids:
+            if cls._sube_giderleri_table_exists():
+                sube_giderleri = SubeGideri.query.filter(
+                    SubeGideri.sube_id.in_(list(branch_ids)),
+                    SubeGideri.tarih >= start_date,
+                    SubeGideri.tarih <= end_date,
+                ).all()
+                for gider in sube_giderleri:
+                    manuel_sube_gideri_by_branch[gider.sube_id] += float(gider.tutar or 0)
+
+            for branch_id in branch_ids:
+                personel_gideri_by_branch[branch_id] = cls._calculate_personel_cost(start_date, end_date, sube_id=branch_id)
+                sabit_gider_by_branch[branch_id] = cls._calculate_sabit_gider_cost(start_date, end_date, sube_id=branch_id)
+                sube_gideri_by_branch[branch_id] = (
+                    manuel_sube_gideri_by_branch[branch_id]
+                    + personel_gideri_by_branch[branch_id]
+                    + sabit_gider_by_branch[branch_id]
+                )
 
         branch_rows = []
         for branch_id in branch_ids:
@@ -822,6 +1187,13 @@ class RaporlamaService:
                 },
             )
             transport_row = transport_metrics["branch_rows"].get(branch_id, cls._default_branch_transport_row())
+            branch_maintenance_cost = maintenance_cost_by_branch.get(branch_id, 0.0)
+            branch_equipment_maintenance_cost = equipment_maintenance_cost_by_branch.get(branch_id, 0.0)
+            branch_vehicle_maintenance_cost = vehicle_maintenance_cost_by_branch.get(branch_id, 0.0)
+            branch_sube_gideri = sube_gideri_by_branch.get(branch_id, 0.0)
+            branch_personel_gideri = personel_gideri_by_branch.get(branch_id, 0.0)
+            branch_sabit_gider = sabit_gider_by_branch.get(branch_id, 0.0)
+            branch_manuel_gider = manuel_sube_gideri_by_branch.get(branch_id, 0.0)
             toplam_gelir = machine_row["gelir"] + transport_row["gelir"]
             toplam_katki = machine_row["gelir"] + transport_row["net"]
 
@@ -842,6 +1214,13 @@ class RaporlamaService:
                     "nakliye_maliyeti": transport_row["maliyet"],
                     "nakliye_net": transport_row["net"],
                     "nakliye_karlilik": transport_row["karlilik_pct"],
+                    "ekipman_bakim_gideri": branch_equipment_maintenance_cost,
+                    "arac_bakim_gideri": branch_vehicle_maintenance_cost,
+                    "bakim_gideri": branch_maintenance_cost,
+                    "manuel_sube_gideri": branch_manuel_gider,
+                    "personel_gideri": branch_personel_gideri,
+                    "sabit_gideri": branch_sabit_gider,
+                    "sube_gideri": branch_sube_gideri,
                     "toplam_gelir": toplam_gelir,
                     "toplam_katki": toplam_katki,
                 }
@@ -864,6 +1243,9 @@ class RaporlamaService:
             projection_mode=projection_mode,
         )
 
+        sube_gideri_toplam = sum(row.get("sube_gideri", 0.0) for row in monthly_revenue_rows)
+        net_katki_toplam = sum(row.get("net_katki", 0.0) for row in monthly_revenue_rows)
+
         return {
             "summary": {
                 "machine_count": machine_totals["machine_count"],
@@ -871,7 +1253,11 @@ class RaporlamaService:
                 "available_days": machine_totals["available_days"],
                 "utilization_pct": machine_totals["utilization_pct"],
                 "machine_revenue": machine_totals["revenue"],
+                "equipment_maintenance_cost": equipment_maintenance_cost,
+                "vehicle_maintenance_cost": vehicle_maintenance_cost,
                 "maintenance_cost": maintenance_cost,
+                "sube_gideri_toplam": sube_gideri_toplam,
+                "net_katki_toplam": net_katki_toplam,
                 "external_rental_cost": external_rental_metrics["total_cost"],
                 "external_rental_revenue": external_rental_metrics["total_revenue"],
                 "external_rental_profit": external_rental_metrics["total_profit"],

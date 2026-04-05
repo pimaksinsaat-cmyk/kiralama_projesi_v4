@@ -75,7 +75,7 @@
                             <div class="col-md-6">
                                 {{ form.tutar.label(class="form-label fw-bold") }}
                                 <div class="input-group">
-                                    <span class="input-group-text">₺</span>
+                                    <span class="input-group-text">TL</span>
                                     {% if form.tutar.errors %}
                                         {{ form.tutar(class="form-control text-end is-invalid", type="text", inputmode="decimal", placeholder="0,00", style="font-size: 1.2em; font-weight: bold;") }}
                                         <div class="invalid-feedback">{% for error in form.tutar.errors %} {{ error }} {% endfor %}</div>

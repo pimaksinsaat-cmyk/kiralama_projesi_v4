@@ -1,0 +1,1009 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    :root {
+        --pimaks-blue: #0d47a1;
+        --pimaks-light-blue: #e3f2fd;
+        --warning-orange: #f39c12;
+        --danger-red: #e74c3c;
+        --text-dark: #2c3e50;
+    }
+
+    .masraf-container {
+        padding: 2rem;
+        background-color: #f4f7f9;
+        min-height: 100vh;
+    }
+
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+        border-bottom: 2px solid #dee2e6;
+        padding-bottom: 1rem;
+    }
+
+    .page-header h1 {
+        color: var(--text-dark);
+        font-weight: 700;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .back-btn {
+        padding: 8px 16px;
+        background-color: #eceff1;
+        color: #455a64;
+        border: none;
+        border-radius: 6px;
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 0.85rem;
+        transition: all 0.2s;
+    }
+
+    .back-btn:hover {
+        background-color: #cfd8dc;
+    }
+
+    .content-wrapper {
+        display: grid;
+        grid-template-columns: 1fr 380px;
+        gap: 2rem;
+        margin-bottom: 2rem;
+    }
+
+    @media (max-width: 1024px) {
+        .content-wrapper {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    /* Özet Kartları */
+    .ozet-kartlar {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .ozet-kart {
+        background: white;
+        border-radius: 10px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        border-left: 4px solid var(--pimaks-blue);
+        text-align: center;
+    }
+
+    .ozet-kart.toplam {
+        border-left-color: var(--pimaks-blue);
+        background: linear-gradient(135deg, var(--pimaks-light-blue) 0%, #ffffff 100%);
+    }
+
+    .ozet-kart.manuel {
+        border-left-color: var(--warning-orange);
+        background: linear-gradient(135deg, #fff7e6 0%, #ffffff 100%);
+    }
+
+    .ozet-kart.personel {
+        border-left-color: #0f766e;
+        background: linear-gradient(135deg, #ecfeff 0%, #ffffff 100%);
+    }
+
+    .ozet-kart.sabit {
+        border-left-color: #0f766e;
+        background: linear-gradient(135deg, #ecfdf5 0%, #ffffff 100%);
+    }
+
+    .ozet-kart-label {
+        font-size: 0.75rem;
+        color: #7f8c8d;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 0.5rem;
+    }
+
+    .ozet-kart-tutar {
+        display: inline-flex;
+        align-items: flex-end;
+        justify-content: center;
+        gap: 0.35rem;
+        font-size: 2rem;
+        font-weight: 800;
+        color: var(--pimaks-blue);
+        font-variant-numeric: tabular-nums lining-nums;
+        font-feature-settings: "tnum" 1, "lnum" 1;
+        letter-spacing: 0.02em;
+        text-shadow: 0 1px 0 rgba(255, 255, 255, 0.7);
+    }
+
+    .ozet-kart-amount {
+        line-height: 1;
+    }
+
+    .ozet-kart-currency {
+        font-size: 0.95rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        opacity: 0.8;
+        padding-bottom: 0.22rem;
+    }
+
+    .kategori-ozet {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: 1rem;
+    }
+
+    .kategori-kart {
+        background: white;
+        border-radius: 8px;
+        padding: 1rem;
+        text-align: center;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        border-top: 3px solid var(--warning-orange);
+    }
+
+    .kategori-kart-adi {
+        font-size: 0.8rem;
+        color: #7f8c8d;
+        margin-bottom: 0.3rem;
+        font-weight: 600;
+    }
+
+    .kategori-kart-tutar {
+        display: inline-flex;
+        align-items: flex-end;
+        justify-content: center;
+        gap: 0.3rem;
+        font-size: 1.3rem;
+        font-weight: 700;
+        color: var(--text-dark);
+    }
+
+    .financial-value {
+        display: inline-flex;
+        align-items: flex-end;
+        gap: 0.3rem;
+        font-variant-numeric: tabular-nums lining-nums;
+        font-feature-settings: "tnum" 1, "lnum" 1;
+        letter-spacing: 0.01em;
+        white-space: nowrap;
+    }
+
+    .financial-value.block {
+        display: inline-flex;
+        justify-content: flex-end;
+        width: 100%;
+    }
+
+    .financial-amount {
+        line-height: 1;
+    }
+
+    .financial-suffix {
+        font-size: 0.78em;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        opacity: 0.82;
+        padding-bottom: 0.1rem;
+    }
+
+    .financial-rate {
+        font-variant-numeric: tabular-nums lining-nums;
+        font-feature-settings: "tnum" 1, "lnum" 1;
+        white-space: nowrap;
+    }
+
+    /* Masraf Tablosu */
+    .masraf-tablo-wrapper {
+        background: white;
+        border-radius: 10px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+        overflow: hidden;
+    }
+
+    .masraf-tablo-header {
+        background: linear-gradient(to right, #ffffff, #f8f9fa);
+        padding: 1.5rem;
+        border-bottom: 1px solid #f1f1f1;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .masraf-tablo-header h3 {
+        margin: 0;
+        color: var(--text-dark);
+        font-weight: 700;
+    }
+
+    .header-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .period-toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+        background: white;
+        border-radius: 10px;
+        padding: 1rem 1.25rem;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+        margin-bottom: 1.25rem;
+        flex-wrap: wrap;
+    }
+
+    .period-toolbar-title {
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+    }
+
+    .period-toolbar-title strong {
+        color: var(--text-dark);
+        font-size: 1rem;
+    }
+
+    .period-toolbar-title span {
+        color: #64748b;
+        font-size: 0.85rem;
+    }
+
+    .period-controls {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        flex-wrap: wrap;
+    }
+
+    .period-nav-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 38px;
+        height: 38px;
+        border-radius: 8px;
+        border: 1px solid #dbe4ee;
+        background: #f8fafc;
+        color: var(--text-dark);
+        text-decoration: none;
+        font-weight: 700;
+        transition: all 0.2s ease;
+    }
+
+    .period-nav-btn:hover {
+        background: var(--pimaks-light-blue);
+        border-color: #bfdbfe;
+    }
+
+    .period-picker-form {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        flex-wrap: wrap;
+    }
+
+    .period-picker-form input,
+    .period-picker-form button {
+        height: 38px;
+        border-radius: 8px;
+    }
+
+    .period-picker-form input {
+        border: 1px solid #dbe4ee;
+        padding: 0 0.85rem;
+        font-family: inherit;
+        font-size: 0.9rem;
+    }
+
+    .period-picker-form button {
+        border: none;
+        background: var(--pimaks-blue);
+        color: white;
+        padding: 0 1rem;
+        font-weight: 600;
+        cursor: pointer;
+    }
+
+    .period-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        border-radius: 999px;
+        background: #e8f1fb;
+        color: var(--pimaks-blue);
+        font-size: 0.8rem;
+        font-weight: 700;
+        padding: 0.35rem 0.8rem;
+    }
+
+    .toggle-form-btn {
+        width: 36px;
+        height: 36px;
+        border: none;
+        border-radius: 999px;
+        background: var(--pimaks-blue);
+        color: white;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-size: 1.1rem;
+        font-weight: 700;
+        transition: transform 0.2s ease, background-color 0.2s ease;
+    }
+
+    .toggle-form-btn:hover {
+        background: #0a3d91;
+        transform: scale(1.05);
+    }
+
+    .toggle-form-btn[aria-expanded="true"] {
+        background: #0f766e;
+    }
+
+    .collapsible-form {
+        border-bottom: 1px solid #eef2f7;
+        background: linear-gradient(180deg, #fbfdff 0%, #f6fafc 100%);
+        padding: 1.25rem 1.5rem 1.5rem;
+    }
+
+    .collapsible-form[hidden] {
+        display: none;
+    }
+
+    .collapsible-form-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        align-items: end;
+    }
+
+    .collapsible-form-grid .form-group {
+        margin-bottom: 0;
+    }
+
+    .collapsible-form-grid .full-width {
+        grid-column: 1 / -1;
+    }
+
+    .inline-submit {
+        align-self: end;
+    }
+
+    .inline-submit input,
+    .inline-submit button {
+        width: 100%;
+    }
+
+    .masraf-tablo {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.9rem;
+    }
+
+    .masraf-tablo thead tr {
+        background-color: #f5f5f5;
+        border-bottom: 1px solid #ddd;
+    }
+
+    .masraf-tablo th {
+        padding: 0.75rem;
+        text-align: left;
+        font-weight: 600;
+        color: #333;
+        border-right: 1px solid #ddd;
+    }
+
+    .masraf-tablo th:last-child {
+        border-right: none;
+        text-align: center;
+    }
+
+    .masraf-tablo td {
+        padding: 0.75rem;
+        border-right: 1px solid #eee;
+        color: #555;
+    }
+
+    .masraf-tablo td:last-child {
+        border-right: none;
+        text-align: center;
+    }
+
+    .durum-badge {
+        display: inline-flex;
+        padding: 0.3rem 0.65rem;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .durum-badge.is-passive {
+        background: #fef3c7;
+        color: #92400e;
+    }
+
+    .masraf-tablo tbody tr {
+        border-bottom: 1px solid #eee;
+        transition: background-color 0.2s;
+    }
+
+    .masraf-tablo tbody tr:hover {
+        background-color: #f9f9f9;
+    }
+
+    .masraf-tarih {
+        color: var(--pimaks-blue);
+        font-weight: 600;
+    }
+
+    .masraf-kategori {
+        display: inline-block;
+        padding: 0.3rem 0.6rem;
+        border-radius: 4px;
+        background-color: #f0f0f0;
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #555;
+    }
+
+    .masraf-tutar {
+        font-weight: 700;
+        color: var(--danger-red);
+        text-align: right;
+    }
+
+    .sil-btn {
+        padding: 0.4rem 0.8rem;
+        background-color: #ffebee;
+        color: var(--danger-red);
+        border: 1px solid var(--danger-red);
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.75rem;
+        font-weight: 600;
+        transition: all 0.2s;
+    }
+
+    .sil-btn:hover {
+        background-color: var(--danger-red);
+        color: white;
+    }
+
+    /* Yan Panel - Form */
+    .form-panel {
+        background: white;
+        border-radius: 10px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+        height: fit-content;
+        position: sticky;
+        top: 100px;
+    }
+
+    .form-panel h3 {
+        margin: 0 0 1.5rem 0;
+        color: var(--text-dark);
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .form-panel .form-group {
+        margin-bottom: 1.2rem;
+    }
+
+    .form-panel label {
+        display: block;
+        font-weight: 600;
+        color: #555;
+        margin-bottom: 0.4rem;
+        font-size: 0.9rem;
+    }
+
+    .form-panel input,
+    .form-panel select,
+    .form-panel textarea {
+        width: 100%;
+        padding: 0.6rem;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        font-size: 0.9rem;
+        font-family: inherit;
+    }
+
+    .form-panel input:focus,
+    .form-panel select:focus,
+    .form-panel textarea:focus {
+        outline: none;
+        border-color: var(--pimaks-blue);
+        box-shadow: 0 0 0 3px var(--pimaks-light-blue);
+    }
+
+    .form-panel textarea {
+        resize: vertical;
+        min-height: 60px;
+    }
+
+    .form-panel button {
+        width: 100%;
+        padding: 0.8rem;
+        background-color: var(--pimaks-blue);
+        color: white;
+        border: none;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 0.9rem;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .form-panel button:hover {
+        background-color: #0a3d91;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(13, 71, 161, 0.3);
+    }
+
+    .bos-liste {
+        grid-column: 1 / -1;
+        text-align: center;
+        padding: 4rem;
+        background: white;
+        border-radius: 10px;
+    }
+
+    .bos-liste-ikon {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+    }
+
+    .bos-liste h3 {
+        color: #94a3b8;
+        margin: 0 0 0.5rem 0;
+    }
+
+    .bos-liste p {
+        color: #94a3b8;
+        margin: 0;
+    }
+</style>
+
+<div class="masraf-container">
+    {% set sabit_form_acik = sabit_gider_form.errors|length > 0 %}
+    <div class="page-header">
+        <h1>
+            <i class="fas fa-receipt"></i> {{ sube.isim }} — Masraf Yönetimi
+        </h1>
+        <a href="{{ url_for('subeler.index') }}" class="back-btn">← Şubelere Dön</a>
+    </div>
+
+    <div class="content-wrapper">
+        <!-- Sol Taraf: Listeler -->
+        <div>
+            <div class="period-toolbar">
+                <div class="period-toolbar-title">
+                    <strong>Masraf Gorunumu</strong>
+                    <span>Kayitlar secili aya gore filtrelenir. Su an: {{ selected_period_label }}</span>
+                </div>
+                <div class="period-controls">
+                    <a class="period-nav-btn" href="{{ url_for('subeler.sube_masraflari', sube_id=sube.id, year=previous_year, month=previous_month) }}" title="Onceki ay">&lsaquo;</a>
+                    <span class="period-badge">{{ selected_period_label }}</span>
+                    <a class="period-nav-btn" href="{{ url_for('subeler.sube_masraflari', sube_id=sube.id, year=next_year, month=next_month) }}" title="Sonraki ay">&rsaquo;</a>
+                    <form method="GET" action="{{ url_for('subeler.sube_masraflari', sube_id=sube.id) }}" class="period-picker-form">
+                        <input type="month" name="period" value="{{ selected_period_key }}">
+                        <button type="submit">Goster</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Özet Kartı -->
+            <div class="ozet-kartlar">
+                <div class="ozet-kart toplam">
+                    <div class="ozet-kart-label">{{ selected_period_label }} Toplam Gider</div>
+                    <div class="ozet-kart-tutar">
+                        <span class="ozet-kart-amount">{{ "{:,.2f}".format(genel_toplam).replace(",", "_").replace(".", ",").replace("_", ".") }}</span>
+                        <span class="ozet-kart-currency">TL</span>
+                    </div>
+                </div>
+                <div class="ozet-kart manuel">
+                    <div class="ozet-kart-label">{{ selected_period_label }} Manuel Masraf</div>
+                    <div class="ozet-kart-tutar" style="color:#b45309;">
+                        <span class="ozet-kart-amount">{{ "{:,.2f}".format(manuel_masraf_toplam).replace(",", "_").replace(".", ",").replace("_", ".") }}</span>
+                        <span class="ozet-kart-currency">TL</span>
+                    </div>
+                </div>
+                <div class="ozet-kart personel">
+                    <div class="ozet-kart-label">{{ selected_period_label }} Personel Gideri</div>
+                    <div class="ozet-kart-tutar" style="color:#0f766e;">
+                        <span class="ozet-kart-amount">{{ "{:,.2f}".format(aylik_personel_toplam).replace(",", "_").replace(".", ",").replace("_", ".") }}</span>
+                        <span class="ozet-kart-currency">TL</span>
+                    </div>
+                </div>
+                <div class="ozet-kart sabit">
+                    <div class="ozet-kart-label">{{ selected_period_label }} Sabit Gider</div>
+                    <div class="ozet-kart-tutar" style="color:#0f766e;">
+                        <span class="ozet-kart-amount">{{ "{:,.2f}".format(aktif_sabit_toplam).replace(",", "_").replace(".", ",").replace("_", ".") }}</span>
+                        <span class="ozet-kart-currency">TL</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="masraf-tablo-wrapper" style="margin-bottom: 2rem;">
+                <div class="masraf-tablo-header">
+                    <h3>{{ selected_period_label }} Personel Giderleri</h3>
+                </div>
+                {% if personel_gider_detaylari %}
+                <table class="masraf-tablo">
+                    <thead>
+                        <tr>
+                            <th>Personel</th>
+                            <th style="width: 150px;">Donem</th>
+                            <th style="width: 120px;">Maas</th>
+                            <th style="width: 120px;">Yemek</th>
+                            <th style="width: 120px;">Yol</th>
+                            <th style="width: 120px;">Ekler</th>
+                            <th style="width: 130px;">Toplam</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in personel_gider_detaylari %}
+                        {% set ek_giderler = row.sgk_tutari + row.yan_haklar_tutari + row.diger_gider_tutari %}
+                        <tr>
+                            <td>
+                                <strong style="color: var(--text-dark);">{{ row.personel_adi }}</strong><br>
+                                <small style="color: #7f8c8d;">{{ row.sube_adi }}</small>
+                            </td>
+                            <td>
+                                {{ row.baslangic_tarihi.strftime('%d.%m.%Y') }}<br>
+                                <small style="color: #7f8c8d;">{{ row.bitis_tarihi.strftime('%d.%m.%Y') if row.bitis_tarihi else 'Devam ediyor' }}</small>
+                            </td>
+                            <td class="masraf-tutar">
+                                <span class="financial-value block">
+                                    <span class="financial-amount">{{ "{:,.2f}".format(row.maas_tutari).replace(",", "_").replace(".", ",").replace("_", ".") }}</span>
+                                    <span class="financial-suffix">TL</span>
+                                </span>
+                            </td>
+                            <td class="masraf-tutar">
+                                <span class="financial-value block">
+                                    <span class="financial-amount">{{ "{:,.2f}".format(row.yemek_tutari).replace(",", "_").replace(".", ",").replace("_", ".") }}</span>
+                                    <span class="financial-suffix">TL</span>
+                                </span>
+                            </td>
+                            <td class="masraf-tutar">
+                                <span class="financial-value block">
+                                    <span class="financial-amount">{{ "{:,.2f}".format(row.yol_tutari).replace(",", "_").replace(".", ",").replace("_", ".") }}</span>
+                                    <span class="financial-suffix">TL</span>
+                                </span>
+                            </td>
+                            <td class="masraf-tutar">
+                                {% if ek_giderler > 0 %}
+                                <span class="financial-value block">
+                                    <span class="financial-amount">{{ "{:,.2f}".format(ek_giderler).replace(",", "_").replace(".", ",").replace("_", ".") }}</span>
+                                    <span class="financial-suffix">TL</span>
+                                </span>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td class="masraf-tutar" style="color:#0f766e;">
+                                <span class="financial-value block">
+                                    <span class="financial-amount">{{ "{:,.2f}".format(row.toplam_tutar).replace(",", "_").replace(".", ",").replace("_", ".") }}</span>
+                                    <span class="financial-suffix">TL</span>
+                                </span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="bos-liste">
+                    <div class="bos-liste-ikon">👥</div>
+                    <h3>{{ selected_period_label }} icin personel gideri yok</h3>
+                    <p>Bu ay icin maas, yemek veya yol gideri ureten aktif bir personel donemi bulunmuyor.</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="masraf-tablo-wrapper" style="margin-bottom: 2rem;">
+                <div class="masraf-tablo-header">
+                    <h3>Aylik Sabit Gider Donemleri</h3>
+                    <div class="header-actions">
+                        <button
+                            type="button"
+                            class="toggle-form-btn"
+                            id="toggle-sabit-gider-form"
+                            aria-expanded="{{ 'true' if sabit_form_acik else 'false' }}"
+                            aria-controls="sabit-gider-form-panel"
+                            title="Aylik sabit gider tanimla"
+                        >+</button>
+                    </div>
+                </div>
+                <div id="sabit-gider-form-panel" class="collapsible-form" {% if not sabit_form_acik %}hidden{% endif %}>
+                    <form method="POST" action="{{ url_for('subeler.sabit_gider_ekle') }}">
+                        {{ sabit_gider_form.hidden_tag() }}
+                        <input type="hidden" name="sube_id" value="{{ sube.id }}">
+                        <input type="hidden" name="year" value="{{ selected_year }}">
+                        <input type="hidden" name="month" value="{{ selected_month }}">
+
+                        <div class="collapsible-form-grid">
+                            <div class="form-group">
+                                {{ sabit_gider_form.kategori.label }}
+                                {{ sabit_gider_form.kategori(class="form-control") }}
+                                {% if sabit_gider_form.kategori.errors %}
+                                    <small style="color: var(--danger-red);">{{ sabit_gider_form.kategori.errors[0] }}</small>
+                                {% endif %}
+                            </div>
+
+                            <div class="form-group">
+                                {{ sabit_gider_form.baslangic_tarihi.label }}
+                                {{ sabit_gider_form.baslangic_tarihi(class="form-control") }}
+                                {% if sabit_gider_form.baslangic_tarihi.errors %}
+                                    <small style="color: var(--danger-red);">{{ sabit_gider_form.baslangic_tarihi.errors[0] }}</small>
+                                {% endif %}
+                            </div>
+
+                            <div class="form-group">
+                                {{ sabit_gider_form.aylik_tutar.label }}
+                                {{ sabit_gider_form.aylik_tutar(class="form-control", placeholder="0.00") }}
+                                {% if sabit_gider_form.aylik_tutar.errors %}
+                                    <small style="color: var(--danger-red);">{{ sabit_gider_form.aylik_tutar.errors[0] }}</small>
+                                {% endif %}
+                            </div>
+
+                            <div class="form-group">
+                                {{ sabit_gider_form.kdv_orani.label }}
+                                {{ sabit_gider_form.kdv_orani(class="form-control", placeholder="Orn: 20") }}
+                                {% if sabit_gider_form.kdv_orani.errors %}
+                                    <small style="color: var(--danger-red);">{{ sabit_gider_form.kdv_orani.errors[0] }}</small>
+                                {% endif %}
+                            </div>
+
+                            <div class="form-group full-width">
+                                {{ sabit_gider_form.aciklama.label }}
+                                {{ sabit_gider_form.aciklama(class="form-control", placeholder="Orn: Sube aylik kira bedeli") }}
+                                {% if sabit_gider_form.aciklama.errors %}
+                                    <small style="color: var(--danger-red);">{{ sabit_gider_form.aciklama.errors[0] }}</small>
+                                {% endif %}
+                            </div>
+
+                            <div class="form-group inline-submit full-width">
+                                {{ sabit_gider_form.submit() }}
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                {% if sabit_giderler %}
+                <table class="masraf-tablo">
+                    <thead>
+                        <tr>
+                            <th style="width: 120px;">Kategori</th>
+                            <th style="width: 120px;">Baslangic</th>
+                            <th style="width: 120px;">Bitis</th>
+                            <th style="width: 120px;">Aylik Tutar</th>
+                            <th>Aciklama</th>
+                            <th style="width: 120px;">Durum</th>
+                            <th style="width: 150px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for donem in sabit_giderler %}
+                        <tr>
+                            <td><span class="masraf-kategori">{{ kategori_labels.get(donem.kategori, donem.kategori) }}</span></td>
+                            <td class="masraf-tarih">{{ donem.baslangic_tarihi.strftime('%d.%m.%Y') }}</td>
+                            <td>{{ donem.bitis_tarihi.strftime('%d.%m.%Y') if donem.bitis_tarihi else '-' }}</td>
+                            <td class="masraf-tutar" style="color:#0f766e;">
+                                <span class="financial-value block">
+                                    <span class="financial-amount">{{ "{:,.2f}".format(donem.aylik_tutar).replace(",", "_").replace(".", ",").replace("_", ".") }}</span>
+                                    <span class="financial-suffix">TL</span>
+                                </span>
+                            </td>
+                            <td>
+                                {% if donem.kdv_orani is not none %}
+                                <small style="color: #7f8c8d;"><strong>KDV:</strong> <span class="financial-rate">%{{ "{:,.2f}".format(donem.kdv_orani).replace(",", "_").replace(".", ",").replace("_", ".") }}</span></small><br>
+                                {% endif %}
+                                <small style="color: #7f8c8d;">{{ donem.aciklama or '-' }}</small>
+                            </td>
+                            <td>
+                                <span class="durum-badge {{ '' if donem.is_active else 'is-passive' }}">{{ 'Aktif' if donem.is_active else 'Kapandi' }}</span>
+                            </td>
+                            <td>
+                                {% if donem.is_active %}
+                                <form method="POST" action="{{ url_for('subeler.sabit_gider_durdur', donem_id=donem.id) }}" style="display:flex; gap:0.4rem; align-items:center; justify-content:flex-end;">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <input type="hidden" name="year" value="{{ selected_year }}">
+                                    <input type="hidden" name="month" value="{{ selected_month }}">
+                                    <input type="date" name="bitis_tarihi" value="{{ today }}" style="max-width: 110px; padding:0.35rem 0.45rem;">
+                                    <button type="submit" class="sil-btn" style="padding:0.4rem 0.65rem;" onclick="return confirm('Bu aylik gider donemini sonlandirmak istediginize emin misiniz?');">Durdur</button>
+                                </form>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="bos-liste">
+                    <div class="bos-liste-ikon">Aylik</div>
+                    <h3>Henuz sabit gider tanimi yok</h3>
+                    <p>Kira ve benzeri duzenli giderleri yukaridaki + butonundan ekleyebilirsiniz.</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Kategori Toplamları -->
+            {% if kategori_toplamlar %}
+            <div style="margin-bottom: 2rem;">
+                <h3 style="color: var(--text-dark); font-weight: 700; margin-bottom: 1rem;">{{ selected_period_label }} Manuel Kategori Toplamlari</h3>
+                <div class="kategori-ozet">
+                    {% for kategori, tutar in kategori_toplamlar.items() | sort %}
+                    <div class="kategori-kart">
+                        <div class="kategori-kart-adi">{{ kategori_labels.get(kategori, kategori) }}</div>
+                        <div class="kategori-kart-tutar">
+                            <span class="financial-value">
+                                <span class="financial-amount">{{ "{:,.2f}".format(tutar).replace(",", "_").replace(".", ",").replace("_", ".") }}</span>
+                                <span class="financial-suffix">TL</span>
+                            </span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Masraf Tablosu -->
+            <div class="masraf-tablo-wrapper">
+                <div class="masraf-tablo-header">
+                    <h3>{{ selected_period_label }} Masraf Listesi</h3>
+                </div>
+                {% if masraflar %}
+                <table class="masraf-tablo">
+                    <thead>
+                        <tr>
+                            <th style="width: 100px;">Tarih</th>
+                            <th style="width: 120px;">Kategori</th>
+                            <th style="width: 100px;">Tutar</th>
+                            <th>Açıklama / Fatura No</th>
+                            <th style="width: 70px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for masraf in masraflar %}
+                        <tr>
+                            <td class="masraf-tarih">{{ masraf.tarih.strftime('%d.%m.%Y') }}</td>
+                            <td>
+                                <span class="masraf-kategori">
+                                    {{ kategori_labels.get(masraf.kategori, masraf.kategori) }}
+                                </span>
+                            </td>
+                            <td class="masraf-tutar">
+                                <span class="financial-value block">
+                                    <span class="financial-amount">{{ "{:,.2f}".format(masraf.tutar).replace(",", "_").replace(".", ",").replace("_", ".") }}</span>
+                                    <span class="financial-suffix">TL</span>
+                                </span>
+                            </td>
+                            <td>
+                                {% if masraf.fatura_no %}
+                                    <small style="color: #7f8c8d;"><strong>{{ masraf.fatura_no }}</strong></small><br>
+                                {% endif %}
+                                <small style="color: #7f8c8d;">{{ masraf.aciklama or '-' }}</small>
+                            </td>
+                            <td>
+                                <form method="POST" action="{{ url_for('subeler.masraf_sil', gider_id=masraf.id) }}"
+                                      style="display: inline;"
+                                      onsubmit="return confirm('Bu masrafı silmek istediğiniz emin misiniz?');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <input type="hidden" name="year" value="{{ selected_year }}">
+                                    <input type="hidden" name="month" value="{{ selected_month }}">
+                                    <button type="submit" class="sil-btn">Sil</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="bos-liste">
+                    <div class="bos-liste-ikon">📭</div>
+                    <h3>{{ selected_period_label }} icin masraf kaydi yok</h3>
+                    <p>Farkli bir ay secerek gecmis kayitlari inceleyebilir veya sagdaki formdan bu aya yeni masraf ekleyebilirsiniz.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Sağ Taraf: Form Paneli -->
+        <div class="form-panel">
+            <h3>
+                <i class="fas fa-plus-circle"></i> Yeni Masraf Ekle
+            </h3>
+
+            <form method="POST" action="{{ url_for('subeler.masraf_ekle') }}">
+                {{ form.hidden_tag() }}
+                <input type="hidden" name="sube_id" value="{{ sube.id }}">
+                <input type="hidden" name="year" value="{{ selected_year }}">
+                <input type="hidden" name="month" value="{{ selected_month }}">
+
+                <div class="form-group">
+                    {{ form.tarih.label }}
+                    {{ form.tarih(class="form-control") }}
+                    {% if form.tarih.errors %}
+                        <small style="color: var(--danger-red);">{{ form.tarih.errors[0] }}</small>
+                    {% endif %}
+                </div>
+
+                <div class="form-group">
+                    {{ form.kategori.label }}
+                    {{ form.kategori(class="form-control") }}
+                    {% if form.kategori.errors %}
+                        <small style="color: var(--danger-red);">{{ form.kategori.errors[0] }}</small>
+                    {% endif %}
+                </div>
+
+                <div class="form-group">
+                    {{ form.tutar.label }}
+                    {{ form.tutar(class="form-control", placeholder="0.00") }}
+                    {% if form.tutar.errors %}
+                        <small style="color: var(--danger-red);">{{ form.tutar.errors[0] }}</small>
+                    {% endif %}
+                </div>
+
+                <div class="form-group">
+                    {{ form.fatura_no.label }}
+                    {{ form.fatura_no(class="form-control", placeholder="Örn: FT-2026-001") }}
+                    {% if form.fatura_no.errors %}
+                        <small style="color: var(--danger-red);">{{ form.fatura_no.errors[0] }}</small>
+                    {% endif %}
+                </div>
+
+                <div class="form-group">
+                    {{ form.aciklama.label }}
+                    {{ form.aciklama(class="form-control", placeholder="Masrafla ilgili notlar...") }}
+                    {% if form.aciklama.errors %}
+                        <small style="color: var(--danger-red);">{{ form.aciklama.errors[0] }}</small>
+                    {% endif %}
+                </div>
+
+                <div class="form-group">
+                    {{ form.submit() }}
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const toggleButton = document.getElementById('toggle-sabit-gider-form');
+        const formPanel = document.getElementById('sabit-gider-form-panel');
+
+        if (!toggleButton || !formPanel) {
+            return;
+        }
+
+        toggleButton.addEventListener('click', function () {
+            const isExpanded = toggleButton.getAttribute('aria-expanded') === 'true';
+            toggleButton.setAttribute('aria-expanded', isExpanded ? 'false' : 'true');
+
+            if (isExpanded) {
+                formPanel.setAttribute('hidden', 'hidden');
+            } else {
+                formPanel.removeAttribute('hidden');
+            }
+        });
+    });
+</script>
+
+{% endblock %}

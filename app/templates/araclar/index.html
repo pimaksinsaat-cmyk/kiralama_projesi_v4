@@ -77,6 +77,9 @@
                                 {% endif %}
                             </td>
                             <td class="align-middle text-center">
+                                <a href="{{ url_for('araclar.bakim_gecmisi', arac_id=arac.id) }}" class="btn btn-sm btn-outline-info" title="Bakım Geçmişi">
+                                    <i class="fas fa-wrench"></i>
+                                </a>
                                 <a href="{{ url_for('araclar.duzenle', arac_id=arac.id) }}" class="btn btn-sm btn-outline-warning" title="Düzenle">
                                     <i class="fas fa-edit"></i>
                                 </a>

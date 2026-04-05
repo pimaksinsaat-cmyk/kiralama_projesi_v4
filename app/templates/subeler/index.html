@@ -159,7 +159,7 @@
 
 <div class="dashboard-container">
     <div class="page-title-section">
-        <h1>🏗️ Şube ve Depo Yönetimi</h1>
+        <h1><i class="fas fa-home" style="color: var(--pimaks-blue); margin-right: 8px;"></i>Şube ve Depo Yönetimi</h1>
         <a href="{{ url_for('subeler.ekle') }}" class="add-button">+ Yeni Şube Tanımla</a>
     </div>
 
@@ -206,9 +206,12 @@
 
             <div class="card-footer">
                 {% if item.detay.konum_linki %}
-                <a href="{{ item.detay.konum_linki }}" target="_blank" class="btn-pimaks btn-maps">Haritada Gör</a>
+                <a href="{{ item.detay.konum_linki }}" target="_blank" class="btn-pimaks btn-maps sube-card-action">Haritada Gör</a>
                 {% endif %}
-                <a href="{{ url_for('subeler.duzenle', id=item.detay.id) }}" class="btn-pimaks btn-manage">Düzenle</a>
+                <a href="{{ url_for('subeler.sube_masraflari', sube_id=item.detay.id) }}" class="btn-pimaks btn-manage sube-card-action" style="background-color: #fff3cd; color: #856404;">
+                    <i class="fas fa-receipt"></i> Masraflar
+                </a>
+                <a href="{{ url_for('subeler.duzenle', id=item.detay.id) }}" class="btn-pimaks btn-manage sube-card-action">Düzenle</a>
             </div>
         </div>
         {% else %}
@@ -489,8 +492,18 @@
     });
 
     // Şube kartlarına tıkla
+    document.querySelectorAll('.sube-card-action').forEach(action => {
+        action.addEventListener('click', (event) => {
+            event.stopPropagation();
+        });
+    });
+
     document.querySelectorAll('.sube-card').forEach(card => {
-        card.addEventListener('click', async function() {
+        card.addEventListener('click', async function(event) {
+            if (event.target.closest('.sube-card-action')) {
+                return;
+            }
+
             const subeId = this.dataset.subeId;
             const subeAdi = this.dataset.subeAdi;
             

@@ -66,10 +66,18 @@ class BakimKaydi(BaseModel):
     
     ekipman_id = db.Column(db.Integer, db.ForeignKey('ekipman.id'), nullable=False)
     tarih = db.Column(db.Date, nullable=False, default=date.today)
+    bakim_tipi = db.Column(db.String(30), nullable=False, default='ariza')
+    servis_tipi = db.Column(db.String(30), nullable=False, default='ic_servis')
+    durum = db.Column(db.String(30), nullable=False, default='acik')
+    servis_veren_firma_id = db.Column(db.Integer, db.ForeignKey('firma.id'), nullable=True)
+    servis_veren_kisi = db.Column(db.String(150), nullable=True)
     aciklama = db.Column(db.String(500), nullable=True) 
     calisma_saati = db.Column(db.Integer, nullable=True) 
+    sonraki_bakim_tarihi = db.Column(db.Date, nullable=True)
+    toplam_iscilik_maliyeti = db.Column(db.Numeric(15, 2), nullable=False, default=0.0)
     
     ekipman = db.relationship('Ekipman', back_populates='bakim_kayitlari')
+    servis_veren_firma = db.relationship('Firma', back_populates='servis_kayitlari', foreign_keys=[servis_veren_firma_id])
     kullanilan_parcalar = db.relationship('KullanilanParca', back_populates='bakim_kaydi', cascade="all, delete-orphan")
     
     def __repr__(self): 
@@ -81,8 +89,10 @@ class KullanilanParca(BaseModel):
     __tablename__ = 'kullanilan_parca'
     
     bakim_kaydi_id = db.Column(db.Integer, db.ForeignKey('bakim_kaydi.id'), nullable=False)
-    stok_karti_id = db.Column(db.Integer, db.ForeignKey('stok_karti.id'), nullable=False)
+    stok_karti_id = db.Column(db.Integer, db.ForeignKey('stok_karti.id'), nullable=True)
+    malzeme_adi = db.Column(db.String(250), nullable=True)
     kullanilan_adet = db.Column(db.Integer, nullable=False, default=1)
+    birim_fiyat = db.Column(db.Numeric(15, 2), nullable=True)
     
     bakim_kaydi = db.relationship('BakimKaydi', back_populates='kullanilan_parcalar')
     stok_karti = db.relationship('StokKarti', back_populates='kullanim_kayitlari')

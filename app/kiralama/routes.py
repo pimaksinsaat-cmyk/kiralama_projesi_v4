@@ -224,6 +224,7 @@ def ekle():
         try:
             form.kiralama_form_no.data = KiralamaService.get_next_form_no()
         except Exception as e:
+            db.session.rollback()
             current_app.logger.error(f"Form numarası otomatik alınamadı: {str(e)}")
             # Son form numarasını al ve kullanıcıya bilgi ver
             try:
@@ -274,6 +275,7 @@ def ekle():
             return redirect(url_for('kiralama.index'))
             
         except ValidationError as e:
+            db.session.rollback()
             OperationLogService.log(
                 module='kiralama',
                 action='create',
@@ -285,6 +287,7 @@ def ekle():
             )
             flash(f"Doğrulama Hatası: {str(e)}", "warning")
         except ValueError as e:
+            db.session.rollback()
             OperationLogService.log(
                 module='kiralama',
                 action='create',
@@ -296,6 +299,7 @@ def ekle():
             )
             flash(f"Veri Hatası: {str(e)}", "danger")
         except Exception as e:
+            db.session.rollback()
             import traceback
             tb_str = traceback.format_exc()
             current_app.logger.error(f"Kiralama Kayıt Hatası: {str(e)}\nTraceback:\n{tb_str}")

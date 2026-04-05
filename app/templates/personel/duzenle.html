@@ -1,0 +1,415 @@
+{% extends "base.html" %}
+
+{% block title %}Personel Duzenle{% endblock %}
+
+{% block content %}
+<style>
+    :root {
+        --personel-teal: #0f766e;
+        --personel-text: #1f2937;
+    }
+
+    .edit-shell {
+        max-width: 860px;
+        margin: 1rem auto 2.5rem;
+    }
+
+    .edit-header,
+    .edit-card,
+    .edit-form {
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 18px;
+        box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+    }
+
+    .edit-header {
+        padding: 1.2rem 1.35rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .edit-header h1 {
+        margin: 0;
+        font-size: 1.6rem;
+        color: var(--personel-text);
+    }
+
+    .edit-header p {
+        margin: 0.35rem 0 0;
+        color: #64748b;
+    }
+
+    .back-link {
+        text-decoration: none;
+        color: var(--personel-teal);
+        font-weight: 700;
+        background: #e6fffb;
+        border: 1px solid #bfeee8;
+        border-radius: 999px;
+        padding: 0.7rem 1rem;
+        white-space: nowrap;
+    }
+
+    .back-link:hover {
+        color: #0a5c56;
+        background: #d6faf4;
+    }
+
+    .edit-card {
+        padding: 1.2rem 1.35rem;
+        margin-bottom: 1rem;
+    }
+
+    .meta-grid,
+    .form-grid,
+    .salary-history-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1rem;
+    }
+
+    .meta-item,
+    .form-group {
+        background: #f8fafc;
+        border-radius: 14px;
+        padding: 0.9rem 1rem;
+    }
+
+    .meta-label {
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        color: #64748b;
+        font-weight: 700;
+        margin-bottom: 0.25rem;
+    }
+
+    .meta-value {
+        font-weight: 800;
+        color: var(--personel-text);
+    }
+
+    .edit-form {
+        padding: 1.25rem 1.35rem;
+    }
+
+    .edit-form h2 {
+        margin: 0 0 1rem;
+        color: var(--personel-text);
+    }
+
+    .section-title {
+        margin: 0 0 0.9rem;
+        color: var(--personel-text);
+        font-size: 1rem;
+        font-weight: 800;
+    }
+
+    .muted-note {
+        margin: 0.35rem 0 0;
+        color: #64748b;
+        font-size: 0.88rem;
+    }
+
+    .form-group label {
+        display: block;
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: #475569;
+        margin-bottom: 0.35rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+
+    .form-group input,
+    .form-group select {
+        width: 100%;
+        border: 1px solid #d0d7de;
+        border-radius: 10px;
+        padding: 0.75rem 0.85rem;
+        background: #fff;
+        font-size: 0.94rem;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus {
+        outline: none;
+        border-color: var(--personel-teal);
+        box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12);
+    }
+
+    .conditional-field {
+        display: none;
+    }
+
+    .conditional-field.is-visible {
+        display: block;
+    }
+
+    .form-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.75rem;
+        margin-top: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .salary-card {
+        background: linear-gradient(180deg, #f8fffe 0%, #eefbf9 100%);
+        border: 1px solid #d1f0ea;
+        border-radius: 16px;
+        padding: 1rem;
+    }
+
+    .salary-card strong {
+        color: var(--personel-text);
+    }
+
+    .salary-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.32rem 0.65rem;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .salary-status.is-passive {
+        background: #fef3c7;
+        color: #92400e;
+    }
+
+    .form-actions a,
+    .form-actions button {
+        text-decoration: none;
+        border: none;
+        border-radius: 10px;
+        padding: 0.8rem 1.1rem;
+        font-weight: 700;
+        cursor: pointer;
+    }
+
+    .form-actions a {
+        background: #edf2f7;
+        color: #475569;
+    }
+
+    .form-actions button {
+        background: var(--personel-teal);
+        color: #fff;
+    }
+
+    @media (max-width: 720px) {
+        .edit-header,
+        .meta-grid,
+        .form-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+<div class="edit-shell">
+    <div class="edit-header">
+        <div>
+            <h1>Personel Bilgilerini Duzenle</h1>
+            <p>{{ personel.tam_ad }} kaydini yeni personel modulu icinden guncelliyorsunuz.</p>
+        </div>
+        <a class="back-link" href="{{ url_for('personel.index', sube_id=selected_sube_id) if selected_sube_id else url_for('personel.index') }}">Listeye Don</a>
+    </div>
+
+    <div class="edit-card">
+        <div class="meta-grid">
+            <div class="meta-item">
+                <div class="meta-label">Personel</div>
+                <div class="meta-value">{{ personel.tam_ad }}</div>
+            </div>
+            <div class="meta-item">
+                <div class="meta-label">Bagli Oldugu Sube</div>
+                <div class="meta-value">{{ personel.sube.isim if personel.sube else 'Sube atanmamis' }}</div>
+            </div>
+            <div class="meta-item">
+                <div class="meta-label">Pozisyon</div>
+                <div class="meta-value">{{ personel.meslek or 'Belirtilmedi' }}</div>
+            </div>
+            <div class="meta-item">
+                <div class="meta-label">Durum</div>
+                <div class="meta-value">{{ 'Ayrildi' if personel.isten_cikis_tarihi else 'Aktif' }}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="edit-card">
+        <h2 class="section-title">Ucret Donemleri</h2>
+        {% if aktif_maas_donemi %}
+        <div class="salary-card" style="margin-bottom: 1rem;">
+            <div style="display:flex; justify-content:space-between; gap:1rem; flex-wrap:wrap; align-items:center;">
+                <div>
+                    <div class="meta-label">Aktif Donem</div>
+                    <div class="meta-value">{{ '{:,.0f}'.format(aktif_maas_donemi.aylik_toplam_maliyet) }} TL</div>
+                    <p class="muted-note">
+                        {{ aktif_maas_donemi.baslangic_tarihi.strftime('%d.%m.%Y') }}
+                        {% if aktif_maas_donemi.bitis_tarihi %}
+                        - {{ aktif_maas_donemi.bitis_tarihi.strftime('%d.%m.%Y') }}
+                        {% else %}
+                        itibariyla aktif
+                        {% endif %}
+                    </p>
+                    <p class="muted-note">Maas {{ '{:,.0f}'.format(aktif_maas_donemi.aylik_maas or 0) }} TL | Yemek {{ '{:,.0f}'.format(aktif_maas_donemi.aylik_yemek_ucreti or 0) }} TL | Yol {{ '{:,.0f}'.format(aktif_maas_donemi.aylik_yol_ucreti or 0) }} TL</p>
+                </div>
+                <div>
+                    <span class="salary-status">Aktif</span>
+                    <p class="muted-note" style="margin-top:0.55rem; text-align:right;">Raporlarda {{ aktif_maas_donemi.sube.isim if aktif_maas_donemi.sube else 'Subesiz' }} altinda hesaplanir.</p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="salary-history-grid">
+            {% for donem in maas_donemleri %}
+            <div class="meta-item">
+                <div style="display:flex; justify-content:space-between; gap:0.75rem; align-items:flex-start;">
+                    <div>
+                        <div class="meta-label">{{ donem.sube.isim if donem.sube else 'Subesiz' }}</div>
+                        <div class="meta-value">{{ '{:,.0f}'.format(donem.aylik_toplam_maliyet) }} TL</div>
+                    </div>
+                    <span class="salary-status {{ '' if not donem.bitis_tarihi else 'is-passive' }}">{{ 'Aktif' if not donem.bitis_tarihi else 'Kapandi' }}</span>
+                </div>
+                <p class="muted-note">
+                    {{ donem.baslangic_tarihi.strftime('%d.%m.%Y') }}
+                    {% if donem.bitis_tarihi %}
+                    - {{ donem.bitis_tarihi.strftime('%d.%m.%Y') }}
+                    {% else %}
+                    - devam ediyor
+                    {% endif %}
+                </p>
+                <p class="muted-note">Maas {{ '{:,.0f}'.format(donem.aylik_maas or 0) }} TL | Yemek {{ '{:,.0f}'.format(donem.aylik_yemek_ucreti or 0) }} TL | Yol {{ '{:,.0f}'.format(donem.aylik_yol_ucreti or 0) }} TL</p>
+            </div>
+            {% else %}
+            <div class="meta-item" style="grid-column: 1 / -1;">
+                <div class="meta-value">Henuz ucret donemi kaydi yok</div>
+                <p class="muted-note">Bu personel icin maas, yemek veya yol belirlendiginde burada otomatik gecmis olusur.</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="edit-form">
+        <h2>Bilgileri Guncelle</h2>
+        <p class="muted-note" style="margin-bottom:1rem;">Maas, yemek, yol veya bagli oldugu sube degisirse, asagidaki tarih yeni donemin baslangici olarak kullanilir.</p>
+        <form method="POST" data-prevent-double-submit>
+            {{ form.hidden_tag() }}
+            <input type="hidden" name="redirect_sube_id" value="{{ selected_sube_id }}">
+
+            <div class="form-grid" style="margin-bottom:1rem;">
+                <div class="form-group">
+                    {{ form.sube_id.label }}
+                    {{ form.sube_id() }}
+                </div>
+                <div class="form-group">
+                    {{ form.meslek.label }}
+                    {{ form.meslek(data_meslek_select='duzenle-personel') }}
+                </div>
+                <div class="form-group conditional-field" data-meslek-other-wrapper="duzenle-personel">
+                    {{ form.meslek_diger.label }}
+                    {{ form.meslek_diger(placeholder='Meslegi yaziniz') }}
+                </div>
+                <div class="form-group">
+                    {{ form.ad.label }}
+                    {{ form.ad(placeholder='Adi') }}
+                </div>
+                <div class="form-group">
+                    {{ form.soyad.label }}
+                    {{ form.soyad(placeholder='Soyadi') }}
+                </div>
+                <div class="form-group">
+                    {{ form.tc_no.label }}
+                    {{ form.tc_no(placeholder='11 haneli') }}
+                </div>
+                <div class="form-group">
+                    {{ form.telefon.label }}
+                    {{ form.telefon(placeholder='05XX XXX XX XX') }}
+                </div>
+                <div class="form-group">
+                    {{ form.maas.label }}
+                    {{ form.maas(placeholder='0.00', step='100') }}
+                </div>
+                <div class="form-group">
+                    {{ form.yemek_ucreti.label }}
+                    {{ form.yemek_ucreti(placeholder='0.00', step='50') }}
+                </div>
+                <div class="form-group">
+                    {{ form.yol_ucreti.label }}
+                    {{ form.yol_ucreti(placeholder='0.00', step='50') }}
+                </div>
+                <div class="form-group">
+                    {{ form.maas_gecerlilik_tarihi.label }}
+                    {{ form.maas_gecerlilik_tarihi() }}
+                </div>
+                <div class="form-group">
+                    {{ form.ise_giris_tarihi.label }}
+                    {{ form.ise_giris_tarihi() }}
+                </div>
+                <div class="form-group">
+                    {{ form.isten_cikis_tarihi.label }}
+                    {{ form.isten_cikis_tarihi() }}
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <a href="{{ url_for('personel.index', sube_id=selected_sube_id) if selected_sube_id else url_for('personel.index') }}">Iptal</a>
+                <button type="submit" data-submitting-text="Kaydediliyor...">Kaydet</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    function syncMeslekOtherField(scopeKey) {
+        const select = document.querySelector('[data-meslek-select="' + scopeKey + '"]');
+        const wrapper = document.querySelector('[data-meslek-other-wrapper="' + scopeKey + '"]');
+        if (!select || !wrapper) {
+            return;
+        }
+
+        wrapper.classList.toggle('is-visible', select.value === 'Diger');
+    }
+
+    document.querySelectorAll('[data-meslek-select]').forEach(function (select) {
+        const scopeKey = select.getAttribute('data-meslek-select');
+        select.addEventListener('change', function () {
+            syncMeslekOtherField(scopeKey);
+        });
+        syncMeslekOtherField(scopeKey);
+    });
+
+    document.querySelectorAll('form[data-prevent-double-submit]').forEach(function (form) {
+        form.addEventListener('submit', function (event) {
+            if (form.dataset.submitting === 'true') {
+                event.preventDefault();
+                return;
+            }
+
+            form.dataset.submitting = 'true';
+
+            const submitButton = event.submitter || form.querySelector('button[type="submit"], input[type="submit"]');
+            if (submitButton) {
+                if (submitButton.dataset.submittingText) {
+                    submitButton.dataset.originalText = submitButton.textContent;
+                    submitButton.textContent = submitButton.dataset.submittingText;
+                }
+                submitButton.disabled = true;
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

@@ -286,7 +286,7 @@
         <div class="summary-card" style="border-left-color: var(--warning-orange);">
             <div class="card-label">Toplam Maliyet</div>
             <div class="card-value" style="color: var(--warning-orange); font-size: 1.3rem;">
-                {{ '{:,.0f}'.format(bakim_kayitlari|map(attribute='maliyet')|select|sum) }} ₺
+                {{ '{:,.0f}'.format(bakim_kayitlari|map(attribute='maliyet')|select|sum) }} TL
             </div>
         </div>
         <div class="summary-card" style="border-left-color: var(--success-green);">
@@ -318,7 +318,7 @@
                         </div>
                         <div style="text-align: right; color: #7f8c8d; font-size: 0.85rem;">
                             {% if bakim.maliyet %}
-                                <strong style="color: var(--warning-orange);">{{ '{:,.0f}'.format(bakim.maliyet) }} ₺</strong>
+                                <strong style="color: var(--warning-orange);">{{ '{:,.0f}'.format(bakim.maliyet) }} TL</strong>
                             {% else %}
                                 -
                             {% endif %}

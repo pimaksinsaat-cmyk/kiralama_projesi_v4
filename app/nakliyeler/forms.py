@@ -51,7 +51,7 @@ class NakliyeForm(FlaskForm):
     taseron_firma_id = SelectField('Taşeron Firma (Tedarikçi)', coerce=int, validators=[Optional()])
     
     # DÜZELTME: Standart StringField yerine yazdığımız TurkishDecimalField'ı kullanıyoruz
-    taseron_maliyet = TurkishDecimalField('Taşeron Alış Maliyeti (₺)', validators=[Optional()]) 
+    taseron_maliyet = TurkishDecimalField('Taşeron Alış Maliyeti (TL)', validators=[Optional()]) 
     
     guzergah = StringField('Güzergah (Nereden - Nereye)', validators=[DataRequired()])
     plaka = StringField('Dış Araç Plakası', validators=[Optional()])

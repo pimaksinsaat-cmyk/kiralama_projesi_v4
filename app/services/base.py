@@ -211,6 +211,8 @@ class BaseService:
             # --- SOFT DELETE MANTIĞI ---
             if cls.use_soft_delete and hasattr(instance, 'is_deleted'):
                 instance.is_deleted = True
+                if hasattr(instance, 'is_active'):
+                    instance.is_active = False
                 
                 # Audit Log: Ne zaman ve kim tarafından silindi
                 if hasattr(instance, 'deleted_at'):
@@ -241,3 +243,33 @@ class BaseService:
                 db.session.rollback()
             logger.error(f"Silme Hatası ({cls.__name__} - ID:{id}): {str(e)}", exc_info=True)
             raise Exception("Bu kayıt silinemez. Başka verilerle bağlantılı olabilir.") from e
+
+    @classmethod
+    def hard_delete(cls, id, auto_commit=True):
+        """
+        Kaydi veritabanindan fiziksel olarak siler.
+        Soft delete edilmis kayitlar da dahil tum kayitlarda kullanilabilir.
+        """
+        instance = cls.get_by_id(id, include_deleted=True)
+        if not instance:
+            raise ValidationError("Silinmek istenen kayıt bulunamadı.")
+
+        try:
+            cls.before_delete(instance)
+            db.session.delete(instance)
+            db.session.flush()
+            cls.after_delete(instance)
+
+            if auto_commit:
+                db.session.commit()
+
+            return True
+        except ValidationError as e:
+            if auto_commit:
+                db.session.rollback()
+            raise e
+        except Exception as e:
+            if auto_commit:
+                db.session.rollback()
+            logger.error(f"Hard Silme Hatası ({cls.__name__} - ID:{id}): {str(e)}", exc_info=True)
+            raise Exception("Bu kayıt fiziksel olarak silinemedi. Başka verilerle bağlantılı olabilir.") from e

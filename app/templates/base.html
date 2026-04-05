@@ -72,6 +72,14 @@
             color: #146c43 !important;
             text-decoration: underline;
         }
+        .nav-personel-btn {
+            color: #0f766e !important;
+        }
+        .nav-personel-btn:hover,
+        .nav-personel-btn:focus {
+            color: #115e59 !important;
+            text-decoration: underline;
+        }
         @media (max-width: 991.98px) {
             .nav-report-btn {
                 display: inline-block;
@@ -146,6 +154,12 @@
                     </li>
 
                     <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('servis.index') }}">
+                            <i class="fas fa-tools"></i> Servis
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('subeler.index') }}">
                             <i class="fas fa-warehouse"></i> Şubeler
                         </a>
@@ -180,6 +194,12 @@
                     <li class="nav-item">
                         <a class="nav-link nav-report-btn" href="{{ url_for('raporlama.index') }}">
                             <i class="fas fa-chart-line me-1"></i> Raporlama
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a class="nav-link nav-report-btn nav-personel-btn" href="{{ url_for('personel.index') }}">
+                            <i class="fas fa-users me-1"></i> Personel
                         </a>
                     </li>
 

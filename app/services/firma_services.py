@@ -1,6 +1,7 @@
 import os
 from datetime import date
 from decimal import Decimal
+import re
 from sqlalchemy import or_, and_
 from sqlalchemy.orm import joinedload, subqueryload
 
@@ -43,6 +44,41 @@ class FirmaService(BaseService):
             instance.firma_adi = normalize_turkish_upper(instance.firma_adi)
         if instance.vergi_no:
             instance.vergi_no = instance.vergi_no.strip()
+
+    @staticmethod
+    def _extract_sozlesme_sequence(sozlesme_no, prefix, year):
+        """PS numarasındaki ana sayısal sırayı çıkarır, olası ekleri yok sayar."""
+        if not sozlesme_no:
+            return None
+
+        match = re.match(rf"^{re.escape(prefix)}-{year}-(\d+)", str(sozlesme_no).strip())
+        if not match:
+            return None
+
+        return int(match.group(1))
+
+    @classmethod
+    def get_next_sozlesme_no(cls):
+        """Sıradaki genel sözleşme numarasını veritabanından bağımsız şekilde üretir."""
+        current_year = date.today().year
+        settings = AppSettings.get_current()
+        start_no = settings.genel_sozlesme_start_no if settings else 1
+        prefix = settings.genel_sozlesme_prefix if settings and settings.genel_sozlesme_prefix else 'PS'
+
+        sozlesme_nolari = cls._get_base_query().with_entities(Firma.sozlesme_no).filter(
+            Firma.sozlesme_no.like(f"{prefix}-{current_year}-%")
+        ).all()
+
+        sequence_values = [
+            sequence
+            for sozlesme_no, in sozlesme_nolari
+            for sequence in [cls._extract_sozlesme_sequence(sozlesme_no, prefix, current_year)]
+            if sequence is not None
+        ]
+        max_seq = max(sequence_values, default=None)
+
+        next_nr = (max_seq + 1) if max_seq else start_no
+        return f"{prefix}-{current_year}-{next_nr:03d}"
 
     @classmethod
     def get_active_firms(cls, search_query=None):
@@ -100,20 +136,7 @@ class FirmaService(BaseService):
         if firma.sozlesme_no:
             raise ValidationError(f"Bu firma için zaten bir sözleşme ({firma.sozlesme_no}) mevcut.")
 
-        current_year = date.today().year
-        settings = AppSettings.get_current()
-        start_no = settings.genel_sozlesme_start_no if settings else 1
-        prefix = settings.genel_sozlesme_prefix if settings and settings.genel_sozlesme_prefix else 'PS'
-        last_firma = cls._get_base_query().filter(Firma.sozlesme_no.like(f"{prefix}-{current_year}-%")).order_by(Firma.sozlesme_no.desc()).first()
-        
-        next_nr = start_no
-        if last_firma and last_firma.sozlesme_no:
-            try:
-                next_nr = int(last_firma.sozlesme_no.split('-')[-1]) + 1
-            except ValueError:
-                pass
-                
-        next_ps_no = f"{prefix}-{current_year}-{next_nr:03d}"
+        next_ps_no = cls.get_next_sozlesme_no()
         
         ikinci_parametre = firma.vergi_no if firma.vergi_no else str(firma.id)
         klasor_adi = klasor_adi_temizle(firma.firma_adi, ikinci_parametre)

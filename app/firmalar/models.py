@@ -128,6 +128,7 @@ class Firma(BaseModel):
     tedarik_edilen_parcalar = db.relationship('StokKarti', back_populates='varsayilan_tedarikci', foreign_keys='StokKarti.varsayilan_tedarikci_id')
     stok_hareketleri = db.relationship('StokHareket', back_populates='firma', cascade="all, delete-orphan")
     nakliyeler = db.relationship('Nakliye', foreign_keys='Nakliye.firma_id', back_populates='firma', cascade="all, delete-orphan")
+    servis_kayitlari = db.relationship('BakimKaydi', back_populates='servis_veren_firma', foreign_keys='BakimKaydi.servis_veren_firma_id')
 
     @property
     def bekleyen_bakiye(self):

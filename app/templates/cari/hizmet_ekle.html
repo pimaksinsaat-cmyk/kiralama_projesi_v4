@@ -80,7 +80,7 @@
                 <div class="col-md-4">
                     {{ form.tutar.label(class="form-label fw-bold") }}
                     <div class="input-group align-middle">
-                        <span class="input-group-text" style="height: 38px;">₺</span>
+                        <span class="input-group-text" style="height: 38px;">TL</span>
                         {{ form.tutar(class="form-control currency-input align-middle" + (' is-invalid' if form.tutar.errors else ''), placeholder="0,00", type="text", autocomplete="off", style="font-size: 1.2em; font-weight: bold; min-width: 180px; max-width: 260px; height: 38px;") }}
                     </div>
                     {% for error in form.tutar.errors %}

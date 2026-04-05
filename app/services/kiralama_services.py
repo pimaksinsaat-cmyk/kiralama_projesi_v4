@@ -3,6 +3,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, date, timedelta
 from decimal import Decimal, InvalidOperation
 import logging
+import re
 import urllib3
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
@@ -337,6 +338,18 @@ class KiralamaService(BaseService):
     _cache_suresi_dakika = 60 # 1 saatte bir güncelle
 
     @staticmethod
+    def _extract_form_sequence(form_no, prefix, year):
+        """Form numarasındaki ana sayısal sırayı çıkarır, revizyon eklerini yok sayar."""
+        if not form_no:
+            return None
+
+        match = re.match(rf"^{re.escape(prefix)}-{year}/(\d+)", str(form_no).strip())
+        if not match:
+            return None
+
+        return int(match.group(1))
+
+    @staticmethod
     def get_next_form_no():
         """Sıradaki kiralama form numarasını (PREFIX-YIL/SIRA) otomatik üretir."""
         year = datetime.now().year
@@ -344,10 +357,17 @@ class KiralamaService(BaseService):
         start_no = settings.kiralama_form_start_no if settings else 1
         prefix = settings.kiralama_form_prefix if settings and settings.kiralama_form_prefix else 'PF'
 
-        seq_expr = func.substr(Kiralama.kiralama_form_no, func.instr(Kiralama.kiralama_form_no, '/') + 1)
-        max_seq = db.session.query(func.max(func.cast(seq_expr, db.Integer))).filter(
+        form_nolari = db.session.query(Kiralama.kiralama_form_no).filter(
             Kiralama.kiralama_form_no.like(f"{prefix}-{year}/%")
-        ).scalar()
+        ).all()
+
+        sequence_values = [
+            sequence
+            for form_no, in form_nolari
+            for sequence in [KiralamaService._extract_form_sequence(form_no, prefix, year)]
+            if sequence is not None
+        ]
+        max_seq = max(sequence_values, default=None)
 
         next_no = (max_seq + 1) if max_seq else start_no
         return f"{prefix}-{year}/{next_no:04d}"

@@ -84,7 +84,7 @@
                                 <label class="form-label fw-bold text-success small">Satış Tutarı (Matrah)</label>
                                 <div class="input-group">
                                     {{ form.tutar(class="form-control", placeholder="0.00") }}
-                                    <span class="input-group-text small">₺</span>
+                                    <span class="input-group-text small">TL</span>
                                 </div>
                                 {% for error in form.tutar.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
                             </div>
@@ -108,7 +108,7 @@
                                 <label class="form-label fw-bold text-danger small">Taşeron Maliyeti (Gider)</label>
                                 <div class="input-group">
                                     {{ form.taseron_maliyet(class="form-control", placeholder="0.00") }}
-                                    <span class="input-group-text small text-danger">₺</span>
+                                    <span class="input-group-text small text-danger">TL</span>
                                 </div>
                             </div>
                         </div>

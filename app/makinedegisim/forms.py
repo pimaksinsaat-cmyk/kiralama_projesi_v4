@@ -32,16 +32,16 @@ class MakineDegisimForm(BaseForm):
     harici_ekipman_uretim_yili = IntegerField('Üretim Yılı', validators=[Optional()])
 
     # --- KİRALAMA FİNANS ---
-    kiralama_brm_fiyat = MoneyField('Yeni Birim Fiyat (₺)', validators=[Optional()])
-    kiralama_alis_fiyat = MoneyField('Harici Kira Alış Fiyatı (₺)', validators=[Optional()])
+    kiralama_brm_fiyat = MoneyField('Yeni Birim Fiyat (TL)', validators=[Optional()])
+    kiralama_alis_fiyat = MoneyField('Harici Kira Alış Fiyatı (TL)', validators=[Optional()])
     
     # --- NAKLİYE ALANLARI ---
     yeni_nakliye_ekle = BooleanField('Yeni nakliye ücreti yansıtılsın mı?')
     is_oz_mal_nakliye = BooleanField('Öz Mal Nakliye')
     is_harici_nakliye = BooleanField('Dış Nakliye')
     
-    nakliye_satis_fiyat = MoneyField('Nakliye Satış Fiyatı (₺)', validators=[Optional()])
-    nakliye_alis_fiyat = MoneyField('Nakliye Alış Fiyatı (₺)', validators=[Optional()])
+    nakliye_satis_fiyat = MoneyField('Nakliye Satış Fiyatı (TL)', validators=[Optional()])
+    nakliye_alis_fiyat = MoneyField('Nakliye Alış Fiyatı (TL)', validators=[Optional()])
     
     nakliye_tedarikci_id = SelectField('Nakliye Tedarikçisi', coerce=int, validators=[Optional()])
     nakliye_araci_id = SelectField('Nakliye Aracı', coerce=int, validators=[Optional()])

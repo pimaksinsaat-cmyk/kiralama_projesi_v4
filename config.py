@@ -3,6 +3,13 @@ import os
 # Projemizin temel dizinini bul
 basedir = os.path.abspath(os.path.dirname(__file__))
 
+
+def _env_to_bool(name, default=False):
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return str(value).strip().lower() in {'1', 'true', 'yes', 'on'}
+
 class Config:
     """
     Tüm yapılandırmalar için temel sınıf.
@@ -39,3 +46,7 @@ class Config:
     SESSION_PERMANENT = False    # Tarayıcı kapanınca oturum bitsin
     SESSION_USE_SIGNER = True    # Cookie imzalansın
     SESSION_KEY_PREFIX = 'pimaks_'
+
+    # Template ve statik dosya yenileme davranışı
+    TEMPLATES_AUTO_RELOAD = _env_to_bool('TEMPLATES_AUTO_RELOAD', False)
+    SEND_FILE_MAX_AGE_DEFAULT = 0 if _env_to_bool('DISABLE_STATIC_CACHE', False) else None

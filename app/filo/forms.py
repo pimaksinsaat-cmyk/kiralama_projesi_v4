@@ -65,6 +65,6 @@ class EkipmanForm(BaseForm):
         ('serviste', 'Serviste / Bakımda')
     ], default='bosta')
 
-    
-    
+
+
     submit = SubmitField('Kaydet')

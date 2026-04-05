@@ -1,6 +1,7 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, TextAreaField, SubmitField, SelectField, URLField, EmailField, HiddenField
-from wtforms.validators import DataRequired, Length, Optional, Email, URL
+from wtforms import StringField, TextAreaField, SubmitField, SelectField, URLField, EmailField, HiddenField, DecimalField
+from wtforms.validators import DataRequired, Length, Optional, Email, URL, NumberRange
+from datetime import datetime
 
 # 1. ŞUBE / DEPO EKLEME VE DÜZENLEME FORMU
 class SubeForm(FlaskForm):
@@ -46,8 +47,67 @@ class TransferForm(FlaskForm):
         ('Diğer', 'Diğer')
     ], validators=[DataRequired(message="Transfer nedeni belirtmek zorunludur.")])
     
-    aciklama = TextAreaField('Açıklama / Notlar', 
-                             validators=[Optional()], 
+    aciklama = TextAreaField('Açıklama / Notlar',
+                             validators=[Optional()],
                              render_kw={"placeholder": "Örn: Periyodik bakım için merkeze çekildi..."})
-    
+
     submit = SubmitField('Transferi Başlat')
+
+
+# 3. ŞUBE GİDER/MASRAF FORMU
+GIDER_KATEGORILERI = [
+    ('kira', 'Kira'),
+    ('elektrik', 'Elektrik'),
+    ('su', 'Su'),
+    ('internet', 'İnternet / İletişim'),
+    ('ikram', 'İkram / Yemek'),
+    ('personel', 'Personel / SGK'),
+    ('temizlik', 'Temizlik'),
+    ('diger', 'Diğer'),
+]
+
+class SubeGideriForm(FlaskForm):
+    sube_id = HiddenField('Şube ID', validators=[DataRequired()])
+    tarih = StringField('Tarih',
+                        validators=[DataRequired(message="Tarih zorunludur")],
+                        default=lambda: datetime.now().strftime('%Y-%m-%d'),
+                        render_kw={"type": "date"})
+    kategori = SelectField('Kategori',
+                          choices=GIDER_KATEGORILERI,
+                          validators=[DataRequired(message="Kategori seçmek zorunludur")])
+    tutar = DecimalField('Tutar (TL)',
+                        places=2,
+                        validators=[DataRequired(message="Tutar zorunludur"),
+                                   NumberRange(min=0.01, message="Tutar 0'dan büyük olmalıdır")])
+    aciklama = StringField('Açıklama',
+                          validators=[Optional(), Length(max=250)])
+    fatura_no = StringField('Fatura / Belge No',
+                           validators=[Optional(), Length(max=50)])
+    submit = SubmitField('Masraf Kaydet')
+
+
+class SubeSabitGiderDonemiForm(FlaskForm):
+    sube_id = HiddenField('Sube ID', validators=[DataRequired()])
+    kategori = SelectField(
+        'Aylik Gider Kategorisi',
+        choices=GIDER_KATEGORILERI,
+        validators=[DataRequired(message='Kategori secmek zorunludur')],
+    )
+    baslangic_tarihi = StringField(
+        'Baslangic Tarihi',
+        validators=[DataRequired(message='Baslangic tarihi zorunludur')],
+        default=lambda: datetime.now().replace(day=1).strftime('%Y-%m-%d'),
+        render_kw={'type': 'date'},
+    )
+    aylik_tutar = DecimalField(
+        'Aylik Tutar (TL)',
+        places=2,
+        validators=[DataRequired(message='Aylik tutar zorunludur'), NumberRange(min=0.01, message='Tutar 0 dan buyuk olmalidir')],
+    )
+    kdv_orani = DecimalField(
+        'KDV Orani (%)',
+        places=2,
+        validators=[Optional(), NumberRange(min=0, message='KDV orani negatif olamaz')],
+    )
+    aciklama = StringField('Aciklama', validators=[Optional(), Length(max=250)])
+    submit = SubmitField('Aylik Gideri Kaydet')

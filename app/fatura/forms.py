@@ -47,7 +47,7 @@ class HakedisOlusturForm(BaseForm):
 
     # --- Para Birimi ---
     para_birimi = SelectField('Para Birimi', choices=[
-        ('TRY', 'Türk Lirası (₺)'),
+        ('TRY', 'Türk Lirası (TL)'),
         ('USD', 'Amerikan Doları ($)'),
         ('EUR', 'Euro (€)')
     ], default='TRY')

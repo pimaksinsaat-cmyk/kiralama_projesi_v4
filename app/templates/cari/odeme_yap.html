@@ -77,7 +77,7 @@
                     {{ form.tutar.label(class="form-label fw-bold") }}
                     <!-- Akıllı Giriş İçin: type="text", autocomplete="off" ve currency-input sınıfı -->
                     <div class="input-group">
-                        <span class="input-group-text">₺</span>
+                        <span class="input-group-text">TL</span>
                         {{ form.tutar(class="form-control currency-input", placeholder="0,00", type="text", autocomplete="off", style="font-size: 1.2em; font-weight: bold;") }}
                     </div>
                     {% for error in form.tutar.errors %}<span class="text-danger small">{{ error }}</span>{% endfor %}

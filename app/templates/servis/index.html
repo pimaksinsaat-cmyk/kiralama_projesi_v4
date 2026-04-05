@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+
+{% block title %}Servis Kayitlari{% endblock %}
+
+{% block content %}
+<style>
+    .service-shell { max-width: 1480px; margin: 0 auto; }
+    .service-hero { background: linear-gradient(135deg, #fff8e8 0%, #fff 55%, #eef7ff 100%); border: 1px solid #f1e2b8; border-radius: 18px; padding: 1.5rem; box-shadow: 0 14px 36px rgba(15, 23, 42, 0.06); }
+    .service-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
+    .service-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; padding: 1rem 1.1rem; }
+    .service-card .value { font-size: 1.5rem; font-weight: 700; color: #0f172a; }
+    .service-card .label { font-size: 0.85rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em; }
+    .service-table-wrap { background: #fff; border: 1px solid #e5e7eb; border-radius: 18px; box-shadow: 0 12px 30px rgba(15, 23, 42, 0.05); overflow: hidden; }
+    .service-table { margin: 0; font-size: 0.92rem; }
+    .service-table thead th { background: #f8fafc; border-bottom-width: 1px; white-space: nowrap; }
+    .service-table td { vertical-align: top; }
+    .service-badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 0.25rem 0.7rem; font-size: 0.78rem; font-weight: 700; }
+    .service-badge.warn { background: #fff3cd; color: #8a5b00; }
+    .service-badge.info { background: #dbeafe; color: #1d4ed8; }
+    .service-badge.success { background: #dcfce7; color: #15803d; }
+    .service-badge.dark { background: #e2e8f0; color: #334155; }
+    .parts-list { margin: 0; padding-left: 1rem; }
+    .parts-list li { margin-bottom: 0.2rem; }
+    .muted-note { color: #64748b; font-size: 0.85rem; }
+    .actions-cell { white-space: nowrap; }
+    .pagination { display: flex; gap: 4px; list-style: none; padding: 0; margin: 0; }
+    .pagination .page-item .page-link { display: inline-block; padding: 6px 12px; border: 1px solid #dee2e6; border-radius: 4px; color: #667eea; text-decoration: none; font-size: 0.875rem; transition: all 0.2s; }
+    .pagination .page-item.active .page-link { background: #667eea; border-color: #667eea; color: white; }
+    .pagination .page-item.disabled .page-link { color: #adb5bd; pointer-events: none; }
+    .pagination .page-item .page-link:hover { background: #eef2ff; border-color: #a5b4fc; }
+    .page-indicator { font-size: 0.85rem; color: #64748b; white-space: nowrap; }
+</style>
+
+<div class="service-shell">
+    <div class="service-hero mb-4">
+        <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+            <div>
+                <h2 class="mb-1 fw-bold"><i class="fas fa-tools me-2 text-warning"></i>Servis Kayitlari</h2>
+                <div class="muted-note">Makine servis gecmisi, kim tarafindan yapildigi, kullanilan parcasi ve sonraki bakim tarihi burada izlenir.</div>
+            </div>
+            <a href="{{ url_for('filo.bakimda') }}" class="btn btn-outline-secondary btn-sm">Bakımdaki Makineler</a>
+        </div>
+
+        <div class="service-grid mb-3">
+            <div class="service-card">
+                <div class="label">Açık Servis</div>
+                <div class="value">{{ acik_servis_sayisi }}</div>
+            </div>
+            <div class="service-card">
+                <div class="label">Periyodik Kayıt</div>
+                <div class="value">{{ planli_bakim_sayisi }}</div>
+            </div>
+            <div class="service-card">
+                <div class="label">Toplam Kayıt</div>
+                <div class="value">{{ pagination.total if pagination else 0 }}</div>
+            </div>
+        </div>
+
+        <form method="GET" class="row g-2 align-items-end">
+            <div class="col-md-6">
+                <label class="form-label fw-semibold">Ara</label>
+                <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="Makine kodu, servis veren, açıklama...">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">Durum</label>
+                <select class="form-select" name="durum">
+                    <option value="">Tümü</option>
+                    <option value="acik" {{ 'selected' if durum == 'acik' else '' }}>Açık</option>
+                    <option value="parca_bekliyor" {{ 'selected' if durum == 'parca_bekliyor' else '' }}>Parça Bekliyor</option>
+                    <option value="tamamlandi" {{ 'selected' if durum == 'tamamlandi' else '' }}>Tamamlandı</option>
+                    <option value="iptal" {{ 'selected' if durum == 'iptal' else '' }}>İptal</option>
+                </select>
+            </div>
+            <input type="hidden" name="per_page" value="{{ per_page }}">
+            <div class="col-md-2 d-grid">
+                <button type="submit" class="btn btn-warning fw-semibold">Getir</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="service-table-wrap">
+        <div class="table-responsive">
+            <table class="table service-table align-middle">
+                <thead>
+                    <tr>
+                        <th>Tarih</th>
+                        <th>Makine</th>
+                        <th>Bakım</th>
+                        <th>Çalışma Saati / Km</th>
+                        <th>Kim Yaptı</th>
+                        <th>Kullanılan Parçalar</th>
+                        <th>İşçilik + Malzeme</th>
+                        <th>Sonraki Bakım</th>
+                        <th>Durum</th>
+                        <th>İşlem</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for kayit in kayitlar %}
+                    <tr>
+                        <td>{{ kayit.tarih.strftime('%d.%m.%Y') if kayit.tarih else '-' }}</td>
+                        <td>
+                            <div class="fw-bold">{{ kayit.ekipman.kod if kayit.ekipman else '-' }}</div>
+                            <div class="muted-note">
+                                {{ kayit.ekipman.marka if kayit.ekipman else '' }} {{ kayit.ekipman.model if kayit.ekipman else '' }}
+                            </div>
+                        </td>
+                        <td>
+                            <div>{{ bakim_tipi_labels.get(kayit.bakim_tipi, kayit.bakim_tipi or '-') }}</div>
+                            <div class="muted-note">{{ servis_tipi_labels.get(kayit.servis_tipi, kayit.servis_tipi or '-') }}</div>
+                            <div class="muted-note mt-1">{{ kayit.aciklama or '-' }}</div>
+                        </td>
+                        <td>{{ kayit.calisma_saati if kayit.calisma_saati is not none else '-' }}</td>
+                        <td>
+                            {% if kayit.servis_veren_firma %}
+                                <div class="fw-semibold">{{ kayit.servis_veren_firma.firma_adi }}</div>
+                            {% elif kayit.servis_veren_kisi %}
+                                <div class="fw-semibold">{{ kayit.servis_veren_kisi }}</div>
+                            {% else %}
+                                <span class="text-muted">Belirtilmedi</span>
+                            {% endif %}
+                            {% if kayit.servis_veren_kisi and kayit.servis_veren_firma %}
+                                <div class="muted-note">{{ kayit.servis_veren_kisi }}</div>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if kayit.kullanilan_parcalar %}
+                            <ul class="parts-list">
+                                {% for parca in kayit.kullanilan_parcalar %}
+                                <li>
+                                    {{ parca.stok_karti.parca_adi if parca.stok_karti else parca.malzeme_adi or 'Parça' }} x {{ parca.kullanilan_adet }}
+                                    {% if parca.stok_karti %}
+                                    <span class="muted-note">(stok: {{ parca.stok_karti.mevcut_stok }})</span>
+                                    {% else %}
+                                    <span class="muted-note">(stok dışı malzeme)</span>
+                                    {% endif %}
+                                    {% if parca.birim_fiyat is not none %}
+                                    <span class="muted-note">(fiyat: {{ '%.2f'|format(parca.birim_fiyat or 0) }} TL)</span>
+                                    {% endif %}
+                                </li>
+                                {% endfor %}
+                            </ul>
+                            {% else %}
+                            <span class="text-muted">Parça işlenmedi</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div>{{ '%.2f'|format(kayit.toplam_servis_maliyeti or 0) }} TL</div>
+                            <div class="muted-note">İşçilik: {{ '%.2f'|format(kayit.toplam_iscilik_maliyeti or 0) }} TL</div>
+                            <div class="muted-note">Malzeme: {{ '%.2f'|format(kayit.malzeme_maliyeti or 0) }} TL</div>
+                        </td>
+                        <td>{{ kayit.sonraki_bakim_tarihi.strftime('%d.%m.%Y') if kayit.sonraki_bakim_tarihi else '-' }}</td>
+                        <td>
+                            {% set durum_sinif = 'warn' if kayit.durum in ['acik', 'parca_bekliyor'] else 'success' if kayit.durum == 'tamamlandi' else 'dark' %}
+                            <span class="service-badge {{ durum_sinif }}">{{ durum_labels.get(kayit.durum, kayit.durum or '-') }}</span>
+                        </td>
+                        <td class="actions-cell">
+                            <a href="{{ url_for('servis.duzenle', id=kayit.id) }}" class="btn btn-sm btn-outline-primary">Düzenle</a>
+                            <form method="POST" action="{{ url_for('servis.sil', id=kayit.id) }}" class="d-inline" onsubmit="return confirm('Bu servis kaydı silinsin mi? Kullanılan parçalar stoğa geri eklenecek.');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-sm btn-outline-danger">Sil</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="10" class="text-center py-5 text-muted">Servis kaydı bulunamadı.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
+        <form method="GET" action="{{ url_for('servis.index') }}" class="d-flex align-items-center gap-2 mb-0">
+            <input type="hidden" name="q" value="{{ q or '' }}">
+            <input type="hidden" name="durum" value="{{ durum or '' }}">
+            <label for="servis-per-page" class="small text-muted mb-0">Sayfa başına</label>
+            <select id="servis-per-page" name="per_page" class="form-select form-select-sm" style="max-width:130px;" onchange="this.form.submit()">
+                <option value="10" {{ 'selected' if per_page == 10 else '' }}>10</option>
+                <option value="25" {{ 'selected' if per_page == 25 else '' }}>25</option>
+                <option value="50" {{ 'selected' if per_page == 50 else '' }}>50</option>
+                <option value="100" {{ 'selected' if per_page == 100 else '' }}>100</option>
+            </select>
+        </form>
+
+        {% if pagination %}
+        <div class="d-flex align-items-center gap-3 ms-auto flex-wrap justify-content-end">
+            <div class="page-indicator">Sayfa {{ pagination.page }} / {{ pagination.pages }}</div>
+            <ul class="pagination mb-0">
+            <li class="page-item {{ 'disabled' if not pagination.has_prev else '' }}">
+                <a class="page-link" href="{{ url_for('servis.index', page=pagination.prev_num, per_page=per_page, q=q, durum=durum) }}">&laquo;</a>
+            </li>
+            {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
+                {% if page_num %}
+                <li class="page-item {{ 'active' if page_num == pagination.page else '' }}">
+                    <a class="page-link" href="{{ url_for('servis.index', page=page_num, per_page=per_page, q=q, durum=durum) }}">{{ page_num }}</a>
+                </li>
+                {% else %}
+                <li class="page-item disabled"><span class="page-link">...</span></li>
+                {% endif %}
+            {% endfor %}
+            <li class="page-item {{ 'disabled' if not pagination.has_next else '' }}">
+                <a class="page-link" href="{{ url_for('servis.index', page=pagination.next_num, per_page=per_page, q=q, durum=durum) }}">&raquo;</a>
+            </li>
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

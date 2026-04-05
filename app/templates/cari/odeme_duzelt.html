@@ -66,7 +66,7 @@
                 <div class="col-md-6">
                     {{ form.tutar.label(class="form-label fw-bold") }}
                     <div class="input-group">
-                        <span class="input-group-text" style="background-color: {{ theme_color }}; color: white;">₺</span>
+                        <span class="input-group-text" style="background-color: {{ theme_color }}; color: white;">TL</span>
                         
                         {# ÖNEMLİ: Value kısmında eksi işaretini siliyoruz ki JS hata vermesin #}
                         {% set display_value = form.tutar.data | string | replace('-', '') if form.tutar.data else '' %}

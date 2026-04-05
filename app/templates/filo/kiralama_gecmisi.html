@@ -196,7 +196,7 @@
                         <td><span class="tarih">{{ detay.baslangic_tarihi.strftime('%d.%m.%Y') }}</span></td>
                         <td><span class="tarih">{{ detay.bitis_tarihi.strftime('%d.%m.%Y') }}</span></td>
                         <td style="text-align: center; font-weight: 500;">{{ detay.gun_sayisi }}</td>
-                        <td class="number currency-try">{{ "%.2f"|format(detay.gelir_try) }} ₺</td>
+                        <td class="number currency-try">{{ "%.2f"|format(detay.gelir_try) }} TL</td>
                         <td class="number currency-usd">{{ "%.2f"|format(detay.gelir_usd) }} $</td>
                         <td class="number currency-eur">{{ "%.2f"|format(detay.gelir_eur) }} €</td>
                     </tr>
@@ -208,7 +208,7 @@
                         <td colspan="2"></td>
                         <td style="text-align: center; font-size: 1.1rem;">{{ total_gun }} gün</td>
                         <td class="number" style="font-size: 1rem;">
-                            <span class="currency-try">{{ "%.2f"|format(total_try) }} ₺</span>
+                            <span class="currency-try">{{ "%.2f"|format(total_try) }} TL</span>
                         </td>
                         <td class="number" style="font-size: 1rem;">
                             <span class="currency-usd">{{ "%.2f"|format(total_usd) }} $</span>

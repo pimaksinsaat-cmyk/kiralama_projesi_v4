@@ -32,7 +32,7 @@
         <div class="card border-start border-success border-4 shadow-sm h-100">
             <div class="card-body py-3">
                 <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Toplam Ciro (Navlun)</div>
-                <div class="h4 mb-0 font-weight-bold text-gray-800">{{ "{:,.2f}".format(stats.ciro).replace(",", "X").replace(".", ",").replace("X", ".") }} ₺</div>
+                <div class="h4 mb-0 font-weight-bold text-gray-800">{{ "{:,.2f}".format(stats.ciro).replace(",", "X").replace(".", ",").replace("X", ".") }} TL</div>
             </div>
         </div>
     </div>
@@ -40,7 +40,7 @@
         <div class="card border-start border-danger border-4 shadow-sm h-100">
             <div class="card-body py-3">
                 <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">Dış Tedarik (Maliyet)</div>
-                <div class="h4 mb-0 font-weight-bold text-gray-800">{{ "{:,.2f}".format(stats.maliyet).replace(",", "X").replace(".", ",").replace("X", ".") }} ₺</div>
+                <div class="h4 mb-0 font-weight-bold text-gray-800">{{ "{:,.2f}".format(stats.maliyet).replace(",", "X").replace(".", ",").replace("X", ".") }} TL</div>
             </div>
         </div>
     </div>
@@ -48,7 +48,7 @@
         <div class="card border-start border-info border-4 shadow-sm h-100">
             <div class="card-body py-3">
                 <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Tahmini Brüt Kâr</div>
-                <div class="h4 mb-0 font-weight-bold text-gray-800">{{ "{:,.2f}".format(stats.kar).replace(",", "X").replace(".", ",").replace("X", ".") }} ₺</div>
+                <div class="h4 mb-0 font-weight-bold text-gray-800">{{ "{:,.2f}".format(stats.kar).replace(",", "X").replace(".", ",").replace("X", ".") }} TL</div>
             </div>
         </div>
     </div>
@@ -193,7 +193,7 @@
                             </td>
                             
                             <td class="text-end">
-                                {{ "{:,.2f}".format(nakliye.tutar or 0).replace(',', 'X').replace('.', ',').replace('X', '.') }} ₺
+                                {{ "{:,.2f}".format(nakliye.tutar or 0).replace(',', 'X').replace('.', ',').replace('X', '.') }} TL
                             </td>
                             <td class="text-end">
                                 {% if nakliye.kiralama_id and nakliye.kiralama and nakliye.kiralama.kalemler %}
@@ -219,9 +219,9 @@
                                     {% set kdv_orani = nakliye.kdv_orani or 0 %}
                                 {% endif %}
                                 {% if kdv_orani and kdv_orani != 0 %}
-                                    {{ "{:,.2f}".format((nakliye.tutar|float) * (kdv_orani / 100.0)).replace(',', 'X').replace('.', ',').replace('X', '.') }} ₺
+                                    {{ "{:,.2f}".format((nakliye.tutar|float) * (kdv_orani / 100.0)).replace(',', 'X').replace('.', ',').replace('X', '.') }} TL
                                 {% else %}
-                                    0,00 ₺
+                                    0,00 TL
                                 {% endif %}
                             </td>
                             <td class="text-end fw-bold text-primary">
@@ -232,7 +232,7 @@
                                 {% endif %}
                                 {% set matrah = nakliye.tutar or 0 %}
                                 {% set kdv = (matrah|float) * (kdv_orani / 100.0) %}
-                                {{ "{:,.2f}".format((matrah|float) + kdv).replace(',', 'X').replace('.', ',').replace('X', '.') }} ₺
+                                {{ "{:,.2f}".format((matrah|float) + kdv).replace(',', 'X').replace('.', ',').replace('X', '.') }} TL
                             </td>
                             
                             <td class="text-center">

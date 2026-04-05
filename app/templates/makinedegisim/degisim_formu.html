@@ -117,7 +117,7 @@
                                 <div class="col-md-2"><label class="small fw-bold">Kapasite</label>{{ form.harici_ekipman_kapasite(id="harici_ekipman_kapasite", class="form-control") }}</div>
                                 <div class="col-md-2"><label class="small fw-bold">Yükseklik</label>{{ form.harici_ekipman_yukseklik(id="harici_ekipman_yukseklik", class="form-control") }}</div>
                                 <div class="col-md-2"><label class="small fw-bold">Üretim Yılı</label>{{ form.harici_ekipman_uretim_yili(id="harici_ekipman_uretim_yili", class="form-control") }}</div>
-                                <div class="col-md-2"><label class="small fw-bold text-danger">Alış ₺</label>{{ form.kiralama_alis_fiyat(id="kiralama_alis_fiyat", class="form-control border-danger") }}</div>
+                                <div class="col-md-2"><label class="small fw-bold text-danger">Alış TL</label>{{ form.kiralama_alis_fiyat(id="kiralama_alis_fiyat", class="form-control border-danger") }}</div>
                             </div>
                         </div>
 
@@ -129,7 +129,7 @@
                             <div class="card-body bg-light py-3">
                                 <div class="row g-3 align-items-end">
                                     <div class="col-md-4">
-                                        <label class="small fw-bold">SATIŞ (₺)</label>
+                                        <label class="small fw-bold">SATIŞ (TL)</label>
                                         {{ form.nakliye_satis_fiyat(id="nakliye_satis_fiyat", class="form-control fw-bold border-warning") }}
                                     </div>
                                     <div class="col-md-4" id="oz_mal_arac_secimi">
@@ -151,7 +151,7 @@
                                             {{ form.nakliye_tedarikci_id(id="nakliye_tedarikci_id", class="form-select form-select-sm border-danger") }}
                                         </div>
                                         <div class="col-md-5">
-                                            <label class="small fw-bold text-danger">Alış ₺</label>
+                                            <label class="small fw-bold text-danger">Alış TL</label>
                                             {{ form.nakliye_alis_fiyat(id="nakliye_alis_fiyat", class="form-control form-control-sm border-danger", placeholder="0.00") }}
                                         </div>
                                     </div>
@@ -165,10 +165,10 @@
                                 {{ form.cikis_saati(id="cikis_saati", class="form-control", placeholder="0") }}
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label fw-bold text-success small">YENİ BİRİM FİYAT (SATIŞ ₺)</label>
+                                <label class="form-label fw-bold text-success small">YENİ BİRİM FİYAT (SATIŞ TL)</label>
                                 <div class="input-group">
                                     {{ form.kiralama_brm_fiyat(id="kiralama_brm_fiyat", class="form-control fw-bold border-success") }}
-                                    <span class="input-group-text bg-success text-white">₺</span>
+                                    <span class="input-group-text bg-success text-white">TL</span>
                                 </div>
                             </div>
                         </div>

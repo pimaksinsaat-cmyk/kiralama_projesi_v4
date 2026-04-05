@@ -169,7 +169,7 @@
                                 <div class="col-6 col-md-2"><label>Yükseklik (m)</label><input type="number" id="g-harici-yukseklik" class="form-control"></div>
                                 <div class="col-6 col-md-2"><label>Üretim Yılı</label><input type="text" id="g-harici-yil" class="form-control"></div>
                                 
-                                <div class="col-12 col-md-4"><label class="text-danger">Maliyet (Alış ₺)</label><input type="number" id="g-alis-fiyat" class="form-control border-danger"></div>
+                                <div class="col-12 col-md-4"><label class="text-danger">Maliyet (Alış TL)</label><input type="number" id="g-alis-fiyat" class="form-control border-danger"></div>
                                                             <div class="col-12 col-md-2">
                                                                 <label>Alış KDV (%)</label>
                                                                 <input id="g-alis-kdv" type="number" class="form-control" min="0" max="100" step="1" placeholder="KDV" value="">
@@ -195,7 +195,7 @@
                                 <div class="col-12 col-md-4">
                                     <div class="row">
                                         <div class="col-7">
-                                            <label class="text-danger">Nakliye Maliyeti (₺)</label>
+                                            <label class="text-danger">Nakliye Maliyeti (TL)</label>
                                             <input type="number" id="g-nakliye-alis" class="form-control border-danger">
                                         </div>
                                         <div class="col-5">
@@ -218,10 +218,10 @@
                                     <label class="d-block mb-1" style="font-size:0.75rem;">Süre</label>
                                     <span id="gun-sayisi-badge" class="badge d-block py-1" style="background:#6c8ebf;font-size:0.82rem;font-weight:600;letter-spacing:0.02em;">— gün</span>
                                 </div>
-                                <div class="col-6 col-md-3"><label class="text-success">Günlük Kira (₺)</label><input type="number" step="0.01" id="g-gunluk" class="form-control border-success"></div>
+                                <div class="col-6 col-md-3"><label class="text-success">Günlük Kira (TL)</label><input type="number" step="0.01" id="g-gunluk" class="form-control border-success"></div>
                                 <div class="col-6 col-md-3">
                                     <div class="d-flex align-items-center gap-2 mb-2">
-                                        <label class="text-success mb-0">Nakliye Bedeli (₺)</label>
+                                        <label class="text-success mb-0">Nakliye Bedeli (TL)</label>
                                         <div class="form-check form-switch m-0">
                                             <input class="form-check-input" type="checkbox" id="g-donus-fatura-et" style="transform: scale(0.9);">
                                             <label class="form-check-label fw-bold" for="g-donus-fatura-et" style="font-size: 0.80rem; margin-left: 2px;">Dönüş</label>
@@ -275,7 +275,7 @@
             </div>
             <div class="card-footer bg-white p-4 border-top">
                 <div class="text-end">
-                    <h2 class="mb-0 text-primary fw-bold">Genel Toplam: <span id="genel-toplam">0.00 ₺</span></h2>
+                    <h2 class="mb-0 text-primary fw-bold">Genel Toplam: <span id="genel-toplam">0.00 TL</span></h2>
                 </div>
             </div>
         </div>
@@ -410,8 +410,8 @@ function liveCalc() {
     if (bas && bit) {
         const gun = hesaplaGun(bas, bit);
         const toplam = (gun * gunluk) + nakToplam;
-        const nakStr = nakBirim > 0 ? ` + ${sefer} sefer x ${formatTRCurrency(nakBirim)} ₺` : '';
-        infoDiv.innerHTML = `<i class="fas fa-calculator me-2"></i> Tahmini: ${gun} Gün x ${formatTRCurrency(gunluk)} ₺${nakStr} = <span class="text-success">${formatTRCurrency(toplam)} ₺</span>`;
+        const nakStr = nakBirim > 0 ? ` + ${sefer} sefer x ${formatTRCurrency(nakBirim)} TL` : '';
+        infoDiv.innerHTML = `<i class="fas fa-calculator me-2"></i> Tahmini: ${gun} Gün x ${formatTRCurrency(gunluk)} TL${nakStr} = <span class="text-success">${formatTRCurrency(toplam)} TL</span>`;
     } else { infoDiv.innerHTML = ""; }
 }
 
@@ -600,8 +600,8 @@ function renderTable() {
             <td>${makine}</td>
             <td><span class="badge ${isDis ? 'bg-danger' : 'bg-primary'}">${turDetay}</span>${durumuBadge}</td>
             <td>${formatTRDate(bas)} / ${formatTRDate(bit)} (${gun} G)</td>
-            <td class="text-end"><strong class="d-block text-dark">${gun} G x ${formatTRCurrency(br_fiyat)} ₺</strong><small class="text-muted">+ ${nk_adet}x${formatTRCurrency(nk_birim)} ₺${donusFaturaEt ? ' (Dönüş dahil)' : ' (Tek Yön)'}</small></td>
-            <td class="text-end fw-bold text-success">${formatTRCurrency(satirToplam)} ₺</td>
+            <td class="text-end"><strong class="d-block text-dark">${gun} G x ${formatTRCurrency(br_fiyat)} TL</strong><small class="text-muted">+ ${nk_adet}x${formatTRCurrency(nk_birim)} TL${donusFaturaEt ? ' (Dönüş dahil)' : ' (Tek Yön)'}</small></td>
+            <td class="text-end fw-bold text-success">${formatTRCurrency(satirToplam)} TL</td>
             <td class="text-center">
                 ${duzenleBtn}
                 ${silBtn}
@@ -609,7 +609,7 @@ function renderTable() {
         `;
         tbody.appendChild(tr);
     });
-    genelToplamEl.innerText = formatTRCurrency(grandTotal) + " ₺";
+    genelToplamEl.innerText = formatTRCurrency(grandTotal) + " TL";
     refreshMakineListesi();
 }
 

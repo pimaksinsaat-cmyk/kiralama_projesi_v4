@@ -1,12 +1,13 @@
-"""
-Ekipman rapor services file'ı düzi fix
-"""
-import os
-os.chdir(r'c:\Users\cuney\Drive\'ım\kiralama_projesi_v3')
+"""Basit dosya inceleme yardımcısı."""
 
-# Dosyayı relative path ile aç
-with open(r'app\services\ekipman_rapor_services.py', 'r', encoding='utf-8') as f:
-    content = f.read()
+from pathlib import Path
+
+
+project_root = Path(__file__).resolve().parent
+target_file = project_root / 'app' / 'services' / 'ekipman_rapor_services.py'
+
+with target_file.open('r', encoding='utf-8') as file_handle:
+    content = file_handle.read()
 
 # Satır 188-210'u göster
 lines = content.split('\n')

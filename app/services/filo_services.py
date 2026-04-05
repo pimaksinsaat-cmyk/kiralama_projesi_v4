@@ -1,8 +1,9 @@
 from app.services.base import BaseService, ValidationError
-from app.filo.models import Ekipman, BakimKaydi
+from app.filo.models import Ekipman, BakimKaydi, KullanilanParca, StokKarti, StokHareket
 from app.kiralama.models import KiralamaKalemi
 from app.extensions import db
 from datetime import datetime
+from decimal import Decimal
 from app.utils import normalize_turkish_upper
 
 class EkipmanService(BaseService):
@@ -106,9 +107,230 @@ class BakimService(BaseService):
     """
     model = BakimKaydi
     use_soft_delete = False # Bakım kayıtlarında soft delete şimdilik gerekli değil
+
+    OPEN_STATUSES = {'acik', 'parca_bekliyor'}
+
+    @staticmethod
+    def _normalize_date(value):
+        if isinstance(value, str) and value:
+            return datetime.strptime(value, '%Y-%m-%d').date()
+        return value or None
+
+    @staticmethod
+    def _normalize_parts(parts_data):
+        normalized_rows = []
+        normalized_stock_totals = {}
+        for part in parts_data or []:
+            try:
+                stok_karti_id = int(part.get('stok_karti_id') or 0)
+                kullanilan_adet = int(part.get('kullanilan_adet') or 0)
+            except (TypeError, ValueError):
+                stok_karti_id = 0
+                try:
+                    kullanilan_adet = int(part.get('kullanilan_adet') or 0)
+                except (TypeError, ValueError):
+                    continue
+
+            malzeme_adi = (part.get('malzeme_adi') or '').strip()
+            birim_fiyat_raw = part.get('birim_fiyat')
+            try:
+                birim_fiyat = Decimal(str(birim_fiyat_raw).replace(' ', '').replace(',', '.')) if str(birim_fiyat_raw).strip() else None
+            except (ArithmeticError, ValueError, TypeError):
+                birim_fiyat = None
+
+            if kullanilan_adet <= 0:
+                continue
+
+            if stok_karti_id > 0:
+                normalized_rows.append({
+                    'stok_karti_id': stok_karti_id,
+                    'malzeme_adi': None,
+                    'kullanilan_adet': kullanilan_adet,
+                    'birim_fiyat': birim_fiyat,
+                })
+                normalized_stock_totals[stok_karti_id] = normalized_stock_totals.get(stok_karti_id, 0) + kullanilan_adet
+                continue
+
+            if malzeme_adi:
+                normalized_rows.append({
+                    'stok_karti_id': None,
+                    'malzeme_adi': malzeme_adi,
+                    'kullanilan_adet': kullanilan_adet,
+                    'birim_fiyat': birim_fiyat or Decimal('0'),
+                })
+
+        return {
+            'rows': normalized_rows,
+            'stock_totals': normalized_stock_totals,
+        }
+
+    @staticmethod
+    def _latest_price(stok_karti_id):
+        hareket = StokHareket.query.filter_by(stok_karti_id=stok_karti_id).order_by(StokHareket.id.desc()).first()
+        return Decimal(hareket.birim_fiyat or 0) if hareket else Decimal('0')
+
+    @classmethod
+    def _sync_parts(cls, bakim_kaydi, normalized_parts):
+        mevcut_parcalar = {}
+        for parca in bakim_kaydi.kullanilan_parcalar:
+            if parca.stok_karti_id:
+                mevcut_parcalar[parca.stok_karti_id] = mevcut_parcalar.get(parca.stok_karti_id, 0) + int(parca.kullanilan_adet or 0)
+
+        hedef_stok = normalized_parts.get('stock_totals', {})
+        hedef_satirlar = normalized_parts.get('rows', [])
+
+        tum_kartlar = set(mevcut_parcalar) | set(hedef_stok)
+        for stok_karti_id in tum_kartlar:
+            onceki_adet = mevcut_parcalar.get(stok_karti_id, 0)
+            yeni_adet = hedef_stok.get(stok_karti_id, 0)
+            delta = yeni_adet - onceki_adet
+            if delta == 0:
+                continue
+
+            stok_karti = StokKarti.query.filter_by(id=stok_karti_id, is_deleted=False).first()
+            if not stok_karti:
+                raise ValidationError('Seçilen stok kartı bulunamadı.')
+
+            if delta > 0 and (stok_karti.mevcut_stok or 0) < delta:
+                raise ValidationError(f"'{stok_karti.parca_adi}' için yeterli stok yok. Mevcut: {stok_karti.mevcut_stok}")
+
+            stok_karti.mevcut_stok = int(stok_karti.mevcut_stok or 0) - delta
+            db.session.add(stok_karti)
+
+            db.session.add(
+                StokHareket(
+                    stok_karti_id=stok_karti.id,
+                    firma_id=bakim_kaydi.servis_veren_firma_id,
+                    tarih=bakim_kaydi.tarih,
+                    adet=abs(delta),
+                    birim_fiyat=cls._latest_price(stok_karti.id),
+                    hareket_tipi='cikis' if delta > 0 else 'giris',
+                    aciklama=f"Servis kaydi #{bakim_kaydi.id} parca senkronizasyonu",
+                )
+            )
+
+        bakim_kaydi.kullanilan_parcalar.clear()
+        db.session.flush()
+
+        for satir in hedef_satirlar:
+            birim_fiyat = satir.get('birim_fiyat')
+            if satir.get('stok_karti_id') and birim_fiyat is None:
+                birim_fiyat = cls._latest_price(satir['stok_karti_id'])
+
+            bakim_kaydi.kullanilan_parcalar.append(
+                KullanilanParca(
+                    stok_karti_id=satir.get('stok_karti_id'),
+                    malzeme_adi=satir.get('malzeme_adi'),
+                    kullanilan_adet=satir.get('kullanilan_adet'),
+                    birim_fiyat=birim_fiyat,
+                )
+            )
+
+    @classmethod
+    def _sync_ekipman_status(cls, bakim_kaydi):
+        ekipman = bakim_kaydi.ekipman
+        if not ekipman:
+            return
+
+        if bakim_kaydi.durum in cls.OPEN_STATUSES:
+            ekipman.calisma_durumu = 'serviste'
+        elif ekipman.calisma_durumu == 'serviste':
+            ekipman.calisma_durumu = 'bosta'
+
+        db.session.add(ekipman)
     
     @classmethod
-    def bakim_kaydet(cls, ekipman_id, bakim_verileri, actor_id=None):
+    def bakim_kaydet(cls, ekipman_id, bakim_verileri, parts_data=None, actor_id=None):
         """Yeni bir bakım kaydı açar."""
-        yeni_bakim = cls.model(ekipman_id=ekipman_id, **bakim_verileri)
-        return cls.save(yeni_bakim, is_new=True, actor_id=actor_id)
+        bakim_verileri['tarih'] = cls._normalize_date(bakim_verileri.get('tarih'))
+        bakim_verileri['sonraki_bakim_tarihi'] = cls._normalize_date(bakim_verileri.get('sonraki_bakim_tarihi'))
+
+        acik_kayit = cls.model.query.filter(
+            cls.model.ekipman_id == ekipman_id,
+            cls.model.is_deleted == False,
+            cls.model.durum.in_(tuple(cls.OPEN_STATUSES)),
+        ).first()
+        if acik_kayit:
+            raise ValidationError('Bu makine için zaten açık bir servis kaydı bulunuyor.')
+
+        try:
+            yeni_bakim = cls.model(ekipman_id=ekipman_id, **bakim_verileri)
+            cls.save(yeni_bakim, is_new=True, auto_commit=False, actor_id=actor_id)
+            cls._sync_parts(yeni_bakim, cls._normalize_parts(parts_data))
+            cls._sync_ekipman_status(yeni_bakim)
+            db.session.commit()
+            return yeni_bakim
+        except Exception:
+            db.session.rollback()
+            raise
+
+    @classmethod
+    def bakim_guncelle(cls, bakim_id, bakim_verileri, parts_data=None, actor_id=None):
+        bakim_kaydi = cls.get_by_id(bakim_id)
+        if not bakim_kaydi:
+            raise ValidationError('Servis kaydı bulunamadı.')
+
+        bakim_verileri['tarih'] = cls._normalize_date(bakim_verileri.get('tarih'))
+        bakim_verileri['sonraki_bakim_tarihi'] = cls._normalize_date(bakim_verileri.get('sonraki_bakim_tarihi'))
+
+        try:
+            for key, value in bakim_verileri.items():
+                if hasattr(bakim_kaydi, key):
+                    setattr(bakim_kaydi, key, value)
+
+            cls.save(bakim_kaydi, is_new=False, auto_commit=False, actor_id=actor_id)
+            cls._sync_parts(bakim_kaydi, cls._normalize_parts(parts_data))
+            cls._sync_ekipman_status(bakim_kaydi)
+            db.session.commit()
+            return bakim_kaydi
+        except Exception:
+            db.session.rollback()
+            raise
+
+    @classmethod
+    def bakim_sil(cls, bakim_id, actor_id=None):
+        bakim_kaydi = cls.get_by_id(bakim_id)
+        if not bakim_kaydi:
+            raise ValidationError('Servis kaydı bulunamadı.')
+
+        try:
+            cls._sync_parts(bakim_kaydi, {})
+            ekipman = bakim_kaydi.ekipman
+            db.session.delete(bakim_kaydi)
+
+            if ekipman and ekipman.calisma_durumu == 'serviste':
+                acik_kalan = cls.model.query.filter(
+                    cls.model.ekipman_id == ekipman.id,
+                    cls.model.id != bakim_id,
+                    cls.model.is_deleted == False,
+                    cls.model.durum.in_(tuple(cls.OPEN_STATUSES)),
+                ).count()
+                if acik_kalan == 0:
+                    ekipman.calisma_durumu = 'bosta'
+                    db.session.add(ekipman)
+
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            raise
+
+    @classmethod
+    def ekipman_bakimini_tamamla(cls, ekipman_id, actor_id=None):
+        acik_kayit = cls.model.query.filter(
+            cls.model.ekipman_id == ekipman_id,
+            cls.model.is_deleted == False,
+            cls.model.durum.in_(tuple(cls.OPEN_STATUSES)),
+        ).order_by(cls.model.tarih.desc(), cls.model.id.desc()).first()
+
+        if not acik_kayit:
+            return None
+
+        try:
+            acik_kayit.durum = 'tamamlandi'
+            cls.save(acik_kayit, is_new=False, auto_commit=False, actor_id=actor_id)
+            cls._sync_ekipman_status(acik_kayit)
+            db.session.commit()
+            return acik_kayit
+        except Exception:
+            db.session.rollback()
+            raise
