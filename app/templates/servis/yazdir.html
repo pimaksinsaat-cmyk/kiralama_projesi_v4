@@ -392,31 +392,32 @@ async function whatsappExcelPaylas(btn, excelUrl, dosyaAdi) {
     const orijinalHtml = btn.innerHTML;
     btn.innerHTML = '&#9203; Hazırlanıyor...';
     btn.style.pointerEvents = 'none';
+    let blob = null;
     try {
         const response = await fetch(excelUrl);
         if (!response.ok) throw new Error('Dosya alınamadı (HTTP ' + response.status + ')');
-        const blob = await response.blob();
+        blob = await response.blob();
         const file = new File([blob], dosyaAdi, {
             type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         });
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
             await navigator.share({ files: [file], title: dosyaAdi });
-        } else {
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = dosyaAdi;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            setTimeout(() => URL.revokeObjectURL(a.href), 10000);
-            alert('Tarayıcınız doğrudan dosya paylaşımını desteklemiyor.\nDosya indirildi — WhatsApp\'tan manuel olarak gönderebilirsiniz.');
+            return;
         }
     } catch (err) {
-        if (err.name !== 'AbortError') alert('Hata: ' + err.message);
+        if (err.name === 'AbortError') return;
+        if (!blob) { alert('Dosya indirilemedi: ' + err.message); return; }
     } finally {
         btn.innerHTML = orijinalHtml;
         btn.style.pointerEvents = '';
     }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = dosyaAdi;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
 }
 </script>
 
