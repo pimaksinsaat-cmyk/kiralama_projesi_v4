@@ -418,6 +418,7 @@ async function whatsappExcelPaylas(btn, excelUrl, dosyaAdi) {
     a.click();
     document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    setTimeout(() => window.open('https://web.whatsapp.com', '_blank'), 800);
 }
 </script>
 

@@ -346,13 +346,12 @@ async function whatsappExcelPaylas(btn, excelUrl, dosyaAdi) {
         }
     } catch (err) {
         if (err.name === 'AbortError') return;
-        // NotAllowedError (Permission denied) veya desteklenmiyorsa indir
         if (!blob) { alert('Dosya indirilemedi: ' + err.message); return; }
     } finally {
         btn.innerHTML = orijinalHtml;
         btn.style.pointerEvents = '';
     }
-    // Fallback: dosyayı indir
+    // Dosyayı indir
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = dosyaAdi;
@@ -360,6 +359,8 @@ async function whatsappExcelPaylas(btn, excelUrl, dosyaAdi) {
     a.click();
     document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    // WhatsApp Web'i aç — kullanıcı indirilen dosyayı gönderebilir
+    setTimeout(() => window.open('https://web.whatsapp.com', '_blank'), 800);
 }
 </script>
 
