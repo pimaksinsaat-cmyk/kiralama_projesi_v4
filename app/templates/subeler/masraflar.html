@@ -785,6 +785,12 @@
         font-size: 0.92rem;
     }
 
+    .durum-detay {
+        font-size: 0.74rem;
+        color: #64748b;
+        line-height: 1.35;
+    }
+
     .sabit-gider-edit-panel {
         margin-top: 0.85rem;
     }
@@ -1341,6 +1347,9 @@
                             <div class="col-6 col-md-1 sabit-gider-col">
                                 <span class="sabit-gider-col-label">Durum</span>
                                 <span class="durum-badge {{ 'is-planned' if donem_durumu == 'Planli' else '' if donem_durumu == 'Aktif' else 'is-passive' }}">{{ donem_durumu }}</span>
+                                {% if donem_durumu == 'Kapandi' and donem_timeline.get('effective_end') %}
+                                <span class="durum-detay">Kapanis: {{ donem_timeline.get('effective_end').strftime('%d.%m.%Y') }}</span>
+                                {% endif %}
                             </div>
                             <div class="col-12 col-md-3 sabit-gider-col">
                                 <span class="sabit-gider-col-label">Islemler</span>
@@ -1354,6 +1363,13 @@
                                         data-default-date="{{ yesterday if donem.baslangic_tarihi < today_date else today }}"
                                         data-category="{{ kategori_labels.get(donem.kategori, donem.kategori) }}"
                                     >Durdur</button>
+                                    {% elif donem_durumu == 'Kapandi' and not sabit_gider_timeline.get(donem.id, {}).get('has_next_period', False) %}
+                                    <form method="POST" action="{{ url_for('subeler.sabit_gider_durdurma_geri_al', donem_id=donem.id) }}" class="inline-stop-form">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <input type="hidden" name="year" value="{{ selected_year }}">
+                                        <input type="hidden" name="month" value="{{ selected_month }}">
+                                        <button type="submit" class="duzenle-btn" onclick="return confirm('Bu sabit gider donemini yeniden aktif hale getirmek istediginize emin misiniz?');">Geri Al</button>
+                                    </form>
                                     {% endif %}
                                     <div class="action-button-row">
                                         <button type="button" class="duzenle-btn sabit-gider-edit-toggle" data-target="sabit-gider-edit-{{ donem.id }}" aria-expanded="false">Duzenle</button>

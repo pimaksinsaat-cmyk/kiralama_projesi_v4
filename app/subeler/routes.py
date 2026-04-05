@@ -421,6 +421,30 @@ def sabit_gider_sil(donem_id):
     return redirect(url_for('subeler.sube_masraflari', **redirect_params))
 
 
+@subeler_bp.route('/sabit-giderler/<int:donem_id>/geri-al', methods=['POST'])
+def sabit_gider_durdurma_geri_al(donem_id):
+    donem = SubeSabitGiderDonemiService.get_by_id(donem_id)
+    if not donem:
+        flash('Sabit gider donemi bulunamadi.', 'warning')
+        return redirect(url_for('subeler.index'))
+
+    redirect_params = {
+        'sube_id': donem.sube_id,
+        'year': request.form.get('year'),
+        'month': request.form.get('month'),
+    }
+
+    try:
+        SubeSabitGiderDonemiService.undo_stop_donem(donem_id)
+        flash('Sabit gider durdurma islemi geri alindi.', 'success')
+    except ValidationError as exc:
+        flash(str(exc), 'warning')
+    except Exception as exc:
+        flash(f'Sabit gider durdurma geri alinirken hata olustu: {exc}', 'danger')
+
+    return redirect(url_for('subeler.sube_masraflari', **redirect_params))
+
+
 @subeler_bp.route('/<int:sube_id>/personel', methods=['GET'])
 def sube_personeli(sube_id):
     """Eski şube personel URL'sini yeni personel modülüne yönlendir."""

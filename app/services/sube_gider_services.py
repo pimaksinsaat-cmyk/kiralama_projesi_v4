@@ -141,6 +141,7 @@ class SubeSabitGiderDonemiService(BaseService):
                         'ended': 'Kapandi',
                     }[status],
                     'is_first_period': not onceki_var,
+                    'has_next_period': sonraki_donem is not None,
                 }
 
         return metadata
@@ -433,6 +434,43 @@ class SubeSabitGiderDonemiService(BaseService):
         except Exception as exc:
             db.session.rollback()
             raise Exception('Sabit gider donemi sonlandirilirken hata olustu.') from exc
+
+    @classmethod
+    def undo_stop_donem(cls, donem_id):
+        donem = cls.get_by_id(donem_id)
+        if not donem:
+            raise ValidationError('Geri alinacak sabit gider donemi bulunamadi.')
+
+        sonraki_donem = (
+            cls._get_base_query()
+            .filter(
+                SubeSabitGiderDonemi.id != donem.id,
+                SubeSabitGiderDonemi.sube_id == donem.sube_id,
+                SubeSabitGiderDonemi.kategori == donem.kategori,
+                SubeSabitGiderDonemi.baslangic_tarihi > donem.baslangic_tarihi,
+            )
+            .order_by(SubeSabitGiderDonemi.baslangic_tarihi.asc(), SubeSabitGiderDonemi.id.asc())
+            .first()
+        )
+        if sonraki_donem:
+            raise ValidationError('Bu donemden sonra daha yeni bir donem oldugu icin geri alma yapilamaz.')
+
+        if donem.bitis_tarihi is None:
+            raise ValidationError('Bu sabit gider donemi zaten aktif durumda.')
+
+        try:
+            donem.bitis_tarihi = None
+            db.session.add(donem)
+            db.session.flush()
+            cls._sync_category_flags(donem.sube_id, donem.kategori)
+            db.session.commit()
+            return donem
+        except ValidationError:
+            db.session.rollback()
+            raise
+        except Exception as exc:
+            db.session.rollback()
+            raise Exception('Sabit gider durdurma islemi geri alinirken hata olustu.') from exc
 
     @classmethod
     def delete_donem(cls, donem_id):
