@@ -48,3 +48,14 @@ class AracBakimForm(BaseForm):
     sonraki_bakim_km = IntegerField('Sonraki Bakım (km)', validators=[Optional(), NumberRange(min=0)])
     sonraki_bakim_tarihi = StringField('Sonraki Bakım Tarihi', validators=[Optional()], render_kw={"type": "date"})
     submit = SubmitField('Bakım Kaydını Kaydet')
+
+
+class AracYakitGiderForm(BaseForm):
+    tarih = DateField('Yakıt Tarihi', validators=[DataRequired()])
+    litre = MoneyField('Alınan Litre', validators=[DataRequired(), NumberRange(min=0.01)])
+    birim_fiyat = MoneyField('Litre Fiyatı (TL)', validators=[DataRequired(), NumberRange(min=0.01)])
+    km = IntegerField('Kilometre', validators=[Optional(), NumberRange(min=0)])
+    istasyon = StringField('İstasyon / Tedarikçi', validators=[Optional()])
+    fatura_no = StringField('Fiş / Belge No', validators=[Optional()])
+    aciklama = TextAreaField('Açıklama', validators=[Optional()])
+    submit = SubmitField('Mazot Giderini Kaydet')

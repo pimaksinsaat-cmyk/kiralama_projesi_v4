@@ -1,4 +1,5 @@
 from datetime import date, datetime, timedelta
+from decimal import Decimal, InvalidOperation
 
 from sqlalchemy import inspect, or_
 
@@ -9,7 +10,7 @@ from app.subeler.models import Sube, SubeGideri, SubeSabitGiderDonemi
 
 class SubeGiderService(BaseService):
     model = SubeGideri
-    updatable_fields = ['sube_id', 'tarih', 'kategori', 'tutar', 'aciklama', 'fatura_no']
+    updatable_fields = ['sube_id', 'arac_id', 'tarih', 'kategori', 'tutar', 'litre', 'birim_fiyat', 'km', 'istasyon', 'aciklama', 'fatura_no']
 
     @staticmethod
     def table_exists():
@@ -21,12 +22,28 @@ class SubeGiderService(BaseService):
             return datetime.strptime(value, '%Y-%m-%d').date()
         return value or None
 
+    @staticmethod
+    def _parse_decimal(value):
+        if value in (None, ''):
+            return None
+        if isinstance(value, Decimal):
+            return value
+        try:
+            return Decimal(str(value).replace('.', '').replace(',', '.'))
+        except (InvalidOperation, ValueError, TypeError):
+            return None
+
     @classmethod
     def _normalize_payload(cls, payload):
         normalized = dict(payload or {})
         normalized['sube_id'] = int(normalized['sube_id']) if normalized.get('sube_id') else None
+        normalized['arac_id'] = int(normalized['arac_id']) if normalized.get('arac_id') else None
         normalized['tarih'] = cls._parse_date(normalized.get('tarih'))
         normalized['kategori'] = (normalized.get('kategori') or '').strip()
+        normalized['litre'] = cls._parse_decimal(normalized.get('litre'))
+        normalized['birim_fiyat'] = cls._parse_decimal(normalized.get('birim_fiyat'))
+        normalized['km'] = int(normalized['km']) if normalized.get('km') not in (None, '') else None
+        normalized['istasyon'] = (normalized.get('istasyon') or '').strip() or None
         normalized['aciklama'] = (normalized.get('aciklama') or '').strip() or None
         normalized['fatura_no'] = (normalized.get('fatura_no') or '').strip() or None
         return normalized

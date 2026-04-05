@@ -1,0 +1,365 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    :root {
+        --primary-blue: #667eea;
+        --warning-orange: #f39c12;
+        --danger-red: #e74c3c;
+        --success-green: #27ae60;
+        --text-dark: #2c3e50;
+    }
+
+    .container-main {
+        padding: 2rem;
+        background-color: #f4f7f9;
+        min-height: 100vh;
+    }
+
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+        border-bottom: 2px solid #dee2e6;
+        padding-bottom: 1rem;
+    }
+
+    .page-header h1 {
+        color: var(--text-dark);
+        font-weight: 700;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .header-actions {
+        display: flex;
+        gap: 0.75rem;
+    }
+
+    .back-btn {
+        padding: 8px 16px;
+        background-color: #eceff1;
+        color: #455a64;
+        border: none;
+        border-radius: 6px;
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 0.85rem;
+    }
+
+    .back-btn:hover {
+        background-color: #cfd8dc;
+    }
+
+    .content-wrapper {
+        display: grid;
+        grid-template-columns: 1fr 380px;
+        gap: 2rem;
+    }
+
+    @media (max-width: 1024px) {
+        .content-wrapper {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .gider-table-wrapper {
+        background: white;
+        border-radius: 10px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+        overflow: hidden;
+    }
+
+    .gider-table-header {
+        padding: 1rem 1.25rem;
+        border-bottom: 1px solid #eef2f7;
+        background: #f8fafc;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .gider-table-title {
+        font-size: 1rem;
+        font-weight: 700;
+        color: var(--text-dark);
+    }
+
+    .gider-table-meta {
+        font-size: 0.8rem;
+        color: #64748b;
+    }
+
+    .table-responsive {
+        overflow-x: auto;
+    }
+
+    .gider-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .gider-table th,
+    .gider-table td {
+        padding: 0.85rem 1rem;
+        border-bottom: 1px solid #eef2f7;
+        white-space: nowrap;
+    }
+
+    .gider-table th {
+        font-weight: 700;
+        color: #64748b;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        background: #f8fafc;
+    }
+
+    .gider-table tbody tr:hover {
+        background: #f8fafc;
+    }
+
+    .gider-table td {
+        color: #334155;
+        font-size: 0.92rem;
+    }
+
+    .gider-table .numeric {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .gider-table .date-cell {
+        font-weight: 600;
+        color: var(--text-dark);
+    }
+
+    .btn-sm {
+        padding: 0.35rem 0.65rem;
+        font-size: 0.75rem;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: 600;
+    }
+
+    .btn-delete {
+        background-color: #ffebee;
+        color: var(--danger-red);
+    }
+
+    .form-panel {
+        background: white;
+        border-radius: 10px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+        height: fit-content;
+        position: sticky;
+        top: 100px;
+    }
+
+    .form-panel h3 {
+        margin: 0 0 1.5rem 0;
+        color: var(--text-dark);
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .form-group {
+        margin-bottom: 1rem;
+    }
+
+    .form-group label {
+        display: block;
+        font-weight: 600;
+        color: #555;
+        margin-bottom: 0.4rem;
+        font-size: 0.9rem;
+    }
+
+    .form-group input,
+    .form-group textarea {
+        width: 100%;
+        padding: 0.6rem;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        font-size: 0.9rem;
+        font-family: inherit;
+    }
+
+    .form-group textarea {
+        min-height: 90px;
+        resize: vertical;
+    }
+
+    .form-panel button {
+        width: 100%;
+        padding: 0.8rem;
+        background-color: var(--primary-blue);
+        color: white;
+        border: none;
+        border-radius: 6px;
+        font-weight: 600;
+        cursor: pointer;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 3rem;
+        background: white;
+        border-radius: 10px;
+    }
+
+    .empty-state h3 {
+        color: #94a3b8;
+        margin: 0;
+    }
+
+    .helper-text {
+        font-size: 0.8rem;
+        color: #64748b;
+        margin-top: 0.4rem;
+    }
+</style>
+
+<div class="container-main">
+    <div class="page-header">
+        <h1><i class="fas fa-gas-pump"></i> {{ arac.plaka }} — Mazot Giderleri</h1>
+        <div class="header-actions">
+            <a href="{{ url_for('araclar.bakim_gecmisi', arac_id=arac.id) }}" class="back-btn">Bakım Geçmişi</a>
+            <a href="{{ url_for('araclar.index') }}" class="back-btn">← Geri Dön</a>
+        </div>
+    </div>
+
+    <div class="content-wrapper">
+        <div>
+            <div class="gider-table-wrapper">
+                <div class="gider-table-header">
+                    <div class="gider-table-title">Yakıt Kayıtları</div>
+                    <div class="gider-table-meta">Toplam {{ giderler|length }} kayıt</div>
+                </div>
+                <div class="table-responsive">
+                    <table class="gider-table">
+                        <thead>
+                            <tr>
+                                <th>Tarih</th>
+                                <th class="numeric">KM</th>
+                                <th class="numeric">Litre</th>
+                                <th class="numeric">Lt Fiyatı</th>
+                                <th class="numeric">Tutar</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if giderler %}
+                                {% for gider in giderler %}
+                                <tr>
+                                    <td class="date-cell">{{ gider.tarih.strftime('%d.%m.%Y') }}</td>
+                                    <td class="numeric">{{ gider.km or '-' }}</td>
+                                    <td class="numeric">{{ '{:,.2f}'.format(gider.litre or 0).replace(',', 'X').replace('.', ',').replace('X', '.') }}</td>
+                                    <td class="numeric">{{ '{:,.2f}'.format(gider.birim_fiyat or 0).replace(',', 'X').replace('.', ',').replace('X', '.') }}</td>
+                                    <td class="numeric">{{ '{:,.2f}'.format(gider.tutar or 0).replace(',', 'X').replace('.', ',').replace('X', '.') }}</td>
+                                    <td class="numeric">
+                                        <form method="POST" action="{{ url_for('araclar.yakit_gideri_sil', gider_id=gider.id) }}" onsubmit="return confirm('Bu mazot giderini silmek istediğinize emin misiniz?');">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <button type="submit" class="btn-sm btn-delete"><i class="fas fa-trash"></i></button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="6" class="empty-state">
+                                        <h3>Henüz mazot gideri yok</h3>
+                                    </td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-panel">
+            <h3><i class="fas fa-plus-circle"></i> Yeni Mazot Gideri</h3>
+            {% if arac.sube %}
+            <div class="helper-text" style="margin-bottom: 1rem;">Bu kayıt {{ arac.sube.isim }} şubesi masraflarına otomatik yansır.</div>
+            {% else %}
+            <div class="helper-text" style="margin-bottom: 1rem; color: var(--danger-red);">Araç şubeye bağlı değil. Önce araç kartından şube seçmelisiniz.</div>
+            {% endif %}
+            <form method="POST" action="{{ url_for('araclar.yakit_gideri_ekle', arac_id=arac.id) }}">
+                {{ form.csrf_token() }}
+                <div class="form-group">
+                    {{ form.tarih.label }}
+                    {{ form.tarih(class='form-control', type='date') }}
+                </div>
+                <div class="form-group">
+                    {{ form.litre.label }}
+                    {{ form.litre(id='yakit-litre', placeholder='0,00') }}
+                </div>
+                <div class="form-group">
+                    {{ form.birim_fiyat.label }}
+                    {{ form.birim_fiyat(id='yakit-birim-fiyat', placeholder='0,00') }}
+                </div>
+                <div class="form-group">
+                    <label>Tahmini Tutar (TL)</label>
+                    <input type="text" id="yakit-toplam-preview" value="0,00" readonly>
+                </div>
+                <div class="form-group">
+                    {{ form.km.label }}
+                    {{ form.km(placeholder='Opsiyonel') }}
+                </div>
+                <div class="form-group">
+                    {{ form.istasyon.label }}
+                    {{ form.istasyon(placeholder='Shell, Opet, BP...') }}
+                </div>
+                <div class="form-group">
+                    {{ form.fatura_no.label }}
+                    {{ form.fatura_no(placeholder='Fiş / irsaliye no') }}
+                </div>
+                <div class="form-group">
+                    {{ form.aciklama.label }}
+                    {{ form.aciklama(placeholder='İsteğe bağlı açıklama') }}
+                </div>
+                <div class="form-group">
+                    {% if arac.sube %}
+                        {{ form.submit() }}
+                    {% else %}
+                        {{ form.submit(disabled=true) }}
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const litreInput = document.getElementById('yakit-litre');
+    const birimFiyatInput = document.getElementById('yakit-birim-fiyat');
+    const toplamPreview = document.getElementById('yakit-toplam-preview');
+
+    function parseNumber(value) {
+        if (!value) {
+            return 0;
+        }
+        return Number(String(value).replace(/\./g, '').replace(',', '.')) || 0;
+    }
+
+    function updatePreview() {
+        const toplam = parseNumber(litreInput?.value) * parseNumber(birimFiyatInput?.value);
+        toplamPreview.value = toplam.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    litreInput?.addEventListener('input', updatePreview);
+    birimFiyatInput?.addEventListener('input', updatePreview);
+    updatePreview();
+});
+</script>
+{% endblock %}

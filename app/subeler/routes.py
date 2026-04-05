@@ -5,7 +5,7 @@ from app.subeler import subeler_bp
 from app.extensions import db
 from app.subeler.models import Sube, SubeGideri
 from app.filo.models import Ekipman
-from app.subeler.forms import SubeForm, SubeGideriForm, SubeSabitGiderDonemiForm, GIDER_KATEGORILERI
+from app.subeler.forms import SubeForm, SubeGideriForm, SubeSabitGiderDonemiForm, GIDER_KATEGORILERI, MANUEL_GIDER_KATEGORILERI
 from app.services.base import ValidationError
 from app.services.sube_gider_services import SubeGiderService, SubeSabitGiderDonemiService
 
@@ -211,7 +211,7 @@ def sube_masraflari(sube_id):
     aylik_personel_toplam = sum(row['toplam_tutar'] for row in personel_gider_detaylari)
     genel_toplam = manuel_masraf_toplam + aylik_personel_toplam + aylik_sabit_toplam
 
-    kategori_labels = dict(GIDER_KATEGORILERI)
+    kategori_labels = dict(MANUEL_GIDER_KATEGORILERI)
 
     return render_template(
         'subeler/masraflar.html',
@@ -228,7 +228,7 @@ def sube_masraflari(sube_id):
         personel_gider_detaylari=personel_gider_detaylari,
         kategori_toplamlar=kategori_toplamlar,
         kategori_labels=kategori_labels,
-        kategori_secenekleri=GIDER_KATEGORILERI,
+        kategori_secenekleri=MANUEL_GIDER_KATEGORILERI,
         today=datetime.now().strftime('%Y-%m-%d'),
         yesterday=(date.today() - timedelta(days=1)).strftime('%Y-%m-%d'),
         today_date=date.today(),

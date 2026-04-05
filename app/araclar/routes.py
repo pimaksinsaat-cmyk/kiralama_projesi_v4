@@ -5,9 +5,12 @@ from flask_login import current_user
 from app.extensions import db
 from . import araclar_bp
 from .models import Arac, AracBakim
-from .forms import AracForm, AracBakimForm
+from .forms import AracForm, AracBakimForm, AracYakitGiderForm
 from app.subeler.models import Sube
+from app.subeler.models import SubeGideri
+from app.services.sube_gider_services import SubeGiderService
 from app.utils import normalize_turkish_upper
+from decimal import Decimal
 
 @araclar_bp.route('/')
 def index():
@@ -256,3 +259,100 @@ def bakim_sil(bakim_id):
         flash(f'Silme sırasında hata oluştu: {str(e)}', 'danger')
 
     return redirect(url_for('araclar.bakim_gecmisi', arac_id=arac_id))
+
+
+@araclar_bp.route('/<int:arac_id>/yakit_giderleri', methods=['GET'])
+def yakit_giderleri(arac_id):
+    arac = db.session.get(Arac, arac_id)
+    if not arac:
+        flash('Araç bulunamadı.', 'danger')
+        return redirect(url_for('araclar.index'))
+
+    form = AracYakitGiderForm()
+    if request.method == 'GET' and not form.tarih.data:
+        form.tarih.data = date.today()
+
+    giderler = (
+        SubeGideri.query.filter_by(arac_id=arac_id, kategori='mazot')
+        .order_by(SubeGideri.tarih.desc(), SubeGideri.id.desc())
+        .all()
+    )
+
+    toplam_tutar = sum(float(gider.tutar or 0) for gider in giderler)
+    toplam_litre = sum(float(gider.litre or 0) for gider in giderler)
+
+    return render_template(
+        'araclar/yakit_giderleri.html',
+        arac=arac,
+        form=form,
+        giderler=giderler,
+        toplam_tutar=toplam_tutar,
+        toplam_litre=toplam_litre,
+    )
+
+
+@araclar_bp.route('/<int:arac_id>/yakit_gideri_ekle', methods=['POST'])
+def yakit_gideri_ekle(arac_id):
+    arac = db.session.get(Arac, arac_id)
+    if not arac:
+        flash('Araç bulunamadı.', 'danger')
+        return redirect(url_for('araclar.index'))
+
+    if not arac.sube_id:
+        flash('Mazot gideri eklemek için aracın bağlı olduğu bir şube tanımlı olmalı.', 'warning')
+        return redirect(url_for('araclar.duzenle', arac_id=arac.id))
+
+    form = AracYakitGiderForm()
+    if form.validate_on_submit():
+        try:
+            litre = form.litre.data or Decimal('0')
+            birim_fiyat = form.birim_fiyat.data or Decimal('0')
+            tutar = litre * birim_fiyat
+            detay_parcalari = [arac.plaka]
+            if form.istasyon.data:
+                detay_parcalari.append(form.istasyon.data.strip())
+            otomatik_aciklama = ' - '.join(detay_parcalari)
+            kullanici_aciklama = (form.aciklama.data or '').strip()
+
+            SubeGiderService.create_gider(
+                {
+                    'sube_id': arac.sube_id,
+                    'arac_id': arac.id,
+                    'tarih': form.tarih.data,
+                    'kategori': 'mazot',
+                    'tutar': tutar,
+                    'litre': litre,
+                    'birim_fiyat': birim_fiyat,
+                    'km': form.km.data,
+                    'istasyon': form.istasyon.data,
+                    'fatura_no': form.fatura_no.data,
+                    'aciklama': f'{otomatik_aciklama} | {kullanici_aciklama}' if kullanici_aciklama else otomatik_aciklama,
+                },
+                actor_id=getattr(current_user, 'id', None),
+            )
+            flash('Mazot gideri araca bağlı olarak kaydedildi.', 'success')
+        except Exception as exc:
+            flash(f'Mazot gideri kaydedilirken hata oluştu: {str(exc)}', 'danger')
+    else:
+        for field_name, errors in form.errors.items():
+            for error in errors:
+                flash(f'{field_name}: {error}', 'warning')
+
+    return redirect(url_for('araclar.yakit_giderleri', arac_id=arac.id))
+
+
+@araclar_bp.route('/yakit_gideri/<int:gider_id>/sil', methods=['POST'])
+def yakit_gideri_sil(gider_id):
+    gider = SubeGideri.query.filter_by(id=gider_id, kategori='mazot').first()
+    if not gider or not gider.arac_id:
+        flash('Mazot gideri bulunamadı.', 'danger')
+        return redirect(url_for('araclar.index'))
+
+    arac_id = gider.arac_id
+    try:
+        SubeGiderService.delete_gider(gider_id)
+        flash('Mazot gideri silindi.', 'success')
+    except Exception as exc:
+        flash(f'Silme sırasında hata oluştu: {str(exc)}', 'danger')
+
+    return redirect(url_for('araclar.yakit_giderleri', arac_id=arac_id))

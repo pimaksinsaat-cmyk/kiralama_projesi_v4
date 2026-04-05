@@ -45,14 +45,20 @@ class SubeGideri(db.Model):
     __tablename__ = 'sube_giderleri'
     id = db.Column(db.Integer, primary_key=True)
     sube_id = db.Column(db.Integer, db.ForeignKey('subeler.id'), nullable=False, index=True)
+    arac_id = db.Column(db.Integer, db.ForeignKey('araclar.id'), nullable=True, index=True)
     tarih = db.Column(db.Date, nullable=False)
-    kategori = db.Column(db.String(50), nullable=False)  # kira, elektrik, su, internet, ikram, personel, temizlik, diger
+    kategori = db.Column(db.String(50), nullable=False)  # kira, elektrik, su, internet, ikram, personel, temizlik, mazot, diger
     tutar = db.Column(db.Numeric(15, 2), nullable=False)
+    litre = db.Column(db.Numeric(10, 2), nullable=True)
+    birim_fiyat = db.Column(db.Numeric(10, 2), nullable=True)
+    km = db.Column(db.Integer, nullable=True)
+    istasyon = db.Column(db.String(150), nullable=True)
     aciklama = db.Column(db.String(250), nullable=True)
     fatura_no = db.Column(db.String(50), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     sube = db.relationship('Sube', backref='giderler')
+    arac = db.relationship('Arac', backref='gider_kayitlari')
 
 
 class SubeSabitGiderDonemi(db.Model):

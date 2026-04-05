@@ -313,8 +313,8 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        // Makine aktif ise (serviste değilse), sadece yerinde_servis seçilebilir
-        if (durum !== 'serviste') {
+        // Kullanimda olan makine ise, sadece yerinde_servis seçilebilir
+        if (durum === 'kullanimda') {
             Array.from(servisTipiSelect.options).forEach(opt => {
                 if (opt.value === 'yerinde_servis') {
                     opt.disabled = false;
@@ -324,7 +324,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             servisTipiSelect.value = 'yerinde_servis';
         } else {
-            // Serviste ise tüm seçenekleri aktifleştir
+            // Boşta veya serviste ise tüm seçenekleri aktifleştir
             Array.from(servisTipiSelect.options).forEach(opt => {
                 opt.disabled = false;
             });

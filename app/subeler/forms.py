@@ -66,6 +66,11 @@ GIDER_KATEGORILERI = [
     ('diger', 'Diğer'),
 ]
 
+MANUEL_GIDER_KATEGORILERI = GIDER_KATEGORILERI[:-1] + [
+    ('mazot', 'Mazot / Yakıt'),
+    GIDER_KATEGORILERI[-1],
+]
+
 class SubeGideriForm(FlaskForm):
     sube_id = HiddenField('Şube ID', validators=[DataRequired()])
     tarih = StringField('Tarih',
@@ -73,7 +78,7 @@ class SubeGideriForm(FlaskForm):
                         default=lambda: datetime.now().strftime('%Y-%m-%d'),
                         render_kw={"type": "date"})
     kategori = SelectField('Kategori',
-                          choices=GIDER_KATEGORILERI,
+                          choices=MANUEL_GIDER_KATEGORILERI,
                           validators=[DataRequired(message="Kategori seçmek zorunludur")])
     tutar = DecimalField('Tutar (TL)',
                         places=2,
