@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+
+{% block title %}Stok Modulu{% endblock %}
+
+{% block content %}
+{% macro money(value) -%}
+{{ '{:,.2f}'.format(value or 0).replace(',', '_').replace('.', ',').replace('_', '.') }} TL
+{%- endmacro %}
+{% macro kisa_firma(ad) -%}
+{{ (ad or '').split()[:4] | join(' ') }}
+{%- endmacro %}
+<style>
+    .stock-shell { max-width: 1480px; margin: 0 auto; }
+    .stock-hero { background: linear-gradient(135deg, #eef7ff 0%, #ffffff 50%, #fdf8ef 100%); border: 1px solid #dbe7f3; border-radius: 18px; padding: 1.5rem; box-shadow: 0 14px 36px rgba(15, 23, 42, 0.06); }
+    .stock-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 1rem; }
+    .stock-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; padding: 1rem 1.1rem; }
+    .stock-card .label { font-size: 0.8rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em; }
+    .stock-card .value { margin-top: 0.25rem; font-size: 1.45rem; font-weight: 800; color: #0f172a; }
+    .stock-layout { display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(320px, 0.95fr); gap: 1rem; align-items: start; }
+    .panel { background: #fff; border: 1px solid #e5e7eb; border-radius: 18px; box-shadow: 0 12px 30px rgba(15, 23, 42, 0.05); overflow: hidden; }
+    .panel-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 1rem 1.2rem; border-bottom: 1px solid #eef2f7; }
+    .panel-title { font-size: 1rem; font-weight: 800; color: #0f172a; }
+    .panel-meta { color: #64748b; font-size: 0.84rem; }
+    .panel-body { padding: 1rem 1.2rem 1.2rem; }
+    .stock-table { margin: 0; }
+    .stock-table thead th { white-space: nowrap; background: #f8fafc; }
+    .stock-table td { vertical-align: middle; }
+    .stock-pill { display: inline-flex; align-items: center; border-radius: 999px; padding: 0.26rem 0.7rem; font-size: 0.78rem; font-weight: 700; }
+    .stock-pill.ok { background: #dcfce7; color: #166534; }
+    .stock-pill.zero { background: #fee2e2; color: #991b1b; }
+    .money-value { font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .form-grid { display: grid; gap: 0.9rem; }
+    .form-grid label { display: block; margin-bottom: 0.3rem; font-size: 0.82rem; font-weight: 700; color: #334155; }
+    .form-grid input, .form-grid select { width: 100%; border: 1px solid #dbe4f0; border-radius: 12px; padding: 0.75rem 0.85rem; }
+    .helper { color: #64748b; font-size: 0.8rem; }
+    .search-form { display: grid; grid-template-columns: 1fr; gap: 0.65rem; align-items: end; }
+    .per-page-bar { display: flex; align-items: center; gap: 0.5rem; font-size: 0.82rem; color: #334155; font-weight: 600; }
+    .per-page-bar select { border: 1px solid #dbe4f0; border-radius: 10px; padding: 0.45rem 0.6rem; font-size: 0.85rem; background: #fff; }
+    .pagination { display: flex; gap: 4px; list-style: none; padding: 0; margin: 0; }
+    .pagination .page-item .page-link { display: inline-block; padding: 6px 12px; border: 1px solid #dee2e6; border-radius: 4px; color: #2563eb; text-decoration: none; font-size: 0.875rem; }
+    .pagination .page-item.active .page-link { background: #2563eb; border-color: #2563eb; color: white; }
+    .pagination .page-item.disabled .page-link { color: #adb5bd; pointer-events: none; }
+    @media (max-width: 1100px) {
+        .stock-layout { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 768px) {
+        .search-form { grid-template-columns: 1fr; }
+    }
+</style>
+
+<div class="stock-shell">
+    <div class="stock-hero mb-4">
+        <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+            <div>
+                <h2 class="mb-1 fw-bold"><i class="fas fa-boxes-stacked me-2 text-primary"></i>Stok Modulu</h2>
+                <div class="helper">Servisten ayri calisan temel stok kartlari ve giris/cikis hareketleri burada yonetilir.</div>
+            </div>
+            <div class="d-flex flex-wrap gap-2">
+                <a href="{{ url_for('stok.arsiv') }}" class="btn btn-outline-dark btn-sm">Arsiv{% if arsiv_kart_sayisi %} ({{ arsiv_kart_sayisi }}){% endif %}</a>
+                <a href="{{ url_for('servis.index') }}" class="btn btn-outline-secondary btn-sm">Servis Kayitlari</a>
+            </div>
+        </div>
+
+        <div class="stock-grid">
+            <div class="stock-card">
+                <div class="label">Aktif Kart</div>
+                <div class="value">{{ aktif_kart_sayisi }}</div>
+            </div>
+            <div class="stock-card">
+                <div class="label">Toplam Stok</div>
+                <div class="value">{{ toplam_stok_adedi }}</div>
+            </div>
+            <div class="stock-card">
+                <div class="label">Hareket Sayisi</div>
+                <div class="value">{{ hareket_sayisi }}</div>
+            </div>
+            <div class="stock-card">
+                <div class="label">Tahmini Envanter Degeri</div>
+                <div class="value money-value" style="font-size:1.2rem;">{{ money(toplam_envanter_degeri) }}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="stock-layout">
+        <div class="panel">
+            <div class="panel-head">
+                <div>
+                    <div class="panel-title">Stok Kartlari</div>
+                    <div class="panel-meta">Toplam {{ pagination.total if pagination else 0 }} kayit</div>
+                </div>
+            </div>
+            <div class="panel-body">
+                <form method="GET" class="search-form mb-3">
+                    <div>
+                        <label>Ara</label>
+                        <input type="text" name="q" value="{{ q }}" placeholder="Parca kodu, adi veya tedarikci..." onchange="this.form.submit()">
+                    </div>
+                    <input type="hidden" name="per_page" value="{{ per_page }}">
+                </form>
+
+                <div class="table-responsive">
+                    <table class="table stock-table align-middle">
+                        <thead>
+                            <tr>
+                                <th>Parca Kodu</th>
+                                <th>Parca Adi</th>
+                                <th>Tedarikci</th>
+                                <th>Mevcut Stok</th>
+                                <th>Son Birim Fiyat</th>
+                                <th>Deger</th>
+                                <th>Islem</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for kart in kartlar %}
+                            <tr>
+                                <td class="fw-semibold">{{ kart.parca_kodu }}</td>
+                                <td>{{ kart.parca_adi }}</td>
+                                <td>{{ kisa_firma(kart.varsayilan_tedarikci.firma_adi) if kart.varsayilan_tedarikci else '-' }}</td>
+                                <td>
+                                    <span class="stock-pill {{ 'ok' if (kart.mevcut_stok or 0) > 0 else 'zero' }}">{{ kart.mevcut_stok or 0 }}</span>
+                                </td>
+                                <td class="money-value">{{ money(kart.son_birim_fiyat) }}</td>
+                                <td class="money-value fw-semibold">{{ money(kart.stok_degeri) }}</td>
+                                <td class="text-nowrap">
+                                    <a href="{{ url_for('stok.detay', kart_id=kart.id) }}" class="btn btn-sm btn-outline-primary">Detay</a>
+                                    <form method="POST" action="{{ url_for('stok.arsivle', kart_id=kart.id) }}" class="d-inline" onsubmit="return confirm('Bu stok karti arsivlensin mi?');">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" {{ 'disabled' if (kart.mevcut_stok or 0) > 0 else '' }}>Arsivle</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="7" class="text-center py-5 text-muted">Stok karti bulunamadi.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                {% if pagination %}
+                <div class="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
+                    <form method="GET" class="per-page-bar">
+                        <input type="hidden" name="q" value="{{ q }}">
+                        <label for="per_page_select">Sayfa basi:</label>
+                        <select id="per_page_select" name="per_page" onchange="this.form.submit()">
+                            <option value="10" {{ 'selected' if per_page == 10 else '' }}>10</option>
+                            <option value="25" {{ 'selected' if per_page == 25 else '' }}>25</option>
+                            <option value="50" {{ 'selected' if per_page == 50 else '' }}>50</option>
+                            <option value="100" {{ 'selected' if per_page == 100 else '' }}>100</option>
+                        </select>
+                    </form>
+                    <ul class="pagination mb-0">
+                        <li class="page-item {{ 'disabled' if not pagination.has_prev else '' }}">
+                            <a class="page-link" href="{{ url_for('stok.index', page=pagination.prev_num, per_page=per_page, q=q) }}">&laquo;</a>
+                        </li>
+                        {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
+                            {% if page_num %}
+                            <li class="page-item {{ 'active' if page_num == pagination.page else '' }}">
+                                <a class="page-link" href="{{ url_for('stok.index', page=page_num, per_page=per_page, q=q) }}">{{ page_num }}</a>
+                            </li>
+                            {% else %}
+                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                            {% endif %}
+                        {% endfor %}
+                        <li class="page-item {{ 'disabled' if not pagination.has_next else '' }}">
+                            <a class="page-link" href="{{ url_for('stok.index', page=pagination.next_num, per_page=per_page, q=q) }}">&raquo;</a>
+                        </li>
+                    </ul>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-head">
+                <div>
+                    <div class="panel-title">Yeni Stok Karti</div>
+                </div>
+            </div>
+            <div class="panel-body">
+                <form method="POST" action="{{ url_for('stok.yeni_kart') }}" class="form-grid">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div>
+                        <label>Parca Kodu</label>
+                        <input type="text" name="parca_kodu" placeholder="ORN-001" required>
+                    </div>
+                    <div>
+                        <label>Parca Adi</label>
+                        <input type="text" name="parca_adi" placeholder="Yag Filtresi" required>
+                    </div>
+                    <div>
+                        <label>Varsayilan Tedarikci</label>
+                        <select name="varsayilan_tedarikci_id">
+                            <option value="">Secilmedi</option>
+                            {% for firma in tedarikciler %}
+                            <option value="{{ firma.id }}">{{ kisa_firma(firma.firma_adi) }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="helper">Ilk stok miktari yerine karti olusturup detay ekranindan giris hareketi acin. Boylece hareket gecmisi korunur.</div>
+                    <button type="submit" class="btn btn-primary">Stok Karti Olustur</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

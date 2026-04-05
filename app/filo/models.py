@@ -123,16 +123,19 @@ class StokHareket(BaseModel):
     __tablename__ = 'stok_hareket'
     
     stok_karti_id = db.Column(db.Integer, db.ForeignKey('stok_karti.id'), nullable=False)
-    firma_id = db.Column(db.Integer, db.ForeignKey('firma.id'), nullable=True) 
+    firma_id = db.Column(db.Integer, db.ForeignKey('firma.id'), nullable=True)
+    bakim_kaydi_id = db.Column(db.Integer, db.ForeignKey('bakim_kaydi.id'), nullable=True)
     tarih = db.Column(db.Date, nullable=False, default=date.today)
-    adet = db.Column(db.Integer, nullable=False) 
+    adet = db.Column(db.Integer, nullable=False)
     birim_fiyat = db.Column(db.Numeric(15, 2), nullable=False, default=0.0)
+    kdv_orani = db.Column(db.Integer, nullable=True, default=None)
     hareket_tipi = db.Column(db.String(20), nullable=False, default='giris')
     fatura_no = db.Column(db.String(50), nullable=True)
     aciklama = db.Column(db.String(250), nullable=True)
 
     stok_karti = db.relationship('StokKarti', back_populates='hareketler')
     firma = db.relationship('Firma', back_populates='stok_hareketleri')
+    bakim_kaydi = db.relationship('BakimKaydi', foreign_keys=[bakim_kaydi_id])
     
     def __repr__(self): 
         return f'<StokHareket {self.adet}>'

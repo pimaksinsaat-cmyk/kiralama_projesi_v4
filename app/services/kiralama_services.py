@@ -262,7 +262,8 @@ class KiralamaKalemiService(BaseService):
                 tarih=kalem.kiralama_bitis or date.today(),
                 guzergah=donus_guzergah,
                 tutar=KiralamaService._get_donus_nakliye_satis(kalem),
-                kdv_orani=kalem.kiralama.kdv_orani or 20,
+                kdv_orani=kalem.nakliye_satis_kdv if kalem.nakliye_satis_kdv is not None else (kalem.kiralama.kdv_orani if kalem.kiralama.kdv_orani is not None else 20),
+                tevkifat_orani=kalem.nakliye_satis_tevkifat_oran or None,
                 aciklama=f"Dönüş: {form_no} #{kalem.id}",
                 nakliye_tipi='oz_mal',
                 arac_id=kalem.nakliye_araci_id,
@@ -433,7 +434,7 @@ class KiralamaService(BaseService):
 
     @staticmethod
     def _hesapla_bekleyen_kalem_tutari(kalem, referans_tarih=None):
-        """Kalem için bugüne kadar tahakkuk eden müşteri alacağını hesaplar."""
+        """Kalem için bugüne kadar tahakkuk eden kira alacağını hesaplar (nakliye ayrı kaydedilir)."""
         bas = to_date(kalem.kiralama_baslangici)
         bit = to_date(kalem.kiralama_bitis)
         if not (bas and bit):
@@ -451,12 +452,11 @@ class KiralamaService(BaseService):
 
         gun = KiralamaService._hesapla_gun_sayisi(bas, ust_sinir)
         kira_tahakkuk = to_decimal(kalem.kiralama_brm_fiyat) * Decimal(gun)
-        nakliye_tahakkuk = to_decimal(kalem.nakliye_satis_fiyat) if bas <= referans_tarih else Decimal('0.00')
-        return kira_tahakkuk + nakliye_tahakkuk
+        return kira_tahakkuk
 
     @staticmethod
     def _hesapla_sozlesme_kalem_tutari(kalem):
-        """Kalem için toplam sozlesme tutarini hesaplar (tum sure)."""
+        """Kalem için toplam sozlesme kira tutarini hesaplar (nakliye ayrı kaydedilir)."""
         bas = to_date(kalem.kiralama_baslangici)
         bit = to_date(kalem.kiralama_bitis)
         if not (bas and bit) or bit < bas:
@@ -464,8 +464,7 @@ class KiralamaService(BaseService):
 
         gun = KiralamaService._hesapla_gun_sayisi(bas, bit)
         kira_toplam = to_decimal(kalem.kiralama_brm_fiyat) * Decimal(gun)
-        nakliye_toplam = to_decimal(kalem.nakliye_satis_fiyat)
-        return kira_toplam + nakliye_toplam
+        return kira_toplam
 
     @staticmethod
     def _hesapla_gun_sayisi(bas, bit):
@@ -556,16 +555,26 @@ class KiralamaService(BaseService):
                 db.session.refresh(cari_kayit)
                 print(f"[DEBUG] DB'ye yazılan HizmetKaydi (guncelle_cari_toplam): id={cari_kayit.id}, kdv_orani={cari_kayit.kdv_orani}")
             else:
+                kdv_orani = getattr(kiralama, 'kdv_orani', None)
+                if kdv_orani is None:
+                    kdv_orani = 0
                 cari_kayit.firma_id = kiralama.firma_musteri_id
                 cari_kayit.fatura_no = kiralama.kiralama_form_no
                 cari_kayit.ozel_id = kiralama.id
                 cari_kayit.tarih = date.today()
                 cari_kayit.tutar = toplam_gelir
+                cari_kayit.kdv_orani = kdv_orani
                 cari_kayit.aciklama = f"Kiralama Bekleyen Bakiye - {kiralama.kiralama_form_no}"
 
             db.session.add(cari_kayit)
         elif cari_kayit:
             db.session.delete(cari_kayit)
+
+        # Kiralamaya bağlı nakliye HizmetKaydi'lerini ayrı olarak senkronize et
+        from app.services.nakliye_services import CariServis as NakliyeCariServis
+        db.session.flush()
+        for nakliye in kiralama.nakliyeler:
+            NakliyeCariServis.musteri_nakliye_senkronize_et(nakliye)
 
         if auto_commit:
             try:
@@ -861,7 +870,8 @@ class KiralamaService(BaseService):
             tarih=bas_tarihi,
             guzergah=guzergah_gidis,
             tutar=KiralamaService._get_gidis_nakliye_satis(kalem),
-            kdv_orani=kiralama.kdv_orani or 20,
+            kdv_orani=kalem.nakliye_satis_kdv if kalem.nakliye_satis_kdv is not None else (kiralama.kdv_orani if kiralama.kdv_orani is not None else 20),
+            tevkifat_orani=kalem.nakliye_satis_tevkifat_oran or None,
             aciklama=f"Gidiş: {kiralama.kiralama_form_no}"
         )
 

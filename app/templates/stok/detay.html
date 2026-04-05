@@ -1,0 +1,246 @@
+{% extends "base.html" %}
+
+{% block title %}Stok Detay{% endblock %}
+
+{% block content %}
+{% macro money(value) -%}
+{{ '{:,.2f}'.format(value or 0).replace(',', '_').replace('.', ',').replace('_', '.') }} TL
+{%- endmacro %}
+{% macro kisa_firma(ad) -%}
+{{ (ad or '').split()[:4] | join(' ') }}
+{%- endmacro %}
+<style>
+    .stock-detail-shell { max-width: 1480px; margin: 0 auto; }
+    .stock-header { display: flex; justify-content: space-between; align-items: start; gap: 1rem; background: linear-gradient(135deg, #f8fbff 0%, #ffffff 55%, #fff8ef 100%); border: 1px solid #dbe7f3; border-radius: 18px; padding: 1.4rem; box-shadow: 0 14px 36px rgba(15, 23, 42, 0.06); }
+    .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 1rem; margin-top: 1rem; }
+    .summary-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; padding: 1rem 1.1rem; }
+    .summary-card .label { font-size: 0.78rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em; }
+    .summary-card .value { margin-top: 0.3rem; font-size: 1.35rem; font-weight: 800; color: #0f172a; }
+    .detail-layout { display: grid; grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr); gap: 1rem; align-items: start; margin-top: 1rem; }
+    .panel { background: #fff; border: 1px solid #e5e7eb; border-radius: 18px; box-shadow: 0 12px 30px rgba(15, 23, 42, 0.05); overflow: hidden; }
+    .panel-head { padding: 1rem 1.2rem; border-bottom: 1px solid #eef2f7; }
+    .panel-title { font-size: 1rem; font-weight: 800; color: #0f172a; }
+    .panel-body { padding: 1rem 1.2rem 1.2rem; }
+    .form-grid { display: grid; gap: 0.9rem; }
+    .form-grid label { display: block; margin-bottom: 0.3rem; font-size: 0.82rem; font-weight: 700; color: #334155; }
+    .form-grid input, .form-grid select, .form-grid textarea { width: 100%; border: 1px solid #dbe4f0; border-radius: 12px; padding: 0.75rem 0.85rem; }
+    .form-grid textarea { min-height: 92px; resize: vertical; }
+    .movement-table { margin: 0; }
+    .movement-table thead th { white-space: nowrap; background: #f8fafc; }
+    .movement-pill { display: inline-flex; align-items: center; border-radius: 999px; padding: 0.26rem 0.7rem; font-size: 0.78rem; font-weight: 700; }
+    .movement-pill.giris { background: #dcfce7; color: #166534; }
+    .movement-pill.cikis { background: #fee2e2; color: #991b1b; }
+    .money-value { font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .helper { color: #64748b; font-size: 0.8rem; }
+    .field-helper { margin-top: 0.25rem; color: #64748b; font-size: 0.78rem; }
+    .action-cell { white-space: nowrap; }
+    @media (max-width: 1100px) {
+        .detail-layout { grid-template-columns: 1fr; }
+    }
+</style>
+
+<div class="stock-detail-shell">
+    <div class="stock-header">
+        <div>
+            <a href="{{ url_for('stok.index') }}" class="btn btn-outline-secondary btn-sm mb-3">Stok Listesi</a>
+            <h2 class="mb-1 fw-bold"><i class="fas fa-box-open me-2 text-primary"></i>{{ kart.parca_adi }}</h2>
+            <div class="text-muted">Kod: <strong>{{ kart.parca_kodu }}</strong>{% if kart.varsayilan_tedarikci %} | Varsayilan tedarikci: {{ kisa_firma(kart.varsayilan_tedarikci.firma_adi) }}{% endif %}</div>
+
+            <div class="summary-grid">
+                <div class="summary-card">
+                    <div class="label">Mevcut Stok</div>
+                    <div class="value">{{ kart.mevcut_stok or 0 }}</div>
+                </div>
+                <div class="summary-card">
+                    <div class="label">Son Birim Fiyat</div>
+                    <div class="value money-value" style="font-size:1.1rem;">{{ money(kart.son_birim_fiyat) }}</div>
+                </div>
+                <div class="summary-card">
+                    <div class="label">Stok Degeri</div>
+                    <div class="value money-value" style="font-size:1.1rem;">{{ money(kart.stok_degeri) }}</div>
+                </div>
+                <div class="summary-card">
+                    <div class="label">Toplam Giris / Cikis</div>
+                    <div class="value" style="font-size:1.1rem;">{{ toplam_giris }} / {{ toplam_cikis }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="detail-layout">
+        <div class="panel">
+            <div class="panel-head">
+                <div class="panel-title">Kart Bilgileri</div>
+            </div>
+            <div class="panel-body">
+                <form method="POST" action="{{ url_for('stok.guncelle', kart_id=kart.id) }}" class="form-grid">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div>
+                        <label>Parca Kodu</label>
+                        <input type="text" name="parca_kodu" value="{{ kart.parca_kodu }}" required>
+                    </div>
+                    <div>
+                        <label>Parca Adi</label>
+                        <input type="text" name="parca_adi" value="{{ kart.parca_adi }}" required>
+                    </div>
+                    <div>
+                        <label>Varsayilan Tedarikci</label>
+                        <select name="varsayilan_tedarikci_id">
+                            <option value="">Secilmedi</option>
+                            {% for firma in tedarikciler %}
+                            <option value="{{ firma.id }}" {{ 'selected' if kart.varsayilan_tedarikci_id == firma.id else '' }}>{{ kisa_firma(firma.firma_adi) }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="helper">Kart arsivleme sadece stok sifira indiginde index ekranindan yapilir.</div>
+                    <button type="submit" class="btn btn-primary">Kart Bilgilerini Guncelle</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-head">
+                <div class="panel-title">Yeni Stok Hareketi</div>
+            </div>
+            <div class="panel-body">
+                <form method="POST" action="{{ url_for('stok.hareket_ekle', kart_id=kart.id) }}" class="form-grid mb-4">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label>Hareket Tipi</label>
+                            <select name="hareket_tipi">
+                                <option value="giris">Giris</option>
+                                <option value="cikis">Cikis</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label>Tarih</label>
+                            <input type="date" name="tarih" value="{{ bugun }}">
+                        </div>
+                        <div class="col-md-4">
+                            <label>Adet</label>
+                            <input type="number" name="adet" min="1" step="1" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label>Birim Fiyat</label>
+                            <input type="text" name="birim_fiyat" placeholder="Giris icin zorunlu, cikis icin opsiyonel">
+                        </div>
+                        <div class="col-md-3">
+                            <label>KDV (%)</label>
+                            <input type="number" name="kdv_orani" min="0" max="100" step="1" value="20" data-kdv-input required>
+                            <div class="field-helper" data-kdv-helper>Giris hareketinde zorunlu.</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label>Firma</label>
+                            <select name="firma_id">
+                                <option value="">Secilmedi</option>
+                                {% for firma in tedarikciler %}
+                                <option value="{{ firma.id }}" {{ 'selected' if kart.varsayilan_tedarikci_id == firma.id else '' }}>{{ kisa_firma(firma.firma_adi) }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label>Fatura No</label>
+                            <input type="text" name="fatura_no">
+                        </div>
+                        <div class="col-md-6">
+                            <label>Aciklama</label>
+                            <input type="text" name="aciklama" placeholder="Istege bagli not">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Hareket Ekle</button>
+                </form>
+
+                <div class="table-responsive">
+                    <table class="table movement-table align-middle">
+                        <thead>
+                            <tr>
+                                <th>Tarih</th>
+                                <th>Tip</th>
+                                <th>Adet</th>
+                                <th>Birim Fiyat</th>
+                                <th>KDV</th>
+                                <th>Toplam</th>
+                                <th>Firma / Ekipman</th>
+                                <th>Fatura</th>
+                                <th>Aciklama</th>
+                                <th>Islem</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for hareket in hareketler %}
+                            <tr>
+                                <td>{{ hareket.tarih.strftime('%d.%m.%Y') if hareket.tarih else '-' }}</td>
+                                <td><span class="movement-pill {{ hareket.hareket_tipi }}">{{ 'Giris' if hareket.hareket_tipi == 'giris' else 'Cikis' }}</span></td>
+                                <td>{{ hareket.adet }}</td>
+                                <td class="money-value">{{ money(hareket.birim_fiyat) }}</td>
+                                <td>{% if hareket.kdv_orani is not none %}%{{ hareket.kdv_orani }}{% else %}-{% endif %}</td>
+                                <td class="money-value fw-semibold">{{ money((hareket.adet or 0) * (hareket.birim_fiyat or 0)) }}</td>
+                                <td>
+    {% if hareket.hareket_tipi == 'cikis' and hareket.bakim_kaydi and hareket.bakim_kaydi.ekipman %}
+        {% set ekipman = hareket.bakim_kaydi.ekipman %}
+        <span class="badge bg-info-subtle text-dark" title="Servis kaydi #{{ hareket.bakim_kaydi.id }}">
+            <i class="fas fa-gears me-1"></i>{{ ekipman.kod }}{% if ekipman.marka %} - {{ ekipman.marka }}{% endif %}
+        </span>
+    {% elif hareket.firma %}
+        {{ kisa_firma(hareket.firma.firma_adi) }}
+    {% else %}
+        -
+    {% endif %}
+</td>
+                                <td>{{ hareket.fatura_no or '-' }}</td>
+                                <td>{{ hareket.aciklama or '-' }}</td>
+                                <td class="action-cell">
+                                    <form method="POST" action="{{ url_for('stok.hareket_sil', kart_id=kart.id, hareket_id=hareket.id) }}" onsubmit="return confirm('Bu stok hareketi kalici olarak silinsin mi? Islem geri alinmaz.');">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">Sil</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="10" class="text-center py-4 text-muted">Bu karta ait stok hareketi henuz yok.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const hareketTipiSelect = document.querySelector('select[name="hareket_tipi"]');
+    const kdvInput = document.querySelector('[data-kdv-input]');
+    const kdvHelper = document.querySelector('[data-kdv-helper]');
+
+    if (!hareketTipiSelect || !kdvInput) {
+        return;
+    }
+
+    function syncKdvField() {
+        const isGiris = hareketTipiSelect.value === 'giris';
+        kdvInput.required = isGiris;
+        kdvInput.disabled = false;
+
+        if (isGiris) {
+            if (!kdvInput.value) {
+                kdvInput.value = '20';
+            }
+            if (kdvHelper) {
+                kdvHelper.textContent = 'Giris hareketinde zorunlu.';
+            }
+            return;
+        }
+
+        if (kdvHelper) {
+            kdvHelper.textContent = 'Cikis hareketinde bos birakabilirsiniz.';
+        }
+    }
+
+    hareketTipiSelect.addEventListener('change', syncKdvField);
+    syncKdvField();
+});
+</script>
+{% endblock %}

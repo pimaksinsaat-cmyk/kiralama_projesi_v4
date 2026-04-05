@@ -12,6 +12,50 @@ from app.services.sube_gider_services import SubeGiderService
 from app.utils import normalize_turkish_upper
 from decimal import Decimal
 
+AY_ADLARI = [
+    'Ocak', 'Subat', 'Mart', 'Nisan', 'Mayis', 'Haziran',
+    'Temmuz', 'Agustos', 'Eylul', 'Ekim', 'Kasim', 'Aralik'
+]
+
+
+def _resolve_selected_period():
+    today = date.today()
+    raw_period = request.args.get('period') or request.form.get('period')
+    raw_year = request.args.get('year') or request.form.get('year')
+    raw_month = request.args.get('month') or request.form.get('month')
+
+    if raw_period and '-' in raw_period:
+        raw_year, raw_month = raw_period.split('-', 1)
+
+    try:
+        selected_year = int(raw_year) if raw_year else today.year
+        selected_month = int(raw_month) if raw_month else today.month
+        if selected_month < 1 or selected_month > 12:
+            raise ValueError()
+    except (TypeError, ValueError):
+        selected_year = today.year
+        selected_month = today.month
+
+    return selected_year, selected_month
+
+
+def _build_period_context(selected_year, selected_month):
+    previous_year = selected_year if selected_month > 1 else selected_year - 1
+    previous_month = selected_month - 1 if selected_month > 1 else 12
+    next_year = selected_year if selected_month < 12 else selected_year + 1
+    next_month = selected_month + 1 if selected_month < 12 else 1
+
+    return {
+        'selected_year': selected_year,
+        'selected_month': selected_month,
+        'selected_period_key': f'{selected_year:04d}-{selected_month:02d}',
+        'selected_period_label': f'{AY_ADLARI[selected_month - 1]} {selected_year}',
+        'previous_year': previous_year,
+        'previous_month': previous_month,
+        'next_year': next_year,
+        'next_month': next_month,
+    }
+
 @araclar_bp.route('/')
 def index():
     page = request.args.get('page', 1, type=int)
@@ -268,12 +312,28 @@ def yakit_giderleri(arac_id):
         flash('Araç bulunamadı.', 'danger')
         return redirect(url_for('araclar.index'))
 
+    selected_year, selected_month = _resolve_selected_period()
+    period_context = _build_period_context(selected_year, selected_month)
+
     form = AracYakitGiderForm()
     if request.method == 'GET' and not form.tarih.data:
-        form.tarih.data = date.today()
+        today = date.today()
+        form.tarih.data = today if (today.year == selected_year and today.month == selected_month) else date(selected_year, selected_month, 1)
+
+    period_start = date(selected_year, selected_month, 1)
+    if selected_month == 12:
+        period_end = date(selected_year + 1, 1, 1)
+    else:
+        period_end = date(selected_year, selected_month + 1, 1)
 
     giderler = (
-        SubeGideri.query.filter_by(arac_id=arac_id, kategori='mazot')
+        SubeGideri.query
+        .filter(
+            SubeGideri.arac_id == arac_id,
+            SubeGideri.kategori == 'mazot',
+            SubeGideri.tarih >= period_start,
+            SubeGideri.tarih < period_end,
+        )
         .order_by(SubeGideri.tarih.desc(), SubeGideri.id.desc())
         .all()
     )
@@ -288,6 +348,7 @@ def yakit_giderleri(arac_id):
         giderler=giderler,
         toplam_tutar=toplam_tutar,
         toplam_litre=toplam_litre,
+        **period_context,
     )
 
 
@@ -297,6 +358,12 @@ def yakit_gideri_ekle(arac_id):
     if not arac:
         flash('Araç bulunamadı.', 'danger')
         return redirect(url_for('araclar.index'))
+
+    redirect_params = {
+        'arac_id': arac.id,
+        'year': request.form.get('year'),
+        'month': request.form.get('month'),
+    }
 
     if not arac.sube_id:
         flash('Mazot gideri eklemek için aracın bağlı olduğu bir şube tanımlı olmalı.', 'warning')
@@ -338,7 +405,7 @@ def yakit_gideri_ekle(arac_id):
             for error in errors:
                 flash(f'{field_name}: {error}', 'warning')
 
-    return redirect(url_for('araclar.yakit_giderleri', arac_id=arac.id))
+    return redirect(url_for('araclar.yakit_giderleri', **redirect_params))
 
 
 @araclar_bp.route('/yakit_gideri/<int:gider_id>/sil', methods=['POST'])
@@ -355,4 +422,11 @@ def yakit_gideri_sil(gider_id):
     except Exception as exc:
         flash(f'Silme sırasında hata oluştu: {str(exc)}', 'danger')
 
-    return redirect(url_for('araclar.yakit_giderleri', arac_id=arac_id))
+    return redirect(
+        url_for(
+            'araclar.yakit_giderleri',
+            arac_id=arac_id,
+            year=request.form.get('year'),
+            month=request.form.get('month'),
+        )
+    )

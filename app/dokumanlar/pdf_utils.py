@@ -1,6 +1,7 @@
 import os
 import platform
 import subprocess
+import time
 
 def convert_docx_to_pdf(docx_path, output_dir, logger=None, timeout_seconds=30):
     current_os = platform.system()
@@ -16,8 +17,38 @@ def convert_docx_to_pdf(docx_path, output_dir, logger=None, timeout_seconds=30):
     abs_pdf = os.path.join(os.path.abspath(output_dir), filename)
 
     if current_os == "Windows":
-        # Burası senin mevcut Windows mantığınla devam eder...
-        pass
+        try:
+            from docx2pdf import convert
+            import pythoncom
+
+            pythoncom.CoInitialize()
+
+            if os.path.exists(abs_pdf):
+                try:
+                    os.remove(abs_pdf)
+                except Exception:
+                    pass
+
+            convert(abs_docx, abs_pdf)
+            time.sleep(1)
+
+            if os.path.exists(abs_pdf):
+                return abs_pdf
+            else:
+                if logger:
+                    logger.error("PDF oluşmadı (Windows docx2pdf).")
+                return None
+
+        except Exception as e:
+            if logger:
+                logger.error(f"Windows PDF dönüşüm hatası: {e}")
+            return None
+        finally:
+            try:
+                import pythoncom as _pc
+                _pc.CoUninitialize()
+            except Exception:
+                pass
 
     # --- Helsinki / Linux Operasyonu ---
     try:

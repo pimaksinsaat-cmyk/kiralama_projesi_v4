@@ -357,7 +357,7 @@
             <input type="hidden" name="kalemler-{{ loop.index0 }}-nakliye_alis_tevkifat_oran" value="{{ k_form.form.nakliye_alis_tevkifat_oran.data or '' }}">
             <input type="hidden" name="kalemler-{{ loop.index0 }}-nakliye_satis_tevkifat_oran" value="{{ k_form.form.nakliye_satis_tevkifat_oran.data or '' }}">
             <input type="hidden" name="kalemler-{{ loop.index0 }}-nakliye_alis_kdv" value="{{ k_form.form.nakliye_alis_kdv.data or '' }}">
-            <input type="hidden" name="kalemler-{{ loop.index0 }}-nakliye_satis_kdv" value="{{ k_form.form.nakliye_satis_kdv.data or '' }}">
+            <input type="hidden" name="kalemler-{{ loop.index0 }}-nakliye_satis_kdv" value="{{ k_form.form.nakliye_satis_kdv.data if k_form.form.nakliye_satis_kdv.data is not none else '' }}">
             <input type="hidden" name="kalemler-{{ loop.index0 }}-kiralama_alis_kdv" value="{{ k_form.form.kiralama_alis_kdv.data or '' }}">
             <input type="hidden" name="kalemler-{{ loop.index0 }}-sonlandirildi" value="{{ 1 if k_form.form.sonlandirildi.data else 0 }}">
             <input type="hidden" name="kalemler-{{ loop.index0 }}-is_active" value="{{ k_form.form.is_active.data or 1 }}">
@@ -692,7 +692,7 @@ function renderTable() {
             ? `<button type="button" class="btn btn-sm btn-outline-secondary" disabled title="Tamamlanmış kalemler silinemez"><i class="fas fa-trash opacity-50"></i></button>`
             : `<button type="button" class="btn btn-sm btn-outline-danger sil-btn" data-idx="${idx}"><i class="fas fa-trash"></i></button>`;
 
-        tr.innerHTML = `<td></td><td>${makine}</td><td>${turDetay}</td><td>${bas} / ${bit} (${gun}g)</td><td>${gun}x${brFiyat} + ${nkAdet}x${nkBirim.toFixed(2)} TL${donusFatura ? ' (Dönüş dahil)' : ' (Tek Yön)'}</td><td><b>${satirToplam.toFixed(2)} TL</b></td><td class="text-center">${duzenleBtn} ${silBtn}</td>`;
+        tr.innerHTML = `<td></td><td>${makine}</td><td>${turDetay}</td><td>${bas} / ${bit} (${gun}g)</td><td>${gun}x${formatTRCurrency(brFiyat)} + ${nkAdet}x${formatTRCurrency(nkBirim)} TL${donusFatura ? ' (Dönüş dahil)' : ' (Tek Yön)'}</td><td><b>${formatTRCurrency(satirToplam)} TL</b></td><td class="text-center">${duzenleBtn} ${silBtn}</td>`;
         tbody.appendChild(tr);
     });
     genelToplamEl.innerText = grandTotal.toLocaleString('tr-TR', { minimumFractionDigits: 2 }) + " TL";
@@ -888,7 +888,8 @@ tbody.onclick = function(e) {
         const donusFaturaVal = group.querySelector('[name$="-donus_nakliye_fatura_et"]').value === '1';
         const nakSatisToplam = parseFloat(group.querySelector('[name$="-nakliye_satis_fiyat"]').value) || 0;
         setVal('g-nakliye', donusFaturaVal ? (nakSatisToplam / 2).toFixed(2) : nakSatisToplam.toFixed(2));
-        setVal('g-nakliye-kdv', group.querySelector('[name$="-nakliye_satis_kdv"]')?.value || '20');
+        const nakSatisKdvRaw = group.querySelector('[name$="-nakliye_satis_kdv"]')?.value;
+        setVal('g-nakliye-kdv', (nakSatisKdvRaw !== undefined && nakSatisKdvRaw !== '') ? nakSatisKdvRaw : '20');
         const donusEl = document.getElementById('g-donus-fatura-et');
         donusEl.checked = donusFaturaVal;
         donusEl.dispatchEvent(new Event('change'));

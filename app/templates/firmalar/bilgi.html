@@ -158,10 +158,12 @@
                             {% for islem in hareketler %}
                             {% set is_kiralama = (islem.tur == 'Kiralama' and islem.ozel_id) %}
                             {% set is_nakliye = (islem.tur == 'Nakliye' and islem.ozel_id) %}
+                            {% set nakliye_kiralama_id = islem.nakliye_kiralama_id if (is_nakliye and islem.nakliye_kiralama_id) else '' %}
                             <tr class="context-row"
                                 data-id="{{ islem.id }}" 
                                 data-type="{% if is_kiralama %}kiralama{% elif is_nakliye %}nakliye{% else %}{{ islem.tur_tipi.lower() }}{% endif %}"
                                 data-ozel-id="{{ islem.ozel_id or '' }}" 
+                                data-nakliye-kiralama-id="{{ nakliye_kiralama_id }}"
                                 data-desc="{{ islem.aciklama }}" 
                                 style="cursor: context-menu;">
                                 <td>{{ start + loop.index }}</td>
@@ -183,6 +185,11 @@
                                 </td>
                                 <td>
                                     {{ islem.aciklama }}
+                                    {% if is_nakliye and islem.nakliye_kiralama_form_no %}
+                                        <br><small class="text-primary">
+                                            <i class="fa fa-link me-1"></i>{{ islem.nakliye_kiralama_form_no }}
+                                        </small>
+                                    {% endif %}
                                     {% if islem.belge_no %}
                                         <br><small class="text-muted">
                                             {% if islem.tur_tipi == 'odeme' %}
@@ -211,6 +218,11 @@
                                 <td class="text-end">
                                     {% if islem.kdv_tutari is defined and islem.kdv_tutari is not none %}
                                         {{ "{:,.2f}".format(islem.kdv_tutari).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+                                        {% if islem.tevkifat_str is defined and islem.tevkifat_str %}
+                                            <div class="text-muted fst-italic" style="font-size:0.7em; line-height:1.3; white-space:nowrap;">
+                                                {{ "{:,.2f}".format(islem.kdv_tutari).replace(',', 'X').replace('.', ',').replace('X', '.') }} − {{ "{:,.2f}".format(islem.kdv_tutari).replace(',', 'X').replace('.', ',').replace('X', '.') }}×{{ islem.tevkifat_str }}
+                                            </div>
+                                        {% endif %}
                                     {% else %}-{% endif %}
                                 </td>
                                 <td class="text-end text-danger fw-bold">
@@ -502,7 +514,12 @@
                 alert("Hata: Kiralama ID bulunamadı!");
             }
         } else if (selectedType === 'nakliye') {
-            window.location.href = "/nakliyeler/duzenle/" + cleanOzelId;
+            const kiralamaId = document.querySelector(`.context-row[data-id="${selectedId}"]`)?.getAttribute('data-nakliye-kiralama-id');
+            if (kiralamaId && kiralamaId !== '') {
+                window.location.href = "/kiralama/duzenle/" + kiralamaId;
+            } else {
+                window.location.href = "/nakliyeler/duzenle/" + cleanOzelId;
+            }
         } else if (selectedType === 'odeme') {
             window.location.href = "/cari/odeme/duzelt/" + selectedId;
         } else {

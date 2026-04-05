@@ -94,6 +94,98 @@
         color: #64748b;
     }
 
+    .period-toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+        padding: 1rem 1.25rem;
+        border-bottom: 1px solid #eef2f7;
+        background: linear-gradient(135deg, #f8fafc 0%, #eef4ff 100%);
+        flex-wrap: wrap;
+    }
+
+    .period-toolbar-title {
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+    }
+
+    .period-toolbar-title strong {
+        font-size: 0.95rem;
+        color: var(--text-dark);
+    }
+
+    .period-toolbar-title span {
+        font-size: 0.82rem;
+        color: #64748b;
+    }
+
+    .period-controls {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        flex-wrap: wrap;
+    }
+
+    .period-nav-btn {
+        width: 34px;
+        height: 34px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        border: 1px solid #dbe4f0;
+        background: white;
+        color: #475569;
+        text-decoration: none;
+        font-weight: 700;
+    }
+
+    .period-nav-btn:hover {
+        background: #e2e8f0;
+    }
+
+    .period-badge {
+        display: inline-flex;
+        align-items: center;
+        height: 34px;
+        padding: 0 0.9rem;
+        border-radius: 999px;
+        background: #dbeafe;
+        color: #1d4ed8;
+        font-weight: 700;
+        font-size: 0.82rem;
+    }
+
+    .period-picker-form {
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+        flex-wrap: wrap;
+    }
+
+    .period-picker-form input,
+    .period-picker-form button {
+        height: 34px;
+        border-radius: 8px;
+        border: 1px solid #dbe4f0;
+    }
+
+    .period-picker-form input {
+        padding: 0 0.7rem;
+        font-size: 0.85rem;
+        background: white;
+    }
+
+    .period-picker-form button {
+        padding: 0 0.85rem;
+        background: white;
+        color: #334155;
+        font-weight: 600;
+        cursor: pointer;
+    }
+
     .table-responsive {
         overflow-x: auto;
     }
@@ -121,6 +213,14 @@
 
     .gider-table tbody tr:hover {
         background: #f8fafc;
+    }
+
+    .gider-table tfoot td {
+        padding: 0.95rem 1rem;
+        border-top: 2px solid #dbe4f0;
+        background: #f8fafc;
+        font-weight: 700;
+        color: var(--text-dark);
     }
 
     .gider-table td {
@@ -240,8 +340,23 @@
     <div class="content-wrapper">
         <div>
             <div class="gider-table-wrapper">
+                <div class="period-toolbar">
+                    <div class="period-toolbar-title">
+                        <strong>Yakıt Gorunumu</strong>
+                        <span>Kayitlar secili aya gore filtrelenir. Su an: {{ selected_period_label }}</span>
+                    </div>
+                    <div class="period-controls">
+                        <a class="period-nav-btn" href="{{ url_for('araclar.yakit_giderleri', arac_id=arac.id, year=previous_year, month=previous_month) }}" title="Onceki ay">&lsaquo;</a>
+                        <span class="period-badge">{{ selected_period_label }}</span>
+                        <a class="period-nav-btn" href="{{ url_for('araclar.yakit_giderleri', arac_id=arac.id, year=next_year, month=next_month) }}" title="Sonraki ay">&rsaquo;</a>
+                        <form method="GET" action="{{ url_for('araclar.yakit_giderleri', arac_id=arac.id) }}" class="period-picker-form">
+                            <input type="month" name="period" value="{{ selected_period_key }}">
+                            <button type="submit">Goster</button>
+                        </form>
+                    </div>
+                </div>
                 <div class="gider-table-header">
-                    <div class="gider-table-title">Yakıt Kayıtları</div>
+                    <div class="gider-table-title">{{ selected_period_label }} Yakıt Kayıtları</div>
                     <div class="gider-table-meta">Toplam {{ giderler|length }} kayıt</div>
                 </div>
                 <div class="table-responsive">
@@ -268,6 +383,8 @@
                                     <td class="numeric">
                                         <form method="POST" action="{{ url_for('araclar.yakit_gideri_sil', gider_id=gider.id) }}" onsubmit="return confirm('Bu mazot giderini silmek istediğinize emin misiniz?');">
                                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <input type="hidden" name="year" value="{{ selected_year }}">
+                                            <input type="hidden" name="month" value="{{ selected_month }}">
                                             <button type="submit" class="btn-sm btn-delete"><i class="fas fa-trash"></i></button>
                                         </form>
                                     </td>
@@ -281,6 +398,15 @@
                                 </tr>
                             {% endif %}
                         </tbody>
+                        <tfoot>
+                            <tr>
+                                <td colspan="2">Toplam</td>
+                                <td class="numeric">{{ '{:,.2f}'.format(toplam_litre or 0).replace(',', 'X').replace('.', ',').replace('X', '.') }}</td>
+                                <td class="numeric">-</td>
+                                <td class="numeric">{{ '{:,.2f}'.format(toplam_tutar or 0).replace(',', 'X').replace('.', ',').replace('X', '.') }}</td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
                     </table>
                 </div>
             </div>
@@ -295,6 +421,8 @@
             {% endif %}
             <form method="POST" action="{{ url_for('araclar.yakit_gideri_ekle', arac_id=arac.id) }}">
                 {{ form.csrf_token() }}
+                <input type="hidden" name="year" value="{{ selected_year }}">
+                <input type="hidden" name="month" value="{{ selected_month }}">
                 <div class="form-group">
                     {{ form.tarih.label }}
                     {{ form.tarih(class='form-control', type='date') }}

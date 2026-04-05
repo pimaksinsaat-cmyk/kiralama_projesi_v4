@@ -1,13 +1,19 @@
-from flask import render_template, request, redirect, url_for, flash
+from io import BytesIO
+
+from flask import render_template, request, redirect, url_for, flash, send_file
 from flask_login import login_required, current_user
 from sqlalchemy import or_
 from sqlalchemy.orm import joinedload, subqueryload
 from decimal import Decimal
 from datetime import date
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
+from app.extensions import db
 from app.servis import servis_bp
 from app.filo.models import BakimKaydi, KullanilanParca, Ekipman, StokKarti, StokHareket
 from app.firmalar.models import Firma
+from app.personel.models import Personel
 from app.services.base import ValidationError
 from app.services.filo_services import BakimService, EkipmanService
 from app.services.operation_log_service import OperationLogService
@@ -75,6 +81,10 @@ def _common_form_context():
         'durum_labels': DURUM_LABELS,
         'stok_kartlari': StokKarti.query.filter_by(is_deleted=False).order_by(StokKarti.parca_adi).all(),
         'servis_firmalari': Firma.query.filter_by(is_tedarikci=True).order_by(Firma.firma_adi).all(),
+        'personel_listesi': Personel.query.filter(
+            Personel.is_deleted == False,
+            Personel.isten_cikis_tarihi == None
+        ).order_by(Personel.ad, Personel.soyad).all(),
     }
 
 
@@ -166,6 +176,223 @@ def index():
     )
 
 
+def _servis_filtered_query(q, durum, eager=True):
+    opts = []
+    if eager:
+        opts = [
+            joinedload(BakimKaydi.ekipman).joinedload(Ekipman.sube),
+            joinedload(BakimKaydi.servis_veren_firma),
+            joinedload(BakimKaydi.kullanilan_parcalar).joinedload(KullanilanParca.stok_karti),
+        ]
+    query = BakimKaydi.query.filter(BakimKaydi.is_deleted == False)
+    if opts:
+        query = query.options(*opts)
+    if q:
+        term = f'%{q}%'
+        query = query.join(BakimKaydi.ekipman).outerjoin(BakimKaydi.servis_veren_firma).filter(
+            or_(
+                Ekipman.kod.ilike(term),
+                Ekipman.marka.ilike(term),
+                Ekipman.model.ilike(term),
+                BakimKaydi.aciklama.ilike(term),
+                BakimKaydi.servis_veren_kisi.ilike(term),
+                Firma.firma_adi.ilike(term),
+            )
+        ).distinct()
+    if durum:
+        query = query.filter(BakimKaydi.durum == durum)
+    return query
+
+
+@servis_bp.route('/yazdir')
+@login_required
+def yazdir():
+    q = request.args.get('q', '', type=str).strip()
+    durum = request.args.get('durum', '', type=str).strip()
+
+    kayitlar = _servis_filtered_query(q, durum).order_by(
+        BakimKaydi.tarih.desc(), BakimKaydi.id.desc()
+    ).all()
+    _attach_cost_totals(kayitlar)
+
+    return render_template(
+        'servis/yazdir.html',
+        kayitlar=kayitlar,
+        q=q,
+        durum=durum,
+        bakim_tipi_labels=BAKIM_TIPI_LABELS,
+        servis_tipi_labels=SERVIS_TIPI_LABELS,
+        durum_labels=DURUM_LABELS,
+        rapor_tarihi=date.today().strftime('%d.%m.%Y'),
+    )
+
+
+@servis_bp.route('/excel')
+@login_required
+def excel():
+    q = request.args.get('q', '', type=str).strip()
+    durum = request.args.get('durum', '', type=str).strip()
+
+    kayitlar = _servis_filtered_query(q, durum).order_by(
+        BakimKaydi.tarih.desc(), BakimKaydi.id.desc()
+    ).all()
+    _attach_cost_totals(kayitlar)
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'Servis Kayitlari'
+    ws.sheet_view.showGridLines = False
+    ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+
+    title_font  = Font(name='Calibri', size=14, bold=True,  color='1F1F1F')
+    meta_font   = Font(name='Calibri', size=10,              color='44546A')
+    header_font = Font(name='Calibri', size=10, bold=True,  color='FFFFFF')
+    body_font   = Font(name='Calibri', size=10,              color='1F1F1F')
+    total_font  = Font(name='Calibri', size=10, bold=True,  color='1F1F1F')
+
+    header_fill = PatternFill(fill_type='solid', fgColor='1F4E78')
+    total_fill  = PatternFill(fill_type='solid', fgColor='EDF3F8')
+
+    thin_blue   = Side(style='thin',   color='D9E2F0')
+    thin_header = Side(style='thin',   color='1F4E78')
+    medium_tot  = Side(style='medium', color='9FBAD0')
+
+    header_border = Border(top=thin_header, bottom=thin_header, left=thin_header, right=thin_header)
+    cell_border   = Border(bottom=thin_blue)
+    total_border  = Border(top=medium_tot)
+
+    left_align   = Alignment(vertical='center', horizontal='left',   wrap_text=True)
+    center_align = Alignment(vertical='center', horizontal='center', wrap_text=True)
+    right_align  = Alignment(vertical='center', horizontal='right')
+
+    NUM_COLS = 12
+    last_col  = 'L'
+
+    ws.merge_cells(f'A1:{last_col}1')
+    ws['A1'] = 'Servis / Bakım Kayıtları'
+    ws['A1'].font      = title_font
+    ws['A1'].alignment = left_align
+
+    ws.merge_cells('A2:F2')
+    filter_text = ('Durum: ' + DURUM_LABELS.get(durum, durum)) if durum else 'Tümü'
+    if q:
+        filter_text += f' | Arama: {q}'
+    ws['A2'] = f'Filtre: {filter_text}'
+    ws['A2'].font      = meta_font
+    ws['A2'].alignment = left_align
+
+    ws.merge_cells('G2:L2')
+    ws['G2'] = f"Rapor Tarihi: {date.today().strftime('%d.%m.%Y')}"
+    ws['G2'].font      = meta_font
+    ws['G2'].alignment = left_align
+
+    headers = [
+        '#', 'Tarih', 'Makine Kodu', 'Marka / Model',
+        'Bakım Tipi', 'Servis Tipi', 'Çalışma Saati',
+        'Kim Yaptı', 'Kullanılan Parçalar',
+        'İşçilik', 'Malzeme', 'Toplam',
+    ]
+    center_cols = {1, 2, 7}
+    right_cols  = {10, 11, 12}
+
+    for col_idx, header in enumerate(headers, start=1):
+        cell = ws.cell(row=4, column=col_idx, value=header)
+        cell.font      = header_font
+        cell.fill      = header_fill
+        cell.border    = header_border
+        cell.alignment = center_align if col_idx in center_cols else (right_align if col_idx in right_cols else left_align)
+
+    current_row  = 5
+    toplam_iscilik = Decimal('0')
+    toplam_malzeme = Decimal('0')
+    toplam_toplam  = Decimal('0')
+
+    for idx, kayit in enumerate(kayitlar, start=1):
+        parcalar_text = ', '.join(
+            (p.stok_karti.parca_adi if p.stok_karti else p.malzeme_adi or 'Parça') +
+            f' x{p.kullanilan_adet}'
+            for p in kayit.kullanilan_parcalar
+        ) or '-'
+
+        kim_yapti = ''
+        if kayit.servis_veren_firma:
+            kim_yapti = kayit.servis_veren_firma.firma_adi or ''
+        if kayit.servis_veren_kisi:
+            kim_yapti = (kim_yapti + ' / ' + kayit.servis_veren_kisi).strip(' /')
+
+        iscilik  = Decimal(kayit.toplam_iscilik_maliyeti or 0)
+        malzeme  = kayit.malzeme_maliyeti
+        toplam   = kayit.toplam_servis_maliyeti
+        toplam_iscilik += iscilik
+        toplam_malzeme += malzeme
+        toplam_toplam  += toplam
+
+        row_data = [
+            idx,
+            kayit.tarih.strftime('%d.%m.%Y') if kayit.tarih else '',
+            kayit.ekipman.kod if kayit.ekipman else '-',
+            f"{kayit.ekipman.marka or ''} {kayit.ekipman.model or ''}".strip() if kayit.ekipman else '-',
+            BAKIM_TIPI_LABELS.get(kayit.bakim_tipi, kayit.bakim_tipi or '-'),
+            SERVIS_TIPI_LABELS.get(kayit.servis_tipi, kayit.servis_tipi or '-'),
+            kayit.calisma_saati if kayit.calisma_saati is not None else '',
+            kim_yapti,
+            parcalar_text,
+            float(iscilik),
+            float(malzeme),
+            float(toplam),
+        ]
+
+        for col_idx, value in enumerate(row_data, start=1):
+            cell = ws.cell(row=current_row, column=col_idx, value=value)
+            cell.font      = body_font
+            cell.border    = cell_border
+            cell.alignment = center_align if col_idx in center_cols else (right_align if col_idx in right_cols else left_align)
+            if col_idx in right_cols:
+                cell.number_format = '#,##0.00'
+
+        ws.row_dimensions[current_row].height = 30
+        current_row += 1
+
+    if kayitlar:
+        total_values = {
+            10: float(toplam_iscilik),
+            11: float(toplam_malzeme),
+            12: float(toplam_toplam),
+        }
+        for col_idx in range(1, NUM_COLS + 1):
+            cell = ws.cell(row=current_row, column=col_idx)
+            cell.font   = total_font
+            cell.fill   = total_fill
+            cell.border = total_border
+            if col_idx == 1:
+                cell.value     = 'TOPLAM'
+                cell.alignment = left_align
+            elif col_idx in total_values:
+                cell.value        = total_values[col_idx]
+                cell.alignment    = right_align
+                cell.number_format = '#,##0.00'
+
+    col_widths = {'A': 5, 'B': 13, 'C': 14, 'D': 22, 'E': 18, 'F': 16,
+                  'G': 14, 'H': 22, 'I': 36, 'J': 14, 'K': 14, 'L': 14}
+    for col_letter, width in col_widths.items():
+        ws.column_dimensions[col_letter].width = width
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    file_name = f"servis_kayitlari_{date.today().strftime('%Y%m%d')}.xlsx"
+    return send_file(
+        output,
+        as_attachment=True,
+        download_name=file_name,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+
+
 @servis_bp.route('/duzenle/<int:id>', methods=['GET', 'POST'])
 @login_required
 def duzenle(id):
@@ -199,7 +426,12 @@ def duzenle(id):
         except Exception as exc:
             flash(f'Hata: {exc}', 'danger')
 
-    return render_template('servis/duzenle.html', kayit=kayit, **_common_form_context())
+    return render_template(
+        'servis/duzenle.html',
+        kayit=kayit,
+        aktif_kiralama_var=BakimService.has_active_rental(kayit.ekipman_id) if kayit.ekipman_id else False,
+        **_common_form_context(),
+    )
 
 
 @servis_bp.route('/sil/<int:id>', methods=['POST'])
@@ -227,11 +459,21 @@ def bakimda():
         page = request.args.get('page', 1, type=int)
         q = request.args.get('q', '', type=str)
 
-        # Serviste olan makineler (bakımda)
+        # Serviste olan makineler + açık yerinde servis kaydı olan kirada makineler
+        acik_yerinde_servis_ekipman_ids = [
+            row[0] for row in db.session.query(BakimKaydi.ekipman_id).filter(
+                BakimKaydi.is_deleted == False,
+                BakimKaydi.durum.in_(('acik', 'parca_bekliyor')),
+            ).distinct().all()
+        ]
+
         serviste_query = Ekipman.query.filter(
             Ekipman.firma_tedarikci_id.is_(None),
             Ekipman.is_active == True,
-            Ekipman.calisma_durumu == 'serviste'
+            or_(
+                Ekipman.calisma_durumu == 'serviste',
+                Ekipman.id.in_(acik_yerinde_servis_ekipman_ids) if acik_yerinde_servis_ekipman_ids else False,
+            )
         ).options(subqueryload(Ekipman.bakim_kayitlari))
 
         if q:
@@ -244,6 +486,7 @@ def bakimda():
                 if not kayit.is_deleted and kayit.durum in {'acik', 'parca_bekliyor'}
             ]
             ekipman.aktif_bakim_kaydi = max(acik_bakimlar, key=lambda kayit: (kayit.tarih or date.min, kayit.id)) if acik_bakimlar else None
+            ekipman.aktif_kiralama_var = BakimService.has_active_rental(ekipman.id)
 
         # Aktif makineler (sahadaki, kullanımda olan) - sayfalanmaz
         aktif_query = Ekipman.query.filter(
@@ -291,6 +534,12 @@ def hizli_servis_ac():
         # Serviste olan (kirada olan) makineler için servis kaydı açılamaz
         if ekipman.calisma_durumu == 'serviste':
             flash(f"'{ekipman.kod}' zaten serviste (kirada). Servis kaydı açılamazsınız.", 'warning')
+            return redirect(url_for('servis.bakimda'))
+
+        # Kirada (sahada çalışan) makine için sadece yerinde servis açılabilir.
+        # Aksi halde makine durumu 'serviste' olur ve kiralama kaydı bozulur.
+        if ekipman.calisma_durumu == 'kirada' and servis_tipi != 'yerinde_servis':
+            flash(f"'{ekipman.kod}' sahada kirada olduğu için yalnızca 'Yerinde Servis' açılabilir.", 'warning')
             return redirect(url_for('servis.bakimda'))
 
         # Servis kaydı oluştur
@@ -342,17 +591,20 @@ def bakim_bitir(id):
     """Makinenin bakımını tamamla ve servisten çıkar"""
     try:
         ekipman = EkipmanService.get_by_id(id)
-        if ekipman and ekipman.calisma_durumu == 'serviste':
-            BakimService.ekipman_bakimini_tamamla(id, actor_id=get_actor_id())
-            OperationLogService.log(
-                module='servis', action='bakim_bitir',
-                user_id=get_actor_id(),
-                username=getattr(current_user, 'username', None),
-                entity_type='Ekipman', entity_id=id,
-                description=f"{ekipman.kod} servisten çıkarıldı.",
-                success=True
-            )
-            flash(f"'{ekipman.kod}' servisten çıkarıldı.", "success")
+        if ekipman:
+            kapatilan = BakimService.ekipman_bakimini_tamamla(id, actor_id=get_actor_id())
+            if kapatilan:
+                OperationLogService.log(
+                    module='servis', action='bakim_bitir',
+                    user_id=get_actor_id(),
+                    username=getattr(current_user, 'username', None),
+                    entity_type='Ekipman', entity_id=id,
+                    description=f"{ekipman.kod} servisten çıkarıldı.",
+                    success=True
+                )
+                flash(f"'{ekipman.kod}' servisi tamamlandı.", "success")
+            else:
+                flash(f"'{ekipman.kod}' için açık servis kaydı bulunamadı.", "warning")
     except ValidationError as e:
         flash(str(e), "danger")
     except Exception as e:

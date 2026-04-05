@@ -9,6 +9,7 @@ from app.services.base import BaseService, ValidationError
 from app.firmalar.models import Firma
 from app.kiralama.models import Kiralama, KiralamaKalemi
 from app.cari.models import Odeme
+from app.nakliyeler.models import Nakliye
 from app.extensions import db
 from app.ayarlar.models import AppSettings
 from app.utils import klasor_adi_temizle, normalize_turkish_upper
@@ -164,6 +165,28 @@ class FirmaService(BaseService):
         ).filter_by(id=firma_id).first()
         if not firma:
             raise ValidationError("Firma bulunamadı.")
+        # Nakliye tevkifat oranlarını tek sorguda çek (N+1'den kaçın)
+        nakliye_ids = [h.nakliye_id for h in firma.hizmet_kayitlari if getattr(h, 'nakliye_id', None)]
+        nakliye_info_map = {}
+        if nakliye_ids:
+            nakliyeler = Nakliye.query.filter(Nakliye.id.in_(nakliye_ids)).with_entities(
+                Nakliye.id, Nakliye.tevkifat_orani, Nakliye.kiralama_id
+            ).all()
+            kiralama_ids_for_nakliye = [n.kiralama_id for n in nakliyeler if n.kiralama_id]
+            kiralama_form_map = {}
+            if kiralama_ids_for_nakliye:
+                kiralamalar_q = Kiralama.query.filter(Kiralama.id.in_(kiralama_ids_for_nakliye)).with_entities(
+                    Kiralama.id, Kiralama.kiralama_form_no
+                ).all()
+                kiralama_form_map = {k.id: k.kiralama_form_no for k in kiralamalar_q}
+            nakliye_info_map = {
+                n.id: {
+                    'tevkifat_orani': n.tevkifat_orani or '',
+                    'kiralama_id': n.kiralama_id,
+                    'kiralama_form_no': kiralama_form_map.get(n.kiralama_id) if n.kiralama_id else None,
+                }
+                for n in nakliyeler
+            }
         hareketler = []
         for h in firma.hizmet_kayitlari:
             if getattr(h, 'is_deleted', False):
@@ -234,6 +257,9 @@ class FirmaService(BaseService):
                 'kdv_orani': hesap_kdv_orani,
                 'kiralama_alis_kdv': getattr(h, 'kiralama_alis_kdv', None),
                 'nakliye_alis_kdv': nakliye_alis_kdv,
+                'tevkifat_str': nakliye_info_map.get(getattr(h, 'nakliye_id', None), {}).get('tevkifat_orani', ''),
+                'nakliye_kiralama_id': nakliye_info_map.get(getattr(h, 'nakliye_id', None), {}).get('kiralama_id'),
+                'nakliye_kiralama_form_no': nakliye_info_map.get(getattr(h, 'nakliye_id', None), {}).get('kiralama_form_no'),
                 'tutar_toplam': tutar_toplam,
                 'nesne': h,
                 'yon': yon
@@ -264,7 +290,23 @@ class FirmaService(BaseService):
                 'tutar_toplam': tutar_deger,
                 'nesne': o
             })
-        hareketler.sort(key=lambda x: x['tarih'] if x['tarih'] else date.min, reverse=True)
+        def _sort_key(x):
+            if x.get('tur_tipi') == 'kiralama':
+                grup = x.get('belge_no') or ''
+                tur_sira = 0
+            elif x.get('tur_tipi') == 'nakliye' and x.get('nakliye_kiralama_form_no'):
+                grup = x.get('nakliye_kiralama_form_no') or ''
+                tur_sira = 1
+            else:
+                grup = ''
+                tur_sira = 2
+            tarih = x.get('tarih') or date.min
+            tarih_ts = tarih.toordinal() if tarih != date.min else 0
+            # grup azalan (ters string karşılaştırması için negatif ord listesi), tur_sira artan, tarih azalan
+            grup_key = tuple(127 - ord(c) for c in grup) if grup else (127,) * 20
+            return (grup_key, tur_sira, -tarih_ts)
+
+        hareketler.sort(key=_sort_key)
         # toplam_borc ve toplam_alacak kaldırıldı (borc/alacak alanları yok)
         # --- SADECE BAKİYE HESAPLAMA KISMI ASKIDA ---
         # yuruyen_bakiye = Decimal('0')

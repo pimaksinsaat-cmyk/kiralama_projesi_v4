@@ -2,7 +2,7 @@ from app.services.base import BaseService, ValidationError
 from app.filo.models import Ekipman, BakimKaydi, KullanilanParca, StokKarti, StokHareket
 from app.kiralama.models import KiralamaKalemi
 from app.extensions import db
-from datetime import datetime
+from datetime import datetime, date
 from decimal import Decimal
 from app.utils import normalize_turkish_upper
 
@@ -110,6 +110,30 @@ class BakimService(BaseService):
 
     OPEN_STATUSES = {'acik', 'parca_bekliyor'}
 
+    @classmethod
+    def get_active_rental(cls, ekipman_id, reference_date=None):
+        reference_date = reference_date or date.today()
+        return KiralamaKalemi.query.filter(
+            KiralamaKalemi.ekipman_id == ekipman_id,
+            KiralamaKalemi.is_deleted == False,
+            KiralamaKalemi.is_active == True,
+            KiralamaKalemi.sonlandirildi == False,
+            KiralamaKalemi.kiralama_baslangici <= reference_date,
+            KiralamaKalemi.kiralama_bitis >= reference_date,
+        ).order_by(KiralamaKalemi.id.desc()).first()
+
+    @classmethod
+    def has_active_rental(cls, ekipman_id, reference_date=None):
+        return cls.get_active_rental(ekipman_id, reference_date=reference_date) is not None
+
+    @classmethod
+    def _validate_rental_safe_service_type(cls, ekipman, servis_tipi):
+        if ekipman and cls.has_active_rental(ekipman.id) and servis_tipi != 'yerinde_servis':
+            raise ValidationError(
+                f"'{ekipman.kod}' aktif kiralamada oldugu icin sadece Yerinde Servis olarak islem gorebilir. "
+                "Ic/Dis servis secimi kiralama kaydini bozabilir."
+            )
+
     @staticmethod
     def _normalize_date(value):
         if isinstance(value, str) and value:
@@ -201,6 +225,7 @@ class BakimService(BaseService):
                 StokHareket(
                     stok_karti_id=stok_karti.id,
                     firma_id=bakim_kaydi.servis_veren_firma_id,
+                    bakim_kaydi_id=bakim_kaydi.id,
                     tarih=bakim_kaydi.tarih,
                     adet=abs(delta),
                     birim_fiyat=cls._latest_price(stok_karti.id),
@@ -232,6 +257,21 @@ class BakimService(BaseService):
         if not ekipman:
             return
 
+        if cls.has_active_rental(ekipman.id):
+            if ekipman.calisma_durumu != 'kirada':
+                ekipman.calisma_durumu = 'kirada'
+                db.session.add(ekipman)
+            return
+
+        # Yerinde servis: makine sahada (kirada) kalmaya devam eder, durum değişmez.
+        if bakim_kaydi.servis_tipi == 'yerinde_servis':
+            return
+
+        # Kirada olan makinenin durumunu servis açılışı/kapanışı bozmamalı
+        # (aksi halde kiralama kaydı bozulur).
+        if ekipman.calisma_durumu == 'kirada':
+            return
+
         if bakim_kaydi.durum in cls.OPEN_STATUSES:
             ekipman.calisma_durumu = 'serviste'
         elif ekipman.calisma_durumu == 'serviste':
@@ -244,6 +284,12 @@ class BakimService(BaseService):
         """Yeni bir bakım kaydı açar."""
         bakim_verileri['tarih'] = cls._normalize_date(bakim_verileri.get('tarih'))
         bakim_verileri['sonraki_bakim_tarihi'] = cls._normalize_date(bakim_verileri.get('sonraki_bakim_tarihi'))
+
+        ekipman = Ekipman.query.filter_by(id=ekipman_id, is_deleted=False).first()
+        if not ekipman:
+            raise ValidationError('Makine bulunamadı.')
+
+        cls._validate_rental_safe_service_type(ekipman, bakim_verileri.get('servis_tipi') or 'ic_servis')
 
         acik_kayit = cls.model.query.filter(
             cls.model.ekipman_id == ekipman_id,
@@ -272,6 +318,10 @@ class BakimService(BaseService):
 
         bakim_verileri['tarih'] = cls._normalize_date(bakim_verileri.get('tarih'))
         bakim_verileri['sonraki_bakim_tarihi'] = cls._normalize_date(bakim_verileri.get('sonraki_bakim_tarihi'))
+        cls._validate_rental_safe_service_type(
+            bakim_kaydi.ekipman,
+            bakim_verileri.get('servis_tipi') or bakim_kaydi.servis_tipi or 'ic_servis',
+        )
 
         try:
             for key, value in bakim_verileri.items():

@@ -17,14 +17,21 @@ depends_on = None
 
 
 def upgrade():
-    with op.batch_alter_table('sube_giderleri', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('arac_id', sa.Integer(), nullable=True))
-        batch_op.add_column(sa.Column('litre', sa.Numeric(precision=10, scale=2), nullable=True))
-        batch_op.add_column(sa.Column('birim_fiyat', sa.Numeric(precision=10, scale=2), nullable=True))
-        batch_op.add_column(sa.Column('km', sa.Integer(), nullable=True))
-        batch_op.add_column(sa.Column('istasyon', sa.String(length=150), nullable=True))
-        batch_op.create_index(batch_op.f('ix_sube_giderleri_arac_id'), ['arac_id'], unique=False)
-        batch_op.create_foreign_key('fk_sube_giderleri_arac_id_araclar', 'araclar', ['arac_id'], ['id'])
+    conn = op.get_bind()
+    conn.execute(sa.text('ALTER TABLE sube_giderleri ADD COLUMN IF NOT EXISTS arac_id INTEGER'))
+    conn.execute(sa.text('ALTER TABLE sube_giderleri ADD COLUMN IF NOT EXISTS litre NUMERIC(10,2)'))
+    conn.execute(sa.text('ALTER TABLE sube_giderleri ADD COLUMN IF NOT EXISTS birim_fiyat NUMERIC(10,2)'))
+    conn.execute(sa.text('ALTER TABLE sube_giderleri ADD COLUMN IF NOT EXISTS km INTEGER'))
+    conn.execute(sa.text('ALTER TABLE sube_giderleri ADD COLUMN IF NOT EXISTS istasyon VARCHAR(150)'))
+    conn.execute(sa.text('CREATE INDEX IF NOT EXISTS ix_sube_giderleri_arac_id ON sube_giderleri (arac_id)'))
+    # FK sadece yoksa ekle
+    exists = conn.execute(sa.text("""
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_name='fk_sube_giderleri_arac_id_araclar'
+          AND table_name='sube_giderleri'
+    """)).fetchone()
+    if not exists:
+        conn.execute(sa.text('ALTER TABLE sube_giderleri ADD CONSTRAINT fk_sube_giderleri_arac_id_araclar FOREIGN KEY (arac_id) REFERENCES araclar(id)'))
 
 
 def downgrade():

@@ -237,18 +237,23 @@ class SubeSabitGiderDonemiService(BaseService):
             period_end = date(year, month + 1, 1) - timedelta(days=1)
 
         days_in_month = (period_end - period_start).days + 1
+        # Icinde bulunulan ay ise hesabi bugune kadar kap
+        today = date.today()
+        effective_period_end = min(period_end, today) if period_start <= today <= period_end else period_end
+        if effective_period_end < period_start:
+            return 0.0
 
         donemler = cls.list_donemler(sube_id)
-        metadata = cls.build_timeline_metadata(donemler, reference_date=period_end)
+        metadata = cls.build_timeline_metadata(donemler, reference_date=effective_period_end)
 
         toplam = 0.0
         for donem in donemler:
             meta = metadata.get(donem.id, {})
             effective_start = meta.get('effective_start') or period_start
-            effective_end = meta.get('effective_end') or period_end
+            effective_end = meta.get('effective_end') or effective_period_end
 
             overlap_start = max(effective_start, period_start)
-            overlap_end = min(effective_end, period_end)
+            overlap_end = min(effective_end, effective_period_end)
             if overlap_end < overlap_start:
                 continue
 

@@ -17,13 +17,22 @@ depends_on = None
 
 
 def upgrade():
-    with op.batch_alter_table('araclar', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('is_nakliye_araci', sa.Boolean(), nullable=False, server_default=sa.false()))
-        batch_op.add_column(sa.Column('is_hizmet_araci', sa.Boolean(), nullable=False, server_default=sa.false()))
-        batch_op.create_index(batch_op.f('ix_araclar_is_nakliye_araci'), ['is_nakliye_araci'], unique=False)
-        batch_op.create_index(batch_op.f('ix_araclar_is_hizmet_araci'), ['is_hizmet_araci'], unique=False)
-
     connection = op.get_bind()
+    # Kolonlar zaten varsa atlıyoruz (IF NOT EXISTS)
+    connection.execute(sa.text(
+        "ALTER TABLE araclar ADD COLUMN IF NOT EXISTS is_nakliye_araci BOOLEAN NOT NULL DEFAULT false"
+    ))
+    connection.execute(sa.text(
+        "ALTER TABLE araclar ADD COLUMN IF NOT EXISTS is_hizmet_araci BOOLEAN NOT NULL DEFAULT false"
+    ))
+    connection.execute(sa.text(
+        "CREATE INDEX IF NOT EXISTS ix_araclar_is_nakliye_araci ON araclar (is_nakliye_araci)"
+    ))
+    connection.execute(sa.text(
+        "CREATE INDEX IF NOT EXISTS ix_araclar_is_hizmet_araci ON araclar (is_hizmet_araci)"
+    ))
+
+    # Veri güncelleme: mevcut kayıtlara arac_tipi'ne göre bayrak ata (idempotent)
     connection.execute(sa.text("""
         UPDATE araclar
         SET
@@ -55,10 +64,6 @@ def upgrade():
                 ELSE FALSE
             END
     """))
-
-    with op.batch_alter_table('araclar', schema=None) as batch_op:
-        batch_op.alter_column('is_nakliye_araci', server_default=None)
-        batch_op.alter_column('is_hizmet_araci', server_default=None)
 
 
 def downgrade():

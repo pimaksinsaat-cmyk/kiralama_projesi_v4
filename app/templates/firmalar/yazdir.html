@@ -412,6 +412,11 @@
             <td class="text-end">
                 {% if islem.kdv_tutari is defined and islem.kdv_tutari is not none %}
                     {{ "{:,.2f}".format(islem.kdv_tutari).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+                    {% if islem.tevkifat_str is defined and islem.tevkifat_str %}
+                        <div style="font-size:0.65em; color:#888; font-style:italic; white-space:nowrap;">
+                            {{ "{:,.2f}".format(islem.kdv_tutari).replace(',', 'X').replace('.', ',').replace('X', '.') }} − {{ "{:,.2f}".format(islem.kdv_tutari).replace(',', 'X').replace('.', ',').replace('X', '.') }}×{{ islem.tevkifat_str }}
+                        </div>
+                    {% endif %}
                 {% else %}-{% endif %}
             </td>
             <td class="text-end fw-bold text-danger">

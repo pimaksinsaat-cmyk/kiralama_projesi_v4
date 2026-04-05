@@ -36,6 +36,7 @@
                 <div class="col-12">
                     <div class="d-flex flex-wrap gap-2 mt-1">
                         <button type="button" class="btn btn-outline-success btn-sm" id="todayRangeBtn">Bugün</button>
+                        <button type="button" class="btn btn-outline-primary btn-sm" id="thisMonthRangeBtn">Bu Ay</button>
                         <button type="button" class="btn btn-outline-secondary btn-sm js-quick-range" data-days="30">Son 30 Gun</button>
                         <button type="button" class="btn btn-outline-secondary btn-sm js-quick-range" data-days="60">Son 60 Gun</button>
                         <button type="button" class="btn btn-outline-secondary btn-sm js-quick-range" data-days="90">Son 90 Gun</button>
@@ -55,6 +56,21 @@
                             document.getElementById('startDateInput').value = todayStr;
                             document.getElementById('endDateInput').value = todayStr;
                             // Formu submit et
+                            var form = document.getElementById('startDateInput').closest('form');
+                            if (form) { form.submit(); }
+                        });
+                    }
+                    var thisMonthBtn = document.getElementById('thisMonthRangeBtn');
+                    if (thisMonthBtn) {
+                        thisMonthBtn.addEventListener('click', function() {
+                            var today = new Date();
+                            var yyyy = today.getFullYear();
+                            var mm = String(today.getMonth() + 1).padStart(2, '0');
+                            var dd = String(today.getDate()).padStart(2, '0');
+                            var firstDay = yyyy + '-' + mm + '-01';
+                            var todayStr = yyyy + '-' + mm + '-' + dd;
+                            document.getElementById('startDateInput').value = firstDay;
+                            document.getElementById('endDateInput').value = todayStr;
                             var form = document.getElementById('startDateInput').closest('form');
                             if (form) { form.submit(); }
                         });

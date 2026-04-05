@@ -25,4 +25,4 @@ COPY . .
 EXPOSE 10000
 
 # 7. Uygulamayı Gunicorn ile başlat
-CMD gunicorn --bind 0.0.0.0:${PORT:-10000} run:app
+CMD gunicorn --worker-class gthread --workers 1 --threads 4 --timeout 90 --graceful-timeout 30 --keep-alive 5 --bind 0.0.0.0:${PORT:-10000} run:app

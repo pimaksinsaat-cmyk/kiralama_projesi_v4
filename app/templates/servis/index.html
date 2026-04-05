@@ -3,6 +3,9 @@
 {% block title %}Servis Kayitlari{% endblock %}
 
 {% block content %}
+{% macro money(value) -%}
+{{ '{:,.2f}'.format(value or 0).replace(',', '_').replace('.', ',').replace('_', '.') }} TL
+{%- endmacro %}
 <style>
     .service-shell { max-width: 1480px; margin: 0 auto; }
     .service-hero { background: linear-gradient(135deg, #fff8e8 0%, #fff 55%, #eef7ff 100%); border: 1px solid #f1e2b8; border-radius: 18px; padding: 1.5rem; box-shadow: 0 14px 36px rgba(15, 23, 42, 0.06); }
@@ -23,6 +26,9 @@
     .parts-list li { margin-bottom: 0.2rem; }
     .muted-note { color: #64748b; font-size: 0.85rem; }
     .actions-cell { white-space: nowrap; }
+    .money-value { font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .money-value.total { font-weight: 700; color: #0f172a; }
+    .money-value.detail { color: #475569; }
     .pagination { display: flex; gap: 4px; list-style: none; padding: 0; margin: 0; }
     .pagination .page-item .page-link { display: inline-block; padding: 6px 12px; border: 1px solid #dee2e6; border-radius: 4px; color: #667eea; text-decoration: none; font-size: 0.875rem; transition: all 0.2s; }
     .pagination .page-item.active .page-link { background: #667eea; border-color: #667eea; color: white; }
@@ -38,7 +44,12 @@
                 <h2 class="mb-1 fw-bold"><i class="fas fa-tools me-2 text-warning"></i>Servis Kayitlari</h2>
                 <div class="muted-note">Makine servis gecmisi, kim tarafindan yapildigi, kullanilan parcasi ve sonraki bakim tarihi burada izlenir.</div>
             </div>
-            <a href="{{ url_for('servis.bakimda') }}" class="btn btn-outline-secondary btn-sm">Bakımdaki Makineler</a>
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+                <a href="{{ url_for('servis.bakimda') }}" class="btn btn-outline-secondary btn-sm">Bakımdaki Makineler</a>
+                <a href="{{ url_for('servis.yazdir', q=q, durum=durum) }}" target="_blank" class="btn btn-outline-dark btn-sm shadow-sm px-3">
+                    <i class="fas fa-print me-1"></i> Yazdır / PDF
+                </a>
+            </div>
         </div>
 
         <div class="service-grid mb-3">
@@ -135,7 +146,7 @@
                                     <span class="muted-note">(stok dışı malzeme)</span>
                                     {% endif %}
                                     {% if parca.birim_fiyat is not none %}
-                                    <span class="muted-note">(fiyat: {{ '%.2f'|format(parca.birim_fiyat or 0) }} TL)</span>
+                                    <span class="muted-note">(fiyat: {{ money(parca.birim_fiyat) }})</span>
                                     {% endif %}
                                 </li>
                                 {% endfor %}
@@ -145,9 +156,9 @@
                             {% endif %}
                         </td>
                         <td>
-                            <div>{{ '%.2f'|format(kayit.toplam_servis_maliyeti or 0) }} TL</div>
-                            <div class="muted-note">İşçilik: {{ '%.2f'|format(kayit.toplam_iscilik_maliyeti or 0) }} TL</div>
-                            <div class="muted-note">Malzeme: {{ '%.2f'|format(kayit.malzeme_maliyeti or 0) }} TL</div>
+                            <div class="money-value total">{{ money(kayit.toplam_servis_maliyeti) }}</div>
+                            <div class="muted-note money-value detail">İşçilik: {{ money(kayit.toplam_iscilik_maliyeti) }}</div>
+                            <div class="muted-note money-value detail">Malzeme: {{ money(kayit.malzeme_maliyeti) }}</div>
                         </td>
                         <td>{{ kayit.sonraki_bakim_tarihi.strftime('%d.%m.%Y') if kayit.sonraki_bakim_tarihi else '-' }}</td>
                         <td>

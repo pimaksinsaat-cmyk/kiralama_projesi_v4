@@ -107,6 +107,10 @@ def create_app(config_class=Config):
     from app.servis import servis_bp
     app.register_blueprint(servis_bp, url_prefix='/servis')
 
+    # 3.2 Stok Modulu
+    from app.stok import stok_bp
+    app.register_blueprint(stok_bp, url_prefix='/stok')
+
     # 4. Kiralama (Sözleşmeler)
     from app.kiralama import kiralama_bp
     app.register_blueprint(kiralama_bp, url_prefix='/kiralama')

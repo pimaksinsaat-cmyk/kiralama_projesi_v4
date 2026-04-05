@@ -40,6 +40,11 @@ def _resolve_selected_period():
         selected_year = today.year
         selected_month = today.month
 
+    # Gelecek ay secilemez, icinde bulunulan aya kilitle
+    if (selected_year, selected_month) > (today.year, today.month):
+        selected_year = today.year
+        selected_month = today.month
+
     return selected_year, selected_month
 
 
@@ -48,6 +53,11 @@ def _build_period_context(selected_year, selected_month):
     previous_month = selected_month - 1 if selected_month > 1 else 12
     next_year = selected_year if selected_month < 12 else selected_year + 1
     next_month = selected_month + 1 if selected_month < 12 else 1
+
+    today = date.today()
+    is_current_month = (selected_year == today.year and selected_month == today.month)
+    # Gelecek aya geçiş engellensin
+    can_go_next = (next_year, next_month) <= (today.year, today.month)
 
     return {
         'selected_year': selected_year,
@@ -58,6 +68,9 @@ def _build_period_context(selected_year, selected_month):
         'previous_month': previous_month,
         'next_year': next_year,
         'next_month': next_month,
+        'is_current_month': is_current_month,
+        'can_go_next_period': can_go_next,
+        'max_period_key': f'{today.year:04d}-{today.month:02d}',
     }
 
 

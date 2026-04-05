@@ -213,8 +213,9 @@ class RaporlamaService:
         if sube_id:
             query = query.filter(PersonelMaasDonemi.sube_id == sube_id)
 
+        today = date.today()
         for donem in query.all():
-            effective_end = donem.bitis_tarihi or end_date
+            effective_end = min(donem.bitis_tarihi or today, today)
             for month_start in cls._iterate_month_starts(start_date, end_date):
                 month_end = cls._month_end(month_start)
                 overlap = cls._overlap_range(donem.baslangic_tarihi, effective_end, month_start, month_end)
@@ -243,8 +244,9 @@ class RaporlamaService:
         if sube_id:
             query = query.filter(SubeSabitGiderDonemi.sube_id == sube_id)
 
+        today = date.today()
         for donem in query.all():
-            effective_end = donem.bitis_tarihi or end_date
+            effective_end = min(donem.bitis_tarihi or today, today)
             for month_start in cls._iterate_month_starts(start_date, end_date):
                 month_end = cls._month_end(month_start)
                 overlap = cls._overlap_range(donem.baslangic_tarihi, effective_end, month_start, month_end)
@@ -464,7 +466,7 @@ class RaporlamaService:
                 query = query.filter(PersonelMaasDonemi.sube_id == sube_id)
 
             for donem in query.all():
-                effective_end = donem.bitis_tarihi or end_date
+                effective_end = min(donem.bitis_tarihi or date.today(), date.today())
                 for month_row in month_rows:
                     month_overlap = cls._overlap_range(
                         donem.baslangic_tarihi,
@@ -491,7 +493,7 @@ class RaporlamaService:
                 query = query.filter(SubeSabitGiderDonemi.sube_id == sube_id)
 
             for donem in query.all():
-                effective_end = donem.bitis_tarihi or end_date
+                effective_end = min(donem.bitis_tarihi or date.today(), date.today())
                 for month_row in month_rows:
                     month_overlap = cls._overlap_range(
                         donem.baslangic_tarihi,
@@ -554,16 +556,7 @@ class RaporlamaService:
         if start_date > end_date:
             return 0
 
-        aktif_baslangic = start_date
-        if ekipman.created_at:
-            kayit_tarihi = ekipman.created_at.date()
-            if kayit_tarihi > aktif_baslangic:
-                aktif_baslangic = kayit_tarihi
-
-        if aktif_baslangic > end_date:
-            return 0
-
-        return (end_date - aktif_baslangic).days + 1
+        return (end_date - start_date).days + 1
 
     @classmethod
     def _calculate_machine_metrics(cls, ekipmanlar, start_date, end_date):

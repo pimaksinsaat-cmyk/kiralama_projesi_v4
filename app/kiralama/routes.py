@@ -150,7 +150,7 @@ def index():
             query = query.join(Firma, Kiralama.firma_musteri_id == Firma.id)\
                          .filter(or_(Kiralama.kiralama_form_no.ilike(search), Firma.firma_adi.ilike(search)))
             
-        pagination = query.order_by(Kiralama.id.desc()).paginate(page=page, per_page=per_page)
+        pagination = query.order_by(Kiralama.kiralama_form_no.desc()).paginate(page=page, per_page=per_page)
         # Liste ekranında görünen kiralamalar için bekleyen cari tutarı güncel tut
         try:
             for kiralama in pagination.items:

@@ -280,7 +280,7 @@ def bilgi(id):
 
         # --- Kiralamalar sayfalama ---
         firma = finans_verileri['firma']
-        kiralamalar_all = sorted(firma.kiralamalar, key=lambda k: k.id, reverse=True)
+        kiralamalar_all = sorted(firma.kiralamalar, key=lambda k: k.kiralama_form_no or '', reverse=True)
         k_pag = ListPagination(total=len(kiralamalar_all), page=kiralama_page, per_page=kiralama_per_page)
         kb = (k_pag.page - 1) * k_pag.per_page
         kiralamalar_sayfa = kiralamalar_all[kb: kb + k_pag.per_page]

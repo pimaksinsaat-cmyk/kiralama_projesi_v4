@@ -155,7 +155,13 @@
                             -
                         {% endif %}
                     </td>
-                    <td><span class="badge bg-secondary">Serviste</span></td>
+                    <td>
+                        {% if ekipman.aktif_kiralama_var and ekipman.aktif_bakim_kaydi and ekipman.aktif_bakim_kaydi.servis_tipi == 'yerinde_servis' %}
+                        <span class="badge" style="background-color: #f59e0b;">Kirada / Yerinde Servis</span>
+                        {% else %}
+                        <span class="badge bg-secondary">Serviste</span>
+                        {% endif %}
+                    </td>
                 </tr>
                 {% else %}
                 <tr>
@@ -195,7 +201,7 @@
     </a>
     <div class="context-menu-divider"></div>
     <a href="#" class="context-menu-item bitir" id="menu-bitir">
-        <i class="fa fa-check-circle"></i> Bakımı Bitir (Boşa Al)
+        <i class="fa fa-check-circle"></i> Bakımı Bitir
     </a>
     <div class="context-menu-divider"></div>
     <a href="#" class="context-menu-item" id="menu-bilgi">
@@ -288,7 +294,7 @@ document.addEventListener('DOMContentLoaded', function() {
     menuBitir.addEventListener('click', function(event) {
         event.preventDefault();
         if (currentBitirUrl && currentEkipmanKod) {
-            if (confirm("'" + currentEkipmanKod + "' kodlu makinenin bakımını bitirip tekrar BOŞA (kullanıma hazır) almak istiyor musunuz?")) {
+            if (confirm("'" + currentEkipmanKod + "' kodlu makinenin bakımını bitirmek istiyor musunuz? Aktif kiralama varsa makinenin kiralama durumu korunacaktır.")) {
                 bitirForm.action = currentBitirUrl;
                 bitirForm.querySelector('input[name="csrf_token"]').value = currentCsrfToken;
                 bitirForm.submit();
@@ -313,8 +319,9 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        // Kullanimda olan makine ise, sadece yerinde_servis seçilebilir
-        if (durum === 'kullanimda') {
+        // Kirada (sahada çalışan) makine ise, sadece yerinde_servis seçilebilir
+        // Aksi halde iç/dış servis seçilirse makine durumu 'serviste' olur ve kiralama kaydı bozulur
+        if (durum === 'kirada') {
             Array.from(servisTipiSelect.options).forEach(opt => {
                 if (opt.value === 'yerinde_servis') {
                     opt.disabled = false;

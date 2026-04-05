@@ -189,26 +189,56 @@ class PersonelService(BaseService):
         return None
 
     @classmethod
+    def _unpaid_leave_days_in_range(cls, personel_id, range_start, range_end):
+        """Verilen personelin [range_start, range_end] araliginda kalan ucretsiz izin gun sayisi."""
+        if not personel_id or not range_start or not range_end or range_start > range_end:
+            return 0
+        try:
+            izinler = PersonelIzin.query.filter(
+                PersonelIzin.personel_id == personel_id,
+                PersonelIzin.is_deleted == False,
+                PersonelIzin.izin_turu == 'ucretsiz',
+                PersonelIzin.baslangic_tarihi <= range_end,
+                PersonelIzin.bitis_tarihi >= range_start,
+            ).all()
+        except Exception:
+            return 0
+
+        toplam_gun = 0
+        for izin in izinler:
+            ovr = cls._overlap_range(izin.baslangic_tarihi, izin.bitis_tarihi, range_start, range_end)
+            if ovr:
+                toplam_gun += cls._days_between(ovr[0], ovr[1])
+        return toplam_gun
+
+    @classmethod
     def get_monthly_cost_breakdown(cls, year, month, sube_id=None):
         if not cls.salary_periods_table_exists():
             return []
 
         month_start, month_end = cls._month_range(year, month)
+        # Icinde bulunulan ay ise hesabi bugune kadar kap (ileriye donuk projeksiyon olmasin).
+        today = date.today()
+        effective_period_end = min(month_end, today) if month_start <= today <= month_end else month_end
+        if effective_period_end < month_start:
+            return []
+
         query = PersonelMaasDonemi.query.options(
             joinedload(PersonelMaasDonemi.personel),
             joinedload(PersonelMaasDonemi.sube),
         ).filter(
-            PersonelMaasDonemi.baslangic_tarihi <= month_end,
+            PersonelMaasDonemi.baslangic_tarihi <= effective_period_end,
             or_(PersonelMaasDonemi.bitis_tarihi.is_(None), PersonelMaasDonemi.bitis_tarihi >= month_start),
         )
 
         if sube_id:
             query = query.filter(PersonelMaasDonemi.sube_id == sube_id)
 
+        month_days = cls._days_between(month_start, month_end)
         rows = []
         for donem in query.all():
-            effective_end = donem.bitis_tarihi or month_end
-            overlap = cls._overlap_range(donem.baslangic_tarihi, effective_end, month_start, month_end)
+            effective_end = min(donem.bitis_tarihi, effective_period_end) if donem.bitis_tarihi else effective_period_end
+            overlap = cls._overlap_range(donem.baslangic_tarihi, effective_end, month_start, effective_period_end)
             if not overlap:
                 continue
 
@@ -218,6 +248,16 @@ class PersonelService(BaseService):
             sgk_tutari = cls._allocate_monthly_amount(donem.sgk_isveren_tutari, overlap[0], overlap[1], month_start, month_end)
             yan_haklar_tutari = cls._allocate_monthly_amount(donem.yan_haklar_tutari, overlap[0], overlap[1], month_start, month_end)
             diger_gider_tutari = cls._allocate_monthly_amount(donem.diger_gider_tutari, overlap[0], overlap[1], month_start, month_end)
+
+            # Ucretsiz izin gunleri: sadece maastan orantili dusulur. Yemek ve yol onceden odendigi icin dusulmez.
+            ucretsiz_izin_gun = cls._unpaid_leave_days_in_range(donem.personel_id, overlap[0], overlap[1]) if month_days > 0 else 0
+            ucretsiz_izin_dusulen = 0.0
+            if ucretsiz_izin_gun > 0 and month_days > 0:
+                gunluk_maas = (cls._normalize_amount(donem.aylik_maas) or 0.0) / month_days
+                dusulen_maas = min(maas_tutari, gunluk_maas * ucretsiz_izin_gun)
+                maas_tutari -= dusulen_maas
+                ucretsiz_izin_dusulen = dusulen_maas
+
             toplam_tutar = maas_tutari + yemek_tutari + yol_tutari + sgk_tutari + yan_haklar_tutari + diger_gider_tutari
 
             if toplam_tutar <= 0:
@@ -237,6 +277,8 @@ class PersonelService(BaseService):
                     'sgk_tutari': sgk_tutari,
                     'yan_haklar_tutari': yan_haklar_tutari,
                     'diger_gider_tutari': diger_gider_tutari,
+                    'ucretsiz_izin_gun': ucretsiz_izin_gun,
+                    'ucretsiz_izin_dusulen': ucretsiz_izin_dusulen,
                     'toplam_tutar': toplam_tutar,
                 }
             )
@@ -298,7 +340,13 @@ class PersonelService(BaseService):
         )
 
     @classmethod
-    def _sync_salary_period_on_update(cls, personel, *, onceki_sube_id, onceki_maas, onceki_yemek_ucreti, onceki_yol_ucreti, yeni_sube_id, yeni_maas, yeni_yemek_ucreti, yeni_yol_ucreti, effective_date):
+    def _rewrite_salary_period_branch_history(cls, personel, yeni_sube_id):
+        for donem in cls.get_salary_periods(personel):
+            donem.sube_id = yeni_sube_id
+            db.session.add(donem)
+
+    @classmethod
+    def _sync_salary_period_on_update(cls, personel, *, onceki_sube_id, onceki_maas, onceki_yemek_ucreti, onceki_yol_ucreti, yeni_sube_id, yeni_maas, yeni_yemek_ucreti, yeni_yol_ucreti, effective_date, rewrite_salary_history=False):
         if not cls.salary_periods_table_exists():
             return
 
@@ -309,6 +357,11 @@ class PersonelService(BaseService):
         onceki_yemek_normalized = cls._normalize_amount(onceki_yemek_ucreti)
         yeni_yol_normalized = cls._normalize_amount(yeni_yol_ucreti)
         onceki_yol_normalized = cls._normalize_amount(onceki_yol_ucreti)
+
+        if rewrite_salary_history and onceki_sube_id != yeni_sube_id:
+            cls._rewrite_salary_period_branch_history(personel, yeni_sube_id)
+            onceki_sube_id = yeni_sube_id
+
         donem_degisti = mevcut_donem is None or effective_date != mevcut_donem.baslangic_tarihi
         degisiklik_var = (
             donem_degisti
@@ -450,7 +503,7 @@ class PersonelService(BaseService):
             raise Exception(f'{cls.model.__name__} islemi sirasinda hata olustu.') from exc
 
     @classmethod
-    def update_personel(cls, personel_id, payload, actor_id=None):
+    def update_personel(cls, personel_id, payload, actor_id=None, rewrite_salary_history=False):
         instance = cls.get_by_id(personel_id)
         if not instance:
             raise ValidationError('Guncellenmek istenen personel bulunamadi.')
@@ -485,6 +538,7 @@ class PersonelService(BaseService):
                 yeni_yemek_ucreti=instance.yemek_ucreti,
                 yeni_yol_ucreti=instance.yol_ucreti,
                 effective_date=effective_date,
+                rewrite_salary_history=rewrite_salary_history,
             )
 
             cls.after_save(instance, is_new=False)

@@ -164,33 +164,142 @@
         background: #e2e8f0;
     }
 
-    .summary-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-        gap: 1rem;
-        margin-bottom: 1.5rem;
-    }
-
-    .summary-card {
-        background: #fff;
+    .summary-badge {
+        margin-bottom: 0;
+        background: #ffffff;
         border: 1px solid #e5e7eb;
         border-radius: 16px;
-        padding: 1rem 1.1rem;
-        box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.05);
+        padding: 1.1rem 1.25rem;
+        width: 100%;
+        position: relative;
+        overflow: hidden;
     }
 
-    .summary-card .label {
-        font-size: 0.75rem;
+    .summary-badge::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: linear-gradient(90deg, var(--personel-teal) 0%, #14b8a6 50%, var(--personel-gold) 100%);
+    }
+
+    .summary-badge-title {
+        margin: 0 0 0.85rem;
+        color: var(--personel-text);
+        font-size: 0.78rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+    }
+
+    .summary-badge-title::before {
+        content: '\f0cb';
+        font-family: 'Font Awesome 6 Free', 'Font Awesome 5 Free';
+        font-weight: 900;
+        color: var(--personel-teal);
+        font-size: 0.85rem;
+    }
+
+    .summary-list {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 0.55rem;
+        align-items: stretch;
+    }
+
+    .summary-row {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        gap: 0.35rem;
+        padding: 0.7rem 0.85rem;
+        border-radius: 10px;
+        background: #f8fafc;
+        border: 1px solid #e5e7eb;
+        transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+        min-height: 62px;
+    }
+
+    .summary-row:not(.total):hover {
+        background: #f1f5f9;
+        border-color: #cbd5e1;
+        transform: translateY(-1px);
+    }
+
+    .summary-row .label {
         color: #64748b;
+        font-size: 0.7rem;
+        font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.04em;
-        margin-bottom: 0.35rem;
+        line-height: 1.3;
     }
 
-    .summary-card .value {
-        font-size: 1.8rem;
-        font-weight: 800;
+    .summary-row .value {
         color: var(--personel-text);
+        font-size: 1.05rem;
+        font-weight: 800;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+        line-height: 1.1;
+    }
+
+    .summary-row.aktif {
+        grid-column: 1;
+        grid-row: 1;
+    }
+
+    .summary-row.izinli {
+        grid-column: 2;
+        grid-row: 1;
+    }
+
+    .summary-row.maas {
+        grid-column: 3;
+        grid-row: 1;
+    }
+
+    .summary-row.yemek {
+        grid-column: 4;
+        grid-row: 1;
+    }
+
+    .summary-row.yol {
+        grid-column: 5;
+        grid-row: 1;
+    }
+
+    .summary-row.total {
+        grid-column: 1 / -1;
+        grid-row: 2;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        min-height: auto;
+    }
+
+    .summary-row.total {
+        background: linear-gradient(135deg, #0f766e 0%, #14b8a6 100%);
+        border-color: #0f766e;
+        box-shadow: 0 4px 12px rgba(15, 118, 110, 0.2);
+    }
+
+    .summary-row.total .label {
+        color: rgba(255, 255, 255, 0.9);
+        font-size: 0.82rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .summary-row.total .value {
+        color: #fff;
+        font-size: 1.05rem;
     }
 
     .content-grid {
@@ -207,67 +316,185 @@
 
     .personel-card {
         background: #fff;
-        border: 1px solid #e7ecef;
-        border-radius: 18px;
-        box-shadow: 0 12px 24px rgba(15, 23, 42, 0.05);
+        border: 1px solid #e5e7eb;
+        border-radius: 16px;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.05);
         overflow: hidden;
+        transition: box-shadow 0.2s ease, transform 0.2s ease;
+    }
+
+    .personel-card:hover {
+        box-shadow: 0 2px 4px rgba(15, 23, 42, 0.06), 0 16px 36px rgba(15, 23, 42, 0.08);
+        transform: translateY(-1px);
     }
 
     .personel-top {
         display: flex;
         justify-content: space-between;
         gap: 1rem;
-        padding: 1.2rem 1.2rem 1rem;
+        padding: 1.1rem 1.3rem 1rem;
         border-bottom: 1px solid #eef2f7;
-        background: linear-gradient(135deg, #ffffff 0%, #f8fffd 100%);
+        background: linear-gradient(135deg, #ffffff 0%, #f6fbfa 100%);
+        position: relative;
+    }
+
+    .personel-top::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 3px;
+        background: linear-gradient(180deg, var(--personel-teal) 0%, #14b8a6 100%);
+    }
+
+    .personel-heading {
+        min-width: 0;
+        flex: 1;
+    }
+
+    .personel-title-row {
+        display: flex;
+        align-items: baseline;
+        flex-wrap: wrap;
+        gap: 0.55rem;
     }
 
     .personel-name {
-        font-size: 1.15rem;
+        font-size: 1.18rem;
         font-weight: 800;
         color: var(--personel-text);
+        letter-spacing: -0.01em;
+    }
+
+    .personel-divider {
+        color: #cbd5e1;
+        font-weight: 400;
+        font-size: 1.05rem;
+        line-height: 1;
     }
 
     .personel-role {
-        margin-top: 0.2rem;
-        color: #64748b;
-        font-size: 0.92rem;
+        color: #0f766e;
+        font-size: 0.86rem;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        background: var(--personel-teal-soft);
+        padding: 0.22rem 0.65rem;
+        border-radius: 999px;
+        border: 1px solid #bfeee8;
+    }
+
+    .personel-role i {
+        font-size: 0.78rem;
+        color: var(--personel-teal);
+    }
+
+    .personel-badges {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        align-items: flex-start;
     }
 
     .sube-pill,
     .durum-pill {
         display: inline-flex;
         align-items: center;
-        border-radius: 999px;
-        padding: 0.35rem 0.8rem;
-        font-size: 0.78rem;
+        gap: 0.4rem;
+        border-radius: 8px;
+        padding: 0.4rem 0.75rem;
+        font-size: 0.75rem;
         font-weight: 700;
         white-space: nowrap;
+        letter-spacing: 0.02em;
+        border: 1px solid transparent;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .sube-pill:hover,
+    .durum-pill:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 3px 8px rgba(15, 23, 42, 0.08);
     }
 
     .sube-pill {
-        background: #eff6ff;
-        color: #1d4ed8;
+        background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+        color: #1e40af;
+        border-color: #bfdbfe;
+    }
+
+    .sube-pill::before {
+        content: '\f3c5';
+        font-family: 'Font Awesome 6 Free', 'Font Awesome 5 Free';
+        font-weight: 900;
+        font-size: 0.75rem;
+        color: #3b82f6;
     }
 
     .sube-pill.empty {
-        background: #f1f5f9;
+        background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
         color: #475569;
+        border-color: #cbd5e1;
+    }
+
+    .sube-pill.empty::before {
+        color: #94a3b8;
+        content: '\f071';
     }
 
     .durum-pill.active {
-        background: #dcfce7;
-        color: #166534;
+        background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+        color: #14532d;
+        border-color: #86efac;
+    }
+
+    .durum-pill.active::before {
+        content: '';
+        display: inline-block;
+        width: 0.5rem;
+        height: 0.5rem;
+        border-radius: 999px;
+        background: #22c55e;
+        box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.2);
+        animation: pulse-active 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse-active {
+        0%, 100% { box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.2); }
+        50% { box-shadow: 0 0 0 5px rgba(34, 197, 94, 0.1); }
     }
 
     .durum-pill.inactive {
-        background: #fee2e2;
-        color: #991b1b;
+        background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+        color: #7f1d1d;
+        border-color: #fca5a5;
+    }
+
+    .durum-pill.inactive::before {
+        content: '\f057';
+        font-family: 'Font Awesome 6 Free', 'Font Awesome 5 Free';
+        font-weight: 900;
+        font-size: 0.75rem;
+        color: #dc2626;
     }
 
     .durum-pill.leave {
-        background: #fef3c7;
-        color: #92400e;
+        background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+        color: #78350f;
+        border-color: #fcd34d;
+    }
+
+    .durum-pill.leave::before {
+        content: '\f5ca';
+        font-family: 'Font Awesome 6 Free', 'Font Awesome 5 Free';
+        font-weight: 900;
+        font-size: 0.72rem;
+        color: #d97706;
     }
 
     .personel-note {
@@ -283,53 +510,285 @@
 
     .info-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-        gap: 0.85rem;
-        margin-bottom: 1rem;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 0;
+        margin-bottom: 1.1rem;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        overflow: hidden;
+        background: #fff;
     }
 
     .info-box {
+        background: #fff;
+        padding: 0.7rem 0.9rem;
+        border-right: 1px solid #eef2f7;
+        transition: background 0.15s ease;
+        min-width: 0;
+    }
+
+    .info-box:last-child {
+        border-right: none;
+    }
+
+    .info-box:hover {
         background: #f8fafc;
-        border-radius: 12px;
-        padding: 0.75rem 0.85rem;
     }
 
     .info-box .label {
-        font-size: 0.7rem;
+        font-size: 0.68rem;
         font-weight: 700;
-        color: #64748b;
+        color: #94a3b8;
         text-transform: uppercase;
-        margin-bottom: 0.25rem;
+        letter-spacing: 0.05em;
+        margin-bottom: 0.3rem;
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+    }
+
+    .info-box .label i {
+        font-size: 0.75rem;
+        color: var(--personel-teal);
+        opacity: 0.7;
     }
 
     .info-box .value {
         color: var(--personel-text);
         font-weight: 700;
+        font-size: 0.95rem;
     }
 
     .izin-summary {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
-        gap: 0.75rem;
-        margin-bottom: 1rem;
+        gap: 0.65rem;
+        margin-bottom: 1.1rem;
     }
 
     .izin-summary .tile {
-        background: #f8fafc;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        background: #fff;
+        border: 1px solid #e5e7eb;
         border-radius: 12px;
-        padding: 0.75rem;
-        text-align: center;
+        padding: 0.75rem 0.9rem;
+        position: relative;
+        overflow: hidden;
+        transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+    }
+
+    .izin-summary .tile:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+    }
+
+    .izin-summary .tile::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        width: 3px;
+    }
+
+    .izin-summary .tile-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 38px;
+        height: 38px;
+        border-radius: 10px;
+        font-size: 1rem;
+        flex-shrink: 0;
+    }
+
+    .izin-summary .tile-body {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        line-height: 1.1;
     }
 
     .izin-summary .tile strong {
-        display: block;
-        font-size: 1.2rem;
+        display: flex;
+        align-items: baseline;
+        gap: 0.25rem;
+        font-size: 1.55rem;
+        font-weight: 800;
+        line-height: 1;
+        margin-bottom: 0.2rem;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .izin-summary .tile strong::after {
+        content: 'gün';
+        font-size: 0.68rem;
+        font-weight: 700;
+        color: #94a3b8;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .izin-summary .tile span {
+        font-size: 0.72rem;
+        font-weight: 700;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .izin-summary .tile.yillik { border-color: #bbf7d0; background: linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%); }
+    .izin-summary .tile.yillik::before { background: #22c55e; }
+    .izin-summary .tile.yillik .tile-icon { background: #dcfce7; color: #15803d; }
+
+    .izin-summary .tile.ucretsiz { border-color: #fed7aa; background: linear-gradient(135deg, #ffffff 0%, #fff7ed 100%); }
+    .izin-summary .tile.ucretsiz::before { background: #f59e0b; }
+    .izin-summary .tile.ucretsiz .tile-icon { background: #ffedd5; color: #b45309; }
+
+    .izin-summary .tile.hastalik { border-color: #fecaca; background: linear-gradient(135deg, #ffffff 0%, #fef2f2 100%); }
+    .izin-summary .tile.hastalik::before { background: #ef4444; }
+    .izin-summary .tile.hastalik .tile-icon { background: #fee2e2; color: #b91c1c; }
+
+    .izin-accordion {
+        margin-bottom: 1.1rem;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        overflow: hidden;
+        background: #fff;
+    }
+
+    .izin-accordion[open] {
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 12px rgba(15, 23, 42, 0.05);
+    }
+
+    .izin-accordion-header {
+        list-style: none;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.75rem 1rem;
+        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+        border-bottom: 1px solid transparent;
+        transition: background 0.15s ease, border-color 0.15s ease;
+        user-select: none;
+    }
+
+    .izin-accordion-header::-webkit-details-marker {
+        display: none;
+    }
+
+    .izin-accordion-header:hover {
+        background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+    }
+
+    .izin-accordion[open] .izin-accordion-header {
+        border-bottom-color: #e5e7eb;
+    }
+
+    .izin-accordion-title {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.55rem;
+        font-size: 0.82rem;
+        font-weight: 800;
+        color: var(--personel-text);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+
+    .izin-accordion-title > i {
+        color: var(--personel-teal);
+        font-size: 0.85rem;
+    }
+
+    .izin-accordion-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 22px;
+        height: 22px;
+        padding: 0 0.45rem;
+        background: var(--personel-teal);
+        color: #fff;
+        border-radius: 999px;
+        font-size: 0.72rem;
+        font-weight: 800;
+        text-transform: none;
+        letter-spacing: 0;
+    }
+
+    .izin-accordion-chevron {
+        color: #64748b;
+        font-size: 0.85rem;
+        transition: transform 0.2s ease;
+    }
+
+    .izin-accordion[open] .izin-accordion-chevron {
+        transform: rotate(180deg);
+    }
+
+    .izin-accordion-body {
+        padding: 0.75rem;
+    }
+
+    .izin-year-filter {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+        margin-bottom: 0.6rem;
+        padding-bottom: 0.6rem;
+        border-bottom: 1px dashed #e5e7eb;
+    }
+
+    .izin-year-chip {
+        border: 1px solid #e5e7eb;
+        background: #fff;
+        color: #475569;
+        font-size: 0.76rem;
+        font-weight: 700;
+        padding: 0.32rem 0.75rem;
+        border-radius: 999px;
+        cursor: pointer;
+        transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .izin-year-chip:hover {
+        background: #f1f5f9;
+        border-color: #cbd5e1;
+    }
+
+    .izin-year-chip.is-active {
+        background: var(--personel-teal);
+        color: #fff;
+        border-color: var(--personel-teal);
+        box-shadow: 0 2px 6px rgba(15, 118, 110, 0.25);
     }
 
     .izin-list {
         display: grid;
         gap: 0.5rem;
-        margin-bottom: 1rem;
+    }
+
+    .izin-item.is-hidden {
+        display: none;
+    }
+
+    .izin-empty-hint {
+        padding: 0.85rem;
+        text-align: center;
+        color: #94a3b8;
+        font-size: 0.85rem;
+        font-weight: 600;
+        background: #f8fafc;
+        border: 1px dashed #e5e7eb;
+        border-radius: 10px;
     }
 
     .izin-item {
@@ -337,15 +796,23 @@
         justify-content: space-between;
         gap: 1rem;
         align-items: center;
-        padding: 0.65rem 0.8rem;
-        border: 1px solid #e5e7eb;
-        border-radius: 12px;
-        background: #fffdf8;
+        padding: 0.7rem 0.9rem;
+        border: 1px solid #fde68a;
+        border-left: 3px solid #f59e0b;
+        border-radius: 10px;
+        background: #fffbeb;
+    }
+
+    .izin-item strong {
+        color: var(--personel-text);
+        font-size: 0.92rem;
     }
 
     .izin-item small {
-        color: #64748b;
+        color: #78716c;
         display: block;
+        font-size: 0.78rem;
+        margin-top: 0.2rem;
     }
 
     .mini-action {
@@ -443,6 +910,40 @@
         .toolbar form {
             grid-template-columns: 1fr;
         }
+
+        .summary-list {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        .summary-row.maas,
+        .summary-row.yemek,
+        .summary-row.yol,
+        .summary-row.aktif,
+        .summary-row.izinli,
+        .summary-row.total {
+            grid-column: auto;
+            grid-row: auto;
+        }
+
+        .summary-row.total {
+            grid-column: 1 / -1;
+        }
+
+        .info-grid {
+            grid-template-columns: repeat(3, 1fr);
+        }
+
+        .info-box:nth-child(3n) {
+            border-right: none;
+        }
+
+        .info-box:nth-child(-n+3) {
+            border-bottom: 1px solid #eef2f7;
+        }
+
+        .info-box:last-child {
+            border-right: none;
+        }
     }
 
     @media (max-width: 640px) {
@@ -501,64 +1002,97 @@
         </form>
     </div>
 
-    <div class="summary-grid">
-        <div class="summary-card">
-            <div class="label">Toplam Personel</div>
-            <div class="value">{{ toplam_personel }}</div>
-        </div>
-        <div class="summary-card">
-            <div class="label">Aktif Personel</div>
-            <div class="value">{{ aktif_personel }}</div>
-        </div>
-        <div class="summary-card">
-            <div class="label">Su An Izinli</div>
-            <div class="value">{{ izinli_personel }}</div>
-        </div>
-        <div class="summary-card">
-            <div class="label">Bugun Calismada</div>
-            <div class="value">{{ calismada_personel }}</div>
-        </div>
-        <div class="summary-card">
-            <div class="label">Subeye Bagli</div>
-            <div class="value">{{ personeller|rejectattr('sube_id', 'none')|list|length }}</div>
-        </div>
-        <div class="summary-card">
-            <div class="label">Toplam Maas</div>
-            <div class="value" style="font-size: 1.35rem; color: var(--personel-gold);">
-                {{ '{:,.0f}'.format(personeller|map(attribute='maas')|select|sum) }} TL
-            </div>
-        </div>
-        <div class="summary-card">
-            <div class="label">Toplam Yemek</div>
-            <div class="value" style="font-size: 1.35rem; color: var(--personel-teal);">
-                {{ '{:,.0f}'.format(personeller|map(attribute='yemek_ucreti')|select|sum) }} TL
-            </div>
-        </div>
-        <div class="summary-card">
-            <div class="label">Toplam Yol</div>
-            <div class="value" style="font-size: 1.35rem; color: #2563eb;">
-                {{ '{:,.0f}'.format(personeller|map(attribute='yol_ucreti')|select|sum) }} TL
-            </div>
-        </div>
-    </div>
-
     <div class="content-grid">
         <div class="personel-list">
+            <div class="summary-badge">
+                <h3 class="summary-badge-title">Personel Ozeti</h3>
+                <div class="summary-list">
+                    <div class="summary-row maas">
+                        <span class="label">Maas</span>
+                        <span class="value">{{ '{:,.0f}'.format(toplam_maas).replace(',', '.') }} TL</span>
+                    </div>
+                    <div class="summary-row yemek">
+                        <span class="label">Yemek</span>
+                        <span class="value">{{ '{:,.0f}'.format(toplam_yemek).replace(',', '.') }} TL</span>
+                    </div>
+                    <div class="summary-row yol">
+                        <span class="label">Yol</span>
+                        <span class="value">{{ '{:,.0f}'.format(toplam_yol).replace(',', '.') }} TL</span>
+                    </div>
+                    <div class="summary-row aktif">
+                        <span class="label">Aktif personel / Toplam personel</span>
+                        <span class="value">{{ aktif_personel }} / {{ toplam_personel }}</span>
+                    </div>
+                    <div class="summary-row izinli">
+                        <span class="label">Izinli personel / Toplam personel</span>
+                        <span class="value">{{ izinli_personel }} / {{ toplam_personel }}</span>
+                    </div>
+                    <div class="summary-row total">
+                        <span class="label">
+                            Toplam
+                            {% if toplam_ucretsiz_kesinti and toplam_ucretsiz_kesinti > 0 %}
+                            <span style="font-size:0.72rem; font-weight:700; opacity:0.85; margin-left:0.5rem; text-transform:none; letter-spacing:0;">
+                                (Ucretsiz izin dusuldu: -{{ '{:,.0f}'.format(toplam_ucretsiz_kesinti).replace(',', '.') }} TL)
+                            </span>
+                            {% endif %}
+                        </span>
+                        <span class="value">{{ '{:,.0f}'.format(toplam_personel_maliyeti).replace(',', '.') }} TL</span>
+                    </div>
+                </div>
+            </div>
+
             {% if personeller %}
                 {% for personel in personeller %}
                 {% set aktif_izinler = personel.izinler|rejectattr('is_deleted')|list %}
+                {% set meslek_lower = (personel.meslek or '')|lower %}
+                {% if 'şoför' in meslek_lower or 'sofor' in meslek_lower or 'soför' in meslek_lower %}
+                    {% set meslek_ikon = 'fa-truck' %}
+                {% elif 'operatör' in meslek_lower or 'operator' in meslek_lower %}
+                    {% set meslek_ikon = 'fa-gears' %}
+                {% elif 'ustabaşı' in meslek_lower or 'ustabasi' in meslek_lower %}
+                    {% set meslek_ikon = 'fa-user-hard-hat' %}
+                {% elif 'usta' in meslek_lower %}
+                    {% set meslek_ikon = 'fa-hammer' %}
+                {% elif 'mühendis' in meslek_lower or 'muhendis' in meslek_lower %}
+                    {% set meslek_ikon = 'fa-helmet-safety' %}
+                {% elif 'muhasebe' in meslek_lower %}
+                    {% set meslek_ikon = 'fa-calculator' %}
+                {% elif 'sekreter' in meslek_lower %}
+                    {% set meslek_ikon = 'fa-headset' %}
+                {% elif 'müdür' in meslek_lower or 'mudur' in meslek_lower or 'yönetici' in meslek_lower or 'yonetici' in meslek_lower %}
+                    {% set meslek_ikon = 'fa-user-tie' %}
+                {% elif 'tekniker' in meslek_lower or 'teknisyen' in meslek_lower or 'tamirci' in meslek_lower %}
+                    {% set meslek_ikon = 'fa-screwdriver-wrench' %}
+                {% elif 'kaynakçı' in meslek_lower or 'kaynakci' in meslek_lower %}
+                    {% set meslek_ikon = 'fa-fire' %}
+                {% elif 'temizlik' in meslek_lower %}
+                    {% set meslek_ikon = 'fa-broom' %}
+                {% elif 'güvenlik' in meslek_lower or 'guvenlik' in meslek_lower %}
+                    {% set meslek_ikon = 'fa-shield-halved' %}
+                {% elif 'depo' in meslek_lower %}
+                    {% set meslek_ikon = 'fa-warehouse' %}
+                {% elif 'satış' in meslek_lower or 'satis' in meslek_lower or 'pazarlama' in meslek_lower %}
+                    {% set meslek_ikon = 'fa-handshake' %}
+                {% elif 'işçi' in meslek_lower or 'isci' in meslek_lower %}
+                    {% set meslek_ikon = 'fa-person-digging' %}
+                {% else %}
+                    {% set meslek_ikon = 'fa-user' %}
+                {% endif %}
                 <div class="personel-card">
                     <div class="personel-top">
-                        <div>
-                            <div class="personel-name">{{ personel.tam_ad }}</div>
-                            <div class="personel-role">{{ personel.meslek or 'Pozisyon belirtilmedi' }}</div>
+                        <div class="personel-heading">
+                            <div class="personel-title-row">
+                                <span class="personel-name">{{ personel.tam_ad }}</span>
+                                <span class="personel-divider">/</span>
+                                <span class="personel-role"><i class="fas {{ meslek_ikon }}"></i>{{ personel.meslek or 'Pozisyon belirtilmedi' }}</span>
+                            </div>
                             {% if personel.is_izinli and personel.current_izin %}
                             <div class="personel-note">
                                 {{ dict(izin_turleri).get(personel.current_izin.izin_turu, personel.current_izin.izin_turu) }} | {{ personel.current_izin.bitis_tarihi.strftime('%d.%m.%Y') }} tarihine kadar izinli
                             </div>
                             {% endif %}
                         </div>
-                        <div style="display:flex; gap:0.5rem; flex-wrap:wrap; justify-content:flex-end;">
+                        <div class="personel-badges">
                             <span class="sube-pill {{ 'empty' if not personel.sube else '' }}">
                                 {{ personel.sube.isim if personel.sube else 'Sube atanmamis' }}
                             </span>
@@ -574,65 +1108,96 @@
                     <div class="personel-body">
                         <div class="info-grid">
                             <div class="info-box">
-                                <div class="label">Telefon</div>
+                                <div class="label"><i class="fas fa-phone"></i>Telefon</div>
                                 <div class="value">{{ personel.telefon or '-' }}</div>
                             </div>
                             <div class="info-box">
-                                <div class="label">TC No</div>
+                                <div class="label"><i class="fas fa-id-card"></i>TC No</div>
                                 <div class="value">{{ personel.tc_no or '-' }}</div>
                             </div>
                             <div class="info-box">
-                                <div class="label">Ise Giris</div>
+                                <div class="label"><i class="fas fa-calendar-plus"></i>Ise Giris</div>
                                 <div class="value">{{ personel.ise_giris_tarihi.strftime('%d.%m.%Y') if personel.ise_giris_tarihi else '-' }}</div>
                             </div>
                             <div class="info-box">
-                                <div class="label">Maas</div>
+                                <div class="label"><i class="fas fa-money-bill-wave"></i>Maas</div>
                                 <div class="value">{{ '{:,.0f}'.format(personel.maas) ~ ' TL' if personel.maas else '-' }}</div>
                             </div>
                             <div class="info-box">
-                                <div class="label">Yemek</div>
+                                <div class="label"><i class="fas fa-utensils"></i>Yemek</div>
                                 <div class="value">{{ '{:,.0f}'.format(personel.yemek_ucreti) ~ ' TL' if personel.yemek_ucreti else '-' }}</div>
                             </div>
                             <div class="info-box">
-                                <div class="label">Yol</div>
+                                <div class="label"><i class="fas fa-bus"></i>Yol</div>
                                 <div class="value">{{ '{:,.0f}'.format(personel.yol_ucreti) ~ ' TL' if personel.yol_ucreti else '-' }}</div>
                             </div>
                         </div>
 
                         <div class="izin-summary">
-                            <div class="tile">
-                                <strong style="color:#15803d;">{{ personel.izinler|selectattr('izin_turu', 'equalto', 'yillik')|rejectattr('is_deleted')|map(attribute='gun_sayisi')|sum }}</strong>
-                                <span>Yillik Izin</span>
+                            <div class="tile yillik">
+                                <span class="tile-icon"><i class="fas fa-umbrella-beach"></i></span>
+                                <div class="tile-body">
+                                    <strong style="color:#15803d;">{{ personel.izinler|selectattr('izin_turu', 'equalto', 'yillik')|rejectattr('is_deleted')|map(attribute='gun_sayisi')|sum }}</strong>
+                                    <span>Yillik Izin</span>
+                                </div>
                             </div>
-                            <div class="tile">
-                                <strong style="color:#b45309;">{{ personel.izinler|selectattr('izin_turu', 'equalto', 'ucretsiz')|rejectattr('is_deleted')|map(attribute='gun_sayisi')|sum }}</strong>
-                                <span>Ucretsiz</span>
+                            <div class="tile ucretsiz">
+                                <span class="tile-icon"><i class="fas fa-calendar-minus"></i></span>
+                                <div class="tile-body">
+                                    <strong style="color:#b45309;">{{ personel.izinler|selectattr('izin_turu', 'equalto', 'ucretsiz')|rejectattr('is_deleted')|map(attribute='gun_sayisi')|sum }}</strong>
+                                    <span>Ucretsiz</span>
+                                </div>
                             </div>
-                            <div class="tile">
-                                <strong style="color:#b91c1c;">{{ personel.izinler|selectattr('izin_turu', 'equalto', 'hastalik')|rejectattr('is_deleted')|map(attribute='gun_sayisi')|sum }}</strong>
-                                <span>Hastalik</span>
+                            <div class="tile hastalik">
+                                <span class="tile-icon"><i class="fas fa-notes-medical"></i></span>
+                                <div class="tile-body">
+                                    <strong style="color:#b91c1c;">{{ personel.izinler|selectattr('izin_turu', 'equalto', 'hastalik')|rejectattr('is_deleted')|map(attribute='gun_sayisi')|sum }}</strong>
+                                    <span>Rapor</span>
+                                </div>
                             </div>
                         </div>
 
                         {% if aktif_izinler %}
-                        <div class="izin-list">
-                            {% for izin in aktif_izinler %}
-                            <div class="izin-item">
-                                <div>
-                                    <strong>{{ dict(izin_turleri).get(izin.izin_turu, izin.izin_turu) }}</strong>
-                                    <small>{{ izin.baslangic_tarihi.strftime('%d.%m.%Y') }} - {{ izin.bitis_tarihi.strftime('%d.%m.%Y') }} | {{ izin.gun_sayisi }} gun</small>
-                                    {% if izin.aciklama %}
-                                    <small>{{ izin.aciklama }}</small>
-                                    {% endif %}
+                        {% set izin_yillari = aktif_izinler|map(attribute='baslangic_tarihi')|map(attribute='year')|list|unique|sort(reverse=true)|list %}
+                        <details class="izin-accordion">
+                            <summary class="izin-accordion-header">
+                                <span class="izin-accordion-title">
+                                    <i class="fas fa-list-ul"></i>
+                                    Izin Kayitlari
+                                    <span class="izin-accordion-count">{{ aktif_izinler|length }}</span>
+                                </span>
+                                <i class="fas fa-chevron-down izin-accordion-chevron"></i>
+                            </summary>
+                            <div class="izin-accordion-body">
+                                <div class="izin-year-filter" data-izin-filter="{{ personel.id }}">
+                                    <button type="button" class="izin-year-chip is-active" data-yil="all">Tumu</button>
+                                    {% for yil in izin_yillari %}
+                                    <button type="button" class="izin-year-chip" data-yil="{{ yil }}">{{ yil }}</button>
+                                    {% endfor %}
                                 </div>
-                                <form method="POST" action="{{ url_for('personel.izin_sil', izin_id=izin.id) }}" onsubmit="return confirm('Bu izin kaydi silinsin mi?');">
-                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                    <input type="hidden" name="redirect_sube_id" value="{{ selected_sube_id }}">
-                                    <button type="submit" class="mini-action danger">Sil</button>
-                                </form>
+                                <div class="izin-list" data-izin-list="{{ personel.id }}">
+                                    {% for izin in aktif_izinler %}
+                                    <div class="izin-item" data-izin-yil="{{ izin.baslangic_tarihi.year }}">
+                                        <div>
+                                            <strong>{{ dict(izin_turleri).get(izin.izin_turu, izin.izin_turu) }}</strong>
+                                            <small>{{ izin.baslangic_tarihi.strftime('%d.%m.%Y') }} - {{ izin.bitis_tarihi.strftime('%d.%m.%Y') }} | {{ izin.gun_sayisi }} gun</small>
+                                            {% if izin.aciklama %}
+                                            <small>{{ izin.aciklama }}</small>
+                                            {% endif %}
+                                        </div>
+                                        <form method="POST" action="{{ url_for('personel.izin_sil', izin_id=izin.id) }}" onsubmit="return confirm('Bu izin kaydi silinsin mi?');">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <input type="hidden" name="redirect_sube_id" value="{{ selected_sube_id }}">
+                                            <button type="submit" class="mini-action danger">Sil</button>
+                                        </form>
+                                    </div>
+                                    {% endfor %}
+                                    <div class="izin-empty-hint" data-izin-empty="{{ personel.id }}" hidden>
+                                        Bu yila ait izin kaydi yok.
+                                    </div>
+                                </div>
                             </div>
-                            {% endfor %}
-                        </div>
+                        </details>
                         {% endif %}
 
                         <div class="card-actions">
@@ -817,15 +1382,37 @@ document.addEventListener('DOMContentLoaded', function () {
                 return;
             }
 
-            form.dataset.submitting = 'true';
-
             const submitButton = event.submitter || form.querySelector('button[type="submit"], input[type="submit"]');
-            if (submitButton) {
-                if (submitButton.dataset.submittingText) {
-                    submitButton.dataset.originalText = submitButton.textContent;
-                    submitButton.textContent = submitButton.dataset.submittingText;
+            window.setTimeout(function () {
+                if (!form.isConnected || form.dataset.submitting === 'true') {
+                    return;
                 }
-                submitButton.disabled = true;
+
+                form.dataset.submitting = 'true';
+
+                if (submitButton) {
+                    if (submitButton.dataset.submittingText) {
+                        submitButton.dataset.originalText = submitButton.textContent;
+                        submitButton.textContent = submitButton.dataset.submittingText;
+                    }
+                    submitButton.disabled = true;
+                }
+            }, 0);
+        });
+    });
+
+    window.addEventListener('pageshow', function () {
+        document.querySelectorAll('form[data-prevent-double-submit]').forEach(function (form) {
+            form.dataset.submitting = 'false';
+
+            const submitButton = form.querySelector('button[type="submit"], input[type="submit"]');
+            if (!submitButton) {
+                return;
+            }
+
+            submitButton.disabled = false;
+            if (submitButton.dataset.originalText) {
+                submitButton.textContent = submitButton.dataset.originalText;
             }
         });
     });
@@ -839,6 +1426,35 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             form.classList.toggle('is-open');
+        });
+    });
+
+    document.querySelectorAll('[data-izin-filter]').forEach(function (filter) {
+        const personelId = filter.getAttribute('data-izin-filter');
+        const list = document.querySelector('[data-izin-list="' + personelId + '"]');
+        const emptyHint = document.querySelector('[data-izin-empty="' + personelId + '"]');
+        if (!list) return;
+
+        filter.querySelectorAll('.izin-year-chip').forEach(function (chip) {
+            chip.addEventListener('click', function () {
+                filter.querySelectorAll('.izin-year-chip').forEach(function (c) {
+                    c.classList.remove('is-active');
+                });
+                chip.classList.add('is-active');
+
+                const selectedYear = chip.getAttribute('data-yil');
+                let visibleCount = 0;
+                list.querySelectorAll('.izin-item').forEach(function (item) {
+                    const itemYear = item.getAttribute('data-izin-yil');
+                    const match = selectedYear === 'all' || itemYear === selectedYear;
+                    item.classList.toggle('is-hidden', !match);
+                    if (match) visibleCount++;
+                });
+
+                if (emptyHint) {
+                    emptyHint.hidden = visibleCount > 0;
+                }
+            });
         });
     });
 });

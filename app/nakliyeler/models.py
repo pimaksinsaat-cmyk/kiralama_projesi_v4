@@ -70,5 +70,17 @@ class Nakliye(db.Model):
             return self.tutar - self.taseron_maliyet
         return self.tutar # Kendi aracımızsa gelirin tamamı brüt kârdır (yakıt hariç)
 
+    @property
+    def net_kdv_orani(self):
+        """Tevkifat uygulanmış efektif KDV oranı (%). Örn: %20 & 2/10 → %16"""
+        kdv = self.kdv_orani or 0
+        if not self.tevkifat_orani:
+            return kdv
+        try:
+            pay, payda = map(int, str(self.tevkifat_orani).split('/'))
+            return kdv * (payda - pay) / payda
+        except (ValueError, ZeroDivisionError):
+            return kdv
+
     def __repr__(self):
         return f'<Nakliye #{self.id} | Tip: {self.nakliye_tipi} | {self.guzergah}>'

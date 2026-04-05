@@ -406,8 +406,7 @@ class EkipmanRaporuService:
         Makinenin belirtilen tarih aralığındaki tüm kiralama detaylarını döner
         """
         query = KiralamaKalemi.query.filter(
-            KiralamaKalemi.ekipman_id == ekipman_id,
-            KiralamaKalemi.is_active == True
+            KiralamaKalemi.ekipman_id == ekipman_id
         ).join(Kiralama).order_by(KiralamaKalemi.kiralama_baslangici.desc())
         
         # Tarih aralığı filtresi: kiralama ile aranan dönem çakışıyor mu?

@@ -148,6 +148,37 @@
         display: block;
     }
 
+    .inline-check {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.65rem;
+        padding: 0.85rem 0.95rem;
+        border-radius: 12px;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+    }
+
+    .inline-check input {
+        width: auto;
+        margin-top: 0.2rem;
+        transform: scale(1.05);
+    }
+
+    .inline-check label {
+        margin: 0;
+        text-transform: none;
+        letter-spacing: normal;
+        font-size: 0.88rem;
+        color: var(--personel-text);
+    }
+
+    .inline-check small {
+        display: block;
+        margin-top: 0.2rem;
+        color: #64748b;
+        font-size: 0.8rem;
+    }
+
     .form-actions {
         display: flex;
         justify-content: flex-end;
@@ -508,6 +539,14 @@
                 </div>
             </div>
 
+            <div class="inline-check" style="margin-bottom: 1rem;">
+                <input type="checkbox" id="sube-gecmisini-duzelt" name="sube_gecmisini_duzelt" value="1" {{ 'checked' if request.form.get('sube_gecmisini_duzelt') == '1' else '' }}>
+                <label for="sube-gecmisini-duzelt">
+                    Bu personel bastan beri secili subedeydi, gecmis maas donemlerini de yeni subeye tasi.
+                    <small>Yanlis ilk sube secimlerinde bunu isaretleyin. Boylece onceki aylara yansiyan personel giderleri de dogru subeye gecer.</small>
+                </label>
+            </div>
+
             <div class="form-actions">
                 <a href="{{ url_for('personel.index', sube_id=selected_sube_id) if selected_sube_id else url_for('personel.index') }}">Iptal</a>
                 <button type="submit" data-submitting-text="Kaydediliyor...">Kaydet</button>
@@ -543,15 +582,37 @@ document.addEventListener('DOMContentLoaded', function () {
                 return;
             }
 
-            form.dataset.submitting = 'true';
-
             const submitButton = event.submitter || form.querySelector('button[type="submit"], input[type="submit"]');
-            if (submitButton) {
-                if (submitButton.dataset.submittingText) {
-                    submitButton.dataset.originalText = submitButton.textContent;
-                    submitButton.textContent = submitButton.dataset.submittingText;
+            window.setTimeout(function () {
+                if (!form.isConnected || form.dataset.submitting === 'true') {
+                    return;
                 }
-                submitButton.disabled = true;
+
+                form.dataset.submitting = 'true';
+
+                if (submitButton) {
+                    if (submitButton.dataset.submittingText) {
+                        submitButton.dataset.originalText = submitButton.textContent;
+                        submitButton.textContent = submitButton.dataset.submittingText;
+                    }
+                    submitButton.disabled = true;
+                }
+            }, 0);
+        });
+    });
+
+    window.addEventListener('pageshow', function () {
+        document.querySelectorAll('form[data-prevent-double-submit]').forEach(function (form) {
+            form.dataset.submitting = 'false';
+
+            const submitButton = form.querySelector('button[type="submit"], input[type="submit"]');
+            if (!submitButton) {
+                return;
+            }
+
+            submitButton.disabled = false;
+            if (submitButton.dataset.originalText) {
+                submitButton.textContent = submitButton.dataset.originalText;
             }
         });
     });

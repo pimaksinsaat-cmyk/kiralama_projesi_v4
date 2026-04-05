@@ -271,11 +271,19 @@
         {% for nakliye in nakliyeler %}
             {% if nakliye.kiralama_id and nakliye.kiralama and nakliye.kiralama.kalemler %}
                 {% set kdv_orani = nakliye.kiralama.kalemler[0].nakliye_satis_kdv or 0 %}
+                {% set tevkifat_str = nakliye.kiralama.kalemler[0].nakliye_satis_tevkifat_oran or '' %}
             {% else %}
                 {% set kdv_orani = nakliye.kdv_orani or 0 %}
+                {% set tevkifat_str = nakliye.tevkifat_orani or '' %}
             {% endif %}
             {% set matrah = nakliye.tutar|float or 0 %}
-            {% set kdv = matrah * (kdv_orani / 100.0) %}
+            {% set kdv_tam = matrah * (kdv_orani / 100.0) %}
+            {% if tevkifat_str %}
+                {% set tev_parts = tevkifat_str.split('/') %}
+                {% set kdv = kdv_tam * (tev_parts[1]|int - tev_parts[0]|int) / tev_parts[1]|int %}
+            {% else %}
+                {% set kdv = kdv_tam %}
+            {% endif %}
             {% set tutar = matrah + kdv %}
             {% set toplam_matrah.val = toplam_matrah.val + matrah %}
             {% set toplam_kdv.val = toplam_kdv.val + kdv %}
@@ -305,7 +313,12 @@
                 </td>
                 <td class="text-end">{{ "{:,.2f}".format(matrah).replace(',', 'X').replace('.', ',').replace('X', '.') }}</td>
                 <td class="text-end">{% if kdv_orani %}%{{ kdv_orani }}{% else %}-{% endif %}</td>
-                <td class="text-end">{{ "{:,.2f}".format(kdv).replace(',', 'X').replace('.', ',').replace('X', '.') }}</td>
+                <td class="text-end">
+                    {{ "{:,.2f}".format(kdv).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+                    {% if tevkifat_str %}
+                        <div style="font-size:0.65em; color:#888; font-style:italic; white-space:nowrap;">{{ "{:,.2f}".format(kdv_tam).replace(',', 'X').replace('.', ',').replace('X', '.') }} − {{ "{:,.2f}".format(kdv_tam).replace(',', 'X').replace('.', ',').replace('X', '.') }}×{{ tevkifat_str }}</div>
+                    {% endif %}
+                </td>
                 <td class="text-end fw-bold">{{ "{:,.2f}".format(tutar).replace(',', 'X').replace('.', ',').replace('X', '.') }}</td>
                 <td class="text-center">
                     {% if nakliye.cari_islendi_mi %}

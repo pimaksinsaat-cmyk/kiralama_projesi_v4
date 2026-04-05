@@ -1,4 +1,5 @@
 from datetime import date, timedelta
+from decimal import Decimal
 from uuid import uuid4
 
 from flask import flash, redirect, render_template, request, url_for
@@ -68,18 +69,25 @@ def _redirect_to_index(selected_sube_id=None):
 
 
 def _resolve_effective_date_value(personel, aktif_maas_donemi=None, maas_donemleri=None):
+    today = date.today()
+
+    if aktif_maas_donemi:
+        return today.strftime('%Y-%m-%d')
+
     if maas_donemleri:
         latest_period = max(
             maas_donemleri,
             key=lambda donem: (donem.baslangic_tarihi or date.min, donem.id or 0),
         )
         if latest_period.baslangic_tarihi:
+            if latest_period.baslangic_tarihi > today:
+                return today.strftime('%Y-%m-%d')
             return latest_period.baslangic_tarihi.strftime('%Y-%m-%d')
 
     if personel.ise_giris_tarihi:
         return personel.ise_giris_tarihi.strftime('%Y-%m-%d')
 
-    return date.today().strftime('%Y-%m-%d')
+    return today.strftime('%Y-%m-%d')
 
 
 @personel_bp.route('/')
@@ -113,6 +121,36 @@ def index():
         izinli_personel = sum(1 for personel in personeller if personel.is_izinli)
         calismada_personel = sum(1 for personel in personeller if personel.is_calisiyor)
 
+    toplam_maas = sum((personel.maas or Decimal('0')) for personel in personeller)
+    toplam_yemek = sum((personel.yemek_ucreti or Decimal('0')) for personel in personeller)
+    toplam_yol = sum((personel.yol_ucreti or Decimal('0')) for personel in personeller)
+
+    # Bu ayki ucretsiz izin gunlerini toplam personel maliyetinden orantili dus
+    today = date.today()
+    if today.month == 12:
+        ay_bitis = date(today.year + 1, 1, 1) - timedelta(days=1)
+    else:
+        ay_bitis = date(today.year, today.month + 1, 1) - timedelta(days=1)
+    ay_baslangic = date(today.year, today.month, 1)
+    ay_gun_sayisi = (ay_bitis - ay_baslangic).days + 1
+
+    # Ucretsiz izin kesintisi sadece maas uzerinden hesaplanir. Yemek ve yol onceden odendigi icin dusulmez.
+    toplam_ucretsiz_kesinti = Decimal('0')
+    for personel in personeller:
+        ucretsiz_gun = PersonelService._unpaid_leave_days_in_range(personel.id, ay_baslangic, ay_bitis)
+        if ucretsiz_gun <= 0:
+            continue
+        aylik_maas = personel.maas or Decimal('0')
+        if aylik_maas <= 0:
+            continue
+        gunluk = aylik_maas / Decimal(ay_gun_sayisi)
+        kesinti = min(aylik_maas, gunluk * Decimal(ucretsiz_gun))
+        toplam_ucretsiz_kesinti += kesinti
+
+    toplam_personel_maliyeti = toplam_maas + toplam_yemek + toplam_yol - toplam_ucretsiz_kesinti
+    if toplam_personel_maliyeti < 0:
+        toplam_personel_maliyeti = Decimal('0')
+
     selected_sube = Sube.query.get(selected_sube_id) if selected_sube_id else None
     izin_default_baslangic = date.today()
     izin_default_bitis = izin_default_baslangic + timedelta(days=7)
@@ -133,6 +171,11 @@ def index():
         aktif_personel=aktif_personel,
         izinli_personel=izinli_personel,
         calismada_personel=calismada_personel,
+        toplam_maas=toplam_maas,
+        toplam_yemek=toplam_yemek,
+        toplam_yol=toplam_yol,
+        toplam_personel_maliyeti=toplam_personel_maliyeti,
+        toplam_ucretsiz_kesinti=toplam_ucretsiz_kesinti,
     )
 
 
@@ -205,6 +248,7 @@ def duzenle(personel_id):
             _flash_form_errors(form)
         else:
             try:
+                sube_gecmisini_duzelt = request.form.get('sube_gecmisini_duzelt') == '1'
                 personel = PersonelService.update_personel(
                     personel.id,
                     {
@@ -222,6 +266,7 @@ def duzenle(personel_id):
                         'isten_cikis_tarihi': form.isten_cikis_tarihi.data,
                     },
                     actor_id=getattr(current_user, 'id', None),
+                    rewrite_salary_history=sube_gecmisini_duzelt,
                 )
                 flash(f'{personel.tam_ad} basariyla guncellendi.', 'success')
                 return _redirect_to_index(selected_sube_id)

@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}Stok Arsivi{% endblock %}
+
+{% block content %}
+{% macro kisa_firma(ad) -%}
+{{ (ad or '').split()[:4] | join(' ') }}
+{%- endmacro %}
+<style>
+    .archive-shell { max-width: 1280px; margin: 0 auto; }
+    .archive-panel { background: #fff; border: 1px solid #e5e7eb; border-radius: 18px; box-shadow: 0 12px 30px rgba(15, 23, 42, 0.05); overflow: hidden; }
+    .archive-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 1.2rem 1.3rem; border-bottom: 1px solid #eef2f7; background: linear-gradient(135deg, #fff 0%, #f8fafc 100%); }
+    .archive-title { font-size: 1.15rem; font-weight: 800; color: #0f172a; }
+    .archive-meta { color: #64748b; font-size: 0.85rem; }
+    .archive-body { padding: 1rem 1.2rem 1.2rem; }
+    .archive-search { display: grid; grid-template-columns: minmax(0, 1fr) 120px; gap: 0.75rem; margin-bottom: 1rem; }
+    .archive-search input { width: 100%; border: 1px solid #dbe4f0; border-radius: 12px; padding: 0.75rem 0.85rem; }
+    .archive-table thead th { background: #f8fafc; white-space: nowrap; }
+    .archive-table td { vertical-align: middle; }
+    .archive-note { color: #64748b; font-size: 0.82rem; }
+    @media (max-width: 768px) {
+        .archive-search { grid-template-columns: 1fr; }
+    }
+</style>
+
+<div class="archive-shell">
+    <div class="archive-panel">
+        <div class="archive-head">
+            <div>
+                <div class="archive-title"><i class="fas fa-box-archive me-2 text-dark"></i>Arsivlenmis Stok Kartlari</div>
+                <div class="archive-meta">Arsive alinmis kartlari buradan gorebilir ve geri yukleyebilirsiniz.</div>
+            </div>
+            <a href="{{ url_for('stok.index') }}" class="btn btn-outline-primary btn-sm">Aktif Listeye Don</a>
+        </div>
+        <div class="archive-body">
+            <form method="GET" class="archive-search">
+                <input type="text" name="q" value="{{ q }}" placeholder="Parca kodu, adi veya tedarikci ara...">
+                <button type="submit" class="btn btn-dark">Getir</button>
+            </form>
+
+            <div class="table-responsive">
+                <table class="table archive-table align-middle">
+                    <thead>
+                        <tr>
+                            <th>Parca Kodu</th>
+                            <th>Parca Adi</th>
+                            <th>Tedarikci</th>
+                            <th>Silinme Tarihi</th>
+                            <th>Islem</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for kart in kartlar %}
+                        <tr>
+                            <td class="fw-semibold">{{ kart.parca_kodu }}</td>
+                            <td>{{ kart.parca_adi }}</td>
+                            <td>{{ kisa_firma(kart.varsayilan_tedarikci.firma_adi) if kart.varsayilan_tedarikci else '-' }}</td>
+                            <td>{{ kart.deleted_at.strftime('%d.%m.%Y %H:%M') if kart.deleted_at else '-' }}</td>
+                            <td>
+                                <form method="POST" action="{{ url_for('stok.geri_yukle', kart_id=kart.id) }}" class="d-inline" onsubmit="return confirm('Bu stok karti arsivden geri yuklensin mi?');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-success">Geri Yukle</button>
+                                </form>
+                                <form method="POST" action="{{ url_for('stok.kalici_sil', kart_id=kart.id) }}" class="d-inline" onsubmit="return confirm('DIKKAT: &quot;{{ kart.parca_kodu }}&quot; kodlu stok karti veritabanindan kalici olarak silinecek. Bu islem GERI ALINAMAZ!\n\nDevam etmek istediginize emin misiniz?') && confirm('Son onay: Kart ve tum stok hareket gecmisi kalici silinsin mi?');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger"><i class="fas fa-trash me-1"></i>Kalici Sil</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="text-center py-5 text-muted">Arsivlenmis stok karti bulunamadi.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="archive-note mt-2">Not: Arsivden geri yuklenen kartlar aktif stok listesine geri doner.</div>
+        </div>
+    </div>
+</div>
+{% endblock %}

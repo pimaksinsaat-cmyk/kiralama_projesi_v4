@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <title>Servis Kayıtları - Yazdır</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            font-size: 11px;
+            color: #222;
+            background: #f4f6f8;
+        }
+
+        .page-wrapper {
+            max-width: 1200px;
+            margin: 30px auto;
+            background: white;
+            padding: 24px 28px;
+            border-radius: 6px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.10);
+        }
+
+        @media print {
+            body { background: white; }
+            .page-wrapper {
+                max-width: 100%;
+                margin: 0;
+                padding: 0;
+                box-shadow: none;
+                border-radius: 0;
+            }
+        }
+
+        @page {
+            size: A4 landscape;
+            margin: 8mm 10mm;
+        }
+
+        /* HEADER */
+        .print-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            border-bottom: 2px solid #333;
+            padding-bottom: 6px;
+            margin-bottom: 10px;
+        }
+        .print-header h1 {
+            font-size: 16px;
+            font-weight: 700;
+            color: #111;
+        }
+        .print-header .meta {
+            font-size: 9px;
+            color: #666;
+            text-align: right;
+            line-height: 1.6;
+        }
+        .print-header .meta .meta-highlight {
+            font-size: 10px;
+            font-weight: 600;
+            color: #2d3e50;
+        }
+
+        /* TABLO */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 10.5px;
+        }
+        col.col-no       { width: 3%; }
+        col.col-tarih    { width: 8%; }
+        col.col-makine   { width: 10%; }
+        col.col-markamod { width: 12%; }
+        col.col-bakim    { width: 9%; }
+        col.col-servis   { width: 9%; }
+        col.col-saat     { width: 7%; }
+        col.col-kim      { width: 12%; }
+        col.col-parcalar { width: 14%; }
+        col.col-iscilik  { width: 7%; }
+        col.col-malzeme  { width: 7%; }
+        col.col-toplam   { width: 10%; }
+        col.col-sonraki  { width: 8%; }
+        col.col-durum    { width: 6%; }
+
+        thead th {
+            background: #dbe7f3;
+            color: #18324a;
+            padding: 7px 8px;
+            text-align: left;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            border-top: 2px solid #18324a;
+            border-bottom: 2px solid #18324a;
+        }
+        thead th.text-end    { text-align: right; }
+        thead th.text-center { text-align: center; }
+
+        tbody tr { border-bottom: 1px solid #dee2e6; }
+        tbody tr:nth-child(odd)  { background: #f8f9fa; }
+        tbody tr:nth-child(even) { background: white; }
+        tbody td {
+            padding: 6px 8px;
+            vertical-align: top;
+        }
+        .text-end    { text-align: right; }
+        .text-center { text-align: center; }
+        .fw-bold     { font-weight: 700; }
+        .text-muted  { color: #6c757d; font-size: 10px; }
+
+        .makine-kod   { font-weight: 700; }
+        .marka-model  { font-size: 10px; color: #555; }
+        .aciklama-alt { font-size: 9.5px; color: #6c757d; display: block; margin-top: 2px; }
+        .parcalar-list { font-size: 9.5px; line-height: 1.5; }
+
+        .durum-badge {
+            display: inline-block;
+            border-radius: 3px;
+            padding: 2px 6px;
+            font-size: 8.5px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+        .durum-acik       { background: #fff3cd; color: #8a5b00; border: 1px solid #ffc107; }
+        .durum-parca      { background: #dbeafe; color: #1d4ed8; border: 1px solid #93c5fd; }
+        .durum-tamamlandi { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
+        .durum-iptal      { background: #e2e8f0; color: #334155; border: 1px solid #cbd5e1; }
+
+        /* TOPLAM SATIRI */
+        tfoot td {
+            padding: 6px 8px;
+            border-top: 2px solid #333;
+            font-weight: 700;
+            font-size: 10px;
+            background: #f0f0f0;
+        }
+
+        /* FOOTER */
+        .print-footer {
+            margin-top: 12px;
+            padding-top: 6px;
+            border-top: 1px solid #ccc;
+            display: flex;
+            justify-content: space-between;
+            font-size: 8px;
+            color: #999;
+        }
+
+        /* YAZDIR BUTONLARI – sadece ekranda */
+        .print-actions {
+            position: fixed;
+            top: 15px;
+            right: 15px;
+            z-index: 9999;
+            display: flex;
+            gap: 8px;
+        }
+        .print-actions button,
+        .print-actions a {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-print { background: #2c3e50; color: white; }
+        .btn-print:hover { background: #1a252f; }
+        .btn-excel { background: #1f7a3f; color: white; }
+        .btn-excel:hover { background: #186132; }
+        .btn-back  { background: #e9ecef; color: #333; }
+        .btn-back:hover { background: #dee2e6; }
+
+        @media print {
+            .print-actions { display: none !important; }
+            body { padding: 0; }
+            thead { display: table-header-group; }
+            thead th {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            tbody tr:nth-child(odd) {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="print-actions">
+    <button class="btn-print" onclick="window.print()">
+        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+            <path d="M2.5 8a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1z"/>
+            <path d="M5 1a2 2 0 0 0-2 2v2H2a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h1v1a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-1h1a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-1V3a2 2 0 0 0-2-2H5zM4 3a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2H4V3zm1 10a1 1 0 0 1-1-1V9h8v3a1 1 0 0 1-1 1H5z"/>
+        </svg>
+        Yazdır / PDF
+    </button>
+    <a class="btn-excel" href="{{ url_for('servis.excel', q=q, durum=durum) }}">
+        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+            <path d="M5.884 6.68a.5.5 0 1 0-.768.64L6.347 8.8 5.116 10.28a.5.5 0 0 0 .768.64L7 9.601l1.116 1.319a.5.5 0 0 0 .768-.64L7.653 8.8l1.231-1.48a.5.5 0 1 0-.768-.64L7 7.999 5.884 6.68z"/>
+            <path d="M14 4.5V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h5.5L14 4.5zM9.5 1.5V4a1 1 0 0 0 1 1H13"/>
+        </svg>
+        Excel'e Aktar
+    </a>
+    <button class="btn-back" onclick="window.close()">
+        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+            <path fill-rule="evenodd" d="M15 8a.5.5 0 0 0-.5-.5H2.707l3.147-3.146a.5.5 0 1 0-.708-.708l-4 4a.5.5 0 0 0 0 .708l4 4a.5.5 0 0 0 .708-.708L2.707 8.5H14.5A.5.5 0 0 0 15 8z"/>
+        </svg>
+        Kapat
+    </button>
+</div>
+
+<div class="page-wrapper">
+
+<!-- HEADER -->
+<div class="print-header">
+    <div>
+        <h1>Servis / Bakım Kayıtları</h1>
+        {% if durum %}
+        <div style="font-size:10px; color:#555; margin-top:3px;">
+            Durum: {{ durum_labels.get(durum, durum) }}
+        </div>
+        {% endif %}
+        {% if q %}
+        <div style="font-size:10px; color:#555; margin-top:2px;">
+            Arama: {{ q }}
+        </div>
+        {% endif %}
+    </div>
+    <div class="meta">
+        <div class="meta-highlight">Toplam Kayıt: {{ kayitlar|length }}</div>
+        <div class="meta-highlight">Rapor Tarihi: {{ rapor_tarihi }}</div>
+    </div>
+</div>
+
+<!-- TABLO -->
+<table>
+    <colgroup>
+        <col class="col-no">
+        <col class="col-tarih">
+        <col class="col-makine">
+        <col class="col-markamod">
+        <col class="col-bakim">
+        <col class="col-servis">
+        <col class="col-saat">
+        <col class="col-kim">
+        <col class="col-parcalar">
+        <col class="col-iscilik">
+        <col class="col-malzeme">
+        <col class="col-toplam">
+        <col class="col-sonraki">
+        <col class="col-durum">
+    </colgroup>
+    <thead>
+        <tr>
+            <th class="text-center">#</th>
+            <th>Tarih</th>
+            <th>Makine</th>
+            <th>Marka / Model</th>
+            <th>Bakım Tipi</th>
+            <th>Servis Tipi</th>
+            <th class="text-center">Çalışma Saati</th>
+            <th>Kim Yaptı</th>
+            <th>Kullanılan Parçalar</th>
+            <th class="text-end">İşçilik</th>
+            <th class="text-end">Malzeme</th>
+            <th class="text-end">Toplam</th>
+            <th>Sonraki Bakım</th>
+            <th class="text-center">Durum</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% set tot_iscilik = namespace(val=0) %}
+        {% set tot_malzeme = namespace(val=0) %}
+        {% set tot_toplam  = namespace(val=0) %}
+
+        {% for kayit in kayitlar %}
+            {% set tot_iscilik.val = tot_iscilik.val + (kayit.toplam_iscilik_maliyeti|float or 0) %}
+            {% set tot_malzeme.val = tot_malzeme.val + (kayit.malzeme_maliyeti|float or 0) %}
+            {% set tot_toplam.val  = tot_toplam.val  + (kayit.toplam_servis_maliyeti|float or 0) %}
+            <tr>
+                <td class="text-center">{{ loop.index }}</td>
+                <td>{{ kayit.tarih.strftime('%d.%m.%Y') if kayit.tarih else '-' }}</td>
+                <td class="makine-kod">{{ kayit.ekipman.kod if kayit.ekipman else '-' }}</td>
+                <td class="marka-model">
+                    {% if kayit.ekipman %}{{ kayit.ekipman.marka or '' }} {{ kayit.ekipman.model or '' }}{% else %}-{% endif %}
+                    {% if kayit.aciklama %}
+                        <span class="aciklama-alt">{{ kayit.aciklama }}</span>
+                    {% endif %}
+                </td>
+                <td>{{ bakim_tipi_labels.get(kayit.bakim_tipi, kayit.bakim_tipi or '-') }}</td>
+                <td>{{ servis_tipi_labels.get(kayit.servis_tipi, kayit.servis_tipi or '-') }}</td>
+                <td class="text-center">{{ kayit.calisma_saati if kayit.calisma_saati is not none else '-' }}</td>
+                <td>
+                    {% if kayit.servis_veren_firma %}
+                        <div>{{ kayit.servis_veren_firma.firma_adi }}</div>
+                    {% endif %}
+                    {% if kayit.servis_veren_kisi %}
+                        <div class="{% if kayit.servis_veren_firma %}text-muted{% endif %}">{{ kayit.servis_veren_kisi }}</div>
+                    {% endif %}
+                    {% if not kayit.servis_veren_firma and not kayit.servis_veren_kisi %}
+                        <span class="text-muted">-</span>
+                    {% endif %}
+                </td>
+                <td class="parcalar-list">
+                    {% if kayit.kullanilan_parcalar %}
+                        {% for parca in kayit.kullanilan_parcalar %}
+                            <div>{{ parca.stok_karti.parca_adi if parca.stok_karti else parca.malzeme_adi or 'Parça' }} × {{ parca.kullanilan_adet }}</div>
+                        {% endfor %}
+                    {% else %}
+                        <span class="text-muted">-</span>
+                    {% endif %}
+                </td>
+                <td class="text-end">
+                    {{ "{:,.2f}".format(kayit.toplam_iscilik_maliyeti|float or 0).replace(',','X').replace('.',',').replace('X','.') }}
+                </td>
+                <td class="text-end">
+                    {{ "{:,.2f}".format(kayit.malzeme_maliyeti|float or 0).replace(',','X').replace('.',',').replace('X','.') }}
+                </td>
+                <td class="text-end fw-bold">
+                    {{ "{:,.2f}".format(kayit.toplam_servis_maliyeti|float or 0).replace(',','X').replace('.',',').replace('X','.') }}
+                </td>
+                <td>{{ kayit.sonraki_bakim_tarihi.strftime('%d.%m.%Y') if kayit.sonraki_bakim_tarihi else '-' }}</td>
+                <td class="text-center">
+                    {% if kayit.durum == 'acik' %}
+                        <span class="durum-badge durum-acik">Açık</span>
+                    {% elif kayit.durum == 'parca_bekliyor' %}
+                        <span class="durum-badge durum-parca">P.Bekliyor</span>
+                    {% elif kayit.durum == 'tamamlandi' %}
+                        <span class="durum-badge durum-tamamlandi">Tamamlandı</span>
+                    {% elif kayit.durum == 'iptal' %}
+                        <span class="durum-badge durum-iptal">İptal</span>
+                    {% else %}
+                        <span class="text-muted">-</span>
+                    {% endif %}
+                </td>
+            </tr>
+        {% else %}
+            <tr>
+                <td colspan="14" class="text-center" style="padding:20px; color:#999;">
+                    Kayıt bulunamadı.
+                </td>
+            </tr>
+        {% endfor %}
+    </tbody>
+    {% if kayitlar %}
+    <tfoot>
+        <tr>
+            <td colspan="9" class="text-end">TOPLAM:</td>
+            <td class="text-end">
+                {{ "{:,.2f}".format(tot_iscilik.val).replace(',','X').replace('.',',').replace('X','.') }} TL
+            </td>
+            <td class="text-end">
+                {{ "{:,.2f}".format(tot_malzeme.val).replace(',','X').replace('.',',').replace('X','.') }} TL
+            </td>
+            <td class="text-end">
+                {{ "{:,.2f}".format(tot_toplam.val).replace(',','X').replace('.',',').replace('X','.') }} TL
+            </td>
+            <td colspan="2"></td>
+        </tr>
+    </tfoot>
+    {% endif %}
+</table>
+
+<!-- FOOTER -->
+<div class="print-footer">
+    <span>Servis / Bakım Kayıtları</span>
+    <span>{{ rapor_tarihi }} tarihinde oluşturuldu</span>
+</div>
+
+</div>
+</body>
+</html>

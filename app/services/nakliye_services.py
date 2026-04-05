@@ -2,6 +2,17 @@ from app.extensions import db
 from app.cari.models import HizmetKaydi
 from decimal import Decimal
 
+
+def _net_kdv_orani(kdv_orani, tevkifat_str):
+    """Tevkifat uygulayarak efektif KDV oranını döner. Örn: 20 & '2/10' → 16"""
+    if not tevkifat_str or not kdv_orani:
+        return kdv_orani
+    try:
+        pay, payda = map(int, str(tevkifat_str).split('/'))
+        return kdv_orani * (payda - pay) / payda
+    except (ValueError, ZeroDivisionError):
+        return kdv_orani
+
 class CariServis:
     """
     Tüm modüllerin (Nakliye vb.) cari hesap işlemlerini tek bir merkezden yöneten,
@@ -28,15 +39,11 @@ class CariServis:
             hizmet.tarih = nakliye.tarih
             hizmet.tutar = nakliye.toplam_tutar
             hizmet.aciklama = aciklama
-            hk_kdv = getattr(nakliye, 'kdv_orani', None)
-            if hk_kdv is None:
-                hk_kdv = 0
-            hizmet.kdv_orani = hk_kdv
+            hk_kdv = getattr(nakliye, 'kdv_orani', None) or 0
+            hizmet.kdv_orani = _net_kdv_orani(hk_kdv, getattr(nakliye, 'tevkifat_orani', None) or '')
         else:
             # Yoksa yeni oluştur
-            hk_kdv = getattr(nakliye, 'kdv_orani', None)
-            if hk_kdv is None:
-                hk_kdv = 0
+            hk_kdv = getattr(nakliye, 'kdv_orani', None) or 0
             hizmet = HizmetKaydi(
                 firma_id=nakliye.firma_id,
                 tarih=nakliye.tarih,
@@ -44,7 +51,7 @@ class CariServis:
                 yon='giden', # Müşteriye giden hizmet = Borç
                 aciklama=aciklama,
                 nakliye_id=nakliye.id,
-                kdv_orani=hk_kdv
+                kdv_orani=_net_kdv_orani(hk_kdv, getattr(nakliye, 'tevkifat_orani', None) or '')
             )
             db.session.add(hizmet)
 

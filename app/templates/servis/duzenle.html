@@ -31,6 +31,13 @@
         <form method="POST" class="p-4">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
+            {% if aktif_kiralama_var %}
+            <div class="alert alert-warning" role="alert" style="margin-bottom: 1rem;">
+                Bu makine aktif kiralamada. Servis kaydi kapatilirken veya guncellenirken makinenin kiralama durumu korunur.
+                Guvenli isleyis icin servis tipi <strong>Yerinde Servis</strong> olarak kalmalidir.
+            </div>
+            {% endif %}
+
             <div class="row g-3">
                 <div class="col-md-4">
                     <label class="form-label fw-semibold">Başlangıç Tarihi</label>
@@ -58,7 +65,7 @@
                 </div>
                 <div class="col-md-4">
                     <label class="form-label fw-semibold">Servis Tipi</label>
-                    <select name="servis_tipi" class="form-select">
+                    <select name="servis_tipi" id="servis_tipi_select" class="form-select">
                         {% for key, label in servis_tipi_labels.items() %}
                         <option value="{{ key }}" {{ 'selected' if kayit.servis_tipi == key else '' }}>{{ label }}</option>
                         {% endfor %}
@@ -75,7 +82,14 @@
                 </div>
                 <div class="col-md-4">
                     <label class="form-label fw-semibold">Teknisyen / Usta</label>
-                    <input type="text" name="servis_veren_kisi" class="form-control" value="{{ kayit.servis_veren_kisi or '' }}">
+                    <input type="text" name="servis_veren_kisi" id="servis_veren_kisi"
+                           class="form-control" value="{{ kayit.servis_veren_kisi or '' }}"
+                           autocomplete="off" list="personel-datalist">
+                    <datalist id="personel-datalist" id="personel-datalist-ic">
+                        {% for p in personel_listesi %}
+                        <option value="{{ p.tam_ad }}">
+                        {% endfor %}
+                    </datalist>
                 </div>
                 <div class="col-md-6">
                     <label class="form-label fw-semibold">Sonraki Bakım Tarihi</label>
@@ -205,6 +219,22 @@ document.addEventListener('DOMContentLoaded', function () {
         attachRemoveHandler(newRow.querySelector('.remove-part-row'));
         tableBody.appendChild(newRow);
     });
+
+    // Servis tipi değişince datalist'i güncelle
+    const servisTipiSelect = document.getElementById('servis_tipi_select');
+    const kisiInput = document.getElementById('servis_veren_kisi');
+    const personelDatalist = document.getElementById('personel-datalist');
+
+    function togglePersonelDatalist() {
+        if (servisTipiSelect.value === 'dis_servis') {
+            kisiInput.removeAttribute('list');
+        } else {
+            kisiInput.setAttribute('list', 'personel-datalist');
+        }
+    }
+
+    servisTipiSelect.addEventListener('change', togglePersonelDatalist);
+    togglePersonelDatalist(); // sayfa açılışında kontrol et
 });
 </script>
 {% endblock %}

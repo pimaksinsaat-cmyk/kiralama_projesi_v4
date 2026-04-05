@@ -152,7 +152,8 @@
                             data-duzenle-url="{{ url_for('nakliyeler.duzenle', id=nakliye.id) }}"
                             data-sil-url="{{ url_for('nakliyeler.sil', id=nakliye.id) }}"
                             data-islendi="{{ '1' if nakliye.cari_islendi_mi else '0' }}"
-                            data-kiralama="{{ '1' if nakliye.kiralama_id else '0' }}">
+                            data-kiralama="{{ '1' if nakliye.kiralama_id else '0' }}"
+                            data-kiralama-duzenle-url="{{ url_for('kiralama.duzenle', kiralama_id=nakliye.kiralama_id) if nakliye.kiralama_id else '' }}">
                             
                             <td>{{ (pagination.page - 1) * pagination.per_page + loop.index }}</td>
                             <td class="ps-3">{{ nakliye.tarih.strftime('%d.%m.%Y') }}</td>
@@ -215,11 +216,25 @@
                             <td class="text-end">
                                 {% if nakliye.kiralama_id and nakliye.kiralama and nakliye.kiralama.kalemler %}
                                     {% set kdv_orani = nakliye.kiralama.kalemler[0].nakliye_satis_kdv or 0 %}
+                                    {% set tevkifat_str = nakliye.kiralama.kalemler[0].nakliye_satis_tevkifat_oran or '' %}
                                 {% else %}
                                     {% set kdv_orani = nakliye.kdv_orani or 0 %}
+                                    {% set tevkifat_str = nakliye.tevkifat_orani or '' %}
                                 {% endif %}
                                 {% if kdv_orani and kdv_orani != 0 %}
-                                    {{ "{:,.2f}".format((nakliye.tutar|float) * (kdv_orani / 100.0)).replace(',', 'X').replace('.', ',').replace('X', '.') }} TL
+                                    {% set kdv_tam = (nakliye.tutar|float) * (kdv_orani / 100.0) %}
+                                    {% if tevkifat_str %}
+                                        {% set tev_parts = tevkifat_str.split('/') %}
+                                        {% set net_kdv = kdv_tam * (tev_parts[1]|int - tev_parts[0]|int) / tev_parts[1]|int %}
+                                    {% else %}
+                                        {% set net_kdv = kdv_tam %}
+                                    {% endif %}
+                                    {{ "{:,.2f}".format(net_kdv).replace(',', 'X').replace('.', ',').replace('X', '.') }} TL
+                                    {% if tevkifat_str %}
+                                        <div class="text-muted fst-italic" style="font-size:0.7em; line-height:1.3; white-space:nowrap;">
+                                            {{ "{:,.2f}".format(kdv_tam).replace(',', 'X').replace('.', ',').replace('X', '.') }} − {{ "{:,.2f}".format(kdv_tam).replace(',', 'X').replace('.', ',').replace('X', '.') }}×{{ tevkifat_str }}
+                                        </div>
+                                    {% endif %}
                                 {% else %}
                                     0,00 TL
                                 {% endif %}
@@ -227,12 +242,20 @@
                             <td class="text-end fw-bold text-primary">
                                 {% if nakliye.kiralama_id and nakliye.kiralama and nakliye.kiralama.kalemler %}
                                     {% set kdv_orani = nakliye.kiralama.kalemler[0].nakliye_satis_kdv or 0 %}
+                                    {% set tevkifat_str = nakliye.kiralama.kalemler[0].nakliye_satis_tevkifat_oran or '' %}
                                 {% else %}
                                     {% set kdv_orani = nakliye.kdv_orani or 0 %}
+                                    {% set tevkifat_str = nakliye.tevkifat_orani or '' %}
                                 {% endif %}
                                 {% set matrah = nakliye.tutar or 0 %}
-                                {% set kdv = (matrah|float) * (kdv_orani / 100.0) %}
-                                {{ "{:,.2f}".format((matrah|float) + kdv).replace(',', 'X').replace('.', ',').replace('X', '.') }} TL
+                                {% set kdv_tam = (matrah|float) * (kdv_orani / 100.0) %}
+                                {% if tevkifat_str %}
+                                    {% set tev_parts = tevkifat_str.split('/') %}
+                                    {% set net_kdv = kdv_tam * (tev_parts[1]|int - tev_parts[0]|int) / tev_parts[1]|int %}
+                                {% else %}
+                                    {% set net_kdv = kdv_tam %}
+                                {% endif %}
+                                {{ "{:,.2f}".format((matrah|float) + net_kdv).replace(',', 'X').replace('.', ',').replace('X', '.') }} TL
                             </td>
                             
                             <td class="text-center">
@@ -310,6 +333,10 @@
     
     <a class="dropdown-item py-2" href="#" id="ctxDetay">
         <i class="fas fa-eye text-info me-3"></i> Detaylı Görünüm
+    </a>
+
+    <a class="dropdown-item py-2" href="#" id="ctxKiralamaGit" style="display:none;">
+        <i class="fas fa-file-contract text-warning me-3"></i> Kiralamayla Düzenle
     </a>
     
     <div id="ctxDuzenleGrup">
@@ -494,6 +521,7 @@
         const duzenleGrup = document.getElementById('ctxDuzenleGrup');
         const silTrigger = document.getElementById('ctxSilTrigger');
         const kilitliMesaj = document.getElementById('ctxKilitliMesaj');
+        const kiralamaGitLink = document.getElementById('ctxKiralamaGit');
         
         const deleteModalEl = document.getElementById('deleteModal');
         const deleteForm = document.getElementById('deleteForm');
@@ -538,6 +566,7 @@
 
                 const detayUrl = this.getAttribute('data-detay-url');
                 const duzenleUrl = this.getAttribute('data-duzenle-url');
+                const kiralamaUrl = this.getAttribute('data-kiralama-duzenle-url');
                 const isKiralama = this.getAttribute('data-kiralama') === '1';
                 currentDeleteUrl = this.getAttribute('data-sil-url');
 
@@ -546,9 +575,12 @@
 
                 // Kiralama Kilidi Mantığı
                 if (isKiralama) {
+                    kiralamaGitLink.href = kiralamaUrl;
+                    kiralamaGitLink.style.display = 'block';
                     duzenleGrup.style.display = 'none';
-                    kilitliMesaj.style.display = 'block';
+                    kilitliMesaj.style.display = 'none';
                 } else {
+                    kiralamaGitLink.style.display = 'none';
                     duzenleGrup.style.display = 'block';
                     kilitliMesaj.style.display = 'none';
                 }
