@@ -322,7 +322,7 @@ def hizli_servis_ac():
         )
 
         flash(f"'{ekipman.kod}' için servis kaydı açıldı.", "success")
-        return redirect(url_for('servis.duzenle', id=bakim_id))
+        return redirect(url_for('servis.duzenle', id=bakim_id.id))
     except ValidationError as e:
         flash(str(e), "warning")
         return redirect(url_for('servis.bakimda'))

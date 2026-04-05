@@ -603,6 +603,33 @@
         background-color: #f9f9f9;
     }
 
+    .masraf-ayrac-row td {
+        background: #fff7ed;
+        border-top: 1px solid #fed7aa;
+        border-bottom: 1px solid #fed7aa;
+        padding: 0.85rem 1rem;
+    }
+
+    .masraf-ayrac-icerik {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .masraf-ayrac-baslik {
+        color: #c2410c;
+        font-weight: 800;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+        font-size: 0.78rem;
+    }
+
+    .masraf-mazot-row {
+        background-color: #fffaf3;
+    }
+
     .masraf-tarih {
         color: var(--pimaks-blue);
         font-weight: 600;
@@ -1463,7 +1490,7 @@
                 <div class="masraf-tablo-header">
                     <h3>{{ selected_period_label }} Masraf Listesi</h3>
                 </div>
-                {% if masraflar %}
+                {% if diger_masraflar or mazot_masraflari %}
                 <table class="masraf-tablo">
                     <thead>
                         <tr>
@@ -1475,7 +1502,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% for masraf in masraflar %}
+                        {% for masraf in diger_masraflar %}
                         <tr>
                             <td class="masraf-tarih">{{ masraf.tarih.strftime('%d.%m.%Y') }}</td>
                             <td>
@@ -1507,6 +1534,50 @@
                             </td>
                         </tr>
                         {% endfor %}
+
+                        {% if mazot_masraflari %}
+                        <tr class="masraf-ayrac-row">
+                            <td colspan="5">
+                                <div class="masraf-ayrac-icerik">
+                                    <span class="masraf-ayrac-baslik">Mazot Giderleri</span>
+                                    <span class="financial-value block">
+                                        <span class="financial-amount">{{ "{:,.2f}".format(mazot_toplam).replace(",", "_").replace(".", ",").replace("_", ".") }}</span>
+                                        <span class="financial-suffix">TL</span>
+                                    </span>
+                                </div>
+                            </td>
+                        </tr>
+                        {% for masraf in mazot_masraflari %}
+                        <tr class="masraf-mazot-row">
+                            <td class="masraf-tarih">{{ masraf.tarih.strftime('%d.%m.%Y') }}</td>
+                            <td>
+                                <span class="masraf-kategori">{{ kategori_labels.get(masraf.kategori, masraf.kategori) }}</span>
+                            </td>
+                            <td class="masraf-tutar">
+                                <span class="financial-value block">
+                                    <span class="financial-amount">{{ "{:,.2f}".format(masraf.tutar).replace(",", "_").replace(".", ",").replace("_", ".") }}</span>
+                                    <span class="financial-suffix">TL</span>
+                                </span>
+                            </td>
+                            <td>
+                                {% if masraf.fatura_no %}
+                                    <small style="color: #7f8c8d;"><strong>{{ masraf.fatura_no }}</strong></small><br>
+                                {% endif %}
+                                <small style="color: #7f8c8d;">{{ masraf.aciklama or '-' }}</small>
+                            </td>
+                            <td>
+                                <form method="POST" action="{{ url_for('subeler.masraf_sil', gider_id=masraf.id) }}"
+                                      style="display: inline;"
+                                      onsubmit="return confirm('Bu mazot giderini silmek istediğiniz emin misiniz?');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <input type="hidden" name="year" value="{{ selected_year }}">
+                                    <input type="hidden" name="month" value="{{ selected_month }}">
+                                    <button type="submit" class="sil-btn">Sil</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        {% endif %}
                     </tbody>
                 </table>
                 {% else %}

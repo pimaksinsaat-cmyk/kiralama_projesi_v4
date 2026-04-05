@@ -206,6 +206,9 @@ def sube_masraflari(sube_id):
     )
 
     kategori_toplamlar = SubeGiderService.build_category_totals(masraflar)
+    mazot_masraflari = [masraf for masraf in masraflar if masraf.kategori == 'mazot']
+    diger_masraflar = [masraf for masraf in masraflar if masraf.kategori != 'mazot']
+    mazot_toplam = sum(float(masraf.tutar or 0) for masraf in mazot_masraflari)
     manuel_masraf_toplam = sum(kategori_toplamlar.values())
     personel_gider_detaylari = PersonelService.get_monthly_cost_breakdown(selected_year, selected_month, sube_id=sube_id)
     aylik_personel_toplam = sum(row['toplam_tutar'] for row in personel_gider_detaylari)
@@ -227,6 +230,9 @@ def sube_masraflari(sube_id):
         aylik_personel_toplam=aylik_personel_toplam,
         personel_gider_detaylari=personel_gider_detaylari,
         kategori_toplamlar=kategori_toplamlar,
+        mazot_masraflari=mazot_masraflari,
+        diger_masraflar=diger_masraflar,
+        mazot_toplam=mazot_toplam,
         kategori_labels=kategori_labels,
         kategori_secenekleri=MANUEL_GIDER_KATEGORILERI,
         today=datetime.now().strftime('%Y-%m-%d'),
