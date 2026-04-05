@@ -88,7 +88,7 @@
                 <div class="input-group">
                     <span class="input-group-text">TL</span>
                     <!-- Akıllı Giriş -->
-                    {{ form.bakiye(class="form-control currency-input", type="text", autocomplete="off", style="font-size: 1.2em; font-weight: bold;") }}
+                    {{ form.bakiye(class="form-control", type="number", step="0.01", autocomplete="off", style="font-size: 1.2em; font-weight: bold;") }}
                 </div>
                 <small class="text-muted">Dikkat: Bakiyeyi buradan değiştirmek işlem kaydı oluşturmaz!</small>
             </div>
@@ -171,50 +171,6 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Para birimi formatlama (Mevcut kodlar)
-    const currencyInputs = document.querySelectorAll('.currency-input');
-    function formatCurrency(value) {
-        if (!value) return '';
-        let v = value.toString().replace(/\./g, '').replace(',', '.');
-        let number = parseFloat(v);
-        if (isNaN(number)) return value;
-        return number.toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-    }
-    function cleanCurrency(val) {
-        if (!val) return "0.00";
-        return val.toString().replace(/\./g, '').replace(',', '.');
-    }
-    function formatInput(input) {
-        let value = input.value;
-        if (value === '') return;
-        let cleanVal = value.replace(/[^\d,]/g, '');
-        let parts = cleanVal.split(',');
-        if (parts.length > 2) cleanVal = parts[0] + ',' + parts.slice(1).join('');
-        parts = cleanVal.split(',');
-        let intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-        let decimalPart = parts.length > 1 ? ',' + parts[1].substring(0, 2) : '';
-        input.value = intPart + decimalPart;
-    }
-    currencyInputs.forEach(input => {
-        if (input.value) {
-             if (input.value.indexOf('.') > -1 && input.value.indexOf(',') === -1) input.value = input.value.replace('.', ',');
-             input.value = formatCurrency(input.value);
-        }
-        input.addEventListener('input', function() { formatInput(this); });
-        input.addEventListener('keydown', function(e) {
-            if (['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete', 'Enter'].includes(e.key)) return;
-            if (!/^[0-9,]$/.test(e.key)) e.preventDefault();
-        });
-        input.addEventListener('focus', function() {
-            let val = this.value.replace(/\./g, '');
-            if (val === '0,00' || val === '0') val = '';
-            this.value = val;
-            setTimeout(() => { this.select(); }, 50);
-        });
-        input.addEventListener('blur', function() { this.value = formatCurrency(this.value); });
-        input.form.addEventListener('submit', function() { input.value = cleanCurrency(input.value); });
-    });
-
     // --- EN GÜVENLİ MODAL KAPATMA MANTIĞI ---
     const backdrop = document.getElementById('modal-backdrop-delete');
     const modal = document.getElementById('delete-modal');
