@@ -8,6 +8,8 @@
     .bakiye-bilgi { font-size: 1.2rem; font-weight: bold; color: #28a745; float: right; }
     .btn-print { background-color: #6610f2; color: white; border: none; }
     .btn-print:hover { background-color: #520dc2; color: white; }
+    .btn-whatsapp { background-color: #25d366; color: white; border: none; }
+    .btn-whatsapp:hover { background-color: #1ebe59; color: white; }
 
     /* SAĞ TIK / MENÜ STİLLERİ (EKLENDİ) */
     .context-menu { 
@@ -67,6 +69,7 @@
         <div class="mb-3 no-print">
             <a href="{{ url_for('cari.kasa_listesi') }}" class="btn btn-secondary btn-sm"><i class="fa fa-arrow-left"></i> Listeye Dön</a>
             <button onclick="window.print()" class="btn btn-print btn-sm"><i class="fa fa-print"></i> Yazdır / PDF</button>
+            <a href="#" class="btn btn-whatsapp btn-sm" onclick="window.open('https://wa.me/?text=' + encodeURIComponent(window.location.href), '_blank'); return false;"><i class="fab fa-whatsapp"></i> WhatsApp'ta Paylaş</a>
             <small class="text-muted ms-2">(İşlem için satıra sağ tıklayın veya basılı tutun)</small>
         </div>
 
