@@ -1,9 +1,11 @@
 from flask import render_template, redirect, url_for, flash, request, jsonify
 from datetime import date, datetime, timedelta
+from decimal import Decimal
 from sqlalchemy import inspect
 from app.subeler import subeler_bp
 from app.extensions import db
 from app.subeler.models import Sube, SubeGideri
+from app.araclar.models import Arac
 from app.filo.models import Ekipman
 from app.subeler.forms import SubeForm, SubeGideriForm, SubeSabitGiderDonemiForm, GIDER_KATEGORILERI, MANUEL_GIDER_KATEGORILERI
 from app.services.base import ValidationError
@@ -183,6 +185,7 @@ def sube_masraflari(sube_id):
     form.sube_id.data = sube_id
     sabit_gider_form = SubeSabitGiderDonemiForm()
     sabit_gider_form.sube_id.data = sube_id
+    sube_araclari = Arac.query.filter_by(sube_id=sube_id, is_active=True).order_by(Arac.plaka).all()
 
     if not _sube_giderleri_table_exists():
         flash('Sube giderleri tablosu veritabaninda henuz olusturulmamis. Giderler su an gosterilemiyor.', 'warning')
@@ -205,14 +208,13 @@ def sube_masraflari(sube_id):
         selected_month,
     )
 
-    kategori_toplamlar = SubeGiderService.build_category_totals(masraflar)
     mazot_masraflari = [masraf for masraf in masraflar if masraf.kategori == 'mazot']
     diger_masraflar = [masraf for masraf in masraflar if masraf.kategori != 'mazot']
     mazot_toplam = sum(float(masraf.tutar or 0) for masraf in mazot_masraflari)
-    manuel_masraf_toplam = sum(kategori_toplamlar.values())
+    manuel_masraf_toplam = sum(float(masraf.tutar or 0) for masraf in diger_masraflar)
     personel_gider_detaylari = PersonelService.get_monthly_cost_breakdown(selected_year, selected_month, sube_id=sube_id)
     aylik_personel_toplam = sum(row['toplam_tutar'] for row in personel_gider_detaylari)
-    genel_toplam = manuel_masraf_toplam + aylik_personel_toplam + aylik_sabit_toplam
+    genel_toplam = manuel_masraf_toplam + mazot_toplam + aylik_personel_toplam + aylik_sabit_toplam
 
     kategori_labels = dict(MANUEL_GIDER_KATEGORILERI)
 
@@ -229,12 +231,12 @@ def sube_masraflari(sube_id):
         manuel_masraf_toplam=manuel_masraf_toplam,
         aylik_personel_toplam=aylik_personel_toplam,
         personel_gider_detaylari=personel_gider_detaylari,
-        kategori_toplamlar=kategori_toplamlar,
         mazot_masraflari=mazot_masraflari,
         diger_masraflar=diger_masraflar,
         mazot_toplam=mazot_toplam,
         kategori_labels=kategori_labels,
         kategori_secenekleri=MANUEL_GIDER_KATEGORILERI,
+        sube_araclari=sube_araclari,
         today=datetime.now().strftime('%Y-%m-%d'),
         yesterday=(date.today() - timedelta(days=1)).strftime('%Y-%m-%d'),
         today_date=date.today(),
@@ -246,6 +248,14 @@ def sube_masraflari(sube_id):
 def masraf_ekle():
     """Yeni masraf kaydı ekle (form gönderimi veya AJAX)."""
     form = SubeGideriForm()
+    is_mazot_request = (request.form.get('kategori') or '').strip() == 'mazot'
+    if is_mazot_request and form.litre.data is not None and form.birim_fiyat.data is not None:
+        form.tutar.data = (Decimal(form.litre.data) * Decimal(form.birim_fiyat.data)).quantize(Decimal('0.01'))
+
+    sube_araclari = []
+    if form.sube_id.data:
+        sube_araclari = Arac.query.filter_by(sube_id=form.sube_id.data, is_active=True).order_by(Arac.plaka).all()
+    sube_arac_map = {str(arac.id): arac for arac in sube_araclari}
     redirect_params = {
         'sube_id': form.sube_id.data,
         'year': request.form.get('year'),
@@ -258,15 +268,45 @@ def masraf_ekle():
 
     if form.validate_on_submit():
         try:
+            payload = {
+                'sube_id': form.sube_id.data,
+                'tarih': form.tarih.data,
+                'kategori': form.kategori.data,
+                'tutar': form.tutar.data,
+                'litre': form.litre.data,
+                'birim_fiyat': form.birim_fiyat.data,
+                'aciklama': form.aciklama.data,
+                'fatura_no': form.fatura_no.data,
+            }
+
+            if form.kategori.data == 'mazot':
+                mazot_arac_secimi = (request.form.get('mazot_arac_secimi') or '').strip()
+                mazot_diger_aciklama = (request.form.get('mazot_diger_aciklama') or '').strip()
+                kullanici_notu = (form.aciklama.data or '').strip()
+
+                if not mazot_arac_secimi:
+                    raise ValidationError('Mazot gideri icin once arac plakasi secmeli veya Diger secenegini kullanmalisiniz.')
+
+                if form.litre.data is None or form.birim_fiyat.data is None:
+                    raise ValidationError('Mazot giderinde litre ve birim fiyat alanlari zorunludur.')
+
+                payload['tutar'] = (Decimal(form.litre.data) * Decimal(form.birim_fiyat.data)).quantize(Decimal('0.01'))
+
+                if mazot_arac_secimi == 'other':
+                    if not mazot_diger_aciklama:
+                        raise ValidationError('Diger secenegini sectiginizde aciklama girmelisiniz.')
+                    mazot_kaynak = f'Akaryakit kalemi: {mazot_diger_aciklama}'
+                else:
+                    secilen_arac = sube_arac_map.get(mazot_arac_secimi)
+                    if not secilen_arac:
+                        raise ValidationError('Secilen arac bu subeye ait aktif arac listesinde bulunamadi.')
+                    payload['arac_id'] = secilen_arac.id
+                    mazot_kaynak = f'Arac: {secilen_arac.plaka}'
+
+                payload['aciklama'] = f'{mazot_kaynak} | {kullanici_notu}' if kullanici_notu else mazot_kaynak
+
             yeni_gider = SubeGiderService.create_gider(
-                {
-                    'sube_id': form.sube_id.data,
-                    'tarih': form.tarih.data,
-                    'kategori': form.kategori.data,
-                    'tutar': form.tutar.data,
-                    'aciklama': form.aciklama.data,
-                    'fatura_no': form.fatura_no.data,
-                }
+                payload
             )
 
             flash(f'{yeni_gider.tutar} TL masraf başarıyla kaydedildi.', 'success')

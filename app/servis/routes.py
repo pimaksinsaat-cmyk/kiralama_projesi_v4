@@ -288,6 +288,11 @@ def hizli_servis_ac():
             flash('Makine bulunamadı.', 'danger')
             return redirect(url_for('servis.bakimda'))
 
+        # Serviste olan (kirada olan) makineler için servis kaydı açılamaz
+        if ekipman.calisma_durumu == 'serviste':
+            flash(f"'{ekipman.kod}' zaten serviste (kirada). Servis kaydı açılamazsınız.", 'warning')
+            return redirect(url_for('servis.bakimda'))
+
         # Servis kaydı oluştur
         bakim_verileri = {
             'tarih': date.today(),

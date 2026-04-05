@@ -80,6 +80,12 @@ class SubeGideriForm(FlaskForm):
     kategori = SelectField('Kategori',
                           choices=MANUEL_GIDER_KATEGORILERI,
                           validators=[DataRequired(message="Kategori seçmek zorunludur")])
+    litre = DecimalField('Litre',
+                        places=2,
+                        validators=[Optional(), NumberRange(min=0.01, message="Litre 0'dan buyuk olmalidir")])
+    birim_fiyat = DecimalField('Birim Fiyat (TL)',
+                              places=2,
+                              validators=[Optional(), NumberRange(min=0.01, message="Birim fiyat 0'dan buyuk olmalidir")])
     tutar = DecimalField('Tutar (TL)',
                         places=2,
                         validators=[DataRequired(message="Tutar zorunludur"),

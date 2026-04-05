@@ -169,6 +169,11 @@
         color: #b45309;
     }
 
+    .ozet-ikon.akaryakit {
+        background: #ffedd5;
+        color: #c2410c;
+    }
+
     .ozet-ikon.personel {
         background: #ccfbf1;
         color: #0f766e;
@@ -204,6 +209,10 @@
 
     .oran-cubugu.manuel span {
         background: #d97706;
+    }
+
+    .oran-cubugu.akaryakit span {
+        background: #ea580c;
     }
 
     .oran-cubugu.personel span {
@@ -628,6 +637,17 @@
 
     .masraf-mazot-row {
         background-color: #fffaf3;
+    }
+
+    .mazot-ek-alan[hidden] {
+        display: none;
+    }
+
+    .form-help-text {
+        display: block;
+        margin-top: 0.35rem;
+        font-size: 0.78rem;
+        color: #7f8c8d;
     }
 
     .masraf-tarih {
@@ -1119,7 +1139,7 @@
                                     <span class="ozet-ikon manuel">M</span>
                                     <span>
                                         <strong>Manuel Masraf</strong>
-                                        <small>Elle girilen kayitlar</small>
+                                        <small>Elle girilen kayitlar (akaryakit haric)</small>
                                     </span>
                                 </div>
                             </td>
@@ -1133,6 +1153,30 @@
                             <td data-label="Tutar" class="masraf-tutar" style="color:#b45309;">
                                 <span class="financial-value block">
                                     <span class="financial-amount">{{ "{:,.2f}".format(manuel_masraf_toplam).replace(",", "_").replace(".", ",").replace("_", ".") }}</span>
+                                    <span class="financial-suffix">TL</span>
+                                </span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td data-label="Kalem">
+                                <div class="ozet-kalem">
+                                    <span class="ozet-ikon akaryakit">A</span>
+                                    <span>
+                                        <strong>Akaryakit</strong>
+                                        <small>Araclara tanimli yakit alimlari</small>
+                                    </span>
+                                </div>
+                            </td>
+                            <td data-label="Pay">
+                                {% set akaryakit_oran = (mazot_toplam / genel_toplam * 100) if genel_toplam else 0 %}
+                                <div class="ozet-oran">
+                                    <div class="oran-cubugu akaryakit"><span style="width: {{ '%.2f'|format(akaryakit_oran) }}%;"></span></div>
+                                    <div class="oran-metin">%{{ "{:,.2f}".format(akaryakit_oran).replace(",", "_").replace(".", ",").replace("_", ".") }}</div>
+                                </div>
+                            </td>
+                            <td data-label="Tutar" class="masraf-tutar" style="color:#c2410c;">
+                                <span class="financial-value block">
+                                    <span class="financial-amount">{{ "{:,.2f}".format(mazot_toplam).replace(",", "_").replace(".", ",").replace("_", ".") }}</span>
                                     <span class="financial-suffix">TL</span>
                                 </span>
                             </td>
@@ -1453,38 +1497,6 @@
                 {% endif %}
             </div>
 
-            <!-- Kategori Toplamları -->
-            {% if kategori_toplamlar %}
-            <div class="kategori-toplam-wrapper">
-                <div class="kategori-toplam-header">
-                    <h3>{{ selected_period_label }} Manuel Kategori Toplamlari</h3>
-                </div>
-                <table class="kategori-toplam-tablosu">
-                    <thead>
-                        <tr>
-                            <th>Kategori</th>
-                            <th style="width: 170px;">Tutar</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for kategori, tutar in kategori_toplamlar.items() | sort %}
-                        <tr>
-                            <td data-label="Kategori">
-                                <span class="masraf-kategori">{{ kategori_labels.get(kategori, kategori) }}</span>
-                            </td>
-                            <td data-label="Tutar" class="masraf-tutar">
-                                <span class="financial-value block">
-                                    <span class="financial-amount">{{ "{:,.2f}".format(tutar).replace(",", "_").replace(".", ",").replace("_", ".") }}</span>
-                                    <span class="financial-suffix">TL</span>
-                                </span>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            {% endif %}
-
             <!-- Masraf Tablosu -->
             <div class="masraf-tablo-wrapper">
                 <div class="masraf-tablo-header">
@@ -1612,15 +1624,43 @@
 
                 <div class="form-group">
                     {{ form.kategori.label }}
-                    {{ form.kategori(class="form-control") }}
+                    {{ form.kategori(class="form-control", id="masraf-kategori-select") }}
                     {% if form.kategori.errors %}
                         <small style="color: var(--danger-red);">{{ form.kategori.errors[0] }}</small>
                     {% endif %}
                 </div>
 
+                <div class="form-group mazot-ek-alan" id="mazot-arac-secim-group" hidden>
+                    <label for="mazot-arac-secimi">Arac Plakasi / Ekipman</label>
+                    <select id="mazot-arac-secimi" name="mazot_arac_secimi" class="form-control">
+                        <option value="">Seciniz...</option>
+                        {% for arac in sube_araclari %}
+                        <option value="{{ arac.id }}">{{ arac.plaka }}{% if arac.marka_model %} - {{ arac.marka_model }}{% endif %}</option>
+                        {% endfor %}
+                        <option value="other">Diger</option>
+                    </select>
+                    <small class="form-help-text">Mazot hangi araca alindiysa secin. Listede yoksa Diger kullanin.</small>
+                </div>
+
+                <div class="form-group mazot-ek-alan" id="mazot-litre-group" hidden>
+                    {{ form.litre.label }}
+                    {{ form.litre(class="form-control", id="mazot-litre", placeholder="Orn: 125.50") }}
+                    {% if form.litre.errors %}
+                        <small style="color: var(--danger-red);">{{ form.litre.errors[0] }}</small>
+                    {% endif %}
+                </div>
+
+                <div class="form-group mazot-ek-alan" id="mazot-birim-fiyat-group" hidden>
+                    {{ form.birim_fiyat.label }}
+                    {{ form.birim_fiyat(class="form-control", id="mazot-birim-fiyat", placeholder="Orn: 46.75") }}
+                    {% if form.birim_fiyat.errors %}
+                        <small style="color: var(--danger-red);">{{ form.birim_fiyat.errors[0] }}</small>
+                    {% endif %}
+                </div>
+
                 <div class="form-group">
                     {{ form.tutar.label }}
-                    {{ form.tutar(class="form-control", placeholder="0.00") }}
+                    {{ form.tutar(class="form-control", id="masraf-tutar-input", placeholder="0.00") }}
                     {% if form.tutar.errors %}
                         <small style="color: var(--danger-red);">{{ form.tutar.errors[0] }}</small>
                     {% endif %}
@@ -1640,6 +1680,12 @@
                     {% if form.aciklama.errors %}
                         <small style="color: var(--danger-red);">{{ form.aciklama.errors[0] }}</small>
                     {% endif %}
+                </div>
+
+                <div class="form-group mazot-ek-alan" id="mazot-diger-aciklama-group" hidden>
+                    <label for="mazot-diger-aciklama">Diger Aciklamasi</label>
+                    <input id="mazot-diger-aciklama" name="mazot_diger_aciklama" class="form-control" type="text" placeholder="Orn: Forklift, jenerator, kompresor">
+                    <small class="form-help-text">Arac disindaki akaryakit kalemlerini buraya manuel yazabilirsiniz.</small>
                 </div>
 
                 <div class="form-group">
@@ -1700,6 +1746,49 @@
         const stopCategory = document.getElementById('sabit-gider-stop-category');
         const stopCloseButton = document.getElementById('sabit-gider-stop-close');
         const stopCancelButton = document.getElementById('sabit-gider-stop-cancel');
+        const masrafKategoriSelect = document.getElementById('masraf-kategori-select');
+        const mazotAracSecimGroup = document.getElementById('mazot-arac-secim-group');
+        const mazotAracSecimi = document.getElementById('mazot-arac-secimi');
+        const mazotLitreGroup = document.getElementById('mazot-litre-group');
+        const mazotLitreInput = document.getElementById('mazot-litre');
+        const mazotBirimFiyatGroup = document.getElementById('mazot-birim-fiyat-group');
+        const mazotBirimFiyatInput = document.getElementById('mazot-birim-fiyat');
+        const masrafTutarInput = document.getElementById('masraf-tutar-input');
+        const mazotDigerAciklamaGroup = document.getElementById('mazot-diger-aciklama-group');
+        const mazotDigerAciklama = document.getElementById('mazot-diger-aciklama');
+
+        function parseDecimalInput(value) {
+            if (!value) {
+                return null;
+            }
+
+            const normalized = value.replace(',', '.');
+            const parsed = Number.parseFloat(normalized);
+            return Number.isFinite(parsed) ? parsed : null;
+        }
+
+        function syncMazotTutar() {
+            if (!masrafTutarInput || !mazotLitreInput || !mazotBirimFiyatInput) {
+                return;
+            }
+
+            if (!masrafKategoriSelect || masrafKategoriSelect.value !== 'mazot') {
+                masrafTutarInput.readOnly = false;
+                return;
+            }
+
+            masrafTutarInput.readOnly = true;
+
+            const litre = parseDecimalInput(mazotLitreInput.value);
+            const birimFiyat = parseDecimalInput(mazotBirimFiyatInput.value);
+
+            if (litre === null || birimFiyat === null) {
+                masrafTutarInput.value = '';
+                return;
+            }
+
+            masrafTutarInput.value = (litre * birimFiyat).toFixed(2);
+        }
 
         function setEditRowState(targetId, shouldOpen) {
             const row = document.getElementById(targetId);
@@ -1773,6 +1862,70 @@
                 }
             });
         }
+
+        function syncMazotFields() {
+            if (!masrafKategoriSelect || !mazotAracSecimGroup || !mazotAracSecimi || !mazotDigerAciklamaGroup || !mazotLitreGroup || !mazotBirimFiyatGroup) {
+                return;
+            }
+
+            const isMazot = masrafKategoriSelect.value === 'mazot';
+            const isOther = mazotAracSecimi.value === 'other';
+
+            if (isMazot) {
+                mazotAracSecimGroup.removeAttribute('hidden');
+                mazotLitreGroup.removeAttribute('hidden');
+                mazotBirimFiyatGroup.removeAttribute('hidden');
+            } else {
+                mazotAracSecimGroup.setAttribute('hidden', 'hidden');
+                mazotLitreGroup.setAttribute('hidden', 'hidden');
+                mazotBirimFiyatGroup.setAttribute('hidden', 'hidden');
+                mazotDigerAciklamaGroup.setAttribute('hidden', 'hidden');
+                mazotAracSecimi.value = '';
+                if (mazotLitreInput) {
+                    mazotLitreInput.value = '';
+                }
+                if (mazotBirimFiyatInput) {
+                    mazotBirimFiyatInput.value = '';
+                }
+                if (mazotDigerAciklama) {
+                    mazotDigerAciklama.value = '';
+                }
+                if (masrafTutarInput) {
+                    masrafTutarInput.readOnly = false;
+                }
+                syncMazotTutar();
+                return;
+            }
+
+            if (isOther) {
+                mazotDigerAciklamaGroup.removeAttribute('hidden');
+            } else {
+                mazotDigerAciklamaGroup.setAttribute('hidden', 'hidden');
+                if (mazotDigerAciklama) {
+                    mazotDigerAciklama.value = '';
+                }
+            }
+
+            syncMazotTutar();
+        }
+
+        if (masrafKategoriSelect) {
+            masrafKategoriSelect.addEventListener('change', syncMazotFields);
+        }
+
+        if (mazotAracSecimi) {
+            mazotAracSecimi.addEventListener('change', syncMazotFields);
+        }
+
+        if (mazotLitreInput) {
+            mazotLitreInput.addEventListener('input', syncMazotTutar);
+        }
+
+        if (mazotBirimFiyatInput) {
+            mazotBirimFiyatInput.addEventListener('input', syncMazotTutar);
+        }
+
+        syncMazotFields();
 
         document.addEventListener('keydown', function (event) {
             if (event.key === 'Escape') {
