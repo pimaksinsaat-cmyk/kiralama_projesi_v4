@@ -370,6 +370,7 @@
                             <i class="fas fa-edit"></i> Düzenle
                         </a>
                         <form method="POST" action="{{ url_for('araclar.bakim_sil', bakim_id=bakim.id) }}" style="display: inline;" onsubmit="return confirm('Bu bakım kaydını silmek istediğiniz emin misiniz?');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="btn-sm btn-delete">
                                 <i class="fas fa-trash"></i> Sil
                             </button>
