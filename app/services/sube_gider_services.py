@@ -100,6 +100,83 @@ class SubeSabitGiderDonemiService(BaseService):
         return value or None
 
     @classmethod
+    def build_timeline_metadata(cls, donemler, reference_date=None):
+        reference_date = reference_date or date.today()
+        grouped = {}
+        metadata = {}
+
+        for donem in sorted(
+            donemler,
+            key=lambda row: ((row.kategori or ''), row.baslangic_tarihi or date.min, row.id or 0),
+        ):
+            grouped.setdefault(donem.kategori, []).append(donem)
+
+        for kategori_donemleri in grouped.values():
+            for index, donem in enumerate(kategori_donemleri):
+                onceki_var = index > 0
+                sonraki_donem = kategori_donemleri[index + 1] if index + 1 < len(kategori_donemleri) else None
+
+                effective_start = donem.baslangic_tarihi if onceki_var else None
+                effective_end = donem.bitis_tarihi
+
+                if sonraki_donem and sonraki_donem.baslangic_tarihi:
+                    next_boundary = sonraki_donem.baslangic_tarihi - timedelta(days=1)
+                    if effective_end is None or effective_end > next_boundary:
+                        effective_end = next_boundary
+
+                if effective_start and effective_start > reference_date:
+                    status = 'planned'
+                elif effective_end and effective_end <= reference_date:
+                    status = 'ended'
+                else:
+                    status = 'active'
+
+                metadata[donem.id] = {
+                    'effective_start': effective_start,
+                    'effective_end': effective_end,
+                    'status': status,
+                    'status_label': {
+                        'planned': 'Planli',
+                        'active': 'Aktif',
+                        'ended': 'Kapandi',
+                    }[status],
+                    'is_first_period': not onceki_var,
+                }
+
+        return metadata
+
+    @staticmethod
+    def _resolve_period_status(donem, reference_date=None):
+        reference_date = reference_date or date.today()
+        if donem.baslangic_tarihi and donem.baslangic_tarihi > reference_date:
+            return 'planned'
+        if donem.bitis_tarihi and donem.bitis_tarihi <= reference_date:
+            return 'ended'
+        return 'active'
+
+    @classmethod
+    def _sync_active_flag(cls, donem, reference_date=None):
+        donem.is_active = cls._resolve_period_status(donem, reference_date=reference_date) == 'active'
+        return donem
+
+    @classmethod
+    def _sync_category_flags(cls, sube_id, kategori, reference_date=None):
+        donemler = (
+            cls._get_base_query()
+            .filter(
+                SubeSabitGiderDonemi.sube_id == sube_id,
+                SubeSabitGiderDonemi.kategori == kategori,
+            )
+            .order_by(SubeSabitGiderDonemi.baslangic_tarihi.asc(), SubeSabitGiderDonemi.id.asc())
+            .all()
+        )
+        metadata = cls.build_timeline_metadata(donemler, reference_date=reference_date)
+        for donem in donemler:
+            donem.is_active = metadata.get(donem.id, {}).get('status') == 'active'
+            db.session.add(donem)
+        return metadata
+
+    @classmethod
     def _normalize_payload(cls, payload):
         normalized = dict(payload or {})
         normalized['sube_id'] = int(normalized['sube_id']) if normalized.get('sube_id') else None
@@ -129,7 +206,7 @@ class SubeSabitGiderDonemiService(BaseService):
         return (
             cls._get_base_query()
             .filter_by(sube_id=sube_id)
-            .order_by(SubeSabitGiderDonemi.is_active.desc(), SubeSabitGiderDonemi.baslangic_tarihi.desc(), SubeSabitGiderDonemi.id.desc())
+            .order_by(SubeSabitGiderDonemi.baslangic_tarihi.desc(), SubeSabitGiderDonemi.id.desc())
             .all()
         )
 
@@ -141,25 +218,34 @@ class SubeSabitGiderDonemiService(BaseService):
         else:
             period_end = date(year, month + 1, 1) - timedelta(days=1)
 
-        donemler = (
-            cls._get_base_query()
-            .filter(
-                SubeSabitGiderDonemi.sube_id == sube_id,
-                SubeSabitGiderDonemi.baslangic_tarihi <= period_end,
-                or_(SubeSabitGiderDonemi.bitis_tarihi.is_(None), SubeSabitGiderDonemi.bitis_tarihi >= period_start),
-            )
-            .all()
-        )
-        return sum(float(donem.aylik_tutar or 0) for donem in donemler)
+        days_in_month = (period_end - period_start).days + 1
+
+        donemler = cls.list_donemler(sube_id)
+        metadata = cls.build_timeline_metadata(donemler, reference_date=period_end)
+
+        toplam = 0.0
+        for donem in donemler:
+            meta = metadata.get(donem.id, {})
+            effective_start = meta.get('effective_start') or period_start
+            effective_end = meta.get('effective_end') or period_end
+
+            overlap_start = max(effective_start, period_start)
+            overlap_end = min(effective_end, period_end)
+            if overlap_end < overlap_start:
+                continue
+
+            overlap_days = (overlap_end - overlap_start).days + 1
+            monthly_amount = float(donem.aylik_tutar or 0)
+            toplam += monthly_amount * (overlap_days / days_in_month)
+
+        return toplam
 
     @classmethod
-    def list_aktif_donemler(cls, sube_id):
-        return (
-            cls._get_base_query()
-            .filter_by(sube_id=sube_id, is_active=True)
-            .order_by(SubeSabitGiderDonemi.baslangic_tarihi.desc(), SubeSabitGiderDonemi.id.desc())
-            .all()
-        )
+    def list_aktif_donemler(cls, sube_id, reference_date=None):
+        reference_date = reference_date or date.today()
+        donemler = cls.list_donemler(sube_id)
+        metadata = cls.build_timeline_metadata(donemler, reference_date=reference_date)
+        return [donem for donem in donemler if metadata.get(donem.id, {}).get('status') == 'active']
 
     @classmethod
     def create_donem(cls, payload, actor_id=None):
@@ -186,18 +272,33 @@ class SubeSabitGiderDonemiService(BaseService):
                 ayni_baslangic.aylik_tutar = instance.aylik_tutar
                 ayni_baslangic.kdv_orani = instance.kdv_orani
                 ayni_baslangic.aciklama = instance.aciklama
-                ayni_baslangic.is_active = True
                 db.session.add(ayni_baslangic)
+                db.session.flush()
+                cls._sync_category_flags(ayni_baslangic.sube_id, ayni_baslangic.kategori)
                 db.session.commit()
                 return ayni_baslangic
 
+            sonraki_donem = (
+                cls._get_base_query()
+                .filter(
+                    SubeSabitGiderDonemi.sube_id == instance.sube_id,
+                    SubeSabitGiderDonemi.kategori == instance.kategori,
+                    SubeSabitGiderDonemi.baslangic_tarihi > instance.baslangic_tarihi,
+                )
+                .order_by(SubeSabitGiderDonemi.baslangic_tarihi.asc(), SubeSabitGiderDonemi.id.asc())
+                .first()
+            )
+            if sonraki_donem:
+                instance.bitis_tarihi = sonraki_donem.baslangic_tarihi - timedelta(days=1)
+
             for donem in cakisan_donemler:
                 donem.bitis_tarihi = instance.baslangic_tarihi - timedelta(days=1)
-                donem.is_active = False
                 db.session.add(donem)
 
             cls._apply_audit_log(instance, is_new=True, actor_id=actor_id)
             db.session.add(instance)
+            db.session.flush()
+            cls._sync_category_flags(instance.sube_id, instance.kategori)
             db.session.commit()
             return instance
         except ValidationError:
@@ -208,21 +309,188 @@ class SubeSabitGiderDonemiService(BaseService):
             raise Exception('Sube sabit gider donemi kaydedilirken hata olustu.') from exc
 
     @classmethod
+    def update_donem(cls, donem_id, payload, actor_id=None):
+        donem = cls.get_by_id(donem_id)
+        if not donem:
+            raise ValidationError('Guncellenecek sabit gider donemi bulunamadi.')
+
+        normalized = cls._normalize_payload(payload)
+        eski_bitis_tarihi = donem.bitis_tarihi
+
+        try:
+            donem.baslangic_tarihi = normalized.get('baslangic_tarihi')
+            donem.aylik_tutar = payload.get('aylik_tutar')
+            donem.kdv_orani = payload.get('kdv_orani')
+            donem.aciklama = normalized.get('aciklama')
+
+            cls.validate(donem, is_new=False)
+
+            ayni_tarih_baska_donem = (
+                cls._get_base_query()
+                .filter(
+                    SubeSabitGiderDonemi.id != donem.id,
+                    SubeSabitGiderDonemi.sube_id == donem.sube_id,
+                    SubeSabitGiderDonemi.kategori == donem.kategori,
+                    SubeSabitGiderDonemi.baslangic_tarihi == donem.baslangic_tarihi,
+                )
+                .first()
+            )
+            if ayni_tarih_baska_donem:
+                raise ValidationError('Ayni kategori icin bu baslangic tarihine sahip baska bir donem zaten var.')
+
+            onceki_donem = (
+                cls._get_base_query()
+                .filter(
+                    SubeSabitGiderDonemi.id != donem.id,
+                    SubeSabitGiderDonemi.sube_id == donem.sube_id,
+                    SubeSabitGiderDonemi.kategori == donem.kategori,
+                    SubeSabitGiderDonemi.baslangic_tarihi < donem.baslangic_tarihi,
+                )
+                .order_by(SubeSabitGiderDonemi.baslangic_tarihi.desc(), SubeSabitGiderDonemi.id.desc())
+                .first()
+            )
+
+            sonraki_donem = (
+                cls._get_base_query()
+                .filter(
+                    SubeSabitGiderDonemi.id != donem.id,
+                    SubeSabitGiderDonemi.sube_id == donem.sube_id,
+                    SubeSabitGiderDonemi.kategori == donem.kategori,
+                    SubeSabitGiderDonemi.baslangic_tarihi > donem.baslangic_tarihi,
+                )
+                .order_by(SubeSabitGiderDonemi.baslangic_tarihi.asc(), SubeSabitGiderDonemi.id.asc())
+                .first()
+            )
+
+            if onceki_donem:
+                onceki_donem.bitis_tarihi = donem.baslangic_tarihi - timedelta(days=1)
+                db.session.add(onceki_donem)
+
+            if sonraki_donem:
+                donem.bitis_tarihi = sonraki_donem.baslangic_tarihi - timedelta(days=1)
+            else:
+                donem.bitis_tarihi = eski_bitis_tarihi if eski_bitis_tarihi and eski_bitis_tarihi >= donem.baslangic_tarihi else None
+
+            if donem.bitis_tarihi and donem.bitis_tarihi < donem.baslangic_tarihi:
+                raise ValidationError('Bitis tarihi baslangic tarihinden once olamaz.')
+
+            cls._apply_audit_log(donem, is_new=False, actor_id=actor_id)
+            db.session.add(donem)
+            db.session.flush()
+            cls._sync_category_flags(donem.sube_id, donem.kategori)
+            db.session.commit()
+            return donem
+        except ValidationError:
+            db.session.rollback()
+            raise
+        except Exception as exc:
+            db.session.rollback()
+            raise Exception('Sabit gider donemi guncellenirken hata olustu.') from exc
+
+    @classmethod
     def stop_donem(cls, donem_id, bitis_tarihi=None):
         donem = cls.get_by_id(donem_id)
         if not donem:
             raise ValidationError('Sonlandirilacak sabit gider donemi bulunamadi.')
 
         stop_date = cls._parse_date(bitis_tarihi) or date.today()
-        if stop_date < donem.baslangic_tarihi:
+        kategori_donemleri = (
+            cls._get_base_query()
+            .filter(
+                SubeSabitGiderDonemi.sube_id == donem.sube_id,
+                SubeSabitGiderDonemi.kategori == donem.kategori,
+            )
+            .order_by(SubeSabitGiderDonemi.baslangic_tarihi.asc(), SubeSabitGiderDonemi.id.asc())
+            .all()
+        )
+        timeline = cls.build_timeline_metadata(kategori_donemleri)
+        effective_start = timeline.get(donem.id, {}).get('effective_start')
+
+        if effective_start and stop_date < effective_start:
             raise ValidationError('Bitis tarihi baslangic tarihinden once olamaz.')
+
+        sonraki_donem = (
+            cls._get_base_query()
+            .filter(
+                SubeSabitGiderDonemi.id != donem.id,
+                SubeSabitGiderDonemi.sube_id == donem.sube_id,
+                SubeSabitGiderDonemi.kategori == donem.kategori,
+                SubeSabitGiderDonemi.baslangic_tarihi > donem.baslangic_tarihi,
+            )
+            .order_by(SubeSabitGiderDonemi.baslangic_tarihi.asc(), SubeSabitGiderDonemi.id.asc())
+            .first()
+        )
+        if sonraki_donem and stop_date >= sonraki_donem.baslangic_tarihi:
+            raise ValidationError('Bitis tarihi sonraki donemin baslangic tarihinden once olmalidir.')
 
         try:
             donem.bitis_tarihi = stop_date
-            donem.is_active = False
             db.session.add(donem)
+            db.session.flush()
+            cls._sync_category_flags(donem.sube_id, donem.kategori)
             db.session.commit()
             return donem
         except Exception as exc:
             db.session.rollback()
             raise Exception('Sabit gider donemi sonlandirilirken hata olustu.') from exc
+
+    @classmethod
+    def delete_donem(cls, donem_id):
+        donem = cls.get_by_id(donem_id)
+        if not donem:
+            raise ValidationError('Silinecek sabit gider donemi bulunamadi.')
+
+        try:
+            onceki_donem = (
+                cls._get_base_query()
+                .filter(
+                    SubeSabitGiderDonemi.id != donem.id,
+                    SubeSabitGiderDonemi.sube_id == donem.sube_id,
+                    SubeSabitGiderDonemi.kategori == donem.kategori,
+                    SubeSabitGiderDonemi.baslangic_tarihi < donem.baslangic_tarihi,
+                )
+                .order_by(SubeSabitGiderDonemi.baslangic_tarihi.desc(), SubeSabitGiderDonemi.id.desc())
+                .first()
+            )
+
+            sonraki_donem = (
+                cls._get_base_query()
+                .filter(
+                    SubeSabitGiderDonemi.id != donem.id,
+                    SubeSabitGiderDonemi.sube_id == donem.sube_id,
+                    SubeSabitGiderDonemi.kategori == donem.kategori,
+                    SubeSabitGiderDonemi.baslangic_tarihi > donem.baslangic_tarihi,
+                )
+                .order_by(SubeSabitGiderDonemi.baslangic_tarihi.asc(), SubeSabitGiderDonemi.id.asc())
+                .first()
+            )
+
+            onceki_bagli_mi = (
+                onceki_donem
+                and (
+                    onceki_donem.bitis_tarihi is None
+                    or onceki_donem.bitis_tarihi == donem.baslangic_tarihi - timedelta(days=1)
+                )
+            )
+
+            if onceki_bagli_mi:
+                onceki_donem.bitis_tarihi = (
+                    sonraki_donem.baslangic_tarihi - timedelta(days=1)
+                    if sonraki_donem
+                    else None
+                )
+                if onceki_donem.bitis_tarihi and onceki_donem.bitis_tarihi < onceki_donem.baslangic_tarihi:
+                    raise ValidationError('Onceki donemin bitis tarihi gecersiz hale geliyor.')
+                db.session.add(onceki_donem)
+
+            db.session.delete(donem)
+            db.session.flush()
+            cls._sync_category_flags(donem.sube_id, donem.kategori)
+            db.session.commit()
+            return True
+        except ValidationError:
+            db.session.rollback()
+            raise
+        except Exception as exc:
+            db.session.rollback()
+            raise Exception('Sabit gider donemi silinirken hata olustu.') from exc

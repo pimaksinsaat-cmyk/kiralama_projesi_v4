@@ -63,107 +63,261 @@
         }
     }
 
-    /* Özet Kartları */
-    .ozet-kartlar {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-        gap: 1rem;
+    .ozet-panel {
+        background: white;
+        border-radius: 10px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+        overflow: hidden;
         margin-bottom: 2rem;
     }
 
-    .ozet-kart {
-        background: white;
-        border-radius: 10px;
-        padding: 1.5rem;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        border-left: 4px solid var(--pimaks-blue);
-        text-align: center;
-    }
-
-    .ozet-kart.toplam {
-        border-left-color: var(--pimaks-blue);
-        background: linear-gradient(135deg, var(--pimaks-light-blue) 0%, #ffffff 100%);
-    }
-
-    .ozet-kart.manuel {
-        border-left-color: var(--warning-orange);
-        background: linear-gradient(135deg, #fff7e6 0%, #ffffff 100%);
-    }
-
-    .ozet-kart.personel {
-        border-left-color: #0f766e;
-        background: linear-gradient(135deg, #ecfeff 0%, #ffffff 100%);
-    }
-
-    .ozet-kart.sabit {
-        border-left-color: #0f766e;
-        background: linear-gradient(135deg, #ecfdf5 0%, #ffffff 100%);
-    }
-
-    .ozet-kart-label {
-        font-size: 0.75rem;
-        color: #7f8c8d;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        margin-bottom: 0.5rem;
-    }
-
-    .ozet-kart-tutar {
-        display: inline-flex;
-        align-items: flex-end;
-        justify-content: center;
-        gap: 0.35rem;
-        font-size: 2rem;
-        font-weight: 800;
-        color: var(--pimaks-blue);
-        font-variant-numeric: tabular-nums lining-nums;
-        font-feature-settings: "tnum" 1, "lnum" 1;
-        letter-spacing: 0.02em;
-        text-shadow: 0 1px 0 rgba(255, 255, 255, 0.7);
-    }
-
-    .ozet-kart-amount {
-        line-height: 1;
-    }
-
-    .ozet-kart-currency {
-        font-size: 0.95rem;
-        font-weight: 700;
-        letter-spacing: 0.08em;
-        opacity: 0.8;
-        padding-bottom: 0.22rem;
-    }
-
-    .kategori-ozet {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    .ozet-panel-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
         gap: 1rem;
+        padding: 1rem 1.25rem;
+        border-bottom: 1px solid #eef2f7;
+        background: #f8fafc;
+        flex-wrap: wrap;
     }
 
-    .kategori-kart {
-        background: white;
-        border-radius: 8px;
-        padding: 1rem;
-        text-align: center;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        border-top: 3px solid var(--warning-orange);
+    .ozet-panel-header h3 {
+        margin: 0;
+        color: var(--text-dark);
+        font-size: 1rem;
+        font-weight: 700;
     }
 
-    .kategori-kart-adi {
-        font-size: 0.8rem;
-        color: #7f8c8d;
-        margin-bottom: 0.3rem;
-        font-weight: 600;
+    .ozet-panel-note {
+        font-size: 0.85rem;
+        color: #64748b;
     }
 
-    .kategori-kart-tutar {
-        display: inline-flex;
-        align-items: flex-end;
-        justify-content: center;
-        gap: 0.3rem;
-        font-size: 1.3rem;
+    .ozet-tablosu {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .ozet-tablosu thead tr {
+        background: #f8fafc;
+    }
+
+    .ozet-tablosu th,
+    .ozet-tablosu td {
+        padding: 0.9rem 1.1rem;
+        border-bottom: 1px solid #eef2f7;
+        text-align: left;
+    }
+
+    .ozet-tablosu th {
+        font-size: 0.78rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #64748b;
+    }
+
+    .ozet-tablosu td:last-child,
+    .ozet-tablosu th:last-child {
+        text-align: right;
+    }
+
+    .ozet-tablosu tbody tr:last-child td {
+        border-bottom: none;
+    }
+
+    .ozet-kalem {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
         font-weight: 700;
         color: var(--text-dark);
+    }
+
+    .ozet-kalem strong {
+        display: block;
+        font-size: 0.95rem;
+    }
+
+    .ozet-kalem small {
+        display: block;
+        font-size: 0.8rem;
+        font-weight: 500;
+        color: #7f8c8d;
+    }
+
+    .ozet-ikon {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.9rem;
+        font-weight: 800;
+        flex-shrink: 0;
+    }
+
+    .ozet-ikon.toplam {
+        background: #dbeafe;
+        color: #1d4ed8;
+    }
+
+    .ozet-ikon.manuel {
+        background: #fef3c7;
+        color: #b45309;
+    }
+
+    .ozet-ikon.personel {
+        background: #ccfbf1;
+        color: #0f766e;
+    }
+
+    .ozet-ikon.sabit {
+        background: #dcfce7;
+        color: #15803d;
+    }
+
+    .ozet-oran {
+        width: 160px;
+    }
+
+    .oran-cubugu {
+        width: 100%;
+        height: 8px;
+        background: #e5e7eb;
+        border-radius: 999px;
+        overflow: hidden;
+        margin-bottom: 0.35rem;
+    }
+
+    .oran-cubugu span {
+        display: block;
+        height: 100%;
+        border-radius: 999px;
+    }
+
+    .oran-cubugu.toplam span {
+        background: #1d4ed8;
+    }
+
+    .oran-cubugu.manuel span {
+        background: #d97706;
+    }
+
+    .oran-cubugu.personel span {
+        background: #0f766e;
+    }
+
+    .oran-cubugu.sabit span {
+        background: #15803d;
+    }
+
+    .oran-metin {
+        font-size: 0.8rem;
+        color: #64748b;
+    }
+
+    .kategori-toplam-wrapper {
+        background: white;
+        border-radius: 10px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+        overflow: hidden;
+        margin-bottom: 2rem;
+    }
+
+    .kategori-toplam-header {
+        padding: 1rem 1.25rem;
+        border-bottom: 1px solid #eef2f7;
+        background: #f8fafc;
+    }
+
+    .kategori-toplam-header h3 {
+        margin: 0;
+        color: var(--text-dark);
+        font-weight: 700;
+        font-size: 1rem;
+    }
+
+    .kategori-toplam-tablosu {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .kategori-toplam-tablosu th,
+    .kategori-toplam-tablosu td {
+        padding: 0.85rem 1.1rem;
+        border-bottom: 1px solid #eef2f7;
+    }
+
+    .kategori-toplam-tablosu th {
+        font-size: 0.78rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #64748b;
+        background: #f8fafc;
+        text-align: left;
+    }
+
+    .kategori-toplam-tablosu td:last-child,
+    .kategori-toplam-tablosu th:last-child {
+        text-align: right;
+    }
+
+    .kategori-toplam-tablosu tbody tr:last-child td {
+        border-bottom: none;
+    }
+
+    @media (max-width: 768px) {
+        .ozet-tablosu,
+        .ozet-tablosu thead,
+        .ozet-tablosu tbody,
+        .ozet-tablosu th,
+        .ozet-tablosu td,
+        .ozet-tablosu tr,
+        .kategori-toplam-tablosu,
+        .kategori-toplam-tablosu thead,
+        .kategori-toplam-tablosu tbody,
+        .kategori-toplam-tablosu th,
+        .kategori-toplam-tablosu td,
+        .kategori-toplam-tablosu tr {
+            display: block;
+        }
+
+        .ozet-tablosu thead,
+        .kategori-toplam-tablosu thead {
+            display: none;
+        }
+
+        .ozet-tablosu tr,
+        .kategori-toplam-tablosu tr {
+            border-bottom: 1px solid #eef2f7;
+        }
+
+        .ozet-tablosu td,
+        .kategori-toplam-tablosu td {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            text-align: right;
+        }
+
+        .ozet-tablosu td::before,
+        .kategori-toplam-tablosu td::before {
+            content: attr(data-label);
+            text-align: left;
+            font-size: 0.78rem;
+            font-weight: 700;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .ozet-oran {
+            width: 100%;
+        }
     }
 
     .financial-value {
@@ -435,6 +589,11 @@
         color: #92400e;
     }
 
+    .durum-badge.is-planned {
+        background: #dbeafe;
+        color: #1d4ed8;
+    }
+
     .masraf-tablo tbody tr {
         border-bottom: 1px solid #eee;
         transition: background-color 0.2s;
@@ -480,6 +639,280 @@
     .sil-btn:hover {
         background-color: var(--danger-red);
         color: white;
+    }
+
+    .kaydet-btn {
+        padding: 0.4rem 0.8rem;
+        background-color: #e8f5e9;
+        color: #166534;
+        border: 1px solid #16a34a;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.75rem;
+        font-weight: 600;
+        transition: all 0.2s;
+    }
+
+    .kaydet-btn:hover {
+        background-color: #16a34a;
+        color: white;
+    }
+
+    .duzenle-btn {
+        padding: 0.4rem 0.8rem;
+        background-color: #e3f2fd;
+        color: #0d47a1;
+        border: 1px solid #90caf9;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.75rem;
+        font-weight: 600;
+        transition: all 0.2s;
+    }
+
+    .duzenle-btn:hover {
+        background-color: #0d47a1;
+        color: white;
+    }
+
+    .duzenle-btn[aria-expanded="true"] {
+        background-color: #0d47a1;
+        color: white;
+    }
+
+    .inline-cell-input {
+        width: 100%;
+        border: 1px solid #dbe4ee;
+        border-radius: 6px;
+        padding: 0.35rem 0.45rem;
+        font-size: 0.84rem;
+        font-family: inherit;
+        background: white;
+    }
+
+    .row-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+        align-items: stretch;
+    }
+
+    .row-actions.compact {
+        min-width: 0;
+        flex-direction: row;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .action-button-row {
+        display: flex;
+        gap: 0.35rem;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .inline-stop-form {
+        display: flex;
+        gap: 0.35rem;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .inline-note {
+        font-size: 0.72rem;
+        color: #64748b;
+        text-align: center;
+        white-space: nowrap;
+    }
+
+    .td-center {
+        text-align: center;
+        vertical-align: middle;
+    }
+
+    .td-top {
+        vertical-align: top;
+    }
+
+    .table-value {
+        display: block;
+        font-weight: 700;
+        color: #0f766e;
+        text-align: left;
+    }
+
+    .sabit-gider-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.9rem;
+    }
+
+    .sabit-gider-list-header {
+        padding: 0 1rem;
+        font-size: 0.76rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #64748b;
+    }
+
+    .sabit-gider-item {
+        background: white;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 1rem;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+    }
+
+    .sabit-gider-col {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+        min-width: 0;
+    }
+
+    .sabit-gider-col-label {
+        font-size: 0.72rem;
+        font-weight: 700;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+    }
+
+    .sabit-gider-col-value {
+        color: var(--text-dark);
+        font-size: 0.92rem;
+    }
+
+    .sabit-gider-edit-panel {
+        margin-top: 0.85rem;
+    }
+
+    .sabit-gider-edit-card {
+        margin: 0;
+        padding: 1rem;
+        border: 1px solid #dbe4ee;
+        border-radius: 10px;
+        background: #f8fafc;
+    }
+
+    .sabit-gider-edit-card label {
+        display: block;
+        font-size: 0.78rem;
+        font-weight: 700;
+        color: #475569;
+        margin-bottom: 0.3rem;
+    }
+
+    .sabit-gider-edit-actions {
+        display: flex;
+        gap: 0.5rem;
+        justify-content: flex-end;
+        margin-top: 0.9rem;
+        flex-wrap: wrap;
+    }
+
+    .sabit-gider-edit-actions .kaydet-btn,
+    .sabit-gider-edit-actions .sil-btn {
+        width: auto;
+    }
+
+    .modal-backdrop-custom {
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.45);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+        z-index: 1200;
+    }
+
+    .modal-card-custom {
+        width: min(460px, 100%);
+        background: white;
+        border-radius: 14px;
+        box-shadow: 0 18px 40px rgba(15, 23, 42, 0.22);
+        overflow: hidden;
+    }
+
+    .modal-card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 1rem 1.25rem;
+        border-bottom: 1px solid #e2e8f0;
+    }
+
+    .modal-card-header h4 {
+        margin: 0;
+        font-size: 1rem;
+        color: var(--text-dark);
+    }
+
+    .modal-close-btn {
+        border: none;
+        background: transparent;
+        color: #64748b;
+        font-size: 1.4rem;
+        line-height: 1;
+        cursor: pointer;
+        padding: 0;
+    }
+
+    .modal-card-body {
+        padding: 1rem 1.25rem 1.25rem;
+    }
+
+    .modal-card-body p {
+        margin: 0 0 0.9rem 0;
+        color: #475569;
+        line-height: 1.45;
+    }
+
+    .modal-card-body label {
+        display: block;
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: #475569;
+        margin-bottom: 0.35rem;
+    }
+
+    .modal-card-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.5rem;
+        margin-top: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .modal-card-actions .kaydet-btn,
+    .modal-card-actions .sil-btn {
+        width: auto;
+    }
+
+    @media (min-width: 768px) {
+        .sabit-gider-col-label {
+            display: none;
+        }
+
+        .row-actions.compact {
+            min-width: 280px;
+            flex-wrap: nowrap;
+        }
+
+        .action-button-row,
+        .inline-stop-form {
+            flex-wrap: nowrap;
+        }
+    }
+
+    @media (max-width: 767.98px) {
+        .sabit-gider-list-header {
+            display: none;
+        }
     }
 
     /* Yan Panel - Form */
@@ -609,36 +1042,118 @@
                 </div>
             </div>
 
-            <!-- Özet Kartı -->
-            <div class="ozet-kartlar">
-                <div class="ozet-kart toplam">
-                    <div class="ozet-kart-label">{{ selected_period_label }} Toplam Gider</div>
-                    <div class="ozet-kart-tutar">
-                        <span class="ozet-kart-amount">{{ "{:,.2f}".format(genel_toplam).replace(",", "_").replace(".", ",").replace("_", ".") }}</span>
-                        <span class="ozet-kart-currency">TL</span>
-                    </div>
+            <!-- Özet Tablosu -->
+            <div class="ozet-panel">
+                <div class="ozet-panel-header">
+                    <h3>{{ selected_period_label }} Gider Ozeti</h3>
+                    <span class="ozet-panel-note">Tum ana kalemler tek tabloda toplandi.</span>
                 </div>
-                <div class="ozet-kart manuel">
-                    <div class="ozet-kart-label">{{ selected_period_label }} Manuel Masraf</div>
-                    <div class="ozet-kart-tutar" style="color:#b45309;">
-                        <span class="ozet-kart-amount">{{ "{:,.2f}".format(manuel_masraf_toplam).replace(",", "_").replace(".", ",").replace("_", ".") }}</span>
-                        <span class="ozet-kart-currency">TL</span>
-                    </div>
-                </div>
-                <div class="ozet-kart personel">
-                    <div class="ozet-kart-label">{{ selected_period_label }} Personel Gideri</div>
-                    <div class="ozet-kart-tutar" style="color:#0f766e;">
-                        <span class="ozet-kart-amount">{{ "{:,.2f}".format(aylik_personel_toplam).replace(",", "_").replace(".", ",").replace("_", ".") }}</span>
-                        <span class="ozet-kart-currency">TL</span>
-                    </div>
-                </div>
-                <div class="ozet-kart sabit">
-                    <div class="ozet-kart-label">{{ selected_period_label }} Sabit Gider</div>
-                    <div class="ozet-kart-tutar" style="color:#0f766e;">
-                        <span class="ozet-kart-amount">{{ "{:,.2f}".format(aktif_sabit_toplam).replace(",", "_").replace(".", ",").replace("_", ".") }}</span>
-                        <span class="ozet-kart-currency">TL</span>
-                    </div>
-                </div>
+                <table class="ozet-tablosu">
+                    <thead>
+                        <tr>
+                            <th>Kalem</th>
+                            <th style="width: 190px;">Toplam Icindeki Pay</th>
+                            <th style="width: 170px;">Tutar</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td data-label="Kalem">
+                                <div class="ozet-kalem">
+                                    <span class="ozet-ikon toplam">T</span>
+                                    <span>
+                                        <strong>Toplam Gider</strong>
+                                        <small>{{ selected_period_label }} genel toplam</small>
+                                    </span>
+                                </div>
+                            </td>
+                            <td data-label="Pay">
+                                <div class="ozet-oran">
+                                    <div class="oran-cubugu toplam"><span style="width: 100%;"></span></div>
+                                    <div class="oran-metin">%100,00</div>
+                                </div>
+                            </td>
+                            <td data-label="Tutar" class="masraf-tutar" style="color: #1d4ed8;">
+                                <span class="financial-value block">
+                                    <span class="financial-amount">{{ "{:,.2f}".format(genel_toplam).replace(",", "_").replace(".", ",").replace("_", ".") }}</span>
+                                    <span class="financial-suffix">TL</span>
+                                </span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td data-label="Kalem">
+                                <div class="ozet-kalem">
+                                    <span class="ozet-ikon manuel">M</span>
+                                    <span>
+                                        <strong>Manuel Masraf</strong>
+                                        <small>Elle girilen kayitlar</small>
+                                    </span>
+                                </div>
+                            </td>
+                            <td data-label="Pay">
+                                {% set manuel_oran = (manuel_masraf_toplam / genel_toplam * 100) if genel_toplam else 0 %}
+                                <div class="ozet-oran">
+                                    <div class="oran-cubugu manuel"><span style="width: {{ '%.2f'|format(manuel_oran) }}%;"></span></div>
+                                    <div class="oran-metin">%{{ "{:,.2f}".format(manuel_oran).replace(",", "_").replace(".", ",").replace("_", ".") }}</div>
+                                </div>
+                            </td>
+                            <td data-label="Tutar" class="masraf-tutar" style="color:#b45309;">
+                                <span class="financial-value block">
+                                    <span class="financial-amount">{{ "{:,.2f}".format(manuel_masraf_toplam).replace(",", "_").replace(".", ",").replace("_", ".") }}</span>
+                                    <span class="financial-suffix">TL</span>
+                                </span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td data-label="Kalem">
+                                <div class="ozet-kalem">
+                                    <span class="ozet-ikon personel">P</span>
+                                    <span>
+                                        <strong>Personel Gideri</strong>
+                                        <small>Maas, yemek ve yol</small>
+                                    </span>
+                                </div>
+                            </td>
+                            <td data-label="Pay">
+                                {% set personel_oran = (aylik_personel_toplam / genel_toplam * 100) if genel_toplam else 0 %}
+                                <div class="ozet-oran">
+                                    <div class="oran-cubugu personel"><span style="width: {{ '%.2f'|format(personel_oran) }}%;"></span></div>
+                                    <div class="oran-metin">%{{ "{:,.2f}".format(personel_oran).replace(",", "_").replace(".", ",").replace("_", ".") }}</div>
+                                </div>
+                            </td>
+                            <td data-label="Tutar" class="masraf-tutar" style="color:#0f766e;">
+                                <span class="financial-value block">
+                                    <span class="financial-amount">{{ "{:,.2f}".format(aylik_personel_toplam).replace(",", "_").replace(".", ",").replace("_", ".") }}</span>
+                                    <span class="financial-suffix">TL</span>
+                                </span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td data-label="Kalem">
+                                <div class="ozet-kalem">
+                                    <span class="ozet-ikon sabit">S</span>
+                                    <span>
+                                        <strong>Sabit Gider</strong>
+                                        <small>Donemsel aylik tanimlar</small>
+                                    </span>
+                                </div>
+                            </td>
+                            <td data-label="Pay">
+                                {% set sabit_oran = (aktif_sabit_toplam / genel_toplam * 100) if genel_toplam else 0 %}
+                                <div class="ozet-oran">
+                                    <div class="oran-cubugu sabit"><span style="width: {{ '%.2f'|format(sabit_oran) }}%;"></span></div>
+                                    <div class="oran-metin">%{{ "{:,.2f}".format(sabit_oran).replace(",", "_").replace(".", ",").replace("_", ".") }}</div>
+                                </div>
+                            </td>
+                            <td data-label="Tutar" class="masraf-tutar" style="color:#15803d;">
+                                <span class="financial-value block">
+                                    <span class="financial-amount">{{ "{:,.2f}".format(aktif_sabit_toplam).replace(",", "_").replace(".", ",").replace("_", ".") }}</span>
+                                    <span class="financial-suffix">TL</span>
+                                </span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
 
             <div class="masraf-tablo-wrapper" style="margin-bottom: 2rem;">
@@ -738,6 +1253,8 @@
                         <input type="hidden" name="year" value="{{ selected_year }}">
                         <input type="hidden" name="month" value="{{ selected_month }}">
 
+                        <p class="muted-note" style="margin: 0 0 1rem 0;">Bu tarih sabit giderin ilk baslama tarihi degil, fiyat degisim tarihidir. Ilk kayit gelecekte olsa bile mevcut sabit gider aktif kabul edilir; sonraki kayitlar degisim tarihi olarak calisir.</p>
+
                         <div class="collapsible-form-grid">
                             <div class="form-group">
                                 {{ sabit_gider_form.kategori.label }}
@@ -786,54 +1303,104 @@
                     </form>
                 </div>
                 {% if sabit_giderler %}
-                <table class="masraf-tablo">
-                    <thead>
-                        <tr>
-                            <th style="width: 120px;">Kategori</th>
-                            <th style="width: 120px;">Baslangic</th>
-                            <th style="width: 120px;">Bitis</th>
-                            <th style="width: 120px;">Aylik Tutar</th>
-                            <th>Aciklama</th>
-                            <th style="width: 120px;">Durum</th>
-                            <th style="width: 150px;"></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for donem in sabit_giderler %}
-                        <tr>
-                            <td><span class="masraf-kategori">{{ kategori_labels.get(donem.kategori, donem.kategori) }}</span></td>
-                            <td class="masraf-tarih">{{ donem.baslangic_tarihi.strftime('%d.%m.%Y') }}</td>
-                            <td>{{ donem.bitis_tarihi.strftime('%d.%m.%Y') if donem.bitis_tarihi else '-' }}</td>
-                            <td class="masraf-tutar" style="color:#0f766e;">
-                                <span class="financial-value block">
-                                    <span class="financial-amount">{{ "{:,.2f}".format(donem.aylik_tutar).replace(",", "_").replace(".", ",").replace("_", ".") }}</span>
-                                    <span class="financial-suffix">TL</span>
-                                </span>
-                            </td>
-                            <td>
-                                {% if donem.kdv_orani is not none %}
-                                <small style="color: #7f8c8d;"><strong>KDV:</strong> <span class="financial-rate">%{{ "{:,.2f}".format(donem.kdv_orani).replace(",", "_").replace(".", ",").replace("_", ".") }}</span></small><br>
-                                {% endif %}
-                                <small style="color: #7f8c8d;">{{ donem.aciklama or '-' }}</small>
-                            </td>
-                            <td>
-                                <span class="durum-badge {{ '' if donem.is_active else 'is-passive' }}">{{ 'Aktif' if donem.is_active else 'Kapandi' }}</span>
-                            </td>
-                            <td>
-                                {% if donem.is_active %}
-                                <form method="POST" action="{{ url_for('subeler.sabit_gider_durdur', donem_id=donem.id) }}" style="display:flex; gap:0.4rem; align-items:center; justify-content:flex-end;">
+                <div class="sabit-gider-list">
+                    <div class="sabit-gider-list-header d-none d-md-block">
+                        <div class="row g-3 align-items-center">
+                            <div class="col-md-2">Kategori</div>
+                            <div class="col-md-2">Donemsel Degisiklik Tarihi</div>
+                            <div class="col-md-2">Tutar (KDV Dahil)</div>
+                            <div class="col-md-2">Aciklama</div>
+                            <div class="col-md-1">Durum</div>
+                            <div class="col-md-3">Islemler</div>
+                        </div>
+                    </div>
+                    {% for donem in sabit_giderler %}
+                    {% set donem_timeline = sabit_gider_timeline.get(donem.id, {}) %}
+                    {% set donem_durumu = donem_timeline.get('status_label', 'Aktif') %}
+                    {% set aylik_tutar = donem.aylik_tutar|float if donem.aylik_tutar is not none else 0 %}
+                    {% set kdv_orani = donem.kdv_orani|float if donem.kdv_orani is not none else 0 %}
+                    {% set kdv_dahil_tutar = aylik_tutar * (1 + (kdv_orani / 100)) %}
+                    <div class="sabit-gider-item">
+                        <div class="row g-3 align-items-center">
+                            <div class="col-12 col-md-2 sabit-gider-col">
+                                <span class="sabit-gider-col-label">Kategori</span>
+                                <span class="masraf-kategori">{{ kategori_labels.get(donem.kategori, donem.kategori) }}</span>
+                            </div>
+                            <div class="col-12 col-md-2 sabit-gider-col">
+                                <span class="sabit-gider-col-label">Donemsel Degisiklik Tarihi</span>
+                                <span class="sabit-gider-col-value">{{ donem.baslangic_tarihi.strftime('%d.%m.%Y') }}</span>
+                            </div>
+                            <div class="col-12 col-md-2 sabit-gider-col">
+                                <span class="sabit-gider-col-label">Tutar (KDV Dahil)</span>
+                                <span class="table-value">{{ '{:,.2f}'.format(kdv_dahil_tutar).replace(',', '_').replace('.', ',').replace('_', '.') }} TL</span>
+                            </div>
+                            <div class="col-12 col-md-2 sabit-gider-col">
+                                <span class="sabit-gider-col-label">Aciklama</span>
+                                <span class="sabit-gider-col-value">{{ donem.aciklama or '-' }}</span>
+                            </div>
+                            <div class="col-6 col-md-1 sabit-gider-col">
+                                <span class="sabit-gider-col-label">Durum</span>
+                                <span class="durum-badge {{ 'is-planned' if donem_durumu == 'Planli' else '' if donem_durumu == 'Aktif' else 'is-passive' }}">{{ donem_durumu }}</span>
+                            </div>
+                            <div class="col-12 col-md-3 sabit-gider-col">
+                                <span class="sabit-gider-col-label">Islemler</span>
+                                <div class="row-actions compact">
+                                    {% if donem_durumu == 'Aktif' %}
+                                    <button
+                                        type="button"
+                                        class="sil-btn sabit-gider-stop-open"
+                                        style="padding:0.4rem 0.65rem;"
+                                        data-action="{{ url_for('subeler.sabit_gider_durdur', donem_id=donem.id) }}"
+                                        data-default-date="{{ yesterday if donem.baslangic_tarihi < today_date else today }}"
+                                        data-category="{{ kategori_labels.get(donem.kategori, donem.kategori) }}"
+                                    >Durdur</button>
+                                    {% endif %}
+                                    <div class="action-button-row">
+                                        <button type="button" class="duzenle-btn sabit-gider-edit-toggle" data-target="sabit-gider-edit-{{ donem.id }}" aria-expanded="false">Duzenle</button>
+                                        <form method="POST" action="{{ url_for('subeler.sabit_gider_sil', donem_id=donem.id) }}" class="inline-stop-form">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <input type="hidden" name="year" value="{{ selected_year }}">
+                                            <input type="hidden" name="month" value="{{ selected_month }}">
+                                            <button type="submit" class="sil-btn" style="padding:0.4rem 0.65rem;" onclick="return confirm('Bu sabit gider donemini silmek istediginize emin misiniz?');">Sil</button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="sabit-gider-edit-{{ donem.id }}" class="sabit-gider-edit-panel" hidden>
+                            <div class="sabit-gider-edit-card">
+                                <form method="POST" action="{{ url_for('subeler.sabit_gider_guncelle', donem_id=donem.id) }}">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <input type="hidden" name="year" value="{{ selected_year }}">
                                     <input type="hidden" name="month" value="{{ selected_month }}">
-                                    <input type="date" name="bitis_tarihi" value="{{ today }}" style="max-width: 110px; padding:0.35rem 0.45rem;">
-                                    <button type="submit" class="sil-btn" style="padding:0.4rem 0.65rem;" onclick="return confirm('Bu aylik gider donemini sonlandirmak istediginize emin misiniz?');">Durdur</button>
+                                    <div class="row g-3 sabit-gider-edit-form">
+                                        <div class="col-12 col-md-3">
+                                            <label>Donemsel Degisiklik Tarihi</label>
+                                            <input class="inline-cell-input" type="date" name="baslangic_tarihi" value="{{ donem.baslangic_tarihi.strftime('%Y-%m-%d') }}">
+                                        </div>
+                                        <div class="col-12 col-md-3">
+                                            <label>Aylik Tutar</label>
+                                            <input class="inline-cell-input" type="number" step="0.01" min="0.01" name="aylik_tutar" value="{{ '%.2f'|format(donem.aylik_tutar or 0) }}">
+                                        </div>
+                                        <div class="col-12 col-md-2">
+                                            <label>KDV Orani</label>
+                                            <input class="inline-cell-input" type="number" step="0.01" min="0" name="kdv_orani" value="{{ '%.2f'|format(donem.kdv_orani or 0) if donem.kdv_orani is not none else '' }}">
+                                        </div>
+                                        <div class="col-12 col-md-4">
+                                            <label>Aciklama</label>
+                                            <input class="inline-cell-input" type="text" name="aciklama" value="{{ donem.aciklama or '' }}">
+                                        </div>
+                                    </div>
+                                    <div class="sabit-gider-edit-actions">
+                                        <button type="button" class="sil-btn sabit-gider-edit-cancel" data-target="sabit-gider-edit-{{ donem.id }}">Kapat</button>
+                                        <button type="submit" class="kaydet-btn">Kaydet</button>
+                                    </div>
                                 </form>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
                 {% else %}
                 <div class="bos-liste">
                     <div class="bos-liste-ikon">Aylik</div>
@@ -845,21 +1412,33 @@
 
             <!-- Kategori Toplamları -->
             {% if kategori_toplamlar %}
-            <div style="margin-bottom: 2rem;">
-                <h3 style="color: var(--text-dark); font-weight: 700; margin-bottom: 1rem;">{{ selected_period_label }} Manuel Kategori Toplamlari</h3>
-                <div class="kategori-ozet">
-                    {% for kategori, tutar in kategori_toplamlar.items() | sort %}
-                    <div class="kategori-kart">
-                        <div class="kategori-kart-adi">{{ kategori_labels.get(kategori, kategori) }}</div>
-                        <div class="kategori-kart-tutar">
-                            <span class="financial-value">
-                                <span class="financial-amount">{{ "{:,.2f}".format(tutar).replace(",", "_").replace(".", ",").replace("_", ".") }}</span>
-                                <span class="financial-suffix">TL</span>
-                            </span>
-                        </div>
-                    </div>
-                    {% endfor %}
+            <div class="kategori-toplam-wrapper">
+                <div class="kategori-toplam-header">
+                    <h3>{{ selected_period_label }} Manuel Kategori Toplamlari</h3>
                 </div>
+                <table class="kategori-toplam-tablosu">
+                    <thead>
+                        <tr>
+                            <th>Kategori</th>
+                            <th style="width: 170px;">Tutar</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for kategori, tutar in kategori_toplamlar.items() | sort %}
+                        <tr>
+                            <td data-label="Kategori">
+                                <span class="masraf-kategori">{{ kategori_labels.get(kategori, kategori) }}</span>
+                            </td>
+                            <td data-label="Tutar" class="masraf-tutar">
+                                <span class="financial-value block">
+                                    <span class="financial-amount">{{ "{:,.2f}".format(tutar).replace(",", "_").replace(".", ",").replace("_", ".") }}</span>
+                                    <span class="financial-suffix">TL</span>
+                                </span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
             {% endif %}
 
@@ -984,23 +1563,133 @@
     </div>
 </div>
 
+<div id="sabit-gider-stop-modal" class="modal-backdrop-custom" hidden>
+    <div class="modal-card-custom" role="dialog" aria-modal="true" aria-labelledby="sabit-gider-stop-title">
+        <div class="modal-card-header">
+            <h4 id="sabit-gider-stop-title">Sabit Gider Donemini Durdur</h4>
+            <button type="button" class="modal-close-btn" id="sabit-gider-stop-close" aria-label="Kapat">&times;</button>
+        </div>
+        <div class="modal-card-body">
+            <p><strong id="sabit-gider-stop-category">Bu kayit</strong> icin durdurma tarihini secin.</p>
+            <form id="sabit-gider-stop-form" method="POST" action="">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="year" value="{{ selected_year }}">
+                <input type="hidden" name="month" value="{{ selected_month }}">
+                <label for="sabit-gider-stop-date">Durdurma Tarihi</label>
+                <input id="sabit-gider-stop-date" class="inline-cell-input" type="date" name="bitis_tarihi" value="{{ yesterday }}">
+                <div class="modal-card-actions">
+                    <button type="button" class="sil-btn" id="sabit-gider-stop-cancel">Vazgec</button>
+                    <button type="submit" class="kaydet-btn">Durdur</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         const toggleButton = document.getElementById('toggle-sabit-gider-form');
         const formPanel = document.getElementById('sabit-gider-form-panel');
 
-        if (!toggleButton || !formPanel) {
-            return;
+        if (toggleButton && formPanel) {
+            toggleButton.addEventListener('click', function () {
+                const isExpanded = toggleButton.getAttribute('aria-expanded') === 'true';
+                toggleButton.setAttribute('aria-expanded', isExpanded ? 'false' : 'true');
+
+                if (isExpanded) {
+                    formPanel.setAttribute('hidden', 'hidden');
+                } else {
+                    formPanel.removeAttribute('hidden');
+                }
+            });
         }
 
-        toggleButton.addEventListener('click', function () {
-            const isExpanded = toggleButton.getAttribute('aria-expanded') === 'true';
-            toggleButton.setAttribute('aria-expanded', isExpanded ? 'false' : 'true');
+        const editButtons = document.querySelectorAll('.sabit-gider-edit-toggle');
+        const cancelButtons = document.querySelectorAll('.sabit-gider-edit-cancel');
+        const stopOpenButtons = document.querySelectorAll('.sabit-gider-stop-open');
+        const stopModal = document.getElementById('sabit-gider-stop-modal');
+        const stopForm = document.getElementById('sabit-gider-stop-form');
+        const stopDateInput = document.getElementById('sabit-gider-stop-date');
+        const stopCategory = document.getElementById('sabit-gider-stop-category');
+        const stopCloseButton = document.getElementById('sabit-gider-stop-close');
+        const stopCancelButton = document.getElementById('sabit-gider-stop-cancel');
 
-            if (isExpanded) {
-                formPanel.setAttribute('hidden', 'hidden');
+        function setEditRowState(targetId, shouldOpen) {
+            const row = document.getElementById(targetId);
+            const button = document.querySelector('.sabit-gider-edit-toggle[data-target="' + targetId + '"]');
+            if (!row || !button) {
+                return;
+            }
+
+            if (shouldOpen) {
+                row.removeAttribute('hidden');
+                button.setAttribute('aria-expanded', 'true');
             } else {
-                formPanel.removeAttribute('hidden');
+                row.setAttribute('hidden', 'hidden');
+                button.setAttribute('aria-expanded', 'false');
+            }
+        }
+
+        editButtons.forEach(function (button) {
+            button.addEventListener('click', function () {
+                const targetId = button.dataset.target;
+                const isExpanded = button.getAttribute('aria-expanded') === 'true';
+                setEditRowState(targetId, !isExpanded);
+            });
+        });
+
+        cancelButtons.forEach(function (button) {
+            button.addEventListener('click', function () {
+                const targetId = button.dataset.target;
+                setEditRowState(targetId, false);
+            });
+        });
+
+        function closeStopModal() {
+            if (!stopModal) {
+                return;
+            }
+            stopModal.setAttribute('hidden', 'hidden');
+        }
+
+        function openStopModal(action, defaultDate, categoryLabel) {
+            if (!stopModal || !stopForm || !stopDateInput) {
+                return;
+            }
+            stopForm.setAttribute('action', action);
+            stopDateInput.value = defaultDate || '';
+            if (stopCategory) {
+                stopCategory.textContent = categoryLabel ? categoryLabel + ' kaydi' : 'Bu kayit';
+            }
+            stopModal.removeAttribute('hidden');
+            stopDateInput.focus();
+        }
+
+        stopOpenButtons.forEach(function (button) {
+            button.addEventListener('click', function () {
+                openStopModal(button.dataset.action, button.dataset.defaultDate, button.dataset.category);
+            });
+        });
+
+        if (stopCloseButton) {
+            stopCloseButton.addEventListener('click', closeStopModal);
+        }
+
+        if (stopCancelButton) {
+            stopCancelButton.addEventListener('click', closeStopModal);
+        }
+
+        if (stopModal) {
+            stopModal.addEventListener('click', function (event) {
+                if (event.target === stopModal) {
+                    closeStopModal();
+                }
+            });
+        }
+
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape') {
+                closeStopModal();
             }
         });
     });

@@ -267,9 +267,6 @@ class PersonelService(BaseService):
 
     @classmethod
     def _validate_salary_effective_date(cls, personel, effective_date, current_period=None):
-        if effective_date > date.today():
-            raise ValidationError('Maas / sube degisiklik tarihi bugunden ileri bir tarih olamaz.')
-
         if personel.ise_giris_tarihi and effective_date < personel.ise_giris_tarihi:
             raise ValidationError('Maas / sube degisiklik tarihi ise giris tarihinden once olamaz.')
 
@@ -305,14 +302,17 @@ class PersonelService(BaseService):
         if not cls.salary_periods_table_exists():
             return
 
-        mevcut_donem = cls.get_current_salary_period(personel)
+        mevcut_donem = cls.get_current_salary_period(personel, reference_date=effective_date)
         yeni_maas_normalized = cls._normalize_amount(yeni_maas)
         onceki_maas_normalized = cls._normalize_amount(onceki_maas)
         yeni_yemek_normalized = cls._normalize_amount(yeni_yemek_ucreti)
         onceki_yemek_normalized = cls._normalize_amount(onceki_yemek_ucreti)
         yeni_yol_normalized = cls._normalize_amount(yeni_yol_ucreti)
         onceki_yol_normalized = cls._normalize_amount(onceki_yol_ucreti)
+        donem_degisti = mevcut_donem is None or effective_date != mevcut_donem.baslangic_tarihi
         degisiklik_var = (
+            donem_degisti
+            or
             onceki_sube_id != yeni_sube_id
             or onceki_maas_normalized != yeni_maas_normalized
             or onceki_yemek_normalized != yeni_yemek_normalized
@@ -320,16 +320,6 @@ class PersonelService(BaseService):
         )
 
         if not degisiklik_var:
-            if mevcut_donem is None and cls._has_period_costs(maas=yeni_maas, yemek_ucreti=yeni_yemek_ucreti, yol_ucreti=yeni_yol_ucreti):
-                cls._create_salary_period(
-                    personel,
-                    baslangic_tarihi=effective_date,
-                    aylik_maas=yeni_maas,
-                    aylik_yemek_ucreti=yeni_yemek_ucreti,
-                    aylik_yol_ucreti=yeni_yol_ucreti,
-                    sube_id=yeni_sube_id,
-                    aciklama='Eksik ucret donemi kaydi otomatik olusturuldu',
-                )
             return
 
         cls._validate_salary_effective_date(personel, effective_date, mevcut_donem)
@@ -359,7 +349,7 @@ class PersonelService(BaseService):
                 aylik_yemek_ucreti=yeni_yemek_ucreti,
                 aylik_yol_ucreti=yeni_yol_ucreti,
                 sube_id=yeni_sube_id,
-                aciklama='Ucret / sube degisikligi',
+                aciklama='Ucret / donem degisikligi',
             )
 
         db.session.flush()

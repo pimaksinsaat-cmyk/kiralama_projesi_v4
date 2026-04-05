@@ -65,8 +65,7 @@
     }
 
     .meta-grid,
-    .form-grid,
-    .salary-history-grid {
+    .form-grid {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 1rem;
@@ -157,15 +156,127 @@
         flex-wrap: wrap;
     }
 
-    .salary-card {
-        background: linear-gradient(180deg, #f8fffe 0%, #eefbf9 100%);
-        border: 1px solid #d1f0ea;
-        border-radius: 16px;
-        padding: 1rem;
+    .period-overview {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 1rem;
+        padding: 1rem 1.1rem;
+        border: 1px solid #dbe5ea;
+        background: #fbfdfe;
+        border-radius: 12px;
+        margin-bottom: 0.9rem;
+        flex-wrap: wrap;
     }
 
-    .salary-card strong {
+    .period-overview strong {
         color: var(--personel-text);
+    }
+
+    .period-toggle {
+        border: 1px solid #d0d7de;
+        border-radius: 12px;
+        background: #fff;
+        overflow: hidden;
+    }
+
+    .period-toggle summary {
+        list-style: none;
+        cursor: pointer;
+        padding: 0.95rem 1.1rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+        font-weight: 700;
+        color: var(--personel-text);
+        user-select: none;
+    }
+
+    .period-toggle summary::-webkit-details-marker {
+        display: none;
+    }
+
+    .period-toggle summary::after {
+        content: '+';
+        width: 26px;
+        height: 26px;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #ecfdf5;
+        color: var(--personel-teal);
+        font-size: 1rem;
+        font-weight: 800;
+        flex-shrink: 0;
+    }
+
+    .period-toggle[open] summary::after {
+        content: '-';
+    }
+
+    .period-toggle-label {
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+    }
+
+    .period-toggle-label small {
+        font-size: 0.82rem;
+        font-weight: 500;
+        color: #64748b;
+    }
+
+    .simple-table-wrap {
+        border-top: 1px solid #e5e7eb;
+        overflow-x: auto;
+        background: #fff;
+    }
+
+    .simple-period-table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 760px;
+        font-size: 0.9rem;
+    }
+
+    .simple-period-table th,
+    .simple-period-table td {
+        border-right: 1px solid #e5e7eb;
+        border-bottom: 1px solid #e5e7eb;
+        padding: 0.7rem 0.8rem;
+        text-align: left;
+        vertical-align: top;
+        white-space: nowrap;
+    }
+
+    .simple-period-table th:last-child,
+    .simple-period-table td:last-child {
+        border-right: none;
+    }
+
+    .simple-period-table thead th {
+        background: #f8fafc;
+        color: #475569;
+        font-size: 0.76rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        font-weight: 700;
+    }
+
+    .simple-period-table tbody tr:nth-child(even) {
+        background: #fcfcfd;
+    }
+
+    .simple-period-table td.number,
+    .simple-period-table th.number {
+        text-align: right;
+    }
+
+    .simple-period-table td.center,
+    .simple-period-table th.center {
+        text-align: center;
     }
 
     .salary-status {
@@ -213,6 +324,10 @@
         .form-grid {
             grid-template-columns: 1fr;
         }
+
+        .period-overview {
+            flex-direction: column;
+        }
     }
 </style>
 
@@ -249,56 +364,85 @@
     <div class="edit-card">
         <h2 class="section-title">Ucret Donemleri</h2>
         {% if aktif_maas_donemi %}
-        <div class="salary-card" style="margin-bottom: 1rem;">
-            <div style="display:flex; justify-content:space-between; gap:1rem; flex-wrap:wrap; align-items:center;">
-                <div>
-                    <div class="meta-label">Aktif Donem</div>
-                    <div class="meta-value">{{ '{:,.0f}'.format(aktif_maas_donemi.aylik_toplam_maliyet) }} TL</div>
-                    <p class="muted-note">
-                        {{ aktif_maas_donemi.baslangic_tarihi.strftime('%d.%m.%Y') }}
-                        {% if aktif_maas_donemi.bitis_tarihi %}
-                        - {{ aktif_maas_donemi.bitis_tarihi.strftime('%d.%m.%Y') }}
-                        {% else %}
-                        itibariyla aktif
-                        {% endif %}
-                    </p>
-                    <p class="muted-note">Maas {{ '{:,.0f}'.format(aktif_maas_donemi.aylik_maas or 0) }} TL | Yemek {{ '{:,.0f}'.format(aktif_maas_donemi.aylik_yemek_ucreti or 0) }} TL | Yol {{ '{:,.0f}'.format(aktif_maas_donemi.aylik_yol_ucreti or 0) }} TL</p>
-                </div>
-                <div>
-                    <span class="salary-status">Aktif</span>
-                    <p class="muted-note" style="margin-top:0.55rem; text-align:right;">Raporlarda {{ aktif_maas_donemi.sube.isim if aktif_maas_donemi.sube else 'Subesiz' }} altinda hesaplanir.</p>
-                </div>
-            </div>
-        </div>
-        {% endif %}
-
-        <div class="salary-history-grid">
-            {% for donem in maas_donemleri %}
-            <div class="meta-item">
-                <div style="display:flex; justify-content:space-between; gap:0.75rem; align-items:flex-start;">
-                    <div>
-                        <div class="meta-label">{{ donem.sube.isim if donem.sube else 'Subesiz' }}</div>
-                        <div class="meta-value">{{ '{:,.0f}'.format(donem.aylik_toplam_maliyet) }} TL</div>
-                    </div>
-                    <span class="salary-status {{ '' if not donem.bitis_tarihi else 'is-passive' }}">{{ 'Aktif' if not donem.bitis_tarihi else 'Kapandi' }}</span>
-                </div>
+        <div class="period-overview">
+            <div>
+                <div class="meta-label">Aktif Donem</div>
+                <div class="meta-value">{{ '{:,.0f}'.format(aktif_maas_donemi.aylik_toplam_maliyet) }} TL</div>
                 <p class="muted-note">
-                    {{ donem.baslangic_tarihi.strftime('%d.%m.%Y') }}
-                    {% if donem.bitis_tarihi %}
-                    - {{ donem.bitis_tarihi.strftime('%d.%m.%Y') }}
+                    {{ aktif_maas_donemi.baslangic_tarihi.strftime('%d.%m.%Y') }}
+                    {% if aktif_maas_donemi.bitis_tarihi %}
+                    - {{ aktif_maas_donemi.bitis_tarihi.strftime('%d.%m.%Y') }}
                     {% else %}
                     - devam ediyor
                     {% endif %}
                 </p>
-                <p class="muted-note">Maas {{ '{:,.0f}'.format(donem.aylik_maas or 0) }} TL | Yemek {{ '{:,.0f}'.format(donem.aylik_yemek_ucreti or 0) }} TL | Yol {{ '{:,.0f}'.format(donem.aylik_yol_ucreti or 0) }} TL</p>
+                <p class="muted-note">Maas {{ '{:,.0f}'.format(aktif_maas_donemi.aylik_maas or 0) }} TL | Yemek {{ '{:,.0f}'.format(aktif_maas_donemi.aylik_yemek_ucreti or 0) }} TL | Yol {{ '{:,.0f}'.format(aktif_maas_donemi.aylik_yol_ucreti or 0) }} TL</p>
             </div>
-            {% else %}
-            <div class="meta-item" style="grid-column: 1 / -1;">
-                <div class="meta-value">Henuz ucret donemi kaydi yok</div>
-                <p class="muted-note">Bu personel icin maas, yemek veya yol belirlendiginde burada otomatik gecmis olusur.</p>
+            <div>
+                <span class="salary-status">Aktif</span>
+                <p class="muted-note" style="margin-top:0.55rem; text-align:right;">{{ aktif_maas_donemi.sube.isim if aktif_maas_donemi.sube else 'Subesiz' }}</p>
             </div>
-            {% endfor %}
         </div>
+        {% elif maas_donemleri %}
+        <p class="muted-note" style="margin-bottom: 0.9rem;">Aktif donem yok. Yalnizca planli veya kapanmis donemler bulunuyor.</p>
+        {% endif %}
+
+        {% if maas_donemleri %}
+        <details class="period-toggle">
+            <summary>
+                <span class="period-toggle-label">
+                    <span>Ucret Donemleri Gecmisi</span>
+                    <small>Gecmise donup rakamlari incelemek icin acin.</small>
+                </span>
+            </summary>
+            <div class="simple-table-wrap">
+                <table class="simple-period-table">
+                    <thead>
+                        <tr>
+                            <th class="center" style="width: 110px;">Durum</th>
+                            <th style="width: 120px;">Baslangic</th>
+                            <th style="width: 120px;">Bitis</th>
+                            <th>Sube</th>
+                            <th class="number" style="width: 120px;">Maas</th>
+                            <th class="number" style="width: 120px;">Yemek</th>
+                            <th class="number" style="width: 120px;">Yol</th>
+                            <th class="number" style="width: 130px;">Toplam</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for donem in maas_donemleri %}
+                        {% set donem_durumu = 'Planli' if donem.baslangic_tarihi and donem.baslangic_tarihi > today else 'Aktif' if not donem.bitis_tarihi else 'Kapandi' %}
+                        <tr>
+                            <td class="center">
+                                <span class="salary-status {{ '' if donem_durumu == 'Aktif' else 'is-passive' }}">{{ donem_durumu }}</span>
+                            </td>
+                            <td>{{ donem.baslangic_tarihi.strftime('%d.%m.%Y') }}</td>
+                            <td>
+                                {% if donem.baslangic_tarihi and donem.baslangic_tarihi > today %}
+                                Planli
+                                {% elif donem.bitis_tarihi %}
+                                {{ donem.bitis_tarihi.strftime('%d.%m.%Y') }}
+                                {% else %}
+                                Devam ediyor
+                                {% endif %}
+                            </td>
+                            <td>{{ donem.sube.isim if donem.sube else 'Subesiz' }}</td>
+                            <td class="number">{{ '{:,.0f}'.format(donem.aylik_maas or 0) }} TL</td>
+                            <td class="number">{{ '{:,.0f}'.format(donem.aylik_yemek_ucreti or 0) }} TL</td>
+                            <td class="number">{{ '{:,.0f}'.format(donem.aylik_yol_ucreti or 0) }} TL</td>
+                            <td class="number"><strong>{{ '{:,.0f}'.format(donem.aylik_toplam_maliyet) }} TL</strong></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </details>
+        {% else %}
+        <div class="meta-item">
+            <div class="meta-value">Henuz ucret donemi kaydi yok</div>
+            <p class="muted-note">Bu personel icin maas, yemek veya yol belirlendiginde burada donem gecmisi olusur.</p>
+        </div>
+        {% endif %}
     </div>
 
     <div class="edit-form">
@@ -352,6 +496,7 @@
                 <div class="form-group">
                     {{ form.maas_gecerlilik_tarihi.label }}
                     {{ form.maas_gecerlilik_tarihi() }}
+                    <p class="muted-note">Bu tarih yeni ucret doneminin baslangicidir. Rakamlar ayni kalsa bile isterseniz yeni donem buradan acabilirsiniz.</p>
                 </div>
                 <div class="form-group">
                     {{ form.ise_giris_tarihi.label }}

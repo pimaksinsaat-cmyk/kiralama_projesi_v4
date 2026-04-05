@@ -1,5 +1,5 @@
 from flask import render_template, redirect, url_for, flash, request, jsonify
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from sqlalchemy import inspect
 from app.subeler import subeler_bp
 from app.extensions import db
@@ -57,6 +57,18 @@ def _build_period_context(selected_year, selected_month):
         'next_year': next_year,
         'next_month': next_month,
     }
+
+
+def _resolve_sabit_gider_baslangic_value(sabit_giderler, selected_year, selected_month):
+    if sabit_giderler:
+        latest_period = max(
+            sabit_giderler,
+            key=lambda donem: (donem.baslangic_tarihi or date.min, donem.id or 0),
+        )
+        if latest_period.baslangic_tarihi:
+            return latest_period.baslangic_tarihi.strftime('%Y-%m-%d')
+
+    return date(selected_year, selected_month, 1).strftime('%Y-%m-%d')
 
 # 1. LİSTELEME SAYFASI (Zaten yazmıştık)
 @subeler_bp.route('/')
@@ -181,9 +193,17 @@ def sube_masraflari(sube_id):
     if not SubeSabitGiderDonemiService.table_exists():
         sabit_giderler = []
         aylik_sabit_toplam = 0.0
+        sabit_gider_timeline = {}
     else:
         sabit_giderler = SubeSabitGiderDonemiService.list_donemler(sube_id)
         aylik_sabit_toplam = SubeSabitGiderDonemiService.calculate_monthly_total(sube_id, selected_year, selected_month)
+        sabit_gider_timeline = SubeSabitGiderDonemiService.build_timeline_metadata(sabit_giderler, reference_date=date.today())
+
+    sabit_gider_form.baslangic_tarihi.data = _resolve_sabit_gider_baslangic_value(
+        sabit_giderler,
+        selected_year,
+        selected_month,
+    )
 
     kategori_toplamlar = SubeGiderService.build_category_totals(masraflar)
     manuel_masraf_toplam = sum(kategori_toplamlar.values())
@@ -200,6 +220,7 @@ def sube_masraflari(sube_id):
         sabit_gider_form=sabit_gider_form,
         masraflar=masraflar,
         sabit_giderler=sabit_giderler,
+        sabit_gider_timeline=sabit_gider_timeline,
         aktif_sabit_toplam=aylik_sabit_toplam,
         genel_toplam=genel_toplam,
         manuel_masraf_toplam=manuel_masraf_toplam,
@@ -209,6 +230,8 @@ def sube_masraflari(sube_id):
         kategori_labels=kategori_labels,
         kategori_secenekleri=GIDER_KATEGORILERI,
         today=datetime.now().strftime('%Y-%m-%d'),
+        yesterday=(date.today() - timedelta(days=1)).strftime('%Y-%m-%d'),
+        today_date=date.today(),
         **period_context,
     )
 
@@ -295,7 +318,7 @@ def sabit_gider_ekle():
         return redirect(url_for('subeler.sube_masraflari', **redirect_params))
 
     try:
-        SubeSabitGiderDonemiService.create_donem(
+        yeni_donem = SubeSabitGiderDonemiService.create_donem(
             {
                 'sube_id': form.sube_id.data,
                 'kategori': form.kategori.data,
@@ -305,11 +328,53 @@ def sabit_gider_ekle():
                 'aciklama': form.aciklama.data,
             }
         )
-        flash('Aylik sabit gider kaydi olusturuldu.', 'success')
+        timeline = SubeSabitGiderDonemiService.build_timeline_metadata(
+            SubeSabitGiderDonemiService.list_donemler(yeni_donem.sube_id),
+            reference_date=date.today(),
+        )
+        yeni_donem_status = timeline.get(yeni_donem.id, {}).get('status')
+        if yeni_donem_status == 'planned':
+            flash('Planli aylik sabit gider donemi olusturuldu.', 'success')
+        else:
+            flash('Aylik sabit gider kaydi olusturuldu.', 'success')
     except ValidationError as exc:
         flash(str(exc), 'warning')
     except Exception as exc:
         flash(f'Sabit gider kaydedilirken hata olustu: {exc}', 'danger')
+
+    return redirect(url_for('subeler.sube_masraflari', **redirect_params))
+
+
+@subeler_bp.route('/sabit-giderler/<int:donem_id>/guncelle', methods=['POST'])
+def sabit_gider_guncelle(donem_id):
+    donem = SubeSabitGiderDonemiService.get_by_id(donem_id)
+    if not donem:
+        flash('Sabit gider donemi bulunamadi.', 'warning')
+        return redirect(url_for('subeler.index'))
+
+    redirect_params = {
+        'sube_id': donem.sube_id,
+        'year': request.form.get('year'),
+        'month': request.form.get('month'),
+    }
+
+    try:
+        SubeSabitGiderDonemiService.update_donem(
+            donem_id,
+            {
+                'sube_id': donem.sube_id,
+                'kategori': donem.kategori,
+                'baslangic_tarihi': request.form.get('baslangic_tarihi'),
+                'aylik_tutar': request.form.get('aylik_tutar', type=float),
+                'kdv_orani': request.form.get('kdv_orani', type=float),
+                'aciklama': request.form.get('aciklama'),
+            }
+        )
+        flash('Sabit gider donemi guncellendi.', 'success')
+    except ValidationError as exc:
+        flash(str(exc), 'warning')
+    except Exception as exc:
+        flash(f'Sabit gider guncellenirken hata olustu: {exc}', 'danger')
 
     return redirect(url_for('subeler.sube_masraflari', **redirect_params))
 
@@ -330,6 +395,30 @@ def sabit_gider_durdur(donem_id):
         flash(f'Sabit gider sonlandirilirken hata olustu: {exc}', 'danger')
 
     return redirect(url_for('subeler.sube_masraflari', sube_id=donem.sube_id, year=request.form.get('year'), month=request.form.get('month')))
+
+
+@subeler_bp.route('/sabit-giderler/<int:donem_id>/sil', methods=['POST'])
+def sabit_gider_sil(donem_id):
+    donem = SubeSabitGiderDonemiService.get_by_id(donem_id)
+    if not donem:
+        flash('Sabit gider donemi bulunamadi.', 'warning')
+        return redirect(url_for('subeler.index'))
+
+    redirect_params = {
+        'sube_id': donem.sube_id,
+        'year': request.form.get('year'),
+        'month': request.form.get('month'),
+    }
+
+    try:
+        SubeSabitGiderDonemiService.delete_donem(donem_id)
+        flash('Sabit gider donemi silindi.', 'success')
+    except ValidationError as exc:
+        flash(str(exc), 'warning')
+    except Exception as exc:
+        flash(f'Sabit gider silinirken hata olustu: {exc}', 'danger')
+
+    return redirect(url_for('subeler.sube_masraflari', **redirect_params))
 
 
 @subeler_bp.route('/<int:sube_id>/personel', methods=['GET'])

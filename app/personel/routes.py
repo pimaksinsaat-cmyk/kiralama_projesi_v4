@@ -67,6 +67,21 @@ def _redirect_to_index(selected_sube_id=None):
     return redirect(url_for('personel.index'))
 
 
+def _resolve_effective_date_value(personel, aktif_maas_donemi=None, maas_donemleri=None):
+    if maas_donemleri:
+        latest_period = max(
+            maas_donemleri,
+            key=lambda donem: (donem.baslangic_tarihi or date.min, donem.id or 0),
+        )
+        if latest_period.baslangic_tarihi:
+            return latest_period.baslangic_tarihi.strftime('%Y-%m-%d')
+
+    if personel.ise_giris_tarihi:
+        return personel.ise_giris_tarihi.strftime('%Y-%m-%d')
+
+    return date.today().strftime('%Y-%m-%d')
+
+
 @personel_bp.route('/')
 def index():
     selected_sube_id = _normalize_sube_filter(request.args.get('sube_id', type=int))
@@ -224,7 +239,11 @@ def duzenle(personel_id):
         form.maas.data = personel.maas
         form.yemek_ucreti.data = personel.yemek_ucreti
         form.yol_ucreti.data = personel.yol_ucreti
-        form.maas_gecerlilik_tarihi.data = date.today().strftime('%Y-%m-%d')
+        form.maas_gecerlilik_tarihi.data = _resolve_effective_date_value(
+            personel,
+            aktif_maas_donemi=aktif_maas_donemi,
+            maas_donemleri=maas_donemleri,
+        )
         form.ise_giris_tarihi.data = personel.ise_giris_tarihi.strftime('%Y-%m-%d') if personel.ise_giris_tarihi else ''
         form.isten_cikis_tarihi.data = personel.isten_cikis_tarihi.strftime('%Y-%m-%d') if personel.isten_cikis_tarihi else ''
 
@@ -234,6 +253,7 @@ def duzenle(personel_id):
         personel=personel,
         maas_donemleri=maas_donemleri,
         aktif_maas_donemi=aktif_maas_donemi,
+        today=date.today(),
         selected_sube_id=_normalize_sube_filter(selected_sube_id) or 0,
     )
 

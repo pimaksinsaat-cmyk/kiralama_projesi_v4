@@ -748,40 +748,14 @@ def sonlandir():
 # -------------------------------------------------------------------------
 # 7. Bakım ve Servis İşlemleri
 # -------------------------------------------------------------------------
-@filo_bp.route('/bakimda')
-def bakimda():
-    try:
-        page = request.args.get('page', 1, type=int)
-        q = request.args.get('q', '', type=str)
-        
-        base_query = Ekipman.query.filter(
-            Ekipman.firma_tedarikci_id.is_(None),
-            Ekipman.is_active == True,
-            Ekipman.calisma_durumu == 'serviste'
-        ).options(subqueryload(Ekipman.bakim_kayitlari))
-        
-        if q:
-            base_query = base_query.filter(Ekipman.kod.ilike(f'%{q}%'))
-            
-        pagination = base_query.order_by(Ekipman.kod).paginate(page=page, per_page=25, error_out=False)
-        for ekipman in pagination.items:
-            acik_bakimlar = [
-                kayit for kayit in ekipman.bakim_kayitlari
-                if not kayit.is_deleted and kayit.durum in {'acik', 'parca_bekliyor'}
-            ]
-            ekipman.aktif_bakim_kaydi = max(acik_bakimlar, key=lambda kayit: (kayit.tarih or date.min, kayit.id)) if acik_bakimlar else None
-        return render_template('filo/bakimda.html', ekipmanlar=pagination.items, pagination=pagination, q=q)
-    except Exception as e:
-        flash(f"Hata: {str(e)}", "danger")
-        return render_template('filo/bakimda.html', ekipmanlar=[], pagination=None, q='')
-
 @filo_bp.route('/bakima_al', methods=['POST'])
 def bakima_al():
+    """Filo listesinden makineyi bakıma al ve servis kaydı oluştur"""
     try:
         ekipman_id = request.form.get('ekipman_id', type=int)
         tarih = request.form.get('tarih')
         calisma_saati = request.form.get('calisma_saati', type=int)
-        
+
         if ekipman_id is None or not tarih:
             flash('Eksik bilgi! Lütfen bakım başlangıç tarihini giriniz.', 'danger')
             return redirect(url_for('filo.index'))
@@ -798,7 +772,7 @@ def bakima_al():
             'toplam_iscilik_maliyeti': Decimal('0'),
             'durum': 'acik',
         }
-        
+
         BakimService.bakim_kaydet(ekipman_id, bakim_verileri, actor_id=get_actor_id())
         OperationLogService.log(
             module='filo', action='bakima_al',
@@ -829,27 +803,8 @@ def bakima_al():
             success=False
         )
         flash(f"Hata: {str(e)}", 'danger')
-        
-    return redirect(url_for('filo.index'))
 
-@filo_bp.route('/bakim_bitir/<int:id>', methods=['POST'])
-def bakim_bitir(id):
-    try:
-        ekipman = EkipmanService.get_by_id(id)
-        if ekipman and ekipman.calisma_durumu == 'serviste':
-            BakimService.ekipman_bakimini_tamamla(id, actor_id=get_actor_id())
-            OperationLogService.log(
-                module='filo', action='bakim_bitir',
-                user_id=get_actor_id(),
-                username=getattr(current_user, 'username', None),
-                entity_type='Ekipman', entity_id=id,
-                description=f"{ekipman.kod} servisten çıkarıldı.",
-                success=True
-            )
-            flash(f"'{ekipman.kod}' servisten çıkarıldı.", "success")
-    except ValidationError as e:
-        flash(str(e), "danger")
-    return redirect(url_for('filo.bakimda'))
+    return redirect(url_for('filo.index'))
 
 # -------------------------------------------------------------------------
 # 8. Arşiv, Silme ve Harici Makineler

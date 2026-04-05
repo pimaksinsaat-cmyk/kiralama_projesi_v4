@@ -94,8 +94,8 @@ class SubeSabitGiderDonemiForm(FlaskForm):
         validators=[DataRequired(message='Kategori secmek zorunludur')],
     )
     baslangic_tarihi = StringField(
-        'Baslangic Tarihi',
-        validators=[DataRequired(message='Baslangic tarihi zorunludur')],
+        'Donemsel Degisim Tarihi',
+        validators=[DataRequired(message='Donemsel degisim tarihi zorunludur')],
         default=lambda: datetime.now().replace(day=1).strftime('%Y-%m-%d'),
         render_kw={'type': 'date'},
     )

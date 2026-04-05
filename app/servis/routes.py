@@ -1,14 +1,20 @@
 from flask import render_template, request, redirect, url_for, flash
 from flask_login import login_required, current_user
 from sqlalchemy import or_
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, subqueryload
 from decimal import Decimal
+from datetime import date
 
 from app.servis import servis_bp
 from app.filo.models import BakimKaydi, KullanilanParca, Ekipman, StokKarti, StokHareket
 from app.firmalar.models import Firma
 from app.services.base import ValidationError
-from app.services.filo_services import BakimService
+from app.services.filo_services import BakimService, EkipmanService
+from app.services.operation_log_service import OperationLogService
+
+
+def get_actor_id():
+    return current_user.id if current_user.is_authenticated else None
 
 
 BAKIM_TIPI_LABELS = {
@@ -208,3 +214,62 @@ def sil(id):
         flash(f'Hata: {exc}', 'danger')
 
     return redirect(url_for('servis.index'))
+
+
+# -------------------------------------------------------------------------
+# Bakımda olan makineler sayfası
+# -------------------------------------------------------------------------
+@servis_bp.route('/bakimda')
+@login_required
+def bakimda():
+    """Serviste olan (bakımda) makinelerin listesi"""
+    try:
+        page = request.args.get('page', 1, type=int)
+        q = request.args.get('q', '', type=str)
+
+        base_query = Ekipman.query.filter(
+            Ekipman.firma_tedarikci_id.is_(None),
+            Ekipman.is_active == True,
+            Ekipman.calisma_durumu == 'serviste'
+        ).options(subqueryload(Ekipman.bakim_kayitlari))
+
+        if q:
+            base_query = base_query.filter(Ekipman.kod.ilike(f'%{q}%'))
+
+        pagination = base_query.order_by(Ekipman.kod).paginate(page=page, per_page=25, error_out=False)
+        for ekipman in pagination.items:
+            acik_bakimlar = [
+                kayit for kayit in ekipman.bakim_kayitlari
+                if not kayit.is_deleted and kayit.durum in {'acik', 'parca_bekliyor'}
+            ]
+            ekipman.aktif_bakim_kaydi = max(acik_bakimlar, key=lambda kayit: (kayit.tarih or date.min, kayit.id)) if acik_bakimlar else None
+
+        return render_template('servis/bakimda.html', ekipmanlar=pagination.items, pagination=pagination, q=q)
+    except Exception as e:
+        flash(f"Hata: {str(e)}", "danger")
+        return render_template('servis/bakimda.html', ekipmanlar=[], pagination=None, q='')
+
+
+@servis_bp.route('/bakim_bitir/<int:id>', methods=['POST'])
+@login_required
+def bakim_bitir(id):
+    """Makinenin bakımını tamamla ve servisten çıkar"""
+    try:
+        ekipman = EkipmanService.get_by_id(id)
+        if ekipman and ekipman.calisma_durumu == 'serviste':
+            BakimService.ekipman_bakimini_tamamla(id, actor_id=get_actor_id())
+            OperationLogService.log(
+                module='servis', action='bakim_bitir',
+                user_id=get_actor_id(),
+                username=getattr(current_user, 'username', None),
+                entity_type='Ekipman', entity_id=id,
+                description=f"{ekipman.kod} servisten çıkarıldı.",
+                success=True
+            )
+            flash(f"'{ekipman.kod}' servisten çıkarıldı.", "success")
+    except ValidationError as e:
+        flash(str(e), "danger")
+    except Exception as e:
+        flash(f"Hata: {str(e)}", "danger")
+
+    return redirect(url_for('servis.bakimda'))
