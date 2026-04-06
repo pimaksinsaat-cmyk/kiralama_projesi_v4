@@ -89,8 +89,6 @@ def odeme_ekle():
     form.kasa_id.choices = [(k.id, f"{k.kasa_adi} ({k.bakiye} {k.para_birimi})") 
                             for k in Kasa.query.filter_by(is_active=True, is_deleted=False).all()]
     
-    secili_firma = Firma.query.get(firma_id) if firma_id else None
-
     if request.method == 'GET':
         if firma_id: form.firma_musteri_id.data = firma_id
         form.tarih.data = date.today()
@@ -139,7 +137,7 @@ def odeme_ekle():
             )
             flash(f"Hata: {str(e)}", "danger")
             
-    return render_template('cari/odeme_ekle.html', form=form, secili_firma=secili_firma)
+    return render_template('cari/odeme_ekle.html', form=form)
 
 @cari_bp.route('/odeme/duzelt/<int:id>', methods=['GET', 'POST'])
 def odeme_duzelt(id):

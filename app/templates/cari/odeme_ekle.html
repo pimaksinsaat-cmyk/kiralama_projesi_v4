@@ -40,15 +40,13 @@
                         </div>
 
                         <div class="row mb-3">
-                            <div class="col-md-6 position-relative">
-                                <label for="musteri_search" class="form-label fw-bold">{{ form.firma_musteri_id.label.text }}</label>
-                                <input type="text" id="musteri_search" class="form-control" placeholder="Müşteri ara..." autocomplete="off"
-                                    value="{{ secili_firma.firma_adi if secili_firma else '' }}">
-                                <input type="hidden" name="firma_musteri_id" id="musteri_id_hidden"
-                                    value="{{ secili_firma.id if secili_firma else '' }}">
-                                <div id="musteri_suggestions" class="list-group position-absolute w-100" style="z-index: 1000;"></div>
+                            <div class="col-md-6">
+                                {{ form.firma_musteri_id.label(class="form-label fw-bold") }}
                                 {% if form.firma_musteri_id.errors %}
-                                    <div class="invalid-feedback d-block">{% for error in form.firma_musteri_id.errors %} {{ error }} {% endfor %}</div>
+                                    {{ form.firma_musteri_id(class="form-select is-invalid") }}
+                                    <div class="invalid-feedback">{% for error in form.firma_musteri_id.errors %} {{ error }} {% endfor %}</div>
+                                {% else %}
+                                    {{ form.firma_musteri_id(class="form-select") }}
                                 {% endif %}
                             </div>
                             <div class="col-md-6">
@@ -209,57 +207,5 @@
     }
 });
 
-// --- Müşteri Live Search ---
-const searchInput = document.getElementById('musteri_search');
-const suggestionsBox = document.getElementById('musteri_suggestions');
-const hiddenIdInput = document.getElementById('musteri_id_hidden');
-const apiUrl = "{{ url_for('cari.musteri_ara') }}";
-
-async function musteriAra(q) {
-    suggestionsBox.innerHTML = '<div class="list-group-item text-muted">Yükleniyor...</div>';
-    try {
-        const resp = await fetch(`${apiUrl}?q=${encodeURIComponent(q)}`);
-        if (!resp.ok) throw new Error('API hatası');
-        const list = await resp.json();
-        if (!Array.isArray(list) || list.length === 0) {
-            suggestionsBox.innerHTML = '<div class="list-group-item text-muted">Sonuç yok</div>';
-            return;
-        }
-        suggestionsBox.innerHTML = list.map(m => {
-            const kisa = m.ad.split(' ').slice(0, 4).join(' ');
-            return `<button type="button" class="list-group-item list-group-item-action border-0" data-id="${m.id}" data-ad="${m.ad}">${kisa}</button>`;
-        }).join('');
-    } catch (e) {
-        suggestionsBox.innerHTML = '<div class="list-group-item text-danger">Bağlantı hatası</div>';
-    }
-}
-
-// Kutuya tıklanınca tüm listeyi göster
-searchInput.addEventListener('focus', function() {
-    if (!hiddenIdInput.value) {
-        musteriAra('');
-    }
-});
-
-// Yazarken filtrele
-searchInput.addEventListener('input', function() {
-    hiddenIdInput.value = '';  // Yazınca seçimi sıfırla
-    musteriAra(this.value.trim());
-});
-
-suggestionsBox.addEventListener('click', function(e) {
-    if (e.target && e.target.matches('button[data-id]')) {
-        hiddenIdInput.value = e.target.getAttribute('data-id');
-        searchInput.value = e.target.getAttribute('data-ad');
-        suggestionsBox.innerHTML = '';
-    }
-});
-
-// Input dışına tıklanınca kutuyu kapat
-document.addEventListener('click', function(e) {
-    if (!searchInput.contains(e.target) && !suggestionsBox.contains(e.target)) {
-        suggestionsBox.innerHTML = '';
-    }
-});
 </script>
 {% endblock %}
