@@ -2,6 +2,9 @@
 {% block head %}
 <link href="https://cdn.jsdelivr.net/npm/tom-select@2/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/tom-select@2/dist/js/tom-select.complete.min.js"></script>
+<style>
+  #firma_musteri_id + .ts-wrapper .ts-control > .placeholder { color: #adb5bd; }
+</style>
 {% endblock %}
 
 {% set is_odeme = (request.args.get('yon') == 'odeme' or (title and 'Ödeme' in title)) %}
@@ -138,7 +141,7 @@
                 openOnFocus: true,
                 allowEmptyOption: true,
                 searchField: ['text'],
-                placeholder: 'Firma Seçin',
+                placeholder: 'Firma Seçiniz',
                 render: {
                     option: function(data, escape) {
                         if (!data.text) return `<div class="d-none"></div>`;
