@@ -1,7 +1,10 @@
+
 # ----------------------
-# MÜŞTERİ (FİRMA) LIVE SEARCH API
+# MÜŞTERİ (FİRMA) LIVE SEARCH API (En alta taşındı)
 # ----------------------
 from flask import jsonify
+
+# ...existing code...
 
 @cari_bp.route('/api/musteri_ara')
 def musteri_ara():
