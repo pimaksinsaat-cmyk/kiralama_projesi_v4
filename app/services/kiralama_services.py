@@ -682,7 +682,7 @@ class KiralamaService(BaseService):
                     KiralamaKalemiService.save(kalem, is_new=True, auto_commit=False, actor_id=actor_id)
                     db.session.flush()
                     logger.debug(f"[CREATE] Kalem flush sonrası id: {kalem.id}")
-                    if any([kalem.nakliye_satis_fiyat > 0, kalem.nakliye_alis_fiyat > 0, kalem.nakliye_araci_id, kalem.nakliye_tedarikci_id]):
+                    if to_decimal(kalem.nakliye_satis_fiyat) > 0 or to_decimal(kalem.nakliye_alis_fiyat) > 0:
                         logger.debug(f"[CREATE] Nakliye ve cari oluşturuluyor: kalem_id={kalem.id}")
                         cls._create_nakliye_ve_cari(kiralama, kalem, makine_adi, bas)
                 logger.debug(f"[CREATE] Cari toplam güncelleniyor: kiralama_id={kiralama.id}")
@@ -815,7 +815,8 @@ class KiralamaService(BaseService):
                 db.session.flush()
                 formdan_gelen_idler.append(aktif.id)
 
-                cls._create_nakliye_ve_cari(kiralama, aktif, makine_adi, bas)
+                if to_decimal(aktif.nakliye_satis_fiyat) > 0 or to_decimal(aktif.nakliye_alis_fiyat) > 0:
+                    cls._create_nakliye_ve_cari(kiralama, aktif, makine_adi, bas)
 
             for k in list(kiralama.kalemler):
                 if k.id not in formdan_gelen_idler:
