@@ -139,6 +139,17 @@
                 allowEmptyOption: true,
                 searchField: ['text'],
                 sortField: [{ field: 'text', direction: 'asc' }],
+                placeholder: 'Firma Adı Ara',
+                render: {
+                    option: function(data, escape) {
+                        const kisa = data.text.split(' ').slice(0, 4).join(' ');
+                        return `<div>${escape(kisa)}</div>`;
+                    },
+                    item: function(data, escape) {
+                        const kisa = data.text.split(' ').slice(0, 4).join(' ');
+                        return `<div>${escape(kisa)}</div>`;
+                    }
+                }
             });
         }
     });
