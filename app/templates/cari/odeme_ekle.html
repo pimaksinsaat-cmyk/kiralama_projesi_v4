@@ -225,9 +225,10 @@ async function musteriAra(q) {
             suggestionsBox.innerHTML = '<div class="list-group-item text-muted">Sonuç yok</div>';
             return;
         }
-        suggestionsBox.innerHTML = list.map(m =>
-            `<button type="button" class="list-group-item list-group-item-action" data-id="${m.id}">${m.ad}</button>`
-        ).join('');
+        suggestionsBox.innerHTML = list.map(m => {
+            const kisa = m.ad.split(' ').slice(0, 4).join(' ');
+            return `<button type="button" class="list-group-item list-group-item-action border-0" data-id="${m.id}" data-ad="${m.ad}">${kisa}</button>`;
+        }).join('');
     } catch (e) {
         suggestionsBox.innerHTML = '<div class="list-group-item text-danger">Bağlantı hatası</div>';
     }
@@ -249,7 +250,7 @@ searchInput.addEventListener('input', function() {
 suggestionsBox.addEventListener('click', function(e) {
     if (e.target && e.target.matches('button[data-id]')) {
         hiddenIdInput.value = e.target.getAttribute('data-id');
-        searchInput.value = e.target.textContent;
+        searchInput.value = e.target.getAttribute('data-ad');
         suggestionsBox.innerHTML = '';
     }
 });
