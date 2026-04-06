@@ -1,4 +1,8 @@
 {% extends "base.html" %}
+{% block head %}
+<link href="https://cdn.jsdelivr.net/npm/tom-select@2/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2/dist/js/tom-select.complete.min.js"></script>
+{% endblock %}
 
 {% set is_odeme = (request.args.get('yon') == 'odeme' or (title and 'Ödeme' in title)) %}
 {% set title_text = title if title else ('Ödeme Yap (Para Çıkışı)' if is_odeme else 'Tahsilat Al (Para Girişi)') %}
@@ -43,10 +47,10 @@
                             <div class="col-md-6">
                                 {{ form.firma_musteri_id.label(class="form-label fw-bold") }}
                                 {% if form.firma_musteri_id.errors %}
-                                    {{ form.firma_musteri_id(class="form-select is-invalid") }}
+                                    {{ form.firma_musteri_id(class="form-select is-invalid", id="firma_musteri_id") }}
                                     <div class="invalid-feedback">{% for error in form.firma_musteri_id.errors %} {{ error }} {% endfor %}</div>
                                 {% else %}
-                                    {{ form.firma_musteri_id(class="form-select") }}
+                                    {{ form.firma_musteri_id(class="form-select", id="firma_musteri_id") }}
                                 {% endif %}
                             </div>
                             <div class="col-md-6">
@@ -124,6 +128,18 @@
         const selectElement = document.getElementById('yon_select');
         if (yon && selectElement) {
             selectElement.value = yon;
+        }
+
+        const firmaSelect = document.getElementById('firma_musteri_id');
+        if (firmaSelect) {
+            new TomSelect(firmaSelect, {
+                create: false,
+                maxOptions: null,
+                openOnFocus: true,
+                allowEmptyOption: true,
+                searchField: ['text'],
+                sortField: [{ field: 'text', direction: 'asc' }],
+            });
         }
     });
 </script>
