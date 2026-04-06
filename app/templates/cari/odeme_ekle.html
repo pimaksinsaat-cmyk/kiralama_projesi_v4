@@ -135,7 +135,7 @@
 
         const firmaSelect = document.getElementById('firma_musteri_id');
         if (firmaSelect) {
-            new TomSelect(firmaSelect, {
+            const ts = new TomSelect(firmaSelect, {
                 create: false,
                 maxOptions: null,
                 openOnFocus: true,
@@ -155,6 +155,10 @@
                     }
                 }
             });
+            // Değer boş seçenek (0) ise temizle, placeholder görünsün
+            if (!firmaSelect.value || firmaSelect.value === '0') {
+                ts.clear(true);
+            }
         }
     });
 </script>
