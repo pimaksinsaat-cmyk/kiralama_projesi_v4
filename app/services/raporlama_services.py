@@ -662,7 +662,7 @@ class RaporlamaService:
             .all()
         )
 
-        arac_query = Arac.query.filter(Arac.is_active.is_(True))
+        arac_query = Arac.query.filter(Arac.is_active.is_(True), Arac.is_nakliye_araci.is_(True))
         if sube_id:
             arac_query = arac_query.filter(Arac.sube_id == sube_id)
         oz_mal_araclar = arac_query.all()
