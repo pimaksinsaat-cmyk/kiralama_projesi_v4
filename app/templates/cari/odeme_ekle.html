@@ -40,13 +40,13 @@
                         </div>
 
                         <div class="row mb-3">
-                            <div class="col-md-6">
-                                {{ form.firma_musteri_id.label(class="form-label fw-bold") }}
+                            <div class="col-md-6 position-relative">
+                                <label for="musteri_search" class="form-label fw-bold">{{ form.firma_musteri_id.label.text }}</label>
+                                <input type="text" id="musteri_search" class="form-control" placeholder="Müşteri ara..." autocomplete="off">
+                                <input type="hidden" name="firma_musteri_id" id="musteri_id_hidden">
+                                <div id="musteri_suggestions" class="list-group position-absolute w-100" style="z-index: 1000;"></div>
                                 {% if form.firma_musteri_id.errors %}
-                                    {{ form.firma_musteri_id(class="form-select is-invalid") }}
-                                    <div class="invalid-feedback">{% for error in form.firma_musteri_id.errors %} {{ error }} {% endfor %}</div>
-                                {% else %}
-                                    {{ form.firma_musteri_id(class="form-select") }}
+                                    <div class="invalid-feedback d-block">{% for error in form.firma_musteri_id.errors %} {{ error }} {% endfor %}</div>
                                 {% endif %}
                             </div>
                             <div class="col-md-6">
@@ -207,5 +207,48 @@
     }
 });
 
+// --- Müşteri Live Search ---
+const searchInput = document.getElementById('musteri_search');
+const suggestionsBox = document.getElementById('musteri_suggestions');
+const hiddenIdInput = document.getElementById('musteri_id_hidden');
+let musteriList = [];
+
+searchInput.addEventListener('input', async function() {
+    const q = this.value.trim();
+    if (q.length < 2) {
+        suggestionsBox.innerHTML = '';
+        return;
+    }
+    suggestionsBox.innerHTML = '<div class="list-group-item">Aranıyor...</div>';
+    try {
+        const resp = await fetch(`/api/musteri_ara?q=${encodeURIComponent(q)}`);
+        if (!resp.ok) throw new Error('API hatası');
+        musteriList = await resp.json();
+        if (!Array.isArray(musteriList) || musteriList.length === 0) {
+            suggestionsBox.innerHTML = '<div class="list-group-item">Sonuç yok</div>';
+            return;
+        }
+        suggestionsBox.innerHTML = musteriList.map(m => `<button type="button" class="list-group-item list-group-item-action" data-id="${m.id}">${m.ad}</button>`).join('');
+    } catch (e) {
+        suggestionsBox.innerHTML = '<div class="list-group-item text-danger">Hata</div>';
+    }
+});
+
+suggestionsBox.addEventListener('click', function(e) {
+    if (e.target && e.target.matches('button[data-id]')) {
+        const id = e.target.getAttribute('data-id');
+        const ad = e.target.textContent;
+        hiddenIdInput.value = id;
+        searchInput.value = ad;
+        suggestionsBox.innerHTML = '';
+    }
+});
+
+// Seçim sonrası input dışına tıklanınca kutuyu kapat
+document.addEventListener('click', function(e) {
+    if (!searchInput.contains(e.target) && !suggestionsBox.contains(e.target)) {
+        suggestionsBox.innerHTML = '';
+    }
+});
 </script>
 {% endblock %}
