@@ -223,7 +223,7 @@ searchInput.addEventListener('input', async function() {
     }
     suggestionsBox.innerHTML = '<div class="list-group-item">Aranıyor...</div>';
     try {
-        const resp = await fetch(`/api/musteri_ara?q=${encodeURIComponent(q)}`);
+        const resp = await fetch(`{{ url_for('cari.musteri_ara') }}?q=${encodeURIComponent(q)}`);
         if (!resp.ok) throw new Error('API hatası');
         musteriList = await resp.json();
         if (!Array.isArray(musteriList) || musteriList.length === 0) {
