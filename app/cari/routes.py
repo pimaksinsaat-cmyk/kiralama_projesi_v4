@@ -862,13 +862,13 @@ def cari_durum_raporu_excel():
 def musteri_ara():
     from flask import jsonify
     q = request.args.get('q', '').strip()
-    if not q or len(q) < 2:
-        return jsonify([])
-    results = Firma.query.filter(
+    base_query = Firma.query.filter(
         Firma.is_active == True,
         Firma.is_deleted == False,
-        Firma.firma_adi.ilike(f"%{q}%")
-    ).order_by(Firma.firma_adi).limit(15).all()
+    )
+    if q:
+        base_query = base_query.filter(Firma.firma_adi.ilike(f"%{q}%"))
+    results = base_query.order_by(Firma.firma_adi).limit(50).all()
     return jsonify([
         {'id': f.id, 'ad': f.firma_adi} for f in results
     ])

@@ -213,40 +213,48 @@
 const searchInput = document.getElementById('musteri_search');
 const suggestionsBox = document.getElementById('musteri_suggestions');
 const hiddenIdInput = document.getElementById('musteri_id_hidden');
-let musteriList = [];
+const apiUrl = "{{ url_for('cari.musteri_ara') }}";
 
-searchInput.addEventListener('input', async function() {
-    const q = this.value.trim();
-    if (q.length < 2) {
-        suggestionsBox.innerHTML = '';
-        return;
-    }
-    suggestionsBox.innerHTML = '<div class="list-group-item">Aranıyor...</div>';
+async function musteriAra(q) {
+    suggestionsBox.innerHTML = '<div class="list-group-item text-muted">Yükleniyor...</div>';
     try {
-        const resp = await fetch(`{{ url_for('cari.musteri_ara') }}?q=${encodeURIComponent(q)}`);
+        const resp = await fetch(`${apiUrl}?q=${encodeURIComponent(q)}`);
         if (!resp.ok) throw new Error('API hatası');
-        musteriList = await resp.json();
-        if (!Array.isArray(musteriList) || musteriList.length === 0) {
-            suggestionsBox.innerHTML = '<div class="list-group-item">Sonuç yok</div>';
+        const list = await resp.json();
+        if (!Array.isArray(list) || list.length === 0) {
+            suggestionsBox.innerHTML = '<div class="list-group-item text-muted">Sonuç yok</div>';
             return;
         }
-        suggestionsBox.innerHTML = musteriList.map(m => `<button type="button" class="list-group-item list-group-item-action" data-id="${m.id}">${m.ad}</button>`).join('');
+        suggestionsBox.innerHTML = list.map(m =>
+            `<button type="button" class="list-group-item list-group-item-action" data-id="${m.id}">${m.ad}</button>`
+        ).join('');
     } catch (e) {
-        suggestionsBox.innerHTML = '<div class="list-group-item text-danger">Hata</div>';
+        suggestionsBox.innerHTML = '<div class="list-group-item text-danger">Bağlantı hatası</div>';
     }
+}
+
+// Kutuya tıklanınca tüm listeyi göster
+searchInput.addEventListener('focus', function() {
+    if (!hiddenIdInput.value) {
+        musteriAra('');
+    }
+});
+
+// Yazarken filtrele
+searchInput.addEventListener('input', function() {
+    hiddenIdInput.value = '';  // Yazınca seçimi sıfırla
+    musteriAra(this.value.trim());
 });
 
 suggestionsBox.addEventListener('click', function(e) {
     if (e.target && e.target.matches('button[data-id]')) {
-        const id = e.target.getAttribute('data-id');
-        const ad = e.target.textContent;
-        hiddenIdInput.value = id;
-        searchInput.value = ad;
+        hiddenIdInput.value = e.target.getAttribute('data-id');
+        searchInput.value = e.target.textContent;
         suggestionsBox.innerHTML = '';
     }
 });
 
-// Seçim sonrası input dışına tıklanınca kutuyu kapat
+// Input dışına tıklanınca kutuyu kapat
 document.addEventListener('click', function(e) {
     if (!searchInput.contains(e.target) && !suggestionsBox.contains(e.target)) {
         suggestionsBox.innerHTML = '';
