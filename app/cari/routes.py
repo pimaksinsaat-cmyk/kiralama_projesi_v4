@@ -83,9 +83,9 @@ def odeme_ekle():
     firma_id = request.args.get('firma_id', type=int)
     yon_param = request.args.get('yon', 'tahsilat')
     form = OdemeForm()
-    
+
     # Seçenekleri dinamik yükle (is_deleted kontrolü servis üzerinden değil modelden geçici olarak yapılıyor)
-    form.firma_musteri_id.choices = [(f.id, f.firma_adi) for f in Firma.query.filter_by(is_active=True, is_deleted=False).all()]
+    form.firma_musteri_id.choices = [(0, '')] + [(f.id, f.firma_adi) for f in Firma.query.filter_by(is_active=True, is_deleted=False).order_by(Firma.firma_adi).all()]
     form.kasa_id.choices = [(k.id, f"{k.kasa_adi} ({k.bakiye} {k.para_birimi})") 
                             for k in Kasa.query.filter_by(is_active=True, is_deleted=False).all()]
     

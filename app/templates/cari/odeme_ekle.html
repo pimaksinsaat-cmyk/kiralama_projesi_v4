@@ -138,14 +138,15 @@
                 openOnFocus: true,
                 allowEmptyOption: true,
                 searchField: ['text'],
-                sortField: [{ field: 'text', direction: 'asc' }],
-                placeholder: 'Firma Adı Ara',
+                placeholder: 'Firma Seçin',
                 render: {
                     option: function(data, escape) {
+                        if (!data.text) return `<div class="d-none"></div>`;
                         const kisa = data.text.split(' ').slice(0, 4).join(' ');
                         return `<div>${escape(kisa)}</div>`;
                     },
                     item: function(data, escape) {
+                        if (!data.text) return `<div></div>`;
                         const kisa = data.text.split(' ').slice(0, 4).join(' ');
                         return `<div>${escape(kisa)}</div>`;
                     }
