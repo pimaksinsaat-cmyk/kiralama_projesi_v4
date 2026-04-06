@@ -1,3 +1,22 @@
+# ----------------------
+# MÜŞTERİ (FİRMA) LIVE SEARCH API
+# ----------------------
+from flask import jsonify
+
+@cari_bp.route('/api/musteri_ara')
+def musteri_ara():
+    q = request.args.get('q', '').strip()
+    if not q or len(q) < 2:
+        return jsonify([])
+    # Firma adında arama (case-insensitive)
+    results = Firma.query.filter(
+        Firma.is_active == True,
+        Firma.is_deleted == False,
+        Firma.firma_adi.ilike(f"%{q}%")
+    ).order_by(Firma.firma_adi).limit(15).all()
+    return jsonify([
+        {'id': f.id, 'ad': f.firma_adi} for f in results
+    ])
 from io import BytesIO
 
 from flask import render_template, redirect, url_for, flash, request, send_file
