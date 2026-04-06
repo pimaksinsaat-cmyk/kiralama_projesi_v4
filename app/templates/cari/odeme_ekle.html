@@ -42,8 +42,10 @@
                         <div class="row mb-3">
                             <div class="col-md-6 position-relative">
                                 <label for="musteri_search" class="form-label fw-bold">{{ form.firma_musteri_id.label.text }}</label>
-                                <input type="text" id="musteri_search" class="form-control" placeholder="Müşteri ara..." autocomplete="off">
-                                <input type="hidden" name="firma_musteri_id" id="musteri_id_hidden">
+                                <input type="text" id="musteri_search" class="form-control" placeholder="Müşteri ara..." autocomplete="off"
+                                    value="{{ secili_firma.firma_adi if secili_firma else '' }}">
+                                <input type="hidden" name="firma_musteri_id" id="musteri_id_hidden"
+                                    value="{{ secili_firma.id if secili_firma else '' }}">
                                 <div id="musteri_suggestions" class="list-group position-absolute w-100" style="z-index: 1000;"></div>
                                 {% if form.firma_musteri_id.errors %}
                                     <div class="invalid-feedback d-block">{% for error in form.firma_musteri_id.errors %} {{ error }} {% endfor %}</div>
