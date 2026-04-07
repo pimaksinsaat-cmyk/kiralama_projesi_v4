@@ -66,17 +66,17 @@
             </div>
         </div>
 
-        <div class="mb-3 no-print">
-            <a href="{{ url_for('cari.kasa_listesi') }}" class="btn btn-secondary btn-sm"><i class="fa fa-arrow-left"></i> Listeye Dön</a>
+        <div class="mb-3 no-print d-flex justify-content-end align-items-center gap-2">
+            <small class="text-muted me-auto">(İşlem için satıra sağ tıklayın veya basılı tutun)</small>
             <a href="{{ url_for('cari.kasa_hareketleri_yazdir', id=kasa.id) }}" target="_blank" class="btn btn-print btn-sm"><i class="fa fa-print"></i> Yazdır / PDF</a>
-            <small class="text-muted ms-2">(İşlem için satıra sağ tıklayın veya basılı tutun)</small>
+            <a href="{{ url_for('cari.kasa_listesi') }}" class="btn btn-secondary btn-sm"><i class="fa fa-arrow-left"></i> Listeye Dön</a>
         </div>
 
         <table class="table table-striped table-bordered">
             <thead class="table-light">
                 <tr>
                     <th style="width: 120px;">Tarih</th>
-                    <th style="width: 200px;">İlgili Cari / Kaynak</th>
+                    <th style="width: 450px;">İlgili Cari / Kaynak</th>
                     <th>İşlem / Açıklama</th>
 
                     <th class="text-end" style="width: 150px;">Tutar</th>
@@ -101,7 +101,7 @@
                     
                     <td>{{ islem.tarih.strftime('%d.%m.%Y') if islem.tarih else '-' }}</td>
                     <td>
-                        {{ islem.firma_musteri.firma_adi.split()[:4]|join(' ') if islem.firma_musteri else 'Sistem / Dahili' }}
+                        {{ islem.firma_musteri.firma_adi.split()[:6]|join(' ') if islem.firma_musteri else 'Sistem / Dahili' }}
                     </td>
                     <td>
                         {{ islem.aciklama or '-' }}

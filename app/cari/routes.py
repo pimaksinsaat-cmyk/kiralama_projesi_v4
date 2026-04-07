@@ -733,7 +733,7 @@ def kasa_hareketleri_excel(id):
 
             if col_idx == 5:
                 cell.alignment = right_alignment
-                cell.number_format = '#,##0.00'
+                cell.number_format = f'#,##0.00 "{para_birimi}"'
                 cell.font = positive_font if tutar > 0 else negative_font
             elif col_idx in {1, 2}:
                 cell.alignment = center_alignment
@@ -744,7 +744,7 @@ def kasa_hareketleri_excel(id):
 
     if hareketler:
         sheet.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=4)
-        total_label = sheet.cell(row=current_row, column=1, value=f'BAKİYE: {float(kasa.bakiye or 0):,.2f} {para_birimi}')
+        total_label = sheet.cell(row=current_row, column=1, value='BAKİYE:')
         total_label.font = total_font
         total_label.fill = total_fill
         total_label.border = total_border
@@ -755,15 +755,21 @@ def kasa_hareketleri_excel(id):
             c.fill = total_fill
             c.border = total_border
 
+        first_data_row = 5
+        last_data_row = current_row - 1
         total_cell = sheet.cell(row=current_row, column=5)
+        total_cell.value = f'=SUM(E{first_data_row}:E{last_data_row})'
+        total_cell.font = total_font
         total_cell.fill = total_fill
         total_cell.border = total_border
+        total_cell.alignment = right_alignment
+        total_cell.number_format = f'#,##0.00 "{para_birimi}"'
 
-    sheet.column_dimensions['A'].width = 5
-    sheet.column_dimensions['B'].width = 14
-    sheet.column_dimensions['C'].width = 30
-    sheet.column_dimensions['D'].width = 45
-    sheet.column_dimensions['E'].width = 18
+    sheet.column_dimensions['A'].width = 7
+    sheet.column_dimensions['B'].width = 21
+    sheet.column_dimensions['C'].width = 86
+    sheet.column_dimensions['D'].width = 71
+    sheet.column_dimensions['E'].width = 29
 
     output = BytesIO()
     workbook.save(output)

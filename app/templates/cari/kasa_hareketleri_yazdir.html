@@ -75,11 +75,11 @@
             border-collapse: collapse;
             font-size: 12px;
         }
-        col.col-no     { width: 5%; }
-        col.col-tarih  { width: 12%; }
-        col.col-kaynak { width: 22%; }
-        col.col-aciklama { width: 43%; }
-        col.col-tutar  { width: 18%; }
+        col.col-no     { width: 4%; }
+        col.col-tarih  { width: 10%; }
+        col.col-kaynak { width: 30%; }
+        col.col-aciklama { width: 34%; }
+        col.col-tutar  { width: 22%; }
 
         thead th {
             background: #dbe7f3;
@@ -243,15 +243,15 @@
             <tr>
                 <td class="text-center">{{ loop.index }}</td>
                 <td>{{ islem.tarih.strftime('%d.%m.%Y') if islem.tarih else '-' }}</td>
-                <td>{{ islem.firma_musteri.firma_adi.split()[:4]|join(' ') if islem.firma_musteri else 'Sistem / Dahili' }}</td>
+                <td>{{ islem.firma_musteri.firma_adi.split()[:6]|join(' ') if islem.firma_musteri else 'Sistem / Dahili' }}</td>
                 <td>
                     {{ islem.aciklama or '-' }}
                     {% if islem.fatura_no %}
                         <span class="belge-no">Belge: {{ islem.fatura_no }}</span>
                     {% endif %}
                 </td>
-                <td class="text-end fw-bold {{ 'text-success' if tutar > 0 else 'text-danger' }}">
-                    {{ "{:+,.2f}".format(tutar).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+                <td class="text-end fw-bold {{ 'text-success' if tutar > 0 else 'text-danger' }}" style="white-space: nowrap;">
+                    {{ "{:+,.2f}".format(tutar).replace(',', 'X').replace('.', ',').replace('X', '.') }} {{ para_birimi }}
                 </td>
             </tr>
         {% else %}
@@ -262,7 +262,7 @@
     <tfoot>
         <tr>
             <td colspan="4" class="text-end">BAKİYE:</td>
-            <td class="text-end">{{ "{:,.2f}".format(kasa.bakiye|float).replace(',', 'X').replace('.', ',').replace('X', '.') }} {{ para_birimi }}</td>
+            <td class="text-end" style="white-space: nowrap;">{{ "{:,.2f}".format(kasa.bakiye|float).replace(',', 'X').replace('.', ',').replace('X', '.') }} {{ para_birimi }}</td>
         </tr>
     </tfoot>
     {% endif %}
