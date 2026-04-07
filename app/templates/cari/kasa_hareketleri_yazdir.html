@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ kasa.kasa_adi }} - Hesap Hareketleri</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            font-size: 12px;
+            color: #222;
+            background: #f4f6f8;
+        }
+
+        .page-wrapper {
+            max-width: 1100px;
+            margin: 30px auto;
+            background: white;
+            padding: 24px 28px;
+            border-radius: 6px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.10);
+        }
+
+        @media print {
+            body { background: white; }
+            .page-wrapper {
+                max-width: 100%;
+                margin: 0;
+                padding: 0;
+                box-shadow: none;
+                border-radius: 0;
+            }
+        }
+
+        @page {
+            size: A4 landscape;
+            margin: 8mm 10mm;
+        }
+
+        /* HEADER */
+        .print-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            border-bottom: 2px solid #333;
+            padding-bottom: 6px;
+            margin-bottom: 10px;
+        }
+        .print-header h1 {
+            font-size: 16px;
+            font-weight: 700;
+            color: #111;
+        }
+        .print-header .sub {
+            font-size: 11px;
+            color: #666;
+            margin-top: 2px;
+        }
+        .print-header .meta {
+            font-size: 9px;
+            color: #666;
+            text-align: right;
+            line-height: 1.5;
+        }
+        .print-header .meta .meta-highlight {
+            font-size: 10px;
+            font-weight: 600;
+            color: #2d3e50;
+        }
+
+        /* TABLO */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        col.col-no     { width: 5%; }
+        col.col-tarih  { width: 12%; }
+        col.col-kaynak { width: 22%; }
+        col.col-aciklama { width: 43%; }
+        col.col-tutar  { width: 18%; }
+
+        thead th {
+            background: #dbe7f3;
+            color: #18324a;
+            padding: 9px 10px;
+            text-align: left;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            border-top: 2px solid #18324a;
+            border-bottom: 2px solid #18324a;
+        }
+        thead tr {
+            box-shadow: inset 0 1px 0 #f7fbff, inset 0 -1px 0 #b7c9db;
+        }
+        thead th.text-end { text-align: right; }
+        thead th.text-center { text-align: center; }
+
+        tbody tr { border-bottom: 1px solid #dee2e6; }
+        tbody tr:nth-child(odd) { background: #f8f9fa; }
+        tbody tr:nth-child(even) { background: white; }
+        tbody td {
+            padding: 7px 10px;
+            vertical-align: middle;
+        }
+        .text-end { text-align: right; }
+        .text-center { text-align: center; }
+        .fw-bold { font-weight: 700; }
+        .text-success { color: #198754; }
+        .text-danger { color: #dc3545; }
+        .text-muted { color: #6c757d; font-size: 11px; }
+        .belge-no { font-size: 10px; color: #6c757d; display: block; margin-top: 2px; }
+
+        /* TOPLAM SATIRI */
+        tfoot td {
+            padding: 6px 10px;
+            border-top: 2px solid #333;
+            font-weight: 700;
+            font-size: 11px;
+            background: #f0f0f0;
+        }
+
+        /* FOOTER */
+        .print-footer {
+            margin-top: 12px;
+            padding-top: 6px;
+            border-top: 1px solid #ccc;
+            display: flex;
+            justify-content: space-between;
+            font-size: 8px;
+            color: #999;
+        }
+
+        /* BUTONLAR */
+        .print-actions {
+            position: fixed;
+            top: 15px;
+            right: 15px;
+            z-index: 9999;
+            display: flex;
+            gap: 8px;
+        }
+        .print-actions button, .print-actions a {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-print { background: #2c3e50; color: white; }
+        .btn-print:hover { background: #1a252f; }
+        .btn-excel { background: #1f7a3f; color: white; }
+        .btn-excel:hover { background: #186132; }
+        .btn-whatsapp { background: #25d366; color: white; }
+        .btn-whatsapp:hover { background: #1ebe59; }
+        .btn-back { background: #e9ecef; color: #333; }
+        .btn-back:hover { background: #dee2e6; }
+
+        @media print {
+            .print-actions { display: none !important; }
+            body { padding: 0; }
+            thead { display: table-header-group; }
+            thead th {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="print-actions">
+    <button class="btn-print" onclick="window.print()">
+        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M2.5 8a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1z"/><path d="M5 1a2 2 0 0 0-2 2v2H2a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h1v1a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-1h1a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-1V3a2 2 0 0 0-2-2H5zM4 3a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2H4V3zm1 10a1 1 0 0 1-1-1V9h8v3a1 1 0 0 1-1 1H5z"/></svg>
+        Yazdir / PDF
+    </button>
+    <a class="btn-excel" href="{{ url_for('cari.kasa_hareketleri_excel', id=kasa.id) }}">
+        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.884 6.68a.5.5 0 1 0-.768.64L6.347 8.8 5.116 10.28a.5.5 0 0 0 .768.64L7 9.601l1.116 1.319a.5.5 0 0 0 .768-.64L7.653 8.8l1.231-1.48a.5.5 0 1 0-.768-.64L7 7.999 5.884 6.68z"/><path d="M14 4.5V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h5.5L14 4.5zM9.5 1.5V4a1 1 0 0 0 1 1H13"/></svg>
+        Excel'e Aktar
+    </a>
+    <a class="btn-whatsapp" href="#" onclick="whatsappExcelPaylas(this, '{{ url_for('cari.kasa_hareketleri_excel', id=kasa.id) }}', 'kasa_hareketleri.xlsx'); return false;">
+        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M13.601 2.326A7.854 7.854 0 0 0 7.994 0C3.627 0 .068 3.558.064 7.926c0 1.399.366 2.76 1.057 3.965L0 16l4.204-1.102a7.933 7.933 0 0 0 3.79.965h.004c4.368 0 7.926-3.558 7.93-7.93A7.898 7.898 0 0 0 13.6 2.326zM7.994 14.521a6.573 6.573 0 0 1-3.356-.92l-.24-.144-2.494.654.666-2.433-.156-.251a6.56 6.56 0 0 1-1.007-3.505c0-3.626 2.957-6.584 6.591-6.584a6.56 6.56 0 0 1 4.66 1.931 6.557 6.557 0 0 1 1.928 4.66c-.004 3.639-2.961 6.592-6.592 6.592zm3.615-4.934c-.197-.099-1.17-.578-1.353-.646-.182-.065-.315-.099-.445.099-.133.197-.513.646-.627.775-.114.133-.232.148-.43.05-.197-.1-.836-.308-1.592-.985-.59-.525-.985-1.175-1.103-1.372-.114-.198-.011-.304.088-.403.087-.088.197-.232.296-.346.1-.114.133-.198.198-.33.065-.134.034-.248-.015-.347-.05-.099-.445-1.076-.612-1.47-.16-.389-.323-.335-.445-.34-.114-.007-.247-.007-.38-.007a.729.729 0 0 0-.529.247c-.182.198-.691.677-.691 1.654 0 .977.71 1.916.81 2.049.098.133 1.394 2.132 3.383 2.992.47.205.84.326 1.129.418.475.152.904.129 1.246.08.38-.058 1.171-.48 1.338-.943.164-.464.164-.86.114-.943-.049-.084-.182-.133-.38-.232z"/></svg>
+        WhatsApp'a Excel Gonder
+    </a>
+    <button class="btn-back" onclick="window.close()">
+        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M15 8a.5.5 0 0 0-.5-.5H2.707l3.147-3.146a.5.5 0 1 0-.708-.708l-4 4a.5.5 0 0 0 0 .708l4 4a.5.5 0 0 0 .708-.708L2.707 8.5H14.5A.5.5 0 0 0 15 8z"/></svg>
+        Kapat
+    </button>
+</div>
+
+<div class="page-wrapper">
+
+<!-- HEADER -->
+<div class="print-header">
+    <div>
+        <h1>{{ kasa.kasa_adi }} - Hesap Hareketleri</h1>
+        <div class="sub">{{ kasa.tipi|upper if kasa.tipi else '' }} Hesabi - {{ para_birimi }}</div>
+    </div>
+    <div class="meta">
+        <div class="meta-highlight">Guncel Bakiye: {{ "{:,.2f}".format(kasa.bakiye|float).replace(',', 'X').replace('.', ',').replace('X', '.') }} {{ para_birimi }}</div>
+        <div class="meta-highlight">Rapor Tarihi: {{ rapor_tarihi }}</div>
+    </div>
+</div>
+
+<!-- TABLO -->
+<table>
+    <colgroup>
+        <col class="col-no">
+        <col class="col-tarih">
+        <col class="col-kaynak">
+        <col class="col-aciklama">
+        <col class="col-tutar">
+    </colgroup>
+    <thead>
+        <tr>
+            <th>#</th>
+            <th>Tarih</th>
+            <th>Ilgili Cari / Kaynak</th>
+            <th>Islem / Aciklama</th>
+            <th class="text-end">Tutar ({{ para_birimi }})</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% set toplam_giris = namespace(val=0) %}
+        {% set toplam_cikis = namespace(val=0) %}
+
+        {% for islem in hareketler %}
+            {% set tutar = islem.tutar|float or 0 %}
+            {% if tutar > 0 %}
+                {% set toplam_giris.val = toplam_giris.val + tutar %}
+            {% else %}
+                {% set toplam_cikis.val = toplam_cikis.val + tutar %}
+            {% endif %}
+
+            <tr>
+                <td class="text-center">{{ loop.index }}</td>
+                <td>{{ islem.tarih.strftime('%d.%m.%Y') if islem.tarih else '-' }}</td>
+                <td>{{ islem.firma_musteri.firma_adi.split()[:4]|join(' ') if islem.firma_musteri else 'Sistem / Dahili' }}</td>
+                <td>
+                    {{ islem.aciklama or '-' }}
+                    {% if islem.fatura_no %}
+                        <span class="belge-no">Belge: {{ islem.fatura_no }}</span>
+                    {% endif %}
+                </td>
+                <td class="text-end fw-bold {{ 'text-success' if tutar > 0 else 'text-danger' }}">
+                    {{ "{:+,.2f}".format(tutar).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+                </td>
+            </tr>
+        {% else %}
+            <tr><td colspan="5" class="text-center" style="padding:20px;">Kayit bulunamadi.</td></tr>
+        {% endfor %}
+    </tbody>
+    {% if hareketler %}
+    <tfoot>
+        <tr>
+            <td colspan="4" class="text-end">BAKİYE:</td>
+            <td class="text-end">{{ "{:,.2f}".format(kasa.bakiye|float).replace(',', 'X').replace('.', ',').replace('X', '.') }} {{ para_birimi }}</td>
+        </tr>
+    </tfoot>
+    {% endif %}
+</table>
+
+<!-- FOOTER -->
+<div class="print-footer">
+    <div>{{ hareketler|length }} kayit listelendi</div>
+    <div>Bu belge bilgi amaciyla hazirlanmistir.</div>
+</div>
+
+</div><!-- /page-wrapper -->
+
+<script>
+async function whatsappExcelPaylas(btn, excelUrl, dosyaAdi) {
+    const orijinalHtml = btn.innerHTML;
+    btn.innerHTML = '&#9203; Hazirlaniyor...';
+    btn.style.pointerEvents = 'none';
+    let blob = null;
+    try {
+        const response = await fetch(excelUrl);
+        if (!response.ok) throw new Error('Dosya alinamadi (HTTP ' + response.status + ')');
+        blob = await response.blob();
+        const file = new File([blob], dosyaAdi, {
+            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            await navigator.share({ files: [file], title: dosyaAdi });
+            return;
+        }
+    } catch (err) {
+        if (err.name === 'AbortError') return;
+        if (!blob) { alert('Dosya indirilemedi: ' + err.message); return; }
+    } finally {
+        btn.innerHTML = orijinalHtml;
+        btn.style.pointerEvents = '';
+    }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = dosyaAdi;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    setTimeout(() => window.open('https://web.whatsapp.com', '_blank'), 800);
+}
+</script>
+
+</body>
+</html>

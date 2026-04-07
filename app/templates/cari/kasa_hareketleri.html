@@ -68,8 +68,7 @@
 
         <div class="mb-3 no-print">
             <a href="{{ url_for('cari.kasa_listesi') }}" class="btn btn-secondary btn-sm"><i class="fa fa-arrow-left"></i> Listeye Dön</a>
-            <button onclick="window.print()" class="btn btn-print btn-sm"><i class="fa fa-print"></i> Yazdır / PDF</button>
-            <a href="#" class="btn btn-whatsapp btn-sm" onclick="window.open('https://wa.me/?text=' + encodeURIComponent(window.location.href), '_blank'); return false;"><i class="fab fa-whatsapp"></i> WhatsApp'ta Paylaş</a>
+            <a href="{{ url_for('cari.kasa_hareketleri_yazdir', id=kasa.id) }}" target="_blank" class="btn btn-print btn-sm"><i class="fa fa-print"></i> Yazdır / PDF</a>
             <small class="text-muted ms-2">(İşlem için satıra sağ tıklayın veya basılı tutun)</small>
         </div>
 
@@ -77,8 +76,9 @@
             <thead class="table-light">
                 <tr>
                     <th style="width: 120px;">Tarih</th>
-                    <th>İlgili Cari / Kaynak</th>
+                    <th style="width: 200px;">İlgili Cari / Kaynak</th>
                     <th>İşlem / Açıklama</th>
+
                     <th class="text-end" style="width: 150px;">Tutar</th>
                 </tr>
             </thead>
@@ -101,7 +101,7 @@
                     
                     <td>{{ islem.tarih.strftime('%d.%m.%Y') if islem.tarih else '-' }}</td>
                     <td>
-                        {{ islem.firma_musteri.firma_adi if islem.firma_musteri else 'Sistem / Dahili' }}
+                        {{ islem.firma_musteri.firma_adi.split()[:4]|join(' ') if islem.firma_musteri else 'Sistem / Dahili' }}
                     </td>
                     <td>
                         {{ islem.aciklama or '-' }}

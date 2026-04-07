@@ -616,6 +616,164 @@ def kasa_hareketleri(id):
                       .order_by(Odeme.tarih.desc(), Odeme.id.desc()).all()
     return render_template('cari/kasa_hareketleri.html', kasa=kasa, hareketler=hareketler, now=datetime.now())
 
+
+@cari_bp.route('/kasa/hareketleri/<int:id>/yazdir')
+def kasa_hareketleri_yazdir(id):
+    kasa = KasaService.get_by_id(id)
+    if not kasa or kasa.is_deleted:
+        flash("Kasa bulunamadı", "danger")
+        return redirect(url_for('cari.kasa_listesi'))
+
+    hareketler = Odeme.query.filter_by(kasa_id=kasa.id, is_deleted=False)\
+                      .order_by(Odeme.tarih.desc(), Odeme.id.desc()).all()
+
+    rapor_tarihi = date.today().strftime('%d.%m.%Y')
+    para_birimi = 'TL' if kasa.para_birimi == 'TRY' else kasa.para_birimi
+    return render_template('cari/kasa_hareketleri_yazdir.html',
+                           kasa=kasa, hareketler=hareketler,
+                           rapor_tarihi=rapor_tarihi, para_birimi=para_birimi)
+
+
+@cari_bp.route('/kasa/hareketleri/<int:id>/excel')
+def kasa_hareketleri_excel(id):
+    kasa = KasaService.get_by_id(id)
+    if not kasa or kasa.is_deleted:
+        flash("Kasa bulunamadı", "danger")
+        return redirect(url_for('cari.kasa_listesi'))
+
+    hareketler = Odeme.query.filter_by(kasa_id=kasa.id, is_deleted=False)\
+                      .order_by(Odeme.tarih.desc(), Odeme.id.desc()).all()
+
+    para_birimi = 'TL' if kasa.para_birimi == 'TRY' else kasa.para_birimi
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = 'Kasa Hareketleri'
+    sheet.sheet_view.showGridLines = False
+    sheet.page_setup.orientation = sheet.ORIENTATION_LANDSCAPE
+    sheet.page_setup.fitToWidth = 1
+    sheet.page_setup.fitToHeight = 0
+    sheet.sheet_properties.pageSetUpPr.fitToPage = True
+
+    title_font = Font(name='Calibri', size=14, bold=True, color='1F1F1F')
+    meta_font = Font(name='Calibri', size=10, color='44546A')
+    header_font = Font(name='Calibri', size=10, bold=True, color='FFFFFF')
+    body_font = Font(name='Calibri', size=10, color='1F1F1F')
+    total_font = Font(name='Calibri', size=10, bold=True, color='1F1F1F')
+    positive_font = Font(name='Calibri', size=10, bold=True, color='198754')
+    negative_font = Font(name='Calibri', size=10, bold=True, color='DC3545')
+
+    header_fill = PatternFill(fill_type='solid', fgColor='1F4E78')
+    total_fill = PatternFill(fill_type='solid', fgColor='EDF3F8')
+
+    thin_blue = Side(style='thin', color='D9E2F0')
+    thin_header = Side(style='thin', color='1F4E78')
+    medium_total = Side(style='medium', color='9FBAD0')
+
+    header_border = Border(top=thin_header, bottom=thin_header, left=thin_header, right=thin_header)
+    cell_border = Border(bottom=thin_blue)
+    total_border = Border(top=medium_total)
+
+    left_alignment = Alignment(vertical='center', horizontal='left', wrap_text=True)
+    center_alignment = Alignment(vertical='center', horizontal='center', wrap_text=True)
+    right_alignment = Alignment(vertical='center', horizontal='right')
+
+    sheet.merge_cells('A1:E1')
+    sheet['A1'] = f'{kasa.kasa_adi} - Hesap Hareketleri'
+    sheet['A1'].font = title_font
+    sheet['A1'].alignment = left_alignment
+
+    sheet.merge_cells('A2:C2')
+    sheet['A2'] = f'{kasa.tipi.upper() if kasa.tipi else ""} Hesabı - {para_birimi}'
+    sheet['A2'].font = meta_font
+    sheet['A2'].alignment = left_alignment
+
+    sheet.merge_cells('D2:E2')
+    sheet['D2'] = f"Rapor Tarihi: {date.today().strftime('%d.%m.%Y')}"
+    sheet['D2'].font = meta_font
+    sheet['D2'].alignment = Alignment(vertical='center', horizontal='right')
+
+    headers = ['#', 'Tarih', 'İlgili Cari / Kaynak', 'İşlem / Açıklama', f'Tutar ({para_birimi})']
+    header_row = 4
+    for col_idx, header in enumerate(headers, start=1):
+        cell = sheet.cell(row=header_row, column=col_idx, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.border = header_border
+        cell.alignment = center_alignment if col_idx in {1, 2} else left_alignment
+
+    current_row = 5
+    toplam_giris = 0.0
+    toplam_cikis = 0.0
+
+    for index, islem in enumerate(hareketler, start=1):
+        tutar = float(islem.tutar or 0)
+        if tutar > 0:
+            toplam_giris += tutar
+        else:
+            toplam_cikis += tutar
+
+        firma_adi = islem.firma_musteri.firma_adi if islem.firma_musteri else 'Sistem / Dahili'
+        aciklama = islem.aciklama or '-'
+        if islem.fatura_no:
+            aciklama = f"{aciklama}\nBelge: {islem.fatura_no}"
+
+        row_data = [
+            index,
+            islem.tarih.strftime('%d.%m.%Y') if islem.tarih else '',
+            firma_adi,
+            aciklama,
+            tutar,
+        ]
+
+        for col_idx, value in enumerate(row_data, start=1):
+            cell = sheet.cell(row=current_row, column=col_idx, value=value)
+            cell.font = body_font
+            cell.border = cell_border
+
+            if col_idx == 5:
+                cell.alignment = right_alignment
+                cell.number_format = '#,##0.00'
+                cell.font = positive_font if tutar > 0 else negative_font
+            elif col_idx in {1, 2}:
+                cell.alignment = center_alignment
+            else:
+                cell.alignment = left_alignment
+
+        current_row += 1
+
+    if hareketler:
+        sheet.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=4)
+        total_label = sheet.cell(row=current_row, column=1, value=f'BAKİYE: {float(kasa.bakiye or 0):,.2f} {para_birimi}')
+        total_label.font = total_font
+        total_label.fill = total_fill
+        total_label.border = total_border
+        total_label.alignment = right_alignment
+
+        for col_idx in range(2, 5):
+            c = sheet.cell(row=current_row, column=col_idx)
+            c.fill = total_fill
+            c.border = total_border
+
+        total_cell = sheet.cell(row=current_row, column=5)
+        total_cell.fill = total_fill
+        total_cell.border = total_border
+
+    sheet.column_dimensions['A'].width = 5
+    sheet.column_dimensions['B'].width = 14
+    sheet.column_dimensions['C'].width = 30
+    sheet.column_dimensions['D'].width = 45
+    sheet.column_dimensions['E'].width = 18
+
+    output = BytesIO()
+    workbook.save(output)
+    output.seek(0)
+    dosya_adi = f"kasa_hareketleri_{kasa.kasa_adi.replace(' ', '_')}.xlsx"
+    return send_file(output, download_name=dosya_adi,
+                     as_attachment=True,
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+
 # -------------------------------------------------------------------------
 # 4. RAPORLAR VE MENÜ
 # -------------------------------------------------------------------------
