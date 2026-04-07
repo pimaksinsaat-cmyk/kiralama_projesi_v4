@@ -196,7 +196,7 @@
                     data-csrf-token="{{ csrf_token() }}"
                     data-form-no="{{ kiralama.kiralama_form_no }}">
 
-                    <td class="text-center fw-bold">{{ loop.index }}</td>
+                    <td class="text-center fw-bold">{{ (pagination.page - 1) * per_page + loop.index }}</td>
 
                     <td class="fw-bold text-dark">{{ kiralama.kiralama_form_no }}</td>
                     
