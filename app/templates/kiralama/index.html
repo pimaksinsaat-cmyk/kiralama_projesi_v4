@@ -178,6 +178,7 @@
         <table class="table-hover shadow-sm rounded overflow-hidden">
             <thead>
                 <tr>
+                    <th width="50">Sıra</th>
                     <th width="130">Form No</th>
                     <th>Kiracı Müşteri</th>
                     <th>Makine & Tedarik Detayı</th>
@@ -194,7 +195,9 @@
                     data-sil-url="{{ url_for('kiralama.sil', kiralama_id=kiralama.id) }}"
                     data-csrf-token="{{ csrf_token() }}"
                     data-form-no="{{ kiralama.kiralama_form_no }}">
-                    
+
+                    <td class="text-center fw-bold">{{ loop.index }}</td>
+
                     <td class="fw-bold text-dark">{{ kiralama.kiralama_form_no }}</td>
                     
                     <td>
@@ -302,7 +305,7 @@
                     </td>
                 </tr>
                 {% else %}
-                <tr><td colspan="5" class="text-center py-5 text-muted fw-bold">HERHANGİ BİR KİRALAMA KAYDI BULUNAMADI.</td></tr>
+                <tr><td colspan="6" class="text-center py-5 text-muted fw-bold">HERHANGİ BİR KİRALAMA KAYDI BULUNAMADI.</td></tr>
                 {% endfor %}
             </tbody>
         </table>

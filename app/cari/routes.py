@@ -5,6 +5,7 @@ from flask_login import current_user
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
+from app.extensions import db
 from app.cari import cari_bp
 # DÜZELTME: KasaHizliIslemForm ve KasaTransferForm import listesine eklendi
 from app.cari.forms import OdemeForm, HizmetKaydiForm, KasaForm, KasaTransferForm, KasaHizliIslemForm
@@ -84,11 +85,17 @@ def odeme_ekle():
     yon_param = request.args.get('yon', 'tahsilat')
     form = OdemeForm()
 
-    # Seçenekleri dinamik yükle (is_deleted kontrolü servis üzerinden değil modelden geçici olarak yapılıyor)
-    form.firma_musteri_id.choices = [(0, '')] + [(f.id, f.firma_adi) for f in Firma.query.filter_by(is_active=True, is_deleted=False).order_by(Firma.firma_adi).all()]
-    form.kasa_id.choices = [(k.id, f"{k.kasa_adi} ({k.bakiye} {k.para_birimi})") 
-                            for k in Kasa.query.filter_by(is_active=True, is_deleted=False).all()]
-    
+    # Seçenekleri dinamik yükle
+    try:
+        form.firma_musteri_id.choices = [(0, '')] + [(f.id, f.firma_adi) for f in Firma.query.filter_by(is_active=True, is_deleted=False).order_by(Firma.firma_adi).all()]
+        form.kasa_id.choices = [(k.id, f"{k.kasa_adi} ({k.bakiye} {k.para_birimi})")
+                                for k in Kasa.query.filter_by(is_active=True, is_deleted=False).all()]
+    except Exception as e:
+        db.session.rollback()
+        logging.error(f"Ödeme Ekle seçenek yükleme hatası: {str(e)}")
+        flash("Form seçenekleri yüklenemedi. Lütfen tekrar deneyin.", "danger")
+        return redirect(url_for('cari.finans_menu'))
+
     if request.method == 'GET':
         if firma_id: form.firma_musteri_id.data = firma_id
         form.tarih.data = date.today()
@@ -119,6 +126,7 @@ def odeme_ekle():
             return redirect(url_for('firmalar.bilgi', id=form.firma_musteri_id.data))
             
         except ValidationError as e:
+            db.session.rollback()
             OperationLogService.log(
                 module='cari', action='odeme_ekle',
                 user_id=get_actor(), username=getattr(current_user, 'username', None),
@@ -128,6 +136,7 @@ def odeme_ekle():
             )
             flash(str(e), "warning")
         except Exception as e:
+            db.session.rollback()
             OperationLogService.log(
                 module='cari', action='odeme_ekle',
                 user_id=get_actor(), username=getattr(current_user, 'username', None),
@@ -136,7 +145,7 @@ def odeme_ekle():
                 success=False
             )
             flash(f"Hata: {str(e)}", "danger")
-            
+
     return render_template('cari/odeme_ekle.html', form=form)
 
 @cari_bp.route('/odeme/duzelt/<int:id>', methods=['GET', 'POST'])
@@ -147,9 +156,15 @@ def odeme_duzelt(id):
         return redirect(request.referrer or url_for('cari.finans_menu'))
 
     form = OdemeForm(obj=odeme)
-    form.firma_musteri_id.choices = [(f.id, f.firma_adi) for f in Firma.query.filter_by(is_active=True, is_deleted=False).all()]
-    form.kasa_id.choices = [(k.id, f"{k.kasa_adi} ({k.bakiye} {k.para_birimi})") 
-                            for k in Kasa.query.filter_by(is_active=True, is_deleted=False).all()]
+    try:
+        form.firma_musteri_id.choices = [(f.id, f.firma_adi) for f in Firma.query.filter_by(is_active=True, is_deleted=False).all()]
+        form.kasa_id.choices = [(k.id, f"{k.kasa_adi} ({k.bakiye} {k.para_birimi})")
+                                for k in Kasa.query.filter_by(is_active=True, is_deleted=False).all()]
+    except Exception as e:
+        db.session.rollback()
+        logging.error(f"Ödeme Düzenle seçenek yükleme hatası: {str(e)}")
+        flash("Form seçenekleri yüklenemedi. Lütfen tekrar deneyin.", "danger")
+        return redirect(request.referrer or url_for('cari.finans_menu'))
 
     # Yön bilgisine göre başlık ve buton metni belirle
     if odeme.yon == 'odeme':
@@ -181,6 +196,7 @@ def odeme_duzelt(id):
             flash('İşlem güncellendi.', 'success')
             return redirect(url_for('firmalar.bilgi', id=odeme.firma_musteri_id))
         except ValidationError as e:
+            db.session.rollback()
             OperationLogService.log(
                 module='cari', action='odeme_duzelt',
                 user_id=get_actor(), username=getattr(current_user, 'username', None),
@@ -189,6 +205,8 @@ def odeme_duzelt(id):
                 success=False
             )
             flash(str(e), "warning")
+            # Rollback sonrası odeme objesi expire oldu, yeniden yükle
+            odeme = OdemeService.get_by_id(id)
 
     return render_template('cari/odeme_ekle.html', form=form, title=page_title, submit_text=submit_text)
 
@@ -238,8 +256,14 @@ def odeme_sil(id):
 def hizmet_ekle():
     firma_id = request.args.get('firma_id', type=int)
     form = HizmetKaydiForm()
-    form.firma_id.choices = [(f.id, f.firma_adi) for f in Firma.query.filter_by(is_active=True, is_deleted=False).all()]
-    
+    try:
+        form.firma_id.choices = [(f.id, f.firma_adi) for f in Firma.query.filter_by(is_active=True, is_deleted=False).all()]
+    except Exception as e:
+        db.session.rollback()
+        logging.error(f"Hizmet Ekle seçenek yükleme hatası: {str(e)}")
+        flash("Form seçenekleri yüklenemedi. Lütfen tekrar deneyin.", "danger")
+        return redirect(url_for('cari.finans_menu'))
+
     if request.method == 'GET':
         if firma_id:
             form.firma_id.data = firma_id
@@ -247,7 +271,10 @@ def hizmet_ekle():
 
     firma = None
     if form.firma_id.data:
-        firma = Firma.query.get(form.firma_id.data)
+        try:
+            firma = Firma.query.get(form.firma_id.data)
+        except Exception:
+            pass
 
     if form.validate_on_submit():
         try:
@@ -272,6 +299,7 @@ def hizmet_ekle():
             flash('Fatura kaydedildi.', 'success')
             return redirect(url_for('firmalar.bilgi', id=form.firma_id.data))
         except ValidationError as e:
+            db.session.rollback()
             OperationLogService.log(
                 module='cari', action='hizmet_ekle',
                 user_id=get_actor(), username=getattr(current_user, 'username', None),
@@ -291,7 +319,13 @@ def hizmet_duzelt(id):
         return redirect(request.referrer)
     
     form = HizmetKaydiForm(obj=hizmet)
-    form.firma_id.choices = [(f.id, f.firma_adi) for f in Firma.query.filter_by(is_active=True, is_deleted=False).all()]
+    try:
+        form.firma_id.choices = [(f.id, f.firma_adi) for f in Firma.query.filter_by(is_active=True, is_deleted=False).all()]
+    except Exception as e:
+        db.session.rollback()
+        logging.error(f"Hizmet Düzenle seçenek yükleme hatası: {str(e)}")
+        flash("Form seçenekleri yüklenemedi. Lütfen tekrar deneyin.", "danger")
+        return redirect(request.referrer or url_for('cari.finans_menu'))
 
     if form.validate_on_submit():
         try:
@@ -302,7 +336,7 @@ def hizmet_duzelt(id):
             hizmet.yon = form.yon.data
             hizmet.aciklama = form.aciklama.data
             hizmet.fatura_no = form.fatura_no.data
-            
+
             HizmetKaydiService.save(hizmet, is_new=False, actor_id=get_actor())
             OperationLogService.log(
                 module='cari', action='hizmet_duzelt',
@@ -314,6 +348,7 @@ def hizmet_duzelt(id):
             flash('Fatura güncellendi.', 'success')
             return redirect(url_for('firmalar.bilgi', id=hizmet.firma_id))
         except ValidationError as e:
+            db.session.rollback()
             OperationLogService.log(
                 module='cari', action='hizmet_duzelt',
                 user_id=get_actor(), username=getattr(current_user, 'username', None),
@@ -322,7 +357,9 @@ def hizmet_duzelt(id):
                 success=False
             )
             flash(str(e), "warning")
-            
+            # Rollback sonrası hizmet objesi expire oldu, yeniden yükle
+            hizmet = HizmetKaydiService.get_by_id(id)
+
     return render_template('cari/hizmet_duzelt.html', form=form, hizmet=hizmet, title="Fatura Düzenle")
 
 @cari_bp.route('/hizmet/sil/<int:id>', methods=['POST'])
@@ -366,14 +403,20 @@ def hizmet_detay(id):
 # -------------------------------------------------------------------------
 @cari_bp.route('/kasa/listesi')
 def kasa_listesi():
-    kasalar = KasaService.find_by(is_active=True, is_deleted=False)
-    
+    try:
+        kasalar = KasaService.find_by(is_active=True, is_deleted=False)
+    except Exception as e:
+        db.session.rollback()
+        logging.error(f"Kasa listesi yükleme hatası: {str(e)}")
+        flash("Kasa listesi yüklenemedi.", "danger")
+        kasalar = []
+
     # Modal transfer formu
     transfer_form = KasaTransferForm()
     kasa_choices = [(k.id, f"{k.kasa_adi} ({k.para_birimi})") for k in kasalar]
     transfer_form.kaynak_kasa_id.choices = kasa_choices
     transfer_form.hedef_kasa_id.choices = kasa_choices
-    
+
     # Modal hızlı işlem formu
     hizli_form = KasaHizliIslemForm()
     hizli_form.kasa_id.choices = kasa_choices
@@ -388,9 +431,9 @@ def kasa_listesi():
         for k in kasalar
     ]
 
-    return render_template('cari/kasa_listesi.html', 
-                           kasalar=kasalar, 
-                           form=transfer_form, 
+    return render_template('cari/kasa_listesi.html',
+                           kasalar=kasalar,
+                           form=transfer_form,
                            hizli_form=hizli_form,
                            kasalar_json=kasalar_json)
 
@@ -535,12 +578,17 @@ def kasa_duzelt(id):
         return redirect(url_for('cari.kasa_listesi'))
 
     form = KasaForm(obj=kasa)
-    diger_kasalar = Kasa.query.filter(
-        Kasa.id != kasa.id,
-        Kasa.para_birimi == kasa.para_birimi,
-        Kasa.is_active == True,
-        Kasa.is_deleted == False,
-    ).order_by(Kasa.kasa_adi).all()
+    try:
+        diger_kasalar = Kasa.query.filter(
+            Kasa.id != kasa.id,
+            Kasa.para_birimi == kasa.para_birimi,
+            Kasa.is_active == True,
+            Kasa.is_deleted == False,
+        ).order_by(Kasa.kasa_adi).all()
+    except Exception as e:
+        db.session.rollback()
+        logging.error(f"Kasa Düzenle yardımcı veri hatası: {str(e)}")
+        diger_kasalar = []
 
     if form.validate_on_submit():
         try:
@@ -560,6 +608,7 @@ def kasa_duzelt(id):
             flash('Kasa bilgileri güncellendi.', 'success')
             return redirect(url_for('cari.kasa_listesi'))
         except ValidationError as e:
+            db.session.rollback()
             OperationLogService.log(
                 module='cari', action='kasa_duzelt',
                 user_id=get_actor(), username=getattr(current_user, 'username', None),
@@ -568,6 +617,8 @@ def kasa_duzelt(id):
                 success=False
             )
             flash(str(e), "warning")
+            # Rollback sonrası kasa objesi expire oldu, yeniden yükle
+            kasa = KasaService.get_by_id(id)
 
     return render_template('cari/kasa_duzelt.html', form=form, kasa=kasa, diger_kasalar=diger_kasalar)
 
@@ -612,8 +663,14 @@ def kasa_hareketleri(id):
         flash("Kasa bulunamadı", "danger")
         return redirect(url_for('cari.kasa_listesi'))
 
-    hareketler = Odeme.query.filter_by(kasa_id=kasa.id, is_deleted=False)\
-                      .order_by(Odeme.tarih.desc(), Odeme.id.desc()).all()
+    try:
+        hareketler = Odeme.query.filter_by(kasa_id=kasa.id, is_deleted=False)\
+                          .order_by(Odeme.tarih.desc(), Odeme.id.desc()).all()
+    except Exception as e:
+        db.session.rollback()
+        logging.error(f"Kasa hareketleri yükleme hatası: {str(e)}")
+        flash("Kasa hareketleri yüklenemedi.", "danger")
+        hareketler = []
     return render_template('cari/kasa_hareketleri.html', kasa=kasa, hareketler=hareketler, now=datetime.now())
 
 
@@ -624,8 +681,14 @@ def kasa_hareketleri_yazdir(id):
         flash("Kasa bulunamadı", "danger")
         return redirect(url_for('cari.kasa_listesi'))
 
-    hareketler = Odeme.query.filter_by(kasa_id=kasa.id, is_deleted=False)\
-                      .order_by(Odeme.tarih.desc(), Odeme.id.desc()).all()
+    try:
+        hareketler = Odeme.query.filter_by(kasa_id=kasa.id, is_deleted=False)\
+                          .order_by(Odeme.tarih.desc(), Odeme.id.desc()).all()
+    except Exception as e:
+        db.session.rollback()
+        logging.error(f"Kasa hareketleri yazdır yükleme hatası: {str(e)}")
+        flash("Kasa hareketleri yüklenemedi.", "danger")
+        return redirect(url_for('cari.kasa_hareketleri', id=id))
 
     rapor_tarihi = date.today().strftime('%d.%m.%Y')
     para_birimi = 'TL' if kasa.para_birimi == 'TRY' else kasa.para_birimi
@@ -641,8 +704,14 @@ def kasa_hareketleri_excel(id):
         flash("Kasa bulunamadı", "danger")
         return redirect(url_for('cari.kasa_listesi'))
 
-    hareketler = Odeme.query.filter_by(kasa_id=kasa.id, is_deleted=False)\
-                      .order_by(Odeme.tarih.desc(), Odeme.id.desc()).all()
+    try:
+        hareketler = Odeme.query.filter_by(kasa_id=kasa.id, is_deleted=False)\
+                          .order_by(Odeme.tarih.desc(), Odeme.id.desc()).all()
+    except Exception as e:
+        db.session.rollback()
+        logging.error(f"Kasa hareketleri Excel yükleme hatası: {str(e)}")
+        flash("Kasa hareketleri yüklenemedi.", "danger")
+        return redirect(url_for('cari.kasa_hareketleri', id=id))
 
     para_birimi = 'TL' if kasa.para_birimi == 'TRY' else kasa.para_birimi
 
@@ -1024,13 +1093,18 @@ def cari_durum_raporu_excel():
 def musteri_ara():
     from flask import jsonify
     q = request.args.get('q', '').strip()
-    base_query = Firma.query.filter(
-        Firma.is_active == True,
-        Firma.is_deleted == False,
-    )
-    if q:
-        base_query = base_query.filter(Firma.firma_adi.ilike(f"%{q}%"))
-    results = base_query.order_by(Firma.firma_adi).limit(50).all()
-    return jsonify([
-        {'id': f.id, 'ad': f.firma_adi} for f in results
-    ])
+    try:
+        base_query = Firma.query.filter(
+            Firma.is_active == True,
+            Firma.is_deleted == False,
+        )
+        if q:
+            base_query = base_query.filter(Firma.firma_adi.ilike(f"%{q}%"))
+        results = base_query.order_by(Firma.firma_adi).limit(50).all()
+        return jsonify([
+            {'id': f.id, 'ad': f.firma_adi} for f in results
+        ])
+    except Exception as e:
+        db.session.rollback()
+        logging.error(f"Müşteri arama API hatası: {str(e)}")
+        return jsonify([]), 500

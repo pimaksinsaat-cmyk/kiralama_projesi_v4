@@ -99,58 +99,72 @@ def index():
     secili_taseron_id = request.args.get('taseron_id')
     secili_firma_id = request.args.get('firma_id')
 
-    query = Nakliye.query
+    try:
+        query = Nakliye.query
 
-    # Filtreleri uygula
-    if baslangic:
-        try:
-            baslangic_date = datetime.strptime(baslangic, '%Y-%m-%d').date()
-            query = query.filter(Nakliye.tarih >= baslangic_date)
-        except ValueError: pass
-    if bitis:
-        try:
-            bitis_date = datetime.strptime(bitis, '%Y-%m-%d').date()
-            query = query.filter(Nakliye.tarih <= bitis_date)
-        except ValueError: pass
-    if secili_plaka:
-        query = query.filter(Nakliye.plaka == secili_plaka)
-    if secili_taseron_id and secili_taseron_id.isdigit():
-        query = query.filter(Nakliye.taseron_firma_id == int(secili_taseron_id))
-    if secili_firma_id and secili_firma_id.isdigit():
-        query = query.filter(Nakliye.firma_id == int(secili_firma_id))
+        # Filtreleri uygula
+        if baslangic:
+            try:
+                baslangic_date = datetime.strptime(baslangic, '%Y-%m-%d').date()
+                query = query.filter(Nakliye.tarih >= baslangic_date)
+            except ValueError: pass
+        if bitis:
+            try:
+                bitis_date = datetime.strptime(bitis, '%Y-%m-%d').date()
+                query = query.filter(Nakliye.tarih <= bitis_date)
+            except ValueError: pass
+        if secili_plaka:
+            query = query.filter(Nakliye.plaka == secili_plaka)
+        if secili_taseron_id and secili_taseron_id.isdigit():
+            query = query.filter(Nakliye.taseron_firma_id == int(secili_taseron_id))
+        if secili_firma_id and secili_firma_id.isdigit():
+            query = query.filter(Nakliye.firma_id == int(secili_firma_id))
 
-    ordered_query = query.order_by(Nakliye.tarih.desc())
-    pagination = ordered_query.paginate(page=page, per_page=per_page, error_out=False)
-    nakliyeler = pagination.items
-    filtered_all = ordered_query.all()
+        ordered_query = query.order_by(Nakliye.tarih.desc())
+        pagination = ordered_query.paginate(page=page, per_page=per_page, error_out=False)
+        nakliyeler = pagination.items
+        filtered_all = ordered_query.all()
 
-    # Dropdown listelerini hazırla
-    plakalar = db.session.query(Nakliye.plaka).filter(Nakliye.plaka.isnot(None)).distinct().all()
-    plaka_listesi = [p[0] for p in plakalar if p[0] and p[0].strip() != ""]
-    taseron_listesi = Firma.query.filter_by(is_tedarikci=True, is_active=True).order_by(Firma.firma_adi).all()
-    firma_listesi = Firma.query.filter_by(is_active=True).order_by(Firma.firma_adi).all()
+        # Dropdown listelerini hazırla
+        plakalar = db.session.query(Nakliye.plaka).filter(Nakliye.plaka.isnot(None)).distinct().all()
+        plaka_listesi = [p[0] for p in plakalar if p[0] and p[0].strip() != ""]
+        taseron_listesi = Firma.query.filter_by(is_tedarikci=True, is_active=True).order_by(Firma.firma_adi).all()
+        firma_listesi = Firma.query.filter_by(is_active=True).order_by(Firma.firma_adi).all()
 
-    # İstatistikler
-    stats = {
-        'sefer_sayisi': len(filtered_all),
-        'ciro': sum(n.toplam_tutar or 0 for n in filtered_all),
-        'maliyet': sum(n.taseron_maliyet or 0 for n in filtered_all),
-        'kar': sum(n.tahmini_kar or 0 for n in filtered_all)
-    }
+        # İstatistikler
+        stats = {
+            'sefer_sayisi': len(filtered_all),
+            'ciro': sum(n.toplam_tutar or 0 for n in filtered_all),
+            'maliyet': sum(n.taseron_maliyet or 0 for n in filtered_all),
+            'kar': sum(n.tahmini_kar or 0 for n in filtered_all)
+        }
 
-    return render_template('nakliyeler/index.html',
-                           nakliyeler=nakliyeler,
-                           pagination=pagination,
-                           per_page=per_page,
-                           stats=stats,
-                           baslangic=baslangic,
-                           bitis=bitis,
-                           plaka_listesi=plaka_listesi,
-                           taseron_listesi=taseron_listesi,
-                           firma_listesi=firma_listesi,
-                           secili_taseron_id=secili_taseron_id,
-                           secili_plaka=secili_plaka,
-                           secili_firma_id=secili_firma_id)
+        return render_template('nakliyeler/index.html',
+                               nakliyeler=nakliyeler,
+                               pagination=pagination,
+                               per_page=per_page,
+                               stats=stats,
+                               baslangic=baslangic,
+                               bitis=bitis,
+                               plaka_listesi=plaka_listesi,
+                               taseron_listesi=taseron_listesi,
+                               firma_listesi=firma_listesi,
+                               secili_taseron_id=secili_taseron_id,
+                               secili_plaka=secili_plaka,
+                               secili_firma_id=secili_firma_id)
+    except Exception as e:
+        db.session.rollback()
+        from flask import current_app
+        current_app.logger.error(f"Nakliye Liste Yükleme Hatası: {str(e)}")
+        flash("Liste yüklenirken bir hata oluştu.", "danger")
+        return render_template('nakliyeler/index.html',
+                               nakliyeler=[], pagination=None, per_page=per_page,
+                               stats={'sefer_sayisi': 0, 'ciro': 0, 'maliyet': 0, 'kar': 0},
+                               baslangic=baslangic, bitis=bitis,
+                               plaka_listesi=[], taseron_listesi=[], firma_listesi=[],
+                               secili_taseron_id=secili_taseron_id,
+                               secili_plaka=secili_plaka,
+                               secili_firma_id=secili_firma_id)
 
 
 # ---------------------------------------------------
@@ -396,12 +410,19 @@ def ekle():
     form = NakliyeForm()
 
     # Form seçeneklerini dinamik doldur
-    firmalar = Firma.query.filter_by(is_active=True).order_by(Firma.firma_adi).all()
-    form.firma_id.choices = [(0, '-- Seçiniz --')] + [(f.id, f.firma_adi) for f in firmalar]
-    form.taseron_firma_id.choices = [(0, '--- Taşeron Seçiniz ---')] + [(f.id, f.firma_adi) for f in firmalar if f.is_tedarikci]
+    try:
+        firmalar = Firma.query.filter_by(is_active=True).order_by(Firma.firma_adi).all()
+        form.firma_id.choices = [(0, '-- Seçiniz --')] + [(f.id, f.firma_adi) for f in firmalar]
+        form.taseron_firma_id.choices = [(0, '--- Taşeron Seçiniz ---')] + [(f.id, f.firma_adi) for f in firmalar if f.is_tedarikci]
 
-    araclar = _get_nakliye_araclari()
-    form.arac_id.choices = [(0, '--- Dış Nakliye / Belirtilmemiş ---')] + [(a.id, a.plaka) for a in araclar]
+        araclar = _get_nakliye_araclari()
+        form.arac_id.choices = [(0, '--- Dış Nakliye / Belirtilmemiş ---')] + [(a.id, a.plaka) for a in araclar]
+    except Exception as e:
+        db.session.rollback()
+        from flask import current_app
+        current_app.logger.error(f"Nakliye Ekle seçenek yükleme hatası: {str(e)}")
+        flash("Form seçenekleri yüklenemedi. Lütfen tekrar deneyin.", "danger")
+        return redirect(url_for('nakliyeler.index'))
 
     kiralama_id = request.args.get('kiralama_id', type=int)
     kdv_orani = request.args.get('kdv_orani', type=int)
@@ -515,20 +536,27 @@ def arac_ekle():
 @nakliye_bp.route('/duzenle/<int:id>', methods=['GET', 'POST'])
 def duzenle(id):
     nakliye = Nakliye.query.get_or_404(id)
-    
+
     if nakliye.kiralama_id:
         flash('Bu kayıt kiralama modülüne bağlıdır.', 'warning')
         return redirect(url_for('nakliyeler.index'))
 
     form = NakliyeForm(obj=nakliye)
-    
+
     # Seçenekleri doldur
-    firmalar = Firma.query.filter_by(is_active=True).all()
-    form.firma_id.choices = [(0, '-- Seçiniz --')] + [(f.id, f.firma_adi) for f in firmalar]
-    form.taseron_firma_id.choices = [(0, '--- Taşeron Seçiniz ---')] + [(f.id, f.firma_adi) for f in firmalar if f.is_tedarikci]
-    
-    araclar = _get_nakliye_araclari()
-    form.arac_id.choices = [(0, '--- Dış Nakliye / Belirtilmemiş ---')] + [(a.id, a.plaka) for a in araclar]
+    try:
+        firmalar = Firma.query.filter_by(is_active=True).all()
+        form.firma_id.choices = [(0, '-- Seçiniz --')] + [(f.id, f.firma_adi) for f in firmalar]
+        form.taseron_firma_id.choices = [(0, '--- Taşeron Seçiniz ---')] + [(f.id, f.firma_adi) for f in firmalar if f.is_tedarikci]
+
+        araclar = _get_nakliye_araclari()
+        form.arac_id.choices = [(0, '--- Dış Nakliye / Belirtilmemiş ---')] + [(a.id, a.plaka) for a in araclar]
+    except Exception as e:
+        db.session.rollback()
+        from flask import current_app
+        current_app.logger.error(f"Nakliye Düzenle seçenek yükleme hatası: {str(e)}")
+        flash("Form seçenekleri yüklenemedi. Lütfen tekrar deneyin.", "danger")
+        return redirect(url_for('nakliyeler.index'))
 
     if form.validate_on_submit():
         try:
@@ -538,7 +566,7 @@ def duzenle(id):
                 nakliye.arac_id = None
             if not nakliye.taseron_firma_id or nakliye.taseron_firma_id <= 0:
                 nakliye.taseron_firma_id = None
-            
+
             if nakliye.nakliye_tipi == 'oz_mal':
                 nakliye.taseron_firma_id = None
                 if nakliye.arac_id:
@@ -555,12 +583,12 @@ def duzenle(id):
 
             nakliye.tutar = to_decimal(form.tutar.data)
             nakliye.taseron_maliyet = to_decimal(form.taseron_maliyet.data) if nakliye.nakliye_tipi == 'taseron' else Decimal('0.00')
-            
+
             nakliye.hesapla_ve_guncelle()
-            
+
             CariServis.musteri_nakliye_senkronize_et(nakliye)
             CariServis.taseron_maliyet_senkronize_et(nakliye)
-            
+
             db.session.commit()
             OperationLogService.log(
                 module='nakliyeler', action='update',
@@ -571,7 +599,7 @@ def duzenle(id):
             )
             flash('Kayıt güncellendi.', 'success')
             return redirect(url_for('nakliyeler.index'))
-            
+
         except Exception as e:
             db.session.rollback()
             OperationLogService.log(
@@ -582,6 +610,8 @@ def duzenle(id):
                 success=False
             )
             flash(f'Hata: {str(e)}', 'danger')
+            # Rollback sonrası nakliye objesi expire oldu, yeniden yükle
+            nakliye = db.session.get(Nakliye, id)
 
     return render_template('nakliyeler/duzenle.html', form=form, nakliye=nakliye)
 

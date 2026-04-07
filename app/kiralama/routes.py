@@ -139,28 +139,21 @@ def index():
         if per_page not in {10, 25, 50, 100}:
             per_page = 25
         q = request.args.get('q', '', type=str)
-        
+
         query = Kiralama.query.options(
-            joinedload(Kiralama.firma_musteri), 
+            joinedload(Kiralama.firma_musteri),
             joinedload(Kiralama.kalemler).joinedload(KiralamaKalemi.ekipman)
         )
-        
+
         if q:
             search = f"%{q}%"
             query = query.join(Firma, Kiralama.firma_musteri_id == Firma.id)\
                          .filter(or_(Kiralama.kiralama_form_no.ilike(search), Firma.firma_adi.ilike(search)))
-            
-        pagination = query.order_by(Kiralama.kiralama_form_no.desc()).paginate(page=page, per_page=per_page)
-        # Liste ekranında görünen kiralamalar için bekleyen cari tutarı güncel tut
-        try:
-            for kiralama in pagination.items:
-                KiralamaService.guncelle_cari_toplam(kiralama.id, auto_commit=False)
-            if pagination.items:
-                db.session.commit()
-        except Exception as sync_err:
-            db.session.rollback()
-            current_app.logger.warning(f"Kiralama cari senkronizasyon uyarısı: {sync_err}")
 
+        pagination = query.order_by(Kiralama.kiralama_form_no.desc()).paginate(page=page, per_page=per_page)
+
+        # ÖNCELİK: Kalem verilerini rollback'ten etkilenmeden önce hesapla.
+        # (guncelle_cari_toplam rollback yaparsa session expire olur ve objelere erişim patlar)
         recent_threshold = datetime.now(timezone.utc) - timedelta(days=1)
         recently_returned_kalem_ids = {
             kalem.id
@@ -171,13 +164,27 @@ def index():
             and kalem.updated_at
             and (kalem.updated_at if kalem.updated_at.tzinfo else kalem.updated_at.replace(tzinfo=timezone.utc)) >= recent_threshold
         }
-        
+
+        # Liste ekranında görünen kiralamalar için bekleyen cari tutarı güncel tut.
+        # Bu işlem bağımsız bir try bloğunda çalışır; başarısız olursa
+        # liste yine de gösterilir, sadece cari tutarlar güncellenmemiş olur.
+        try:
+            for kiralama in pagination.items:
+                KiralamaService.guncelle_cari_toplam(kiralama.id, auto_commit=False)
+            if pagination.items:
+                db.session.commit()
+        except Exception as sync_err:
+            db.session.rollback()
+            current_app.logger.warning(f"Kiralama cari senkronizasyon uyarısı: {sync_err}")
+            # Rollback sonrası objeler expire oldu, listeyi yeniden yükle
+            pagination = query.order_by(Kiralama.kiralama_form_no.desc()).paginate(page=page, per_page=per_page)
+
         return render_template(
-            'kiralama/index.html', 
-            kiralamalar=pagination.items, 
-            pagination=pagination, 
+            'kiralama/index.html',
+            kiralamalar=pagination.items,
+            pagination=pagination,
             per_page=per_page,
-            q=q, 
+            q=q,
             kurlar=KiralamaService.get_tcmb_kurlari(),
             today=date.today(),
             subeler=get_cached_subeler(),
@@ -186,7 +193,7 @@ def index():
             recently_returned_kalem_ids=recently_returned_kalem_ids
         )
     except Exception as e:
-        current_app.logger.error(f"Kiralama Liste Yükleme Hatası: {str(e)}")
+        current_app.logger.error(f"Kiralama Liste Yükleme Hatası: {str(e)}\n{traceback.format_exc()}")
         flash(f"Liste yüklenirken bir hata oluştu.", "danger")
         return render_template('kiralama/index.html', kiralamalar=[], pagination=None, per_page=25, q='', kurlar={}, today=date.today(), subeler=[], nakliye_araclari=[], nakliye_tedarikci_listesi=[], recently_returned_kalem_ids=set())
 
@@ -322,12 +329,22 @@ def ekle():
                         flash(f"Satır {idx+1} - {k_field}: {k_msg}", "warning")
             else:
                 flash(f"{field}: {errors}", "warning")
-    ekipman_sube_map = {
-        e.id: (e.sube.isim if e.sube else 'Şube Tanımsız')
-        for e in Ekipman.query.options(joinedload(Ekipman.sube)).all()
-    }
-    subeler = Sube.query.all()
-    markalar = [m[0] for m in db.session.query(Ekipman.marka).filter(Ekipman.marka.isnot(None)).distinct().all()]
+
+    # Rollback sonrası session bozulmuş olabilir; form render için gereken
+    # sorguları korumalı blokta çalıştır
+    try:
+        ekipman_sube_map = {
+            e.id: (e.sube.isim if e.sube else 'Şube Tanımsız')
+            for e in Ekipman.query.options(joinedload(Ekipman.sube)).all()
+        }
+        subeler = Sube.query.all()
+        markalar = [m[0] for m in db.session.query(Ekipman.marka).filter(Ekipman.marka.isnot(None)).distinct().all()]
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Ekle formu yardımcı veri hatası: {str(e)}")
+        ekipman_sube_map = {}
+        subeler = []
+        markalar = []
     tipler = [tip for tip, _ in EKIPMAN_TIPI_SECENEKLERI]
     return render_template('kiralama/form.html', form=form, subeler=subeler, markalar=markalar, tipler=tipler, is_edit=False, ekipman_sube_map=ekipman_sube_map, ekipman_map_json='{}')
 
@@ -428,7 +445,10 @@ def duzenle(kiralama_id):
             if hasattr(k_form, 'chain_id'):
                 k_form.chain_id.data = kalem.chain_id
         # Kalemler doldurulduktan sonra tekrar choices'ları ata
-        populate_kiralama_form_choices(form, include_ids=include_ids)
+        try:
+            populate_kiralama_form_choices(form, include_ids=include_ids)
+        except Exception as e:
+            current_app.logger.error(f"Seçenek doldurma hatası (Düzenle/GET tekrar): {str(e)}")
 
     # Tarih field'larını manual parse et (WTForms validation hatasından kaçınmak için)
     if request.method == 'POST':
@@ -473,6 +493,7 @@ def duzenle(kiralama_id):
             flash('Kiralama başarıyla güncellendi.', 'success')
             return redirect(url_for('kiralama.index'))
         except ValidationError as e:
+            db.session.rollback()
             OperationLogService.log(
                 module='kiralama',
                 action='update',
@@ -485,6 +506,7 @@ def duzenle(kiralama_id):
             )
             flash(f"Hata: {str(e)}", "warning")
         except Exception as e:
+            db.session.rollback()
             current_app.logger.error(f"Kiralama Güncelleme Hatası (ID: {kiralama_id}): {str(e)}")
             OperationLogService.log(
                 module='kiralama',
@@ -512,25 +534,35 @@ def duzenle(kiralama_id):
                             flash(f"Satır {idx+1} - {k_field}: {k_msg}", "warning")
                 else:
                     flash(f"{field}: {errors}", "warning")
-    # Get all possible equipment for the choices to build a definitive map
-    include_ids_for_map = [k.ekipman_id for k in kiralama.kalemler if k.ekipman_id]
-    filo_query_for_map = Ekipman.query.filter(
-        Ekipman.firma_tedarikci_id.is_(None),
-        or_(Ekipman.calisma_durumu == 'bosta', Ekipman.id.in_(include_ids_for_map))
-    ).order_by(Ekipman.kod).all()
-    
-    # Create the complete map
-    ekipman_map = {
-        e.id: f"{(e.kod or '').strip()} | {(e.tipi or '').strip()} ({(e.marka or 'Bilinmiyor').strip()}-{e.calisma_yuksekligi or 0}m - {e.kaldirma_kapasitesi or 0}kg)"
-        for e in filo_query_for_map
-    }
+    # Rollback sonrası session bozulmuş olabilir; form render için gereken
+    # sorguları korumalı blokta çalıştır
+    try:
+        # Rollback sonrası kiralama objesi expire olmuş olabilir, yeniden yükle
+        db.session.refresh(kiralama)
+        include_ids_for_map = [k.ekipman_id for k in kiralama.kalemler if k.ekipman_id]
+        filo_query_for_map = Ekipman.query.filter(
+            Ekipman.firma_tedarikci_id.is_(None),
+            or_(Ekipman.calisma_durumu == 'bosta', Ekipman.id.in_(include_ids_for_map))
+        ).order_by(Ekipman.kod).all()
 
-    ekipman_sube_map = {
-        e.id: (e.sube.isim if e.sube else 'Şube Tanımsız')
-        for e in Ekipman.query.options(joinedload(Ekipman.sube)).all()
-    }
-    subeler = Sube.query.all()
-    markalar = [m[0] for m in db.session.query(Ekipman.marka).filter(Ekipman.marka.isnot(None)).distinct().all()]
+        ekipman_map = {
+            e.id: f"{(e.kod or '').strip()} | {(e.tipi or '').strip()} ({(e.marka or 'Bilinmiyor').strip()}-{e.calisma_yuksekligi or 0}m - {e.kaldirma_kapasitesi or 0}kg)"
+            for e in filo_query_for_map
+        }
+
+        ekipman_sube_map = {
+            e.id: (e.sube.isim if e.sube else 'Şube Tanımsız')
+            for e in Ekipman.query.options(joinedload(Ekipman.sube)).all()
+        }
+        subeler = Sube.query.all()
+        markalar = [m[0] for m in db.session.query(Ekipman.marka).filter(Ekipman.marka.isnot(None)).distinct().all()]
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Düzenle formu yardımcı veri hatası: {str(e)}")
+        ekipman_map = {}
+        ekipman_sube_map = {}
+        subeler = []
+        markalar = []
     tipler = [tip for tip, _ in EKIPMAN_TIPI_SECENEKLERI]
     return render_template('kiralama/form.html', form=form, kiralama=kiralama, markalar=markalar, subeler=subeler, tipler=tipler, is_edit=True, ekipman_sube_map=ekipman_sube_map, ekipman_map_json=json.dumps(ekipman_map))
 
