@@ -41,7 +41,7 @@ def _postgres_env(url):
 def _postgres_dump_command(*, output_path=None):
     url = db.engine.url
     command = [
-        os.environ.get('PG_DUMP_BIN', 'pg_dump'),
+        os.environ.get('PG_DUMP_BIN', '/usr/bin/pg_dump'),
         '--host', url.host or 'localhost',
         '--port', str(url.port or 5432),
         '--username', url.username or 'postgres',

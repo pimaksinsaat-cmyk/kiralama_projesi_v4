@@ -6,6 +6,7 @@ WORKDIR /app
 
 # 3. Kütüphane listesini kopyalayıp kurulumları yapıyoruz
 COPY requirements.txt .
+RUN apt-get update && apt-get install -y postgresql-client
 RUN pip install --no-cache-dir -r requirements.txt
 
 # 4. Projedeki tüm kodları (static, templates, vs.) konteynerin içine kopyalıyoruz
