@@ -1117,11 +1117,14 @@
         <h1>
             <i class="fas fa-receipt"></i> {{ sube.isim }} — Masraf Yönetimi
         </h1>
-        <div style="display: flex; gap: 0.5rem; align-items: center;">
-            <select onchange="if(this.value) window.location.href=this.value;" style="padding: 8px 12px; border-radius: 6px; border: 1px solid #ccc; font-size: 0.9rem;">
+        <div style="display: flex; gap: 0.5rem; align-items: center; flex-shrink: 0;">
+            <select id="sube-gecis-dropdown" onchange="if(this.value) window.location.href=this.value;" style="padding: 8px 12px; border-radius: 6px; border: 1px solid #ccc; font-size: 0.9rem; min-width: 180px;">
                 <option value="">Diğer Şubeye Git...</option>
-                {% for s in aktif_subeler if s.id != sube.id %}
-                <option value="{{ url_for('subeler.sube_masraflari', sube_id=s.id) }}">{{ s.isim }}</option>
+                {% set _subeler_listesi = aktif_subeler if aktif_subeler is defined and aktif_subeler else [] %}
+                {% for s in _subeler_listesi %}
+                    {% if s.id != sube.id %}
+                    <option value="{{ url_for('subeler.sube_masraflari', sube_id=s.id) }}">{{ s.isim }}</option>
+                    {% endif %}
                 {% endfor %}
             </select>
             <a href="{{ url_for('subeler.index') }}" class="back-btn">← Şubelere Dön</a>

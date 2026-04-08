@@ -16,6 +16,18 @@ def _sube_giderleri_table_exists():
     return inspect(db.engine).has_table(SubeGideri.__tablename__)
 
 
+@subeler_bp.context_processor
+def _inject_aktif_subeler():
+    """Tum subeler blueprint sablonlarina aktif sube listesini saglar.
+    Dropdown gibi sablon-duzeyinde kullanilan listelerin rota bazli
+    unutulmasini engeller."""
+    try:
+        subeler = Sube.query.filter_by(is_active=True).order_by(Sube.isim).all()
+    except Exception:
+        subeler = []
+    return {'aktif_subeler': subeler}
+
+
 AY_ADLARI = [
     'Ocak', 'Subat', 'Mart', 'Nisan', 'Mayis', 'Haziran',
     'Temmuz', 'Agustos', 'Eylul', 'Ekim', 'Kasim', 'Aralik'
