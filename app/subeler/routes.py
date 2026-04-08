@@ -377,11 +377,16 @@ def sabit_gider_ekle():
         return redirect(url_for('subeler.sube_masraflari', **redirect_params))
 
     try:
+        # apply_retroactively TRUE ise, baslangic_tarihi otomatik olarak yılbaşı (01.01) olsun
+        baslangic_tarihi = form.baslangic_tarihi.data
+        if form.apply_retroactively.data:
+            baslangic_tarihi = date(baslangic_tarihi.year, 1, 1)
+
         yeni_donem = SubeSabitGiderDonemiService.create_donem(
             {
                 'sube_id': form.sube_id.data,
                 'kategori': form.kategori.data,
-                'baslangic_tarihi': form.baslangic_tarihi.data,
+                'baslangic_tarihi': baslangic_tarihi,
                 'aylik_tutar': form.aylik_tutar.data,
                 'kdv_orani': form.kdv_orani.data,
                 'aciklama': form.aciklama.data,
