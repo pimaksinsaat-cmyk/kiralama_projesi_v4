@@ -380,8 +380,10 @@ def duzenle(kiralama_id):
                 if field is not None and getattr(field, 'choices', None) is None:
                     field.choices = []
     except Exception as e:
-        current_app.logger.error(f"Seçenek doldurma hatası (Düzenle): {str(e)}")
-        flash("Form seçenekleri yüklenirken hata oluştu.", "danger")
+        import traceback
+        tb = traceback.format_exc()
+        current_app.logger.error(f"Seçenek doldurma hatası (Düzenle): {str(e)}\n{tb}")
+        flash(f"Form seçenekleri yüklenirken hata oluştu: {str(e)}", "danger")
         return redirect(url_for('kiralama.index'))
 
     if request.method == 'GET':
