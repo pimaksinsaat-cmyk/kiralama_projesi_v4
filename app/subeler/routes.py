@@ -385,6 +385,7 @@ def sabit_gider_ekle():
                 'aylik_tutar': form.aylik_tutar.data,
                 'kdv_orani': form.kdv_orani.data,
                 'aciklama': form.aciklama.data,
+                'apply_retroactively': form.apply_retroactively.data,
             }
         )
         timeline = SubeSabitGiderDonemiService.build_timeline_metadata(
