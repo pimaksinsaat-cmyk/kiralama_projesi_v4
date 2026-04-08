@@ -1433,6 +1433,16 @@
                                 {% endif %}
                             </div>
 
+                            <div class="form-group full-width">
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    {{ sabit_gider_form.apply_retroactively(class="form-check-input") }}
+                                    {{ sabit_gider_form.apply_retroactively.label(class="form-check-label") }}
+                                </div>
+                                {% if sabit_gider_form.apply_retroactively.errors %}
+                                    <small style="color: var(--danger-red);">{{ sabit_gider_form.apply_retroactively.errors[0] }}</small>
+                                {% endif %}
+                            </div>
+
                             <div class="form-group inline-submit full-width">
                                 {{ sabit_gider_form.submit() }}
                             </div>
