@@ -104,7 +104,7 @@ class SubeGiderService(BaseService):
 
 class SubeSabitGiderDonemiService(BaseService):
     model = SubeSabitGiderDonemi
-    updatable_fields = ['kategori', 'baslangic_tarihi', 'bitis_tarihi', 'aylik_tutar', 'kdv_orani', 'aciklama', 'is_active']
+    updatable_fields = ['kategori', 'baslangic_tarihi', 'bitis_tarihi', 'aylik_tutar', 'kdv_orani', 'aciklama', 'is_active', 'apply_retroactively']
 
     @staticmethod
     def table_exists():
@@ -133,7 +133,12 @@ class SubeSabitGiderDonemiService(BaseService):
                 onceki_var = index > 0
                 sonraki_donem = kategori_donemleri[index + 1] if index + 1 < len(kategori_donemleri) else None
 
-                effective_start = donem.baslangic_tarihi if onceki_var else None
+                # apply_retroactively=True ise, ilk dönem geçmişe geri uygulanır (effective_start=None)
+                # apply_retroactively=False ise, sadece baslangic_tarihi'nden itibaren uygulanır
+                if donem.apply_retroactively:
+                    effective_start = donem.baslangic_tarihi if onceki_var else None
+                else:
+                    effective_start = donem.baslangic_tarihi
                 effective_end = donem.bitis_tarihi
 
                 if sonraki_donem and sonraki_donem.baslangic_tarihi:

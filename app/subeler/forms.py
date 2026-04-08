@@ -1,5 +1,5 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, TextAreaField, SubmitField, SelectField, URLField, EmailField, HiddenField, DecimalField
+from wtforms import StringField, TextAreaField, SubmitField, SelectField, URLField, EmailField, HiddenField, DecimalField, BooleanField
 from wtforms.validators import DataRequired, Length, Optional, Email, URL, NumberRange
 from datetime import datetime
 
@@ -121,4 +121,5 @@ class SubeSabitGiderDonemiForm(FlaskForm):
         validators=[Optional(), NumberRange(min=0, message='KDV orani negatif olamaz')],
     )
     aciklama = StringField('Aciklama', validators=[Optional(), Length(max=250)])
+    apply_retroactively = BooleanField('Yılbaşından beri dikkate al (geçmiş aylara da uygulanır)')
     submit = SubmitField('Aylik Gideri Kaydet')

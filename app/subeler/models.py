@@ -73,4 +73,5 @@ class SubeSabitGiderDonemi(db.Model):
     kdv_orani = db.Column(db.Numeric(5, 2), nullable=True)
     aciklama = db.Column(db.String(250), nullable=True)
     is_active = db.Column(db.Boolean, default=True, nullable=False, index=True)
+    apply_retroactively = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
