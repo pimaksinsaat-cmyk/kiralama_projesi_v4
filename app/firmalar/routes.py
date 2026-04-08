@@ -234,18 +234,6 @@ def duzelt(id):
 @firmalar_bp.route('/bilgi/<int:id>', methods=['GET'])
 @login_required
 def bilgi(id):
-    # --- LOG: Taşeron Nakliye Bedeli ---
-    try:
-        nakliye_hareketler = [h for h in hareketler_all if (getattr(h, 'tur', None) == 'Nakliye') or (isinstance(h, dict) and h.get('tur') == 'Nakliye')]
-        for i, islem in enumerate(nakliye_hareketler):
-            if isinstance(islem, dict):
-                log_str = f"[NAKLIYE] Hareket {i+1}: id={islem.get('id')}, aciklama={islem.get('aciklama')}, kdv_orani={islem.get('kdv_orani')}, tutar={islem.get('tutar')}"
-            else:
-                log_str = f"[NAKLIYE] Hareket {i+1}: id={getattr(islem, 'id', None)}, aciklama={getattr(islem, 'aciklama', None)}, kdv_orani={getattr(islem, 'kdv_orani', None)}, tutar={getattr(islem, 'tutar', None)}"
-            current_app.logger.debug(log_str)
-    except Exception as log_ex:
-        current_app.logger.warning(f"[NAKLIYE] LOG sırasında hata: {log_ex}")
-
     try:
         tab = request.args.get('tab', 'hareket')
 
