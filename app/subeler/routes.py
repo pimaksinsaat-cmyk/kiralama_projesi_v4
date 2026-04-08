@@ -231,9 +231,12 @@ def sube_masraflari(sube_id):
 
     kategori_labels = dict(MANUEL_GIDER_KATEGORILERI)
 
+    aktif_subeler = Sube.query.filter_by(is_active=True).order_by(Sube.isim).all()
+
     return render_template(
         'subeler/masraflar.html',
         sube=sube,
+        aktif_subeler=aktif_subeler,
         form=form,
         sabit_gider_form=sabit_gider_form,
         masraflar=masraflar,
