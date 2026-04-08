@@ -532,10 +532,11 @@ class KiralamaService(BaseService):
             toplam_tahakkuk += KiralamaService._hesapla_bekleyen_kalem_tutari(kalem)
             toplam_sozlesme += KiralamaService._hesapla_sozlesme_kalem_tutari(kalem)
 
-        # Eğer kiralama gelecekte başlıyorsa cariye borç 0 gözüksün, başlangıç tarihinde otomatik hesaplama başlasın.
+        # Kiralamaya ait cari kaydı her zaman aç (0 TL bile olsa)
+        # Kiralama başladığında tutarı otomatik güncellenecek
         toplam_gelir = toplam_tahakkuk if toplam_tahakkuk > 0 else Decimal('0.00')
 
-        if toplam_gelir > 0:
+        if True:  # Her zaman cari kaydını aç/güncelle
             if not cari_kayit:
                 kdv_orani = getattr(kiralama, 'kdv_orani', None)
                 if kdv_orani is None:
@@ -567,8 +568,12 @@ class KiralamaService(BaseService):
                 cari_kayit.aciklama = f"Kiralama Bekleyen Bakiye - {kiralama.kiralama_form_no}"
 
             db.session.add(cari_kayit)
-        elif cari_kayit:
-            db.session.delete(cari_kayit)
+        else:
+            # toplam_gelir = 0 ama cari_kayit varsa, 0 TL olarak güncelle
+            # (Kiralama başlamadığında 0 TL, başladığında tutarı otomatik güncellenecek)
+            if cari_kayit:
+                cari_kayit.tutar = Decimal('0.00')
+                db.session.add(cari_kayit)
 
         # Kiralamaya bağlı nakliye HizmetKaydi'lerini ayrı olarak senkronize et
         from app.services.nakliye_services import CariServis as NakliyeCariServis
