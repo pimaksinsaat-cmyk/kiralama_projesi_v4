@@ -238,18 +238,34 @@ class RaporlamaService:
 
         total_cost = 0.0
         query = SubeSabitGiderDonemi.query.filter(
-            SubeSabitGiderDonemi.baslangic_tarihi <= end_date,
             or_(SubeSabitGiderDonemi.bitis_tarihi.is_(None), SubeSabitGiderDonemi.bitis_tarihi >= start_date),
         )
         if sube_id:
             query = query.filter(SubeSabitGiderDonemi.sube_id == sube_id)
 
+        # Her (sube_id, kategori) için en eski kayıt: baslangic_tarihi ileride olsa bile
+        # rapor döneminden itibaren aktif say (ilk kayıt her zaman geçerli).
+        donemler = query.all()
+        en_eski = {}
+        for d in donemler:
+            k = (d.sube_id, d.kategori)
+            if k not in en_eski or d.baslangic_tarihi < en_eski[k]:
+                en_eski[k] = d.baslangic_tarihi
+
         today = date.today()
-        for donem in query.all():
+        for donem in donemler:
+            k = (donem.sube_id, donem.kategori)
+            # İlk kayıt ilerideyse rapor döneminden itibaren aktif say
+            if en_eski[k] == donem.baslangic_tarihi:
+                effective_start = min(donem.baslangic_tarihi, start_date)
+            else:
+                if donem.baslangic_tarihi > end_date:
+                    continue
+                effective_start = donem.baslangic_tarihi
             effective_end = min(donem.bitis_tarihi or today, today)
             for month_start in cls._iterate_month_starts(start_date, end_date):
                 month_end = cls._month_end(month_start)
-                overlap = cls._overlap_range(donem.baslangic_tarihi, effective_end, month_start, month_end)
+                overlap = cls._overlap_range(effective_start, effective_end, month_start, month_end)
                 if not overlap:
                     continue
                 total_cost += cls._allocate_monthly_amount(
@@ -486,17 +502,32 @@ class RaporlamaService:
 
         if cls._sube_sabit_gider_donemleri_table_exists():
             query = SubeSabitGiderDonemi.query.filter(
-                SubeSabitGiderDonemi.baslangic_tarihi <= end_date,
                 or_(SubeSabitGiderDonemi.bitis_tarihi.is_(None), SubeSabitGiderDonemi.bitis_tarihi >= start_date),
             )
             if sube_id:
                 query = query.filter(SubeSabitGiderDonemi.sube_id == sube_id)
 
-            for donem in query.all():
+            sabit_donemler = query.all()
+            # Her (sube_id, kategori) için en eski kayıt tespit et
+            en_eski_sabit = {}
+            for d in sabit_donemler:
+                k = (d.sube_id, d.kategori)
+                if k not in en_eski_sabit or d.baslangic_tarihi < en_eski_sabit[k]:
+                    en_eski_sabit[k] = d.baslangic_tarihi
+
+            for donem in sabit_donemler:
+                k = (donem.sube_id, donem.kategori)
+                # İlk kayıt ilerideyse rapor döneminden itibaren aktif say
+                if en_eski_sabit[k] == donem.baslangic_tarihi:
+                    effective_start = min(donem.baslangic_tarihi, start_date)
+                else:
+                    if donem.baslangic_tarihi > end_date:
+                        continue
+                    effective_start = donem.baslangic_tarihi
                 effective_end = min(donem.bitis_tarihi or date.today(), date.today())
                 for month_row in month_rows:
                     month_overlap = cls._overlap_range(
-                        donem.baslangic_tarihi,
+                        effective_start,
                         effective_end,
                         month_row["month_start"],
                         month_row["month_end"],
