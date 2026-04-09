@@ -91,6 +91,36 @@
         </div>
     </div>
 
+    <!-- GENEL TOPLAM ÖZETİ -->
+    <div class="row mb-4 no-print">
+        <div class="col-md-3 mb-2">
+            <div style="background: #f8f9fa; border-left: 4px solid #dc3545; padding: 15px; border-radius: 6px;">
+                <small class="text-muted fw-bold d-block mb-1">GENEL BORÇ (KDV Dahil)</small>
+                <span style="font-size: 1.3rem; font-weight: 700; color: #dc3545;">{{ "{:,.2f}".format(genel_toplam.borc_kdvli).replace(',', 'X').replace('.', ',').replace('X', '.') }} TL</span>
+            </div>
+        </div>
+        <div class="col-md-3 mb-2">
+            <div style="background: #f8f9fa; border-left: 4px solid #28a745; padding: 15px; border-radius: 6px;">
+                <small class="text-muted fw-bold d-block mb-1">GENEL ALACAK (KDV Dahil)</small>
+                <span style="font-size: 1.3rem; font-weight: 700; color: #28a745;">{{ "{:,.2f}".format(genel_toplam.alacak_kdvli).replace(',', 'X').replace('.', ',').replace('X', '.') }} TL</span>
+            </div>
+        </div>
+        <div class="col-md-3 mb-2">
+            <div style="background: #f8f9fa; border-left: 4px solid #007bff; padding: 15px; border-radius: 6px;">
+                <small class="text-muted fw-bold d-block mb-1">NET BAKİYE (KDV Dahil)</small>
+                <span style="font-size: 1.3rem; font-weight: 700; color: #007bff;">
+                    {% if genel_toplam.bakiye_kdvli > 0 %}
+                        +{{ "{:,.2f}".format(genel_toplam.bakiye_kdvli).replace(',', 'X').replace('.', ',').replace('X', '.') }} TL
+                    {% elif genel_toplam.bakiye_kdvli < 0 %}
+                        {{ "{:,.2f}".format(genel_toplam.bakiye_kdvli).replace(',', 'X').replace('.', ',').replace('X', '.') }} TL
+                    {% else %}
+                        0,00 TL
+                    {% endif %}
+                </span>
+            </div>
+        </div>
+    </div>
+
     <form method="GET" action="{{ url_for('cari.cari_durum_raporu') }}" class="d-flex align-items-center gap-2 mb-3 no-print" style="max-width: 520px;">
         <input type="hidden" name="sort_by" value="{{ sort_by }}">
         <input type="hidden" name="sort_dir" value="{{ sort_dir }}">
