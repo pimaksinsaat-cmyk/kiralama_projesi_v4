@@ -261,21 +261,23 @@ class CariRaporService:
         g_borc_kdvli, g_alacak_kdvli = 0, 0
         for f in firmalar:
             ozet = f.bakiye_ozeti
-            if ozet['net_bakiye'] != 0 or ozet['net_bakiye_kdvli'] != 0:
-                rapor.append({
-                    'id': f.id,
-                    'firma_adi': f.firma_adi,
-                    'borc': ozet['borc'],
-                    'alacak': ozet['alacak'],
-                    'bakiye': ozet['net_bakiye'],
-                    'borc_kdvli': ozet['borc_kdvli'],
-                    'alacak_kdvli': ozet['alacak_kdvli'],
-                    'bakiye_kdvli': ozet['net_bakiye_kdvli']
-                })
-                g_borc += ozet['borc']
-                g_alacak += ozet['alacak']
-                g_borc_kdvli += ozet['borc_kdvli']
-                g_alacak_kdvli += ozet['alacak_kdvli']
+            # Tüm firmaları göster (sıfır bakiyeli olanları da dahil et)
+            rapor.append({
+                'id': f.id,
+                'firma_adi': f.firma_adi,
+                'yetkili': f.yetkili_adi,
+                'tipi': 'Müşteri' if f.is_musteri else ('Tedarikçi' if f.is_tedarikci else 'Firma'),
+                'borc': ozet['borc'],
+                'alacak': ozet['alacak'],
+                'bakiye': ozet['net_bakiye'],
+                'borc_kdvli': ozet['borc_kdvli'],
+                'alacak_kdvli': ozet['alacak_kdvli'],
+                'bakiye_kdvli': ozet['net_bakiye_kdvli']
+            })
+            g_borc += ozet['borc']
+            g_alacak += ozet['alacak']
+            g_borc_kdvli += ozet['borc_kdvli']
+            g_alacak_kdvli += ozet['alacak_kdvli']
         return rapor, {
             'borc': g_borc,
             'alacak': g_alacak,
