@@ -167,6 +167,26 @@
         buttonText: { today: 'Bugün', month: 'Ay', list: 'Liste' },
         events: "{{ url_for('takvim.takvim_events') }}",
 
+            // GÜNDE EN FAZLA 3 ETKİNLİK GÖSTER, FAZLASI İÇİN "+X DAHA" LİNKİ
+            dayMaxEvents: 3,
+            moreLinkClick: function(info) {
+                // Tüm etkinlikleri modalda göster
+                let html = '<ul class="list-group">';
+                info.eventSegs.forEach(seg => {
+                    const e = seg.event;
+                    html += `<li class='list-group-item py-2 px-2'>
+                        <span class='badge me-2' style='background:${seg.event.backgroundColor || '#888'}'>&nbsp;</span>
+                        <b>${e.title}</b><br>
+                        <small class='text-muted'>${e.extendedProps.detay || e.extendedProps.aciklama || ''}</small>
+                    </li>`;
+                });
+                html += '</ul>';
+                document.getElementById('tumEtkinliklerModalBody').innerHTML = html;
+                const modal = new bootstrap.Modal(document.getElementById('tumEtkinliklerModal'));
+                modal.show();
+                return false; // Varsayılan davranışı engelle
+            },
+
         dateClick: function(info) {
             closeAll();
             document.getElementById('hatirlatmaTarih').value = info.dateStr;
@@ -259,4 +279,17 @@
     calendar.render();
 });
 </script>
+<!-- Tüm Etkinlikler Modalı -->
+<div class="modal fade" id="tumEtkinliklerModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-light py-2">
+                <h6 class="modal-title fw-bold">Tüm Etkinlikler</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body py-3" id="tumEtkinliklerModalBody">
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
