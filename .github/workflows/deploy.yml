@@ -34,4 +34,3 @@ jobs:
             python -m flask db upgrade
 
             systemctl restart kiralama_v4.service
-            systemctl restart kiralama_test.service
