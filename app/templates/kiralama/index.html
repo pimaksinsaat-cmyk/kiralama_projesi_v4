@@ -82,10 +82,12 @@
         background: #d39e00;
     }
     .kalem-listesi-expanded {
-        display: none;
+        max-height: 0;
+        overflow: hidden;
     }
     .kalem-listesi-expanded.show {
-        display: block;
+        max-height: none;
+        overflow: visible;
     }
     .kalem-listesi-expanded .kalem-listesi-item {
         padding: 8px 0;
@@ -1118,40 +1120,58 @@ document.addEventListener('DOMContentLoaded', function() {
     function alignKalemRows() {
         const kiralamaSatirlari = document.querySelectorAll('tr.kiralama-satiri');
 
+        // 1. ADIM: Tüm mevcut min-height'ları sıfırla (taze ölçüm için)
+        document.querySelectorAll('tr.kiralama-satiri .kalem-listesi-item').forEach(item => {
+            item.style.minHeight = '';
+        });
+
+        // Reflow'u zorla ki sıfırlama uygulansın
+        void document.body.offsetHeight;
+
+        // 2. ADIM: Her satır için ölç ve senkronize et
         kiralamaSatirlari.forEach(row => {
             const tds = row.querySelectorAll('td');
-            if (tds.length < 6) return; // Yeterli sütun yoksa atla
+            if (tds.length < 6) return;
 
-            // 4. td = Makine sütunu, 6. td = Durum sütunu
             const makineTd = tds[3];
             const durumTd = tds[5];
 
-            // Her sütundan kalem-listesi-item'leri al
             const makineItems = makineTd.querySelectorAll('.kalem-listesi-item');
             const durumItems = durumTd.querySelectorAll('.kalem-listesi-item');
 
-            // Eşleşen öğeleri hizala
             const maxCount = Math.max(makineItems.length, durumItems.length);
             for (let i = 0; i < maxCount; i++) {
                 const mItem = makineItems[i];
                 const dItem = durumItems[i];
 
                 if (mItem && dItem) {
-                    // Yükseklikleri ölç
-                    const mHeight = mItem.offsetHeight;
-                    const dHeight = dItem.offsetHeight;
-                    const maxHeight = Math.max(mHeight, dHeight);
+                    // getBoundingClientRect daha kesin ölçüm verir
+                    const mHeight = mItem.getBoundingClientRect().height;
+                    const dHeight = dItem.getBoundingClientRect().height;
+                    const maxHeight = Math.ceil(Math.max(mHeight, dHeight));
 
-                    // Her ikisine aynı min-height ver
-                    mItem.style.minHeight = maxHeight + 'px';
-                    dItem.style.minHeight = maxHeight + 'px';
+                    if (maxHeight > 0) {
+                        mItem.style.minHeight = maxHeight + 'px';
+                        dItem.style.minHeight = maxHeight + 'px';
+                    }
                 }
             }
         });
     }
 
-    // Sayfa yüklendiğinde hizala
-    alignKalemRows();
+    // Sayfa yüklendiğinde hizala - iki rAF ile layout'un hazır olduğundan emin ol
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            alignKalemRows();
+        });
+    });
+
+    // Pencere boyutu değiştiğinde de yeniden hizala (font yeniden boyutlandırılması vb.)
+    let resizeTimer;
+    window.addEventListener('resize', function() {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(alignKalemRows, 150);
+    });
 
     // Expand/collapse'te yeniden hizala
     expandBtns.forEach(btn => {
