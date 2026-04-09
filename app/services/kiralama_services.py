@@ -446,7 +446,10 @@ class KiralamaService(BaseService):
         if bas > referans_tarih:
             return Decimal('0.00')
 
-        ust_sinir = bit if kalem.sonlandirildi else min(bit, referans_tarih)
+        # sonlandirildi=True → makine iade edildi, sözleşme bitişine kadar hesapla
+        # sonlandirildi=False → makine hâlâ dışarıda, bugüne kadar tahakkuk et
+        #   (bitiş tarihi geçmiş olsa bile devam eder)
+        ust_sinir = bit if kalem.sonlandirildi else referans_tarih
         if ust_sinir < bas:
             return Decimal('0.00')
 
@@ -471,8 +474,8 @@ class KiralamaService(BaseService):
         """Dış tedarikçi için bugüne kadar tahakkuk eden alış tutarını hesaplar.
         Müşteri tarafıyla birebir aynı mantık kullanılır:
           - bas > referans → 0 (henüz başlamamış)
-          - sonlandirildi=True → bit'e kadar tam süre (gerçek bitiş tarihi)
-          - sonlandirildi=False → min(bit, referans_tarih) kadar
+          - sonlandirildi=True → bit'e kadar tam süre (makine iade edildi)
+          - sonlandirildi=False → bugüne kadar tahakkuk et (makine hâlâ dışarıda)
         """
         bas = to_date(kalem.kiralama_baslangici)
         bit = to_date(kalem.kiralama_bitis)
@@ -482,7 +485,7 @@ class KiralamaService(BaseService):
             referans_tarih = date.today()
         if bas > referans_tarih:
             return Decimal('0.00')
-        ust_sinir = bit if kalem.sonlandirildi else min(bit, referans_tarih)
+        ust_sinir = bit if kalem.sonlandirildi else referans_tarih
         if ust_sinir < bas:
             return Decimal('0.00')
         gun = KiralamaService._hesapla_gun_sayisi(bas, ust_sinir)

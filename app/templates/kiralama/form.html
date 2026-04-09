@@ -692,7 +692,7 @@ function renderTable() {
             ? `<button type="button" class="btn btn-sm btn-outline-secondary" disabled title="Tamamlanmış kalemler silinemez"><i class="fas fa-trash opacity-50"></i></button>`
             : `<button type="button" class="btn btn-sm btn-outline-danger sil-btn" data-idx="${idx}"><i class="fas fa-trash"></i></button>`;
 
-        tr.innerHTML = `<td></td><td>${makine}</td><td>${turDetay}</td><td>${bas} / ${bit} (${gun}g)</td><td>${gun}x${formatTRCurrency(brFiyat)} + ${nkAdet}x${formatTRCurrency(nkBirim)} TL${donusFatura ? ' (Dönüş dahil)' : ' (Tek Yön)'}</td><td><b>${formatTRCurrency(satirToplam)} TL</b></td><td class="text-center">${duzenleBtn} ${silBtn}</td>`;
+        tr.innerHTML = `<td></td><td>${makine}</td><td>${turDetay}</td><td>${formatTRDate(bas)} / ${formatTRDate(bit)} (${gun}g)</td><td>${gun}x${formatTRCurrency(brFiyat)} + ${nkAdet}x${formatTRCurrency(nkBirim)} TL${donusFatura ? ' (Dönüş dahil)' : ' (Tek Yön)'}</td><td><b>${formatTRCurrency(satirToplam)} TL</b></td><td class="text-center">${duzenleBtn} ${silBtn}</td>`;
         tbody.appendChild(tr);
     });
     genelToplamEl.innerText = grandTotal.toLocaleString('tr-TR', { minimumFractionDigits: 2 }) + " TL";

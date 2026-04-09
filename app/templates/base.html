@@ -24,14 +24,23 @@
             font-weight: 600;
             letter-spacing: 0.5px;
             display: flex;
+            flex-direction: column;
             align-items: center;
+            justify-content: center;
+            gap: 0.25rem;
             color: #333 !important;
+            padding: 0 !important;
         }
         .navbar-logo {
             height: 58px;
             width: auto;
-            margin-right: 10px;
             object-fit: contain;
+        }
+        .navbar-brand-text {
+            font-size: 0.6rem;
+            font-weight: 500;
+            text-align: center;
+            white-space: nowrap;
         }
         .nav-report-btn {
             border: none;
@@ -80,6 +89,24 @@
             color: #115e59 !important;
             text-decoration: underline;
         }
+        /* Masaüstü: nav linkleri sıkıştır, tüm öğeler sığsın */
+        @media (min-width: 992px) {
+            .navbar .navbar-nav .nav-link {
+                padding-left: 0.4rem;
+                padding-right: 0.4rem;
+                font-size: 0.95rem;
+            }
+            .navbar .navbar-nav .nav-link i {
+                font-size: 1.1rem;
+                margin-right: 0.3rem;
+            }
+            .nav-report-btn {
+                padding: 0.4rem 0.5rem !important;
+            }
+            .nav-db-btn {
+                padding: 0.4rem 0.5rem !important;
+            }
+        }
         @media (max-width: 991.98px) {
             .nav-report-btn {
                 display: inline-block;
@@ -110,9 +137,10 @@
         <div class="container">
             <a class="navbar-brand" href="{{ url_for('main.index') }}">
                 <img src="{{ url_for('static', filename=(system_settings.logo_path if system_settings and system_settings.logo_path else 'img/logo.JPG')) }}"
-                     alt="{{ system_settings.company_name if system_settings and system_settings.company_name else 'Pimaks Logo' }}"
+                     alt="Logo"
                      class="navbar-logo"
                      onerror="this.onerror=null; this.src='/static/img/placeholder.png';">
+                <span class="navbar-brand-text">{{ system_settings.company_name if system_settings and system_settings.company_name else 'Pimaks' }}</span>
             </a>
 
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">

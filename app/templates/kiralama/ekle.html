@@ -444,6 +444,12 @@ function hesaplaGun(bas, bit) {
     return Math.max((b2 - b1) / 86400000 + 1, 0);
 }
 
+function formatTRDate(dateStr) {
+    if (!dateStr) return '-';
+    const [year, month, day] = dateStr.split('-');
+    return `${day}.${month}.${year}`;
+}
+
 function formatTRCurrency(amount) {
     return parseFloat(amount).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
@@ -654,7 +660,7 @@ g_btn_ekle.onclick = function() {
         const group = hiddenContainer.querySelectorAll('.kalem-group')[editingIdx];
         
         tr.dataset.toplam = toplam;
-        tr.innerHTML = `<td></td><td>${makineAdi}</td><td>${turDetay}</td><td>${bas} / ${bit} (${gun}g)</td><td>${gun}x${s_fiyat} + ${nk_adet}x${nk_birim.toFixed(2)} TL${donusFaturaEt ? ' (Dönüş dahil)' : ' (Tek Yön)'}</td><td><b>${toplam.toFixed(2)} TL</b></td><td class="text-center"><button type="button" class="btn btn-sm btn-outline-info duzenle-btn"><i class="fas fa-edit"></i></button> <button type="button" class="btn btn-sm btn-outline-danger sil-btn"><i class="fas fa-trash"></i></button></td>`;
+        tr.innerHTML = `<td></td><td>${makineAdi}</td><td>${turDetay}</td><td>${formatTRDate(bas)} / ${formatTRDate(bit)} (${gun}g)</td><td>${gun}x${s_fiyat} + ${nk_adet}x${nk_birim.toFixed(2)} TL${donusFaturaEt ? ' (Dönüş dahil)' : ' (Tek Yön)'}</td><td><b>${toplam.toFixed(2)} TL</b></td><td class="text-center"><button type="button" class="btn btn-sm btn-outline-info duzenle-btn"><i class="fas fa-edit"></i></button> <button type="button" class="btn btn-sm btn-outline-danger sil-btn"><i class="fas fa-trash"></i></button></td>`;
         
         group.querySelector('[name$="-dis_tedarik_ekipman"]').value = isDis ? 1 : 0;
         group.querySelector('[name$="-ekipman_id"]').value = isDis ? 0 : g_ekipman.value;
@@ -683,7 +689,7 @@ g_btn_ekle.onclick = function() {
         // YENİ KAYIT MODU
         const tr = document.createElement('tr');
         tr.dataset.toplam = toplam;
-        tr.innerHTML = `<td></td><td>${makineAdi}</td><td>${turDetay}</td><td>${bas} / ${bit} (${gun}g)</td><td>${gun}x${s_fiyat} + ${nk_adet}x${nk_birim.toFixed(2)} TL${donusFaturaEt ? ' (Dönüş dahil)' : ' (Tek Yön)'}</td><td><b>${toplam.toFixed(2)} TL</b></td><td class="text-center"><button type="button" class="btn btn-sm btn-outline-info duzenle-btn"><i class="fas fa-edit"></i></button> <button type="button" class="btn btn-sm btn-outline-danger sil-btn"><i class="fas fa-trash"></i></button></td>`;
+        tr.innerHTML = `<td></td><td>${makineAdi}</td><td>${turDetay}</td><td>${formatTRDate(bas)} / ${formatTRDate(bit)} (${gun}g)</td><td>${gun}x${s_fiyat} + ${nk_adet}x${nk_birim.toFixed(2)} TL${donusFaturaEt ? ' (Dönüş dahil)' : ' (Tek Yön)'}</td><td><b>${toplam.toFixed(2)} TL</b></td><td class="text-center"><button type="button" class="btn btn-sm btn-outline-info duzenle-btn"><i class="fas fa-edit"></i></button> <button type="button" class="btn btn-sm btn-outline-danger sil-btn"><i class="fas fa-trash"></i></button></td>`;
         tbody.appendChild(tr);
 
         const group = document.createElement('div');
