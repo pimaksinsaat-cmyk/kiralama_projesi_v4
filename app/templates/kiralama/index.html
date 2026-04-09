@@ -1105,6 +1105,47 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // ==================== KALEM LİSTESİ EXPAND/COLLAPSE ====================
     const expandBtns = document.querySelectorAll('.kalem-expand-btn');
+
+    // Satırları hizala: makine sütunu ile durum sütununun her kalem çifti aynı yükseklikte
+    function alignKalemRows() {
+        const kiralamaSatirlari = document.querySelectorAll('tr.kiralama-satiri');
+
+        kiralamaSatirlari.forEach(row => {
+            const tds = row.querySelectorAll('td');
+            if (tds.length < 6) return; // Yeterli sütun yoksa atla
+
+            // 4. td = Makine sütunu, 6. td = Durum sütunu
+            const makineTd = tds[3];
+            const durumTd = tds[5];
+
+            // Her sütundan kalem-listesi-item'leri al
+            const makineItems = makineTd.querySelectorAll('.kalem-listesi-item');
+            const durumItems = durumTd.querySelectorAll('.kalem-listesi-item');
+
+            // Eşleşen öğeleri hizala
+            const maxCount = Math.max(makineItems.length, durumItems.length);
+            for (let i = 0; i < maxCount; i++) {
+                const mItem = makineItems[i];
+                const dItem = durumItems[i];
+
+                if (mItem && dItem) {
+                    // Yükseklikleri ölç
+                    const mHeight = mItem.offsetHeight;
+                    const dHeight = dItem.offsetHeight;
+                    const maxHeight = Math.max(mHeight, dHeight);
+
+                    // Her ikisine aynı min-height ver
+                    mItem.style.minHeight = maxHeight + 'px';
+                    dItem.style.minHeight = maxHeight + 'px';
+                }
+            }
+        });
+    }
+
+    // Sayfa yüklendiğinde hizala
+    alignKalemRows();
+
+    // Expand/collapse'te yeniden hizala
     expandBtns.forEach(btn => {
         btn.addEventListener('click', function(e) {
             e.stopPropagation();
@@ -1125,6 +1166,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 icon.classList.toggle('fa-chevron-down');
                 icon.classList.toggle('fa-chevron-up');
             }
+
+            // Expand/collapse sonrası yeniden hizala
+            setTimeout(alignKalemRows, 50);
         });
     });
 });
