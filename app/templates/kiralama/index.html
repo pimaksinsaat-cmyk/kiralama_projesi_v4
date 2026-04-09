@@ -288,7 +288,7 @@
                                     </div>
 
                                     {% if kalemler_sayisi > 1 %}
-                                        <button type="button" class="kalem-expand-btn" data-kalem-container="kalemler-{{ kiralama.id }}">
+                                        <button type="button" class="kalem-expand-btn" data-expand-all="kalemler-{{ kiralama.id }},durum-{{ kiralama.id }}">
                                             <i class="fas fa-chevron-down me-1"></i>+{{ kalemler_sayisi - 1 }} kalem
                                         </button>
                                     {% endif %}
@@ -385,11 +385,6 @@
                                         {{ kalem.kiralama_baslangici.strftime('%d.%m') }} - {{ kalem.kiralama_bitis.strftime('%d.%m') }}
                                     </small>
 
-                                    {% if kalemler_sayisi > 1 %}
-                                        <button type="button" class="kalem-expand-btn ms-1" data-kalem-container="durum-{{ kiralama.id }}" style="margin-left: 8px !important;">
-                                            <i class="fas fa-chevron-down me-1"></i>+{{ kalemler_sayisi - 1 }} kalem
-                                        </button>
-                                    {% endif %}
                                 </div>
 
                                 {% if kalemler_sayisi > 1 %}
@@ -1107,16 +1102,22 @@ document.addEventListener('DOMContentLoaded', function() {
     expandBtns.forEach(btn => {
         btn.addEventListener('click', function(e) {
             e.stopPropagation();
-            const containerId = this.getAttribute('data-kalem-container');
-            const container = document.getElementById(containerId);
-            if (container) {
-                container.classList.toggle('show');
-                // İkon yönünü değiştir
-                const icon = this.querySelector('i');
-                if (icon) {
-                    icon.classList.toggle('fa-chevron-down');
-                    icon.classList.toggle('fa-chevron-up');
-                }
+            const containerIds = this.getAttribute('data-expand-all');
+            if (containerIds) {
+                // Birden fazla container'ı aç/kapat (virgülle ayrılmış)
+                const ids = containerIds.split(',');
+                ids.forEach(id => {
+                    const container = document.getElementById(id.trim());
+                    if (container) {
+                        container.classList.toggle('show');
+                    }
+                });
+            }
+            // İkon yönünü değiştir
+            const icon = this.querySelector('i');
+            if (icon) {
+                icon.classList.toggle('fa-chevron-down');
+                icon.classList.toggle('fa-chevron-up');
             }
         });
     });
