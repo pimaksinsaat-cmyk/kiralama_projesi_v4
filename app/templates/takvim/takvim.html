@@ -181,23 +181,28 @@
             // GÜNDE EN FAZLA 3 ETKİNLİK GÖSTER, FAZLASI İÇİN "+X DAHA" LİNKİ
             dayMaxEvents: 3,
             moreLinkClick: function(info) {
-                // Tüm etkinlikleri modalda göster
+                // FullCalendar v6: info.allSegs = o gündeki tüm event segmentleri
+                info.jsEvent.preventDefault();
+                info.jsEvent.stopPropagation();
+
+                const segs = info.allSegs || [];
                 let html = '<ul class="list-group">';
-                info.eventSegs.forEach(seg => {
+                segs.forEach(seg => {
                     const e = seg.event;
+                    const bg = e.backgroundColor || '#888';
+                    const detay = e.extendedProps.detay || e.extendedProps.aciklama || '';
                     html += `<li class='list-group-item py-2 px-2'>
-                        <span class='badge me-2' style='background:${seg.event.backgroundColor || '#888'}'>&nbsp;</span>
-                        <b>${e.title}</b><br>
-                        <small class='text-muted'>${e.extendedProps.detay || e.extendedProps.aciklama || ''}</small>
+                        <span class='badge me-2' style='background:${bg}'>&nbsp;</span>
+                        <b>${e.title}</b>${detay ? '<br><small class="text-muted">' + detay + '</small>' : ''}
                     </li>`;
                 });
                 html += '</ul>';
-                setTimeout(function() {
-                    document.getElementById('tumEtkinliklerModalBody').innerHTML = html;
-                    const modal = new bootstrap.Modal(document.getElementById('tumEtkinliklerModal'));
-                    modal.show();
-                }, 50);
-                return false; // FullCalendar'ın kendi popup'ını tamamen engelle
+
+                document.getElementById('tumEtkinliklerModalBody').innerHTML = html;
+                const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('tumEtkinliklerModal'));
+                modal.show();
+
+                return 'none'; // FullCalendar'ın kendi popover'ını engelle
             },
 
         dateClick: function(info) {
