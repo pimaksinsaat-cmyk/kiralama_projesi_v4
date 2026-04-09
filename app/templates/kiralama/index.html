@@ -54,6 +54,32 @@
     .kalem-listesi li { padding: 4px 0; border-bottom: 1px dashed #eee; }
     .kalem-listesi li:last-child { border-bottom: none; }
     .kalem-listesi-item:hover { background-color: #f8f9fa; cursor: context-menu; border-radius: 4px; }
+
+    .kalem-expand-btn {
+        display: inline-block;
+        margin-left: 8px;
+        padding: 2px 8px;
+        background: #f0ad4e;
+        color: white;
+        border: none;
+        border-radius: 3px;
+        cursor: pointer;
+        font-size: 0.75rem;
+        font-weight: bold;
+        transition: all 0.2s ease;
+    }
+    .kalem-expand-btn:hover {
+        background: #d39e00;
+    }
+    .kalem-listesi-expanded {
+        display: none;
+        margin-top: 8px;
+        border-top: 1px dashed #ddd;
+        padding-top: 8px;
+    }
+    .kalem-listesi-expanded.show {
+        display: block;
+    }
     
     .status-badge { min-width: 135px; text-align: center; font-size: 0.7rem; padding: 4px; font-weight: 700; border-radius: 4px; }
     .inline-action-btn {
@@ -211,7 +237,8 @@
                     </td>
 
                     <td>
-                        <ul class="kalem-listesi">
+                        <div class="kalem-detay-wrapper">
+                            {% set kalemler_sayisi = kiralama.kalemler|length %}
                             {% for kalem in kiralama.kalemler %}
                             {# Tutar hesaplama #}
                             {% set g = (kalem.kiralama_bitis - kalem.kiralama_baslangici).days + 1 %}
@@ -220,47 +247,103 @@
                             {% set bdl = (g * kalem.kiralama_brm_fiyat) + (kalem.nakliye_satis_fiyat or 0) %}
                             {% set satir_toplam.val = satir_toplam.val + bdl %}
 
-                            <li class="kalem-listesi-item px-2
-                                {% if not kalem.is_active %}
-                                    opacity-50 text-decoration-line-through
-                                {% endif %}"
-                                data-kalem-id="{{ kalem.id }}"
-                                data-ekipman-kod="{{ kalem.ekipman.kod if kalem.ekipman else (kalem.harici_ekipman_marka ~ ' ' ~ kalem.harici_ekipman_model) }}"
-                                data-csrf-token="{{ csrf_token() }}"
-                                data-sonlandirilmis="{{ 1 if kalem.sonlandirildi else 0 }}"
-                                data-swap="{{ 1 if not kalem.is_active else 0 }}"
-                                data-baslangic="{{ kalem.kiralama_baslangici.strftime('%Y-%m-%d') if kalem.kiralama_baslangici else '' }}"
-                                data-nakliye-satis="{{ kalem.nakliye_satis_fiyat or 0 }}"
-                                data-donus-nakliye-satis="{{ kalem.donus_nakliye_satis_fiyat if kalem.donus_nakliye_satis_fiyat is not none else '' }}"
-                                data-donus-fatura-et="{{ 1 if kalem.donus_nakliye_fatura_et else 0 }}">
-                                
-                                
-                                {% if kalem.is_dis_tedarik_ekipman %}
-                                    <span class="external-badge">DIŞ TEDARİK</span>
-                                    <span class="fw-bold">{{ kalem.harici_ekipman_marka }} {{ kalem.harici_ekipman_model }}</span>
-                                    
-                                    <span class="supplier-info">
-                                        <i class="fas fa-truck-loading me-1"></i>
-                                        <span class="supplier-label">Tedarikçi:</span>
-                                        {{ (kalem.harici_tedarikci.firma_adi | truncate_name) if kalem.harici_tedarikci else 'Bilinmiyor' }}
-                                    </span>
-                                {% elif kalem.ekipman %}
-                                    <span class="fw-bold text-dark">{{ kalem.ekipman.kod }}</span> <small class="text-muted">({{ kalem.ekipman.tipi }})</small>
-                                {% else %}
-                                    <span class="text-muted small">Ekipman Verisi Eksik</span>
-                                {% endif %}
+                            {% if loop.index == 1 %}
+                                {# İlk kalem hep görünsün #}
+                                <div class="kalem-listesi-item px-2
+                                    {% if not kalem.is_active %}
+                                        opacity-50 text-decoration-line-through
+                                    {% endif %}"
+                                    data-kalem-id="{{ kalem.id }}"
+                                    data-ekipman-kod="{{ kalem.ekipman.kod if kalem.ekipman else (kalem.harici_ekipman_marka ~ ' ' ~ kalem.harici_ekipman_model) }}"
+                                    data-csrf-token="{{ csrf_token() }}"
+                                    data-sonlandirilmis="{{ 1 if kalem.sonlandirildi else 0 }}"
+                                    data-swap="{{ 1 if not kalem.is_active else 0 }}"
+                                    data-baslangic="{{ kalem.kiralama_baslangici.strftime('%Y-%m-%d') if kalem.kiralama_baslangici else '' }}"
+                                    data-nakliye-satis="{{ kalem.nakliye_satis_fiyat or 0 }}"
+                                    data-donus-nakliye-satis="{{ kalem.donus_nakliye_satis_fiyat if kalem.donus_nakliye_satis_fiyat is not none else '' }}"
+                                    data-donus-fatura-et="{{ 1 if kalem.donus_nakliye_fatura_et else 0 }}">
 
-                                <div class="small text-muted mt-1">
-                                    {{ g }} Gün x {{ "{:,.2f}".format(kalem.kiralama_brm_fiyat or 0).replace(",", "X").replace(".", ",").replace("X", ".") }} TL
-                                    +
-                                    {{ nk_sayi }} x {{ "{:,.2f}".format(nk_birim).replace(",", "X").replace(".", ",").replace("X", ".") }} TL
-                                    =
-                                    <span class="fw-bold">{{ "{:,.2f}".format(bdl).replace(",", "X").replace(".", ",").replace("X", ".") }} TL</span>
-                                    <span class="ms-1">({{ 'Dönüş dahil' if kalem.donus_nakliye_fatura_et else 'Tek Yön' }})</span>
+                                    {% if kalem.is_dis_tedarik_ekipman %}
+                                        <span class="external-badge">DIŞ TEDARİK</span>
+                                        <span class="fw-bold">{{ kalem.harici_ekipman_marka }} {{ kalem.harici_ekipman_model }}</span>
+
+                                        <span class="supplier-info">
+                                            <i class="fas fa-truck-loading me-1"></i>
+                                            <span class="supplier-label">Tedarikçi:</span>
+                                            {{ (kalem.harici_tedarikci.firma_adi | truncate_name) if kalem.harici_tedarikci else 'Bilinmiyor' }}
+                                        </span>
+                                    {% elif kalem.ekipman %}
+                                        <span class="fw-bold text-dark">{{ kalem.ekipman.kod }}</span> <small class="text-muted">({{ kalem.ekipman.tipi }})</small>
+                                    {% else %}
+                                        <span class="text-muted small">Ekipman Verisi Eksik</span>
+                                    {% endif %}
+
+                                    <div class="small text-muted mt-1">
+                                        {{ g }} Gün x {{ "{:,.2f}".format(kalem.kiralama_brm_fiyat or 0).replace(",", "X").replace(".", ",").replace("X", ".") }} TL
+                                        +
+                                        {{ nk_sayi }} x {{ "{:,.2f}".format(nk_birim).replace(",", "X").replace(".", ",").replace("X", ".") }} TL
+                                        =
+                                        <span class="fw-bold">{{ "{:,.2f}".format(bdl).replace(",", "X").replace(".", ",").replace("X", ".") }} TL</span>
+                                        <span class="ms-1">({{ 'Dönüş dahil' if kalem.donus_nakliye_fatura_et else 'Tek Yön' }})</span>
+                                    </div>
+
+                                    {% if kalemler_sayisi > 1 %}
+                                        <button type="button" class="kalem-expand-btn" data-kalem-container="kalemler-{{ kiralama.id }}">
+                                            <i class="fas fa-chevron-down me-1"></i>+{{ kalemler_sayisi - 1 }} kalem
+                                        </button>
+                                    {% endif %}
                                 </div>
-                            </li>
+
+                                {% if kalemler_sayisi > 1 %}
+                                    <div class="kalem-listesi-expanded" id="kalemler-{{ kiralama.id }}">
+                                {% endif %}
+                            {% elif loop.index > 1 %}
+                                {# İkinci ve sonraki kalemler katlanabilir bölümde #}
+                                <div class="kalem-listesi-item px-2 mt-2
+                                    {% if not kalem.is_active %}
+                                        opacity-50 text-decoration-line-through
+                                    {% endif %}"
+                                    data-kalem-id="{{ kalem.id }}"
+                                    data-ekipman-kod="{{ kalem.ekipman.kod if kalem.ekipman else (kalem.harici_ekipman_marka ~ ' ' ~ kalem.harici_ekipman_model) }}"
+                                    data-csrf-token="{{ csrf_token() }}"
+                                    data-sonlandirilmis="{{ 1 if kalem.sonlandirildi else 0 }}"
+                                    data-swap="{{ 1 if not kalem.is_active else 0 }}"
+                                    data-baslangic="{{ kalem.kiralama_baslangici.strftime('%Y-%m-%d') if kalem.kiralama_baslangici else '' }}"
+                                    data-nakliye-satis="{{ kalem.nakliye_satis_fiyat or 0 }}"
+                                    data-donus-nakliye-satis="{{ kalem.donus_nakliye_satis_fiyat if kalem.donus_nakliye_satis_fiyat is not none else '' }}"
+                                    data-donus-fatura-et="{{ 1 if kalem.donus_nakliye_fatura_et else 0 }}">
+
+                                    {% if kalem.is_dis_tedarik_ekipman %}
+                                        <span class="external-badge">DIŞ TEDARİK</span>
+                                        <span class="fw-bold">{{ kalem.harici_ekipman_marka }} {{ kalem.harici_ekipman_model }}</span>
+
+                                        <span class="supplier-info">
+                                            <i class="fas fa-truck-loading me-1"></i>
+                                            <span class="supplier-label">Tedarikçi:</span>
+                                            {{ (kalem.harici_tedarikci.firma_adi | truncate_name) if kalem.harici_tedarikci else 'Bilinmiyor' }}
+                                        </span>
+                                    {% elif kalem.ekipman %}
+                                        <span class="fw-bold text-dark">{{ kalem.ekipman.kod }}</span> <small class="text-muted">({{ kalem.ekipman.tipi }})</small>
+                                    {% else %}
+                                        <span class="text-muted small">Ekipman Verisi Eksik</span>
+                                    {% endif %}
+
+                                    <div class="small text-muted mt-1">
+                                        {{ g }} Gün x {{ "{:,.2f}".format(kalem.kiralama_brm_fiyat or 0).replace(",", "X").replace(".", ",").replace("X", ".") }} TL
+                                        +
+                                        {{ nk_sayi }} x {{ "{:,.2f}".format(nk_birim).replace(",", "X").replace(".", ",").replace("X", ".") }} TL
+                                        =
+                                        <span class="fw-bold">{{ "{:,.2f}".format(bdl).replace(",", "X").replace(".", ",").replace("X", ".") }} TL</span>
+                                        <span class="ms-1">({{ 'Dönüş dahil' if kalem.donus_nakliye_fatura_et else 'Tek Yön' }})</span>
+                                    </div>
+                                </div>
+                            {% endif %}
+
+                            {% if loop.last and kalemler_sayisi > 1 %}
+                                    </div>
+                            {% endif %}
                             {% endfor %}
-                        </ul>
+                        </div>
                     </td>
 
                     <td class="text-end">
@@ -969,6 +1052,25 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+
+    // ==================== KALEM LİSTESİ EXPAND/COLLAPSE ====================
+    const expandBtns = document.querySelectorAll('.kalem-expand-btn');
+    expandBtns.forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const containerId = this.getAttribute('data-kalem-container');
+            const container = document.getElementById(containerId);
+            if (container) {
+                container.classList.toggle('show');
+                // İkon yönünü değiştir
+                const icon = this.querySelector('i');
+                if (icon) {
+                    icon.classList.toggle('fa-chevron-down');
+                    icon.classList.toggle('fa-chevron-up');
+                }
+            }
+        });
+    });
 });
 </script>
 {% endblock %}
