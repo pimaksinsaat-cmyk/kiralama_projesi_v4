@@ -63,7 +63,8 @@
     .kalem-listesi li:last-child { border-bottom: none; }
     .kalem-listesi-item { padding: 8px 0; border-bottom: 1px dashed #eee; display: block; margin: 0; }
     .kalem-listesi-item:last-child { border-bottom: none; }
-    .kalem-listesi-item:hover { background-color: #f8f9fa; cursor: context-menu; border-radius: 4px; }
+    .kalem-detay-wrapper .kalem-listesi-item:hover { background-color: #f8f9fa; cursor: context-menu; border-radius: 4px; }
+    .durum-detay-wrapper .kalem-listesi-item:hover { background-color: #f8f9fa; border-radius: 4px; }
 
     .kalem-expand-btn {
         display: inline-block;
@@ -674,8 +675,9 @@ document.addEventListener('DOMContentLoaded', function() {
         e.stopPropagation();
         return false;
     };
-    // Sadece .kiralama-satiri ve .kalem-listesi-item üzerinde contextmenu'yu engelle
-    document.querySelectorAll('.kiralama-satiri, .kalem-listesi-item').forEach(function(row) {
+    // Sadece .kiralama-satiri ve makine sütunundaki .kalem-listesi-item üzerinde contextmenu'yu engelle
+    // Durum/Vade sütunu hariç tutuldu (yanlış kalem okumasına sebep oluyordu)
+    document.querySelectorAll('.kiralama-satiri, .kalem-detay-wrapper .kalem-listesi-item').forEach(function(row) {
         row.addEventListener('contextmenu', preventNativeContextMenu, { passive: false });
     });
     const contextMenu = document.getElementById('context-menu');
@@ -804,8 +806,8 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Makine Bazlı Sağ Tık
-    document.querySelectorAll('.kalem-listesi-item').forEach(item => {
+    // Makine Bazlı Sağ Tık - sadece makine sütunu (durum sütunu hariç)
+    document.querySelectorAll('.kalem-detay-wrapper .kalem-listesi-item').forEach(item => {
         item.addEventListener('contextmenu', function(e) {
             e.preventDefault(); e.stopPropagation(); closeModals();
             state.kId = this.dataset.kalemId;
@@ -906,12 +908,13 @@ document.addEventListener('DOMContentLoaded', function() {
         row.addEventListener('touchmove', () => clearTimeout(t));
     });
 
-    document.querySelectorAll('.kalem-listesi-item').forEach(item => {
+    // Sadece makine sütunundaki kalemler için sağ tık menüsü (durum sütunu hariç)
+    document.querySelectorAll('.kalem-detay-wrapper .kalem-listesi-item').forEach(item => {
         item.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); openItemMenu(e, item); });
         let t;
         item.addEventListener('touchstart', (e) => {
             e.stopPropagation();
-            t = setTimeout(() => { 
+            t = setTimeout(() => {
                 if (navigator.vibrate) navigator.vibrate(50);
                 openItemMenu(e, item);
             }, 700);
