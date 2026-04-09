@@ -170,7 +170,7 @@ class FirmaService(BaseService):
         nakliye_info_map = {}
         if nakliye_ids:
             nakliyeler = Nakliye.query.filter(Nakliye.id.in_(nakliye_ids)).with_entities(
-                Nakliye.id, Nakliye.tevkifat_orani, Nakliye.kiralama_id
+                Nakliye.id, Nakliye.tevkifat_orani, Nakliye.kiralama_id, Nakliye.kdv_orani
             ).all()
             kiralama_ids_for_nakliye = [n.kiralama_id for n in nakliyeler if n.kiralama_id]
             kiralama_form_map = {}
@@ -184,9 +184,11 @@ class FirmaService(BaseService):
                     'tevkifat_orani': n.tevkifat_orani or '',
                     'kiralama_id': n.kiralama_id,
                     'kiralama_form_no': kiralama_form_map.get(n.kiralama_id) if n.kiralama_id else None,
+                    'kdv_orani': n.kdv_orani,
                 }
                 for n in nakliyeler
             }
+        from app.services.kiralama_services import KiralamaService
         hareketler = []
         for h in firma.hizmet_kayitlari:
             if getattr(h, 'is_deleted', False):
@@ -197,7 +199,12 @@ class FirmaService(BaseService):
                 and not db.session.get(Kiralama, h.ozel_id)
             ):
                 continue
-            tutar = h.tutar or Decimal('0')
+            # Nakliye bağlantılı kayıtlarda tutar=0 olanları gösterme
+            if getattr(h, 'nakliye_id', None) and not (h.tutar and h.tutar > 0):
+                continue
+            # Bekleyen kiralama ve dış tedarik kayıtları için canlı tahakkuk hesapla;
+            # diğer kayıtlar (fatura, nakliye vb.) için DB'deki değeri kullan.
+            tutar = KiralamaService.hesapla_hizmet_kaydi_canli_tutari(h)
             if getattr(h, 'nakliye_id', None):
                 tur_adi, tur_tipi, ozel_id = 'Nakliye', 'nakliye', h.nakliye_id
             elif getattr(h, 'ozel_id', None): 
@@ -209,10 +216,22 @@ class FirmaService(BaseService):
             tutar_deger = tutar * tutar_sign
             yon = getattr(h, 'yon', None)
 
-            # KDV oranı: nakliye_alis_kdv varsa onu kullan, aksi takdirde kdv_orani kullan
+            # KDV oranı: nakliye_alis_kdv → kiralama_alis_kdv → kdv_orani öncelik sırası
             nakliye_alis_kdv = getattr(h, 'nakliye_alis_kdv', None)
+            kiralama_alis_kdv = getattr(h, 'kiralama_alis_kdv', None)
             kdv_orani = getattr(h, 'kdv_orani', None)
-            hesap_kdv_orani = nakliye_alis_kdv if nakliye_alis_kdv is not None else kdv_orani
+            hesap_kdv_orani = (
+                nakliye_alis_kdv if nakliye_alis_kdv is not None
+                else kiralama_alis_kdv if kiralama_alis_kdv is not None
+                else kdv_orani
+            )
+            # Eski kayıtlarda kdv_orani NULL olabilir; nakliye ve dış kiralama için fallback
+            if hesap_kdv_orani is None and getattr(h, 'nakliye_id', None):
+                hesap_kdv_orani = nakliye_info_map.get(h.nakliye_id, {}).get('kdv_orani')
+            if hesap_kdv_orani is None and getattr(h, 'ozel_id', None) and (h.aciklama or '').startswith('Dış Kiralama'):
+                kalem_obj = db.session.get(KiralamaKalemi, h.ozel_id)
+                if kalem_obj:
+                    hesap_kdv_orani = kalem_obj.kiralama_alis_kdv
 
             # KDV tutarı hesapla (matrah * hesap_kdv_orani / 100)
             if hesap_kdv_orani is not None and tutar_deger is not None:

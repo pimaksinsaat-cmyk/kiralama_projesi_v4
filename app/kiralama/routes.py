@@ -278,9 +278,18 @@ def ekle():
                 description=f"Kiralama oluşturuldu: {created_kiralama.kiralama_form_no}",
                 success=True,
             )
-            flash('Kiralama kaydı başarıyla oluşturuldu.', 'success')
+            # İleri tarihli kalem uyarısı
+            from datetime import date as _date
+            ileri_tarihli = any(
+                k.get('kiralama_baslangici') and str(k.get('kiralama_baslangici')) > _date.today().isoformat()
+                for k in kalemler_data
+            )
+            if ileri_tarihli:
+                flash('Kiralama kaydı başarıyla oluşturuldu. ⚠️ Bir veya daha fazla kalemin başlangıç tarihi ileridedir — cari tahakkuk başlangıç tarihine geldiğinde otomatik yansıyacaktır.', 'info')
+            else:
+                flash('Kiralama kaydı başarıyla oluşturuldu.', 'success')
             return redirect(url_for('kiralama.index'))
-            
+
         except ValidationError as e:
             db.session.rollback()
             OperationLogService.log(
@@ -492,7 +501,16 @@ def duzenle(kiralama_id):
                 description=f"Kiralama güncellendi: {kiralama.kiralama_form_no}",
                 success=True,
             )
-            flash('Kiralama başarıyla güncellendi.', 'success')
+            # İleri tarihli kalem uyarısı
+            from datetime import date as _date
+            ileri_tarihli = any(
+                k.get('kiralama_baslangici') and str(k.get('kiralama_baslangici')) > _date.today().isoformat()
+                for k in kalemler_data
+            )
+            if ileri_tarihli:
+                flash('Kiralama başarıyla güncellendi. ⚠️ Bir veya daha fazla kalemin başlangıç tarihi ileridedir — cari tahakkuk başlangıç tarihine geldiğinde otomatik yansıyacaktır.', 'info')
+            else:
+                flash('Kiralama başarıyla güncellendi.', 'success')
             return redirect(url_for('kiralama.index'))
         except ValidationError as e:
             db.session.rollback()

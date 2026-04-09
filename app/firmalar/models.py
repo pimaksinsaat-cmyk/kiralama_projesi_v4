@@ -73,41 +73,52 @@ class Firma(BaseModel):
         """
         Hareketlerden (Odeme ve HizmetKaydi) anlık borç/alacak raporu üretir.
         KDV dahil toplamları da içerir.
+
+        'Kiralama Bekleyen Bakiye' ve 'Dış Kiralama' HizmetKaydi kayıtları için
+        DB'deki sabit tutar yerine bugünkü tahakkuk canlı hesaplanır. Böylece
+        ileri tarihli kontratların tutarı da gün geçtikçe doğru yansıtılır.
         """
         from app.cari.models import Odeme, HizmetKaydi
-        # KDV hariç borç
-        h_borc = db.session.query(func.sum(HizmetKaydi.tutar)).filter(
-            HizmetKaydi.firma_id == self.id, HizmetKaydi.yon == 'giden', HizmetKaydi.is_deleted == False
-        ).scalar() or 0
-        # KDV hariç alacak
-        h_alacak = db.session.query(func.sum(HizmetKaydi.tutar)).filter(
-            HizmetKaydi.firma_id == self.id, HizmetKaydi.yon == 'gelen', HizmetKaydi.is_deleted == False
-        ).scalar() or 0
         from decimal import Decimal
-        h_borc_kdvli = Decimal('0.00')
-        for row in db.session.query(HizmetKaydi.tutar, HizmetKaydi.kdv_orani).filter(
-            HizmetKaydi.firma_id == self.id, HizmetKaydi.yon == 'giden', HizmetKaydi.is_deleted == False
-        ):
-            tutar = row.tutar or Decimal('0.00')
-            kdv = row.kdv_orani or 0
-            h_borc_kdvli += tutar * (Decimal('1.00') + Decimal(kdv) / Decimal('100.00'))
-        # KDV dahil alacak
+        from app.services.kiralama_services import KiralamaService
+
+        h_borc        = Decimal('0.00')
+        h_alacak      = Decimal('0.00')
+        h_borc_kdvli  = Decimal('0.00')
         h_alacak_kdvli = Decimal('0.00')
-        for row in db.session.query(HizmetKaydi.tutar, HizmetKaydi.kdv_orani).filter(
-            HizmetKaydi.firma_id == self.id, HizmetKaydi.yon == 'gelen', HizmetKaydi.is_deleted == False
-        ):
-            tutar = row.tutar or Decimal('0.00')
-            kdv = row.kdv_orani or 0
-            h_alacak_kdvli += tutar * (Decimal('1.00') + Decimal(kdv) / Decimal('100.00'))
+
+        kayitlar = HizmetKaydi.query.filter(
+            HizmetKaydi.firma_id == self.id,
+            HizmetKaydi.is_deleted == False
+        ).all()
+
+        for h in kayitlar:
+            tutar = KiralamaService.hesapla_hizmet_kaydi_canli_tutari(h)
+            # KDV oranı: nakliye_alis_kdv → kiralama_alis_kdv → kdv_orani öncelik sırası
+            kdv_oran = (
+                h.nakliye_alis_kdv if h.nakliye_alis_kdv is not None
+                else h.kiralama_alis_kdv if h.kiralama_alis_kdv is not None
+                else h.kdv_orani
+            )
+            kdv   = Decimal(str(kdv_oran or 0))
+            tutar_kdvli = tutar * (Decimal('1.00') + kdv / Decimal('100.00'))
+            if h.yon == 'giden':
+                h_borc       += tutar
+                h_borc_kdvli += tutar_kdvli
+            elif h.yon == 'gelen':
+                h_alacak       += tutar
+                h_alacak_kdvli += tutar_kdvli
+
         tahsilat = db.session.query(func.sum(Odeme.tutar)).filter(
             Odeme.firma_musteri_id == self.id, Odeme.yon == 'tahsilat', Odeme.is_deleted == False
         ).scalar() or 0
         odeme = db.session.query(func.sum(Odeme.tutar)).filter(
             Odeme.firma_musteri_id == self.id, Odeme.yon == 'odeme', Odeme.is_deleted == False
         ).scalar() or 0
-        total_debit = h_borc + odeme
-        total_credit = h_alacak + tahsilat
-        total_debit_kdvli = h_borc_kdvli + odeme
+
+        total_debit       = h_borc + odeme
+        total_credit      = h_alacak + tahsilat
+        total_debit_kdvli  = h_borc_kdvli + odeme
         total_credit_kdvli = h_alacak_kdvli + tahsilat
         return {
             'borc': total_debit,

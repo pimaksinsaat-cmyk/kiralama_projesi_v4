@@ -46,7 +46,7 @@ def to_decimal(value):
 
 
 def _nakliye_filtered_query(baslangic, bitis, secili_plaka, secili_taseron_id, secili_firma_id):
-    query = Nakliye.query
+    query = Nakliye.query.filter(Nakliye.tutar > 0)
 
     if baslangic:
         try:
@@ -100,7 +100,7 @@ def index():
     secili_firma_id = request.args.get('firma_id')
 
     try:
-        query = Nakliye.query
+        query = Nakliye.query.filter(Nakliye.tutar > 0)
 
         # Filtreleri uygula
         if baslangic:

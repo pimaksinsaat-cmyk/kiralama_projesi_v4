@@ -197,24 +197,19 @@
                                 {{ "{:,.2f}".format(nakliye.tutar or 0).replace(',', 'X').replace('.', ',').replace('X', '.') }} TL
                             </td>
                             <td class="text-end">
-                                {% if nakliye.kiralama_id and nakliye.kiralama and nakliye.kiralama.kalemler %}
-                                    {% set kiralama_kdv = nakliye.kiralama.kalemler[0].nakliye_satis_kdv or 0 %}
-                                    {% if kiralama_kdv and kiralama_kdv != 0 %}
-                                        {{ kiralama_kdv }} %
-                                    {% else %}
-                                        -
-                                    {% endif %}
+                                {% if nakliye.kiralama_id and nakliye.kiralama and nakliye.kiralama.kalemler and nakliye.kiralama.kalemler[0].nakliye_satis_kdv %}
+                                    {% set efektif_kdv = nakliye.kiralama.kalemler[0].nakliye_satis_kdv %}
                                 {% else %}
-                                    {% set kdv_orani = nakliye.kdv_orani or 0 %}
-                                    {% if kdv_orani and kdv_orani != 0 %}
-                                        {{ kdv_orani }} %
-                                    {% else %}
-                                        -
-                                    {% endif %}
+                                    {% set efektif_kdv = nakliye.kdv_orani or 0 %}
+                                {% endif %}
+                                {% if efektif_kdv and efektif_kdv != 0 %}
+                                    {{ efektif_kdv }} %
+                                {% else %}
+                                    -
                                 {% endif %}
                             </td>
                             <td class="text-end">
-                                {% if nakliye.kiralama_id and nakliye.kiralama and nakliye.kiralama.kalemler %}
+                                {% if nakliye.kiralama_id and nakliye.kiralama and nakliye.kiralama.kalemler and nakliye.kiralama.kalemler[0].nakliye_satis_kdv %}
                                     {% set kdv_orani = nakliye.kiralama.kalemler[0].nakliye_satis_kdv or 0 %}
                                     {% set tevkifat_str = nakliye.kiralama.kalemler[0].nakliye_satis_tevkifat_oran or '' %}
                                 {% else %}
@@ -240,7 +235,7 @@
                                 {% endif %}
                             </td>
                             <td class="text-end fw-bold text-primary">
-                                {% if nakliye.kiralama_id and nakliye.kiralama and nakliye.kiralama.kalemler %}
+                                {% if nakliye.kiralama_id and nakliye.kiralama and nakliye.kiralama.kalemler and nakliye.kiralama.kalemler[0].nakliye_satis_kdv %}
                                     {% set kdv_orani = nakliye.kiralama.kalemler[0].nakliye_satis_kdv or 0 %}
                                     {% set tevkifat_str = nakliye.kiralama.kalemler[0].nakliye_satis_tevkifat_oran or '' %}
                                 {% else %}

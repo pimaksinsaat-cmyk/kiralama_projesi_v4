@@ -467,6 +467,65 @@ class KiralamaService(BaseService):
         return kira_toplam
 
     @staticmethod
+    def _hesapla_bekleyen_alis_kalem_tutari(kalem, referans_tarih=None):
+        """Dış tedarikçi için bugüne kadar tahakkuk eden alış tutarını hesaplar.
+        Müşteri tarafıyla birebir aynı mantık kullanılır:
+          - bas > referans → 0 (henüz başlamamış)
+          - sonlandirildi=True → bit'e kadar tam süre (gerçek bitiş tarihi)
+          - sonlandirildi=False → min(bit, referans_tarih) kadar
+        """
+        bas = to_date(kalem.kiralama_baslangici)
+        bit = to_date(kalem.kiralama_bitis)
+        if not (bas and bit):
+            return Decimal('0.00')
+        if referans_tarih is None:
+            referans_tarih = date.today()
+        if bas > referans_tarih:
+            return Decimal('0.00')
+        ust_sinir = bit if kalem.sonlandirildi else min(bit, referans_tarih)
+        if ust_sinir < bas:
+            return Decimal('0.00')
+        gun = KiralamaService._hesapla_gun_sayisi(bas, ust_sinir)
+        return to_decimal(kalem.kiralama_alis_fiyat) * Decimal(gun)
+
+    @staticmethod
+    def hesapla_hizmet_kaydi_canli_tutari(hizmet_kaydi, referans_tarih=None):
+        """HizmetKaydi için CANLI (on-the-fly) tahakkuk tutarını döner.
+
+        'Kiralama Bekleyen Bakiye' kayıtları → bağlı kiralamanın tüm kalemleri
+        üzerinden bugüne kadar tahakkuk eden müşteri alacağını yeniden hesaplar.
+
+        'Dış Kiralama' kayıtları → bağlı kalem üzerinden bugüne kadar tahakkuk
+        eden tedarikçi borcunu yeniden hesaplar.
+
+        Diğer kayıtlar (fatura, nakliye vb.) → DB'deki sabit tutar döner.
+
+        Böylece gün geçtikçe stored değerler bayatlasa bile ekranda her zaman
+        güncel bekleyen tahakkuk görünür. İleri tarihli kontratlarda başlangıç
+        tarihi geldiğinde tahakkuk otomatik olarak doğru hesaplanmaya başlar.
+        """
+        aciklama = (hizmet_kaydi.aciklama or '').strip()
+        ozel_id  = getattr(hizmet_kaydi, 'ozel_id', None)
+
+        if ozel_id and aciklama.startswith('Kiralama Bekleyen Bakiye'):
+            kiralama_obj = db.session.get(Kiralama, ozel_id)
+            if kiralama_obj:
+                toplam = Decimal('0.00')
+                for kalem in kiralama_obj.kalemler:
+                    if getattr(kalem, 'is_deleted', False):
+                        continue
+                    k_tutar = KiralamaService._hesapla_bekleyen_kalem_tutari(kalem, referans_tarih)
+                    toplam += k_tutar
+                return toplam
+
+        if ozel_id and aciklama.startswith('Dış Kiralama'):
+            kalem_obj = db.session.get(KiralamaKalemi, ozel_id)
+            if kalem_obj and not getattr(kalem_obj, 'is_deleted', False):
+                return KiralamaService._hesapla_bekleyen_alis_kalem_tutari(kalem_obj, referans_tarih)
+
+        return hizmet_kaydi.tutar or Decimal('0.00')
+
+    @staticmethod
     def _hesapla_gun_sayisi(bas, bit):
         """
         Başlangıç ve bitiş tarihleri arasındaki gün sayısını hesaplar.
@@ -806,7 +865,10 @@ class KiralamaService(BaseService):
                         db.session.add(HizmetKaydi(
                             firma_id=aktif.harici_ekipman_tedarikci_id, tarih=date.today(),
                             tutar=(aktif.kiralama_alis_fiyat * gun), yon='gelen',
-                            fatura_no=kiralama.kiralama_form_no, ozel_id=aktif.id, aciklama=f"Dış Kiralama (Güncelleme): {makine_adi}"
+                            fatura_no=kiralama.kiralama_form_no, ozel_id=aktif.id, aciklama=f"Dış Kiralama (Güncelleme): {makine_adi}",
+                            kdv_orani=aktif.kiralama_alis_kdv,
+                            kiralama_alis_kdv=aktif.kiralama_alis_kdv,
+                            nakliye_alis_kdv=aktif.nakliye_alis_kdv
                         ))
 
                 # Nakliye ayarları
