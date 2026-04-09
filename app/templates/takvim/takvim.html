@@ -12,7 +12,17 @@
         border-radius: 12px;
         box-shadow: 0 4px 15px rgba(0,0,0,0.06);
         padding: 10px;
+           overflow: visible !important;
     }
+    /* FullCalendar gün hücresi taşma ve z-index düzeltmesi */
+    .fc .fc-daygrid-day {
+        overflow: visible !important;
+        z-index: 1;
+    }
+
+    /* Modal z-index düzeltmesi */
+    .modal-backdrop.show { z-index: 4001 !important; }
+    .modal.show { z-index: 4100 !important; }
     
     /* Hücreleri ve Fontları Ufaltalım */
     .fc .fc-toolbar-title { font-size: 1.1rem !important; font-weight: 700; }
@@ -154,16 +164,17 @@
         }
 
         const calendar = new FullCalendar.Calendar(calendarEl, {
-        initialView: 'dayGridMonth',
-        locale: 'tr',
-        firstDay: 1,
-        height: 580,         /* Kompakt görünüm */
-        aspectRatio: 2.1,
+            initialView: 'dayGridMonth',
+            locale: 'tr',
+            firstDay: 1,
+            height: 750,         /* Daha büyük görünüm, 5 hafta için */
+            aspectRatio: 2.1,
         headerToolbar: { 
             left: 'prev,next today', 
             center: 'title', 
             right: 'dayGridMonth,listMonth' 
         },
+        fixedWeekCount: true, // Her zaman 5 veya 6 hafta gösterir, satır kayması olmaz
         buttonText: { today: 'Bugün', month: 'Ay', list: 'Liste' },
         events: "{{ url_for('takvim.takvim_events') }}",
 
@@ -181,10 +192,12 @@
                     </li>`;
                 });
                 html += '</ul>';
-                document.getElementById('tumEtkinliklerModalBody').innerHTML = html;
-                const modal = new bootstrap.Modal(document.getElementById('tumEtkinliklerModal'));
-                modal.show();
-                return false; // Varsayılan davranışı engelle
+                setTimeout(function() {
+                    document.getElementById('tumEtkinliklerModalBody').innerHTML = html;
+                    const modal = new bootstrap.Modal(document.getElementById('tumEtkinliklerModal'));
+                    modal.show();
+                }, 50);
+                return false; // FullCalendar'ın kendi popup'ını tamamen engelle
             },
 
         dateClick: function(info) {
