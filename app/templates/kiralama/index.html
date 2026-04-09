@@ -292,13 +292,13 @@
                                         <span class="fw-bold">{{ "{:,.2f}".format(bdl).replace(",", "X").replace(".", ",").replace("X", ".") }} TL</span>
                                         <span class="ms-1">({{ 'Dönüş dahil' if kalem.donus_nakliye_fatura_et else 'Tek Yön' }})</span>
                                     </div>
-
-                                    {% if kalemler_sayisi > 1 %}
-                                        <button type="button" class="kalem-expand-btn" data-expand-all="kalemler-{{ kiralama.id }},durum-{{ kiralama.id }}">
-                                            <i class="fas fa-chevron-down me-1"></i>+{{ kalemler_sayisi - 1 }} kalem
-                                        </button>
-                                    {% endif %}
                                 </div>
+
+                                {% if kalemler_sayisi > 1 %}
+                                    <button type="button" class="kalem-expand-btn mt-2" data-expand-all="kalemler-{{ kiralama.id }},durum-{{ kiralama.id }}">
+                                        <i class="fas fa-chevron-down me-1"></i>+{{ kalemler_sayisi - 1 }} kalem
+                                    </button>
+                                {% endif %}
 
                                 {% if kalemler_sayisi > 1 %}
                                     <div class="kalem-listesi-expanded" id="kalemler-{{ kiralama.id }}">
