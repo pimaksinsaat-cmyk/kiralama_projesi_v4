@@ -180,6 +180,7 @@
 
             // GÜNDE EN FAZLA 3 ETKİNLİK GÖSTER, FAZLASI İÇİN "+X DAHA" LİNKİ
             dayMaxEvents: 3,
+            moreLinkText: function(n) { return '+' + n + ' daha'; },
             moreLinkClick: function(info) {
                 // FullCalendar v6: info.allSegs = o gündeki tüm event segmentleri
                 info.jsEvent.preventDefault();
