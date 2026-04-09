@@ -351,40 +351,89 @@
                     </td>
 
                     <td>
-                        <ul class="kalem-listesi">
+                        <div class="durum-detay-wrapper">
                             {% for kalem in kiralama.kalemler %}
-                            <li>
-                                {% if kalem.sonlandirildi %}
-                                    <span class="badge bg-secondary status-badge shadow-sm"><i class="fas fa-check-double me-1"></i> TAMAMLANDI</span>
-                                    {% if kalem.is_active and kalem.id in recently_returned_kalem_ids %}
-                                        <button
-                                            type="button"
-                                            class="inline-action-btn js-iade-iptal-btn"
-                                            data-kalem-id="{{ kalem.id }}"
-                                            data-csrf-token="{{ csrf_token() }}"
-                                            data-ekipman-kod="{{ kalem.ekipman.kod if kalem.ekipman else (kalem.harici_ekipman_marka ~ ' ' ~ kalem.harici_ekipman_model) }}"
-                                            title="İade işlemini geri al (yalnızca 24 saat içinde)">
-                                            <i class="fas fa-undo-alt"></i> İade İptal
-                                        </button>
-                                    {% endif %}
-                                {% else %}
-                                    {% if today %}
-                                        {% set kalan_gun = (kalem.kiralama_bitis - today).days %}
-                                        {% if kalan_gun < 0 %}
-                                            <span class="badge bg-danger status-badge shadow-sm"><i class="fas fa-exclamation-triangle me-1"></i> GECİKTİ ({{ kalan_gun|abs }} GÜN)</span>
-                                        {% elif kalan_gun <= 3 %}
-                                            <span class="badge bg-warning text-dark status-badge shadow-sm"><i class="fas fa-hourglass-half me-1"></i> VADE AZALDI ({{ kalan_gun }} GÜN)</span>
-                                        {% else %}
-                                            <span class="badge bg-success status-badge shadow-sm">AKTİF ({{ kalan_gun }} GÜN VAR)</span>
+                            {% if loop.index == 1 %}
+                                {# İlk kalem hep görünsün #}
+                                <div class="py-1">
+                                    {% if kalem.sonlandirildi %}
+                                        <span class="badge bg-secondary status-badge shadow-sm"><i class="fas fa-check-double me-1"></i> TAMAMLANDI</span>
+                                        {% if kalem.is_active and kalem.id in recently_returned_kalem_ids %}
+                                            <button
+                                                type="button"
+                                                class="inline-action-btn js-iade-iptal-btn"
+                                                data-kalem-id="{{ kalem.id }}"
+                                                data-csrf-token="{{ csrf_token() }}"
+                                                data-ekipman-kod="{{ kalem.ekipman.kod if kalem.ekipman else (kalem.harici_ekipman_marka ~ ' ' ~ kalem.harici_ekipman_model) }}"
+                                                title="İade işlemini geri al (yalnızca 24 saat içinde)">
+                                                <i class="fas fa-undo-alt"></i> İade İptal
+                                            </button>
+                                        {% endif %}
+                                    {% else %}
+                                        {% if today %}
+                                            {% set kalan_gun = (kalem.kiralama_bitis - today).days %}
+                                            {% if kalan_gun < 0 %}
+                                                <span class="badge bg-danger status-badge shadow-sm"><i class="fas fa-exclamation-triangle me-1"></i> GECİKTİ ({{ kalan_gun|abs }} GÜN)</span>
+                                            {% elif kalan_gun <= 3 %}
+                                                <span class="badge bg-warning text-dark status-badge shadow-sm"><i class="fas fa-hourglass-half me-1"></i> VADE AZALDI ({{ kalan_gun }} GÜN)</span>
+                                            {% else %}
+                                                <span class="badge bg-success status-badge shadow-sm">AKTİF ({{ kalan_gun }} GÜN VAR)</span>
+                                            {% endif %}
                                         {% endif %}
                                     {% endif %}
+                                    <small class="text-muted ms-2 fw-bold" style="font-size: 0.7rem;">
+                                        {{ kalem.kiralama_baslangici.strftime('%d.%m') }} - {{ kalem.kiralama_bitis.strftime('%d.%m') }}
+                                    </small>
+
+                                    {% if kalemler_sayisi > 1 %}
+                                        <button type="button" class="kalem-expand-btn ms-1" data-kalem-container="durum-{{ kiralama.id }}" style="margin-left: 8px !important;">
+                                            <i class="fas fa-chevron-down me-1"></i>+{{ kalemler_sayisi - 1 }} kalem
+                                        </button>
+                                    {% endif %}
+                                </div>
+
+                                {% if kalemler_sayisi > 1 %}
+                                    <div class="kalem-listesi-expanded" id="durum-{{ kiralama.id }}">
                                 {% endif %}
-                                <small class="text-muted ms-2 fw-bold" style="font-size: 0.7rem;">
-                                    {{ kalem.kiralama_baslangici.strftime('%d.%m') }} - {{ kalem.kiralama_bitis.strftime('%d.%m') }}
-                                </small>
-                            </li>
+                            {% elif loop.index > 1 %}
+                                {# İkinci ve sonraki kalemler katlanabilir bölümde #}
+                                <div class="py-1">
+                                    {% if kalem.sonlandirildi %}
+                                        <span class="badge bg-secondary status-badge shadow-sm"><i class="fas fa-check-double me-1"></i> TAMAMLANDI</span>
+                                        {% if kalem.is_active and kalem.id in recently_returned_kalem_ids %}
+                                            <button
+                                                type="button"
+                                                class="inline-action-btn js-iade-iptal-btn"
+                                                data-kalem-id="{{ kalem.id }}"
+                                                data-csrf-token="{{ csrf_token() }}"
+                                                data-ekipman-kod="{{ kalem.ekipman.kod if kalem.ekipman else (kalem.harici_ekipman_marka ~ ' ' ~ kalem.harici_ekipman_model) }}"
+                                                title="İade işlemini geri al (yalnızca 24 saat içinde)">
+                                                <i class="fas fa-undo-alt"></i> İade İptal
+                                            </button>
+                                        {% endif %}
+                                    {% else %}
+                                        {% if today %}
+                                            {% set kalan_gun = (kalem.kiralama_bitis - today).days %}
+                                            {% if kalan_gun < 0 %}
+                                                <span class="badge bg-danger status-badge shadow-sm"><i class="fas fa-exclamation-triangle me-1"></i> GECİKTİ ({{ kalan_gun|abs }} GÜN)</span>
+                                            {% elif kalan_gun <= 3 %}
+                                                <span class="badge bg-warning text-dark status-badge shadow-sm"><i class="fas fa-hourglass-half me-1"></i> VADE AZALDI ({{ kalan_gun }} GÜN)</span>
+                                            {% else %}
+                                                <span class="badge bg-success status-badge shadow-sm">AKTİF ({{ kalan_gun }} GÜN VAR)</span>
+                                            {% endif %}
+                                        {% endif %}
+                                    {% endif %}
+                                    <small class="text-muted ms-2 fw-bold" style="font-size: 0.7rem;">
+                                        {{ kalem.kiralama_baslangici.strftime('%d.%m') }} - {{ kalem.kiralama_bitis.strftime('%d.%m') }}
+                                    </small>
+                                </div>
+                            {% endif %}
+
+                            {% if loop.last and kalemler_sayisi > 1 %}
+                                    </div>
+                            {% endif %}
                             {% endfor %}
-                        </ul>
+                        </div>
                     </td>
                 </tr>
                 {% else %}
