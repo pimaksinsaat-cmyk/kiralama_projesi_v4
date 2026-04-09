@@ -32,6 +32,9 @@
 <div class="mb-3">
 {{ form.yetkili_adi.label(class="form-label fw-bold small") }}
 {{ form.yetkili_adi(class="form-control form-control-sm" + (" is-invalid" if form.yetkili_adi.errors else "")) }}
+{% if form.yetkili_adi.errors %}
+<div class="invalid-feedback">{% for error in form.yetkili_adi.errors %}{{ error }}{% endfor %}</div>
+{% endif %}
 </div>
 
 <!-- 3. TELEFON VE E-POSTA -->
@@ -43,7 +46,10 @@
 </div>
 <div class="col-md-6 mb-3">
 {{ form.eposta.label(class="form-label fw-bold small") }}
-{{ form.eposta(class="form-control form-control-sm", placeholder="ornek@firma.com") }}
+{{ form.eposta(class="form-control form-control-sm" + (" is-invalid" if form.eposta.errors else ""), placeholder="ornek@firma.com") }}
+{% if form.eposta.errors %}
+<div class="invalid-feedback">{% for error in form.eposta.errors %}{{ error }}{% endfor %}</div>
+{% endif %}
 </div>
 </div>
 
@@ -51,7 +57,10 @@
 
 <div class="mb-3">
 {{ form.iletisim_bilgileri.label(class="form-label fw-bold small") }}
-{{ form.iletisim_bilgileri(class="form-control form-control-sm", rows=3) }}
+{{ form.iletisim_bilgileri(class="form-control form-control-sm" + (" is-invalid" if form.iletisim_bilgileri.errors else ""), rows=3) }}
+{% if form.iletisim_bilgileri.errors %}
+<div class="invalid-feedback">{% for error in form.iletisim_bilgileri.errors %}{{ error }}{% endfor %}</div>
+{% endif %}
 </div>
 
 <!-- 5. VERGİ BİLGİLERİ -->
@@ -59,11 +68,17 @@
 <div class="row">
 <div class="col-md-6 mb-3">
 {{ form.vergi_dairesi.label(class="form-label fw-bold small") }}
-{{ form.vergi_dairesi(class="form-control form-control-sm") }}
+{{ form.vergi_dairesi(class="form-control form-control-sm" + (" is-invalid" if form.vergi_dairesi.errors else "")) }}
+{% if form.vergi_dairesi.errors %}
+<div class="invalid-feedback">{% for error in form.vergi_dairesi.errors %}{{ error }}{% endfor %}</div>
+{% endif %}
 </div>
 <div class="col-md-6 mb-3">
 {{ form.vergi_no.label(class="form-label fw-bold small") }}
-{{ form.vergi_no(class="form-control form-control-sm") }}
+{{ form.vergi_no(class="form-control form-control-sm" + (" is-invalid" if form.vergi_no.errors else "")) }}
+{% if form.vergi_no.errors %}
+<div class="invalid-feedback">{% for error in form.vergi_no.errors %}{{ error }}{% endfor %}</div>
+{% endif %}
 </div>
 </div>
 
