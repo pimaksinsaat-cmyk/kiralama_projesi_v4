@@ -53,6 +53,8 @@
     .kalem-listesi { list-style-type: none; padding-left: 0; margin-bottom: 0; }
     .kalem-listesi li { padding: 4px 0; border-bottom: 1px dashed #eee; }
     .kalem-listesi li:last-child { border-bottom: none; }
+    .kalem-listesi-item { padding: 8px 0; border-bottom: 1px dashed #eee; display: block; }
+    .kalem-listesi-item:last-child { border-bottom: none; }
     .kalem-listesi-item:hover { background-color: #f8f9fa; cursor: context-menu; border-radius: 4px; }
 
     .kalem-expand-btn {
@@ -73,12 +75,16 @@
     }
     .kalem-listesi-expanded {
         display: none;
-        margin-top: 8px;
-        border-top: 1px dashed #ddd;
-        padding-top: 8px;
     }
     .kalem-listesi-expanded.show {
         display: block;
+    }
+    .kalem-listesi-expanded .kalem-listesi-item {
+        padding: 8px 0;
+        border-bottom: 1px dashed #eee;
+    }
+    .kalem-listesi-expanded .kalem-listesi-item:last-child {
+        border-bottom: none;
     }
     
     .status-badge { min-width: 135px; text-align: center; font-size: 0.7rem; padding: 4px; font-weight: 700; border-radius: 4px; }
@@ -355,7 +361,7 @@
                             {% for kalem in kiralama.kalemler %}
                             {% if loop.index == 1 %}
                                 {# İlk kalem hep görünsün #}
-                                <div class="py-1">
+                                <div class="kalem-listesi-item px-2">
                                     {% if kalem.sonlandirildi %}
                                         <span class="badge bg-secondary status-badge shadow-sm"><i class="fas fa-check-double me-1"></i> TAMAMLANDI</span>
                                         {% if kalem.is_active and kalem.id in recently_returned_kalem_ids %}
@@ -392,7 +398,7 @@
                                 {% endif %}
                             {% elif loop.index > 1 %}
                                 {# İkinci ve sonraki kalemler katlanabilir bölümde #}
-                                <div class="py-1">
+                                <div class="kalem-listesi-item px-2">
                                     {% if kalem.sonlandirildi %}
                                         <span class="badge bg-secondary status-badge shadow-sm"><i class="fas fa-check-double me-1"></i> TAMAMLANDI</span>
                                         {% if kalem.is_active and kalem.id in recently_returned_kalem_ids %}
