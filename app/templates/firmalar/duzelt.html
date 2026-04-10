@@ -7,7 +7,8 @@
         <div class="col-md-8">
             <h2 class="mb-4">Firmayı Düzenle: <span class="text-primary">{{ firma.firma_adi }}</span></h2>
             <form action="" method="POST" novalidate class="card card-body shadow-sm">
-                {% with btn_text="Değişiklikleri Güncelle", btn_color="warning text-white" %}
+                {% set referrer = request.referrer if request.referrer and request.referrer != request.url else url_for('firmalar.index') %}
+                {% with btn_text="Değişiklikleri Güncelle", btn_color="warning text-white", referrer=referrer %}
                     {% include "firmalar/_form_fields.html" %}
                 {% endwith %}
             </form>

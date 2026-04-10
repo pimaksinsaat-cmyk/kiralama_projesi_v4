@@ -130,8 +130,8 @@
     </div>
 
     <p style="margin-top: 20px;">
-        <a href="{{ url_for('kiralama.index') }}" class="btn btn-secondary">Kiralama Listesine Dön</a>
-        <a href="{{ url_for('kiralama.duzelt', id=kiralama.id) }}" class="btn btn-primary" style="background-color: #17a2b8; border-color: #17a2b8;">Bu Kiralamayı Düzenle</a>
+        <a href="{{ request.args.get('next') or request.referrer or url_for('kiralama.index') }}" class="btn btn-secondary">Kiralama Listesine Dön</a>
+        <a href="{{ url_for('kiralama.duzelt', id=kiralama.id, next=request.url) }}" class="btn btn-primary" style="background-color: #17a2b8; border-color: #17a2b8;">Bu Kiralamayı Düzenle</a>
     </p>
 
 </div>

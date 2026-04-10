@@ -16,6 +16,7 @@ from app.firmalar.models import Firma
 from app.personel.models import Personel
 from app.services.base import ValidationError
 from app.services.filo_services import BakimService, EkipmanService
+from app.utils import tr_ilike
 from app.services.operation_log_service import OperationLogService
 
 
@@ -130,15 +131,14 @@ def index():
     )
 
     if q:
-        term = f'%{q}%'
         query = query.join(BakimKaydi.ekipman).outerjoin(BakimKaydi.servis_veren_firma).filter(
             or_(
-                Ekipman.kod.ilike(term),
-                Ekipman.marka.ilike(term),
-                Ekipman.model.ilike(term),
-                BakimKaydi.aciklama.ilike(term),
-                BakimKaydi.servis_veren_kisi.ilike(term),
-                Firma.firma_adi.ilike(term),
+                tr_ilike(Ekipman.kod, f'%{q}%'),
+                tr_ilike(Ekipman.marka, f'%{q}%'),
+                tr_ilike(Ekipman.model, f'%{q}%'),
+                tr_ilike(BakimKaydi.aciklama, f'%{q}%'),
+                tr_ilike(BakimKaydi.servis_veren_kisi, f'%{q}%'),
+                tr_ilike(Firma.firma_adi, f'%{q}%'),
             )
         ).distinct()
 
@@ -188,15 +188,14 @@ def _servis_filtered_query(q, durum, eager=True):
     if opts:
         query = query.options(*opts)
     if q:
-        term = f'%{q}%'
         query = query.join(BakimKaydi.ekipman).outerjoin(BakimKaydi.servis_veren_firma).filter(
             or_(
-                Ekipman.kod.ilike(term),
-                Ekipman.marka.ilike(term),
-                Ekipman.model.ilike(term),
-                BakimKaydi.aciklama.ilike(term),
-                BakimKaydi.servis_veren_kisi.ilike(term),
-                Firma.firma_adi.ilike(term),
+                tr_ilike(Ekipman.kod, f'%{q}%'),
+                tr_ilike(Ekipman.marka, f'%{q}%'),
+                tr_ilike(Ekipman.model, f'%{q}%'),
+                tr_ilike(BakimKaydi.aciklama, f'%{q}%'),
+                tr_ilike(BakimKaydi.servis_veren_kisi, f'%{q}%'),
+                tr_ilike(Firma.firma_adi, f'%{q}%'),
             )
         ).distinct()
     if durum:
@@ -477,7 +476,7 @@ def bakimda():
         ).options(subqueryload(Ekipman.bakim_kayitlari))
 
         if q:
-            serviste_query = serviste_query.filter(Ekipman.kod.ilike(f'%{q}%'))
+            serviste_query = serviste_query.filter(tr_ilike(Ekipman.kod, f'%{q}%'))
 
         pagination = serviste_query.order_by(Ekipman.kod).paginate(page=page, per_page=25, error_out=False)
         for ekipman in pagination.items:
@@ -496,7 +495,7 @@ def bakimda():
         ).order_by(Ekipman.kod)
 
         if q:
-            aktif_query = aktif_query.filter(Ekipman.kod.ilike(f'%{q}%'))
+            aktif_query = aktif_query.filter(tr_ilike(Ekipman.kod, f'%{q}%'))
 
         aktif_makineler = aktif_query.all()
 

@@ -4,6 +4,38 @@ from sqlalchemy import func
 from datetime import datetime, timezone
 
 # ---------------------------------------------------------
+# ORTAK FİLTRELEME: HizmetKaydi bakiye hesabına dahil edilecek kayıtlar
+# ---------------------------------------------------------
+# Kiralama kapanışında kapat_kalem tarafından oluşturulan nakliye muhasebe kayıtları
+# (ozel_id=kalem.id ile işaretlenir). Bunların finansal karşılığı CariServis tarafından
+# nakliye_id dolu bir HizmetKaydi ile zaten oluşturulmaktadır; dolayısıyla bu kayıtlar
+# bakiye hesabına dahil edilmemelidir.
+NAKLIYE_MUHASEBE_PREFIXLERI = (
+    'Müşteri Dönüş Nakliye Bedeli',
+    'Müşteri Nakliye Fark',
+)
+
+
+def hizmet_kaydi_bakiyeye_dahil_mi(h) -> bool:
+    """
+    Bir HizmetKaydi kaydının bakiye hesabına dahil edilip edilmeyeceğini döner.
+    Her iki hesaplama yolu (bakiye_ozeti ve firma_services hareketler) bu fonksiyonu
+    kullanarak tutarlı davranış sağlar.
+    """
+    if getattr(h, 'is_deleted', False):
+        return False
+    # nakliye_id dolu kayıtlar doğrudan nakliye işlemini temsil eder — dahil et
+    if getattr(h, 'nakliye_id', None):
+        return True
+    # ozel_id dolu + nakliye muhasebe aciklama → kapat_kalem çift kaydı → hariç tut
+    if getattr(h, 'ozel_id', None) is not None:
+        aciklama = (h.aciklama or '')
+        if aciklama.startswith(NAKLIYE_MUHASEBE_PREFIXLERI):
+            return False
+    return True
+
+
+# ---------------------------------------------------------
 # YARDIMCI FONKSİYONLAR (BAKİYE SENKRONİZASYONU)
 # ---------------------------------------------------------
 def _sync_firma_bakiye(firma_id):
@@ -266,7 +298,12 @@ class CariRaporService:
                 'id': f.id,
                 'firma_adi': f.firma_adi,
                 'yetkili': f.yetkili_adi,
-                'tipi': 'Müşteri' if f.is_musteri else ('Tedarikçi' if f.is_tedarikci else 'Firma'),
+                'tipi': (
+                    'Müşteri, Tedarikçi' if f.is_musteri and f.is_tedarikci
+                    else 'Müşteri' if f.is_musteri
+                    else 'Tedarikçi' if f.is_tedarikci
+                    else 'Firma'
+                ),
                 'borc': ozet['borc'],
                 'alacak': ozet['alacak'],
                 'bakiye': ozet['net_bakiye'],

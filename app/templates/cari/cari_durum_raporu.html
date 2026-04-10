@@ -169,7 +169,17 @@
                             <small class="text-muted">{{ satir.yetkili }}</small>
                         {% endif %}
                     </td>
-                    <td><span class="badge badge-light border">{{ satir.tipi if satir.tipi else 'Firma' }}</span></td>
+                    <td>
+                        {% if 'Müşteri' in satir.tipi %}
+                            <span class="badge bg-success text-white">Mşt</span>
+                        {% endif %}
+                        {% if 'Tedarikçi' in satir.tipi %}
+                            <span class="badge bg-warning text-white">Ted.</span>
+                        {% endif %}
+                        {% if satir.tipi == 'Firma' %}
+                            <span class="badge badge-light text-dark border">Firma</span>
+                        {% endif %}
+                    </td>
                     <td class="text-right text-primary">
                         {{ "{:,.2f}".format(satir.borc_kdvli).replace(',', 'X').replace('.', ',').replace('X', '.') }} TL
                     </td>
@@ -186,9 +196,13 @@
                         {% endif %}
                     </td>
                     <td class="text-center">
-                        {% if satir.bakiye > 0 %} <span class="badge badge-danger">Borçlu</span>
-                        {% elif satir.bakiye < 0 %} <span class="badge badge-success">Alacaklı</span>
-                        {% else %} <span class="badge badge-secondary">Kapalı</span> {% endif %}
+                        {% if satir.bakiye_kdvli > 0.5 %}
+                            <span class="badge bg-danger text-white">Borçlu</span>
+                        {% elif satir.bakiye_kdvli < -0.5 %}
+                            <span class="badge bg-success text-white">Alacaklı</span>
+                        {% else %}
+                            <span class="badge bg-secondary text-white">Kapalı</span>
+                        {% endif %}
                     </td>
                 </tr>
                 {% else %}

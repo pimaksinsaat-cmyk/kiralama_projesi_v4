@@ -6,6 +6,7 @@ from sqlalchemy import inspect, or_
 from app.extensions import db
 from app.services.base import BaseService, ValidationError
 from app.subeler.models import Sube, SubeGideri, SubeSabitGiderDonemi
+from app.utils import bugun as _bugun
 
 
 class SubeGiderService(BaseService):
@@ -118,7 +119,7 @@ class SubeSabitGiderDonemiService(BaseService):
 
     @classmethod
     def build_timeline_metadata(cls, donemler, reference_date=None):
-        reference_date = reference_date or date.today()
+        reference_date = reference_date or _bugun()
         grouped = {}
         metadata = {}
 
@@ -170,7 +171,7 @@ class SubeSabitGiderDonemiService(BaseService):
 
     @staticmethod
     def _resolve_period_status(donem, reference_date=None):
-        reference_date = reference_date or date.today()
+        reference_date = reference_date or _bugun()
         if donem.baslangic_tarihi and donem.baslangic_tarihi > reference_date:
             return 'planned'
         if donem.bitis_tarihi and donem.bitis_tarihi <= reference_date:
@@ -243,7 +244,7 @@ class SubeSabitGiderDonemiService(BaseService):
 
         days_in_month = (period_end - period_start).days + 1
         # Icinde bulunulan ay ise hesabi bugune kadar kap
-        today = date.today()
+        today = _bugun()
         effective_period_end = min(period_end, today) if period_start <= today <= period_end else period_end
         if effective_period_end < period_start:
             return 0.0
@@ -270,7 +271,7 @@ class SubeSabitGiderDonemiService(BaseService):
 
     @classmethod
     def list_aktif_donemler(cls, sube_id, reference_date=None):
-        reference_date = reference_date or date.today()
+        reference_date = reference_date or _bugun()
         donemler = cls.list_donemler(sube_id)
         metadata = cls.build_timeline_metadata(donemler, reference_date=reference_date)
         return [donem for donem in donemler if metadata.get(donem.id, {}).get('status') == 'active']
@@ -421,7 +422,7 @@ class SubeSabitGiderDonemiService(BaseService):
         if not donem:
             raise ValidationError('Sonlandirilacak sabit gider donemi bulunamadi.')
 
-        stop_date = cls._parse_date(bitis_tarihi) or date.today()
+        stop_date = cls._parse_date(bitis_tarihi) or _bugun()
         kategori_donemleri = (
             cls._get_base_query()
             .filter(

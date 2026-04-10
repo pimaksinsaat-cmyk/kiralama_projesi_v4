@@ -18,6 +18,7 @@ from app.services.cari_services import (
     CariRaporService, get_dahili_islem_firmasi
 )
 from app.services.base import ValidationError
+from app.utils import tr_ilike, tr_lower
 from app.services.operation_log_service import OperationLogService
 
 from decimal import Decimal
@@ -866,18 +867,18 @@ def _get_cari_durum_raporu_verisi(sort_by, sort_dir, q):
     rapor, genel_toplam = CariRaporService.get_durum_raporu()
 
     if q:
-        q_lower = q.casefold()
-        rapor = [s for s in rapor if q_lower in (s.get('firma_adi') or '').casefold()]
+        q_lower = tr_lower(q)
+        rapor = [s for s in rapor if q_lower in tr_lower(s.get('firma_adi') or '')]
 
     if sort_by == 'firma_adi':
-        sort_key = lambda s: (s.get('firma_adi') or '').casefold()
+        sort_key = lambda s: tr_lower(s.get('firma_adi') or '')
     elif sort_by in ('bakiye', 'bakiye_kdvli'):
         key_name = 'bakiye_kdvli' if sort_by == 'bakiye_kdvli' else 'bakiye'
         sort_key = lambda s: float(s.get(key_name) or 0)
     else:
         def durum_key(s):
-            bakiye = float(s.get('bakiye') or 0)
-            return 'borclu' if bakiye > 0 else ('alacakli' if bakiye < 0 else 'kapali')
+            bakiye = float(s.get('bakiye_kdvli') or 0)
+            return 'borclu' if bakiye > 0.5 else ('alacakli' if bakiye < -0.5 else 'kapali')
         sort_key = durum_key
 
     rapor = sorted(rapor, key=sort_key, reverse=(sort_dir == 'desc'))
@@ -1099,7 +1100,7 @@ def musteri_ara():
             Firma.is_deleted == False,
         )
         if q:
-            base_query = base_query.filter(Firma.firma_adi.ilike(f"%{q}%"))
+            base_query = base_query.filter(tr_ilike(Firma.firma_adi, f"%{q}%"))
         results = base_query.order_by(Firma.firma_adi).limit(50).all()
         return jsonify([
             {'id': f.id, 'ad': f.firma_adi} for f in results

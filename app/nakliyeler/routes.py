@@ -91,13 +91,22 @@ def index():
         per_page = 25
 
     bugun = date.today()
-    varsayilan_baslangic = (bugun - timedelta(days=15)).isoformat()
 
-    baslangic = request.args.get('baslangic') or varsayilan_baslangic
-    bitis = request.args.get('bitis') or bugun.isoformat()
+    baslangic_explicit = request.args.get('baslangic')
+    bitis_explicit = request.args.get('bitis')
     secili_plaka = request.args.get('plaka')
     secili_taseron_id = request.args.get('taseron_id')
     secili_firma_id = request.args.get('firma_id')
+
+    # Firma/taşeron/plaka filtresi aktifken varsayılan tarih aralığı uygulanmaz;
+    # böylece eski tarihli kiralama bağlantılı nakliyeler de görünür.
+    spesifik_filtre_var = bool(secili_firma_id or secili_taseron_id or secili_plaka)
+    if spesifik_filtre_var:
+        baslangic = baslangic_explicit  # None ise tarih kısıtı yok
+        bitis = bitis_explicit
+    else:
+        baslangic = baslangic_explicit or (bugun - timedelta(days=15)).isoformat()
+        bitis = bitis_explicit or bugun.isoformat()
 
     try:
         query = Nakliye.query.filter(Nakliye.tutar > 0)
@@ -129,7 +138,8 @@ def index():
         plakalar = db.session.query(Nakliye.plaka).filter(Nakliye.plaka.isnot(None)).distinct().all()
         plaka_listesi = [p[0] for p in plakalar if p[0] and p[0].strip() != ""]
         taseron_listesi = Firma.query.filter_by(is_tedarikci=True, is_active=True).order_by(Firma.firma_adi).all()
-        firma_listesi = Firma.query.filter_by(is_active=True).order_by(Firma.firma_adi).all()
+        firma_listesi = [{'id': f.id, 'firma_adi': f.firma_adi}
+                         for f in Firma.query.filter_by(is_active=True).order_by(Firma.firma_adi).all()]
 
         # İstatistikler
         stats = {
@@ -173,13 +183,16 @@ def index():
 @nakliye_bp.route('/yazdir')
 def yazdir():
     bugun = date.today()
-    varsayilan_baslangic = (bugun - timedelta(days=15)).isoformat()
 
-    baslangic = request.args.get('baslangic') or varsayilan_baslangic
-    bitis = request.args.get('bitis') or bugun.isoformat()
+    baslangic = request.args.get('baslangic')
+    bitis = request.args.get('bitis')
     secili_plaka = request.args.get('plaka')
     secili_taseron_id = request.args.get('taseron_id')
     secili_firma_id = request.args.get('firma_id')
+
+    if not (secili_firma_id or secili_taseron_id or secili_plaka):
+        baslangic = baslangic or (bugun - timedelta(days=15)).isoformat()
+        bitis = bitis or bugun.isoformat()
 
     query = _nakliye_filtered_query(baslangic, bitis, secili_plaka, secili_taseron_id, secili_firma_id)
     nakliyeler = query.order_by(Nakliye.tarih.desc()).all()
@@ -205,13 +218,16 @@ def yazdir():
 @nakliye_bp.route('/excel')
 def excel_aktar():
     bugun = date.today()
-    varsayilan_baslangic = (bugun - timedelta(days=15)).isoformat()
 
-    baslangic = request.args.get('baslangic') or varsayilan_baslangic
-    bitis = request.args.get('bitis') or bugun.isoformat()
+    baslangic = request.args.get('baslangic')
+    bitis = request.args.get('bitis')
     secili_plaka = request.args.get('plaka')
     secili_taseron_id = request.args.get('taseron_id')
     secili_firma_id = request.args.get('firma_id')
+
+    if not (secili_firma_id or secili_taseron_id or secili_plaka):
+        baslangic = baslangic or (bugun - timedelta(days=15)).isoformat()
+        bitis = bitis or bugun.isoformat()
 
     nakliyeler = _nakliye_filtered_query(
         baslangic,

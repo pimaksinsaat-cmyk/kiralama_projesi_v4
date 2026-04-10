@@ -8,6 +8,7 @@ from app.extensions import db
 from app.personel.models import Personel, PersonelIzin, PersonelMaasDonemi
 from app.services.base import BaseService, ValidationError
 from app.subeler.models import Sube
+from app.utils import tr_ilike
 
 
 class PersonelService(BaseService):
@@ -456,15 +457,15 @@ class PersonelService(BaseService):
             query = query.filter(Personel.sube_id == sube_id)
 
         if search_query:
-            term = f'%{search_query.strip()}%'
+            s = search_query.strip()
             query = query.filter(
                 or_(
-                    Personel.ad.ilike(term),
-                    Personel.soyad.ilike(term),
-                    Personel.tc_no.ilike(term),
-                    Personel.telefon.ilike(term),
-                    Personel.meslek.ilike(term),
-                    Sube.isim.ilike(term),
+                    tr_ilike(Personel.ad, f'%{s}%'),
+                    tr_ilike(Personel.soyad, f'%{s}%'),
+                    Personel.tc_no.ilike(f'%{s}%'),
+                    Personel.telefon.ilike(f'%{s}%'),
+                    tr_ilike(Personel.meslek, f'%{s}%'),
+                    tr_ilike(Sube.isim, f'%{s}%'),
                 )
             )
 

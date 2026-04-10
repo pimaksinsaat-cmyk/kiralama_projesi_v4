@@ -38,7 +38,19 @@
 <div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap">
         <div>
-            <h1 class="mb-1 d-inline-block align-middle">{{ firma.firma_adi | truncate_name }}</h1>
+            <div class="d-flex align-items-center gap-2 mb-1">
+                <h1 class="mb-0">{{ firma.firma_adi | truncate_name(2) }}</h1>
+                <!-- Firma Hızlı Geçiş -->
+                <div class="position-relative" id="firma-gecis-wrapper">
+                    <button class="btn btn-sm btn-outline-secondary" type="button" id="firma-gecis-btn" title="Firmalar arasında geç">
+                        <i class="fa fa-exchange-alt"></i>
+                    </button>
+                    <div id="firma-gecis-panel" style="display:none; position:absolute; left:0; top:110%; width:300px; background:#fff; border:1px solid #dee2e6; border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,0.12); z-index:2000; padding:10px;">
+                        <input type="text" id="firma-gecis-input" class="form-control form-control-sm" placeholder="Firma adı yazın..." autocomplete="off">
+                        <ul id="firma-gecis-liste" style="list-style:none; margin:0; padding:0; max-height:220px; overflow-y:auto;"></ul>
+                    </div>
+                </div>
+            </div>
             <div class="d-block mt-1">
                 <span class="badge bg-{{ 'success' if firma.is_musteri else 'secondary' }}">{{ 'Müşteri' if firma.is_musteri else '' }}</span>
                 <span class="badge bg-{{ 'warning' if firma.is_tedarikci else 'secondary' }}">{{ 'Tedarikçi' if firma.is_tedarikci else '' }}</span>
@@ -49,7 +61,7 @@
         <div class="mt-2 mt-md-0">
             <div class="btn-group me-2" role="group">
                 <!-- HAKEDİŞ BUTONU -->
-                <a href="{{ url_for('fatura.olustur') }}" class="btn btn-primary">
+                <a href="#" class="btn btn-primary disabled" tabindex="-1" aria-disabled="true" title="Hakediş modülü devre dışı">
                     <i class="fa fa-magic"></i> Hakediş Oluştur
                 </a>
                 <a href="{{ url_for('cari.odeme_ekle', firma_id=firma.id, yon='tahsilat') }}" class="btn btn-success">
@@ -64,11 +76,9 @@
             </div>
             <a id="yazdir-btn" href="{{ url_for('firmalar.bilgi_yazdir', id=firma.id, tab=tab) }}" class="btn btn-dark" target="_blank">
                 <i class="fa fa-print"></i>
+
             </a>
             <a href="{{ url_for('firmalar.duzelt', id=firma.id) }}" class="btn btn-warning"><i class="fa fa-edit"></i></a>
-            <a href="{{ request.referrer or url_for('firmalar.index') }}" class="btn btn-secondary">
-                <i class="fa fa-arrow-left"></i>
-            </a>
         </div>
     </div>
 
@@ -118,16 +128,106 @@
         </div>
     </div>
 
+    <!-- Tarih Filtresi Başlangıç -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <form method="get" class="row g-2 align-items-end" id="dateFilterForm">
+                <input type="hidden" name="tab" value="{{ tab }}">
+                <div class="col-md-3">
+                    <label class="form-label">Başlangıç</label>
+                    <input id="startDateInput" class="form-control" type="date" name="start_date" value="{{ request.args.get('start_date') or (start_date.strftime('%Y-%m-%d') if start_date else '') }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Bitiş</label>
+                    <input id="endDateInput" class="form-control" type="date" name="end_date" value="{{ request.args.get('end_date') or (end_date.strftime('%Y-%m-%d') if end_date else '') }}">
+                </div>
+                <div class="col-md-2 d-grid">
+                    <button class="btn btn-primary" type="submit">Uygula</button>
+                </div>
+                <div class="col-12">
+                    <div class="d-flex flex-wrap gap-2 mt-1">
+                        <button type="button" class="btn btn-outline-success btn-sm" id="todayRangeBtn">Bugün</button>
+                        <button type="button" class="btn btn-outline-primary btn-sm" id="thisMonthRangeBtn">Bu Ay</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm js-quick-range" data-days="30">Son 30 Gün</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm js-quick-range" data-days="60">Son 60 Gün</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm js-quick-range" data-days="90">Son 90 Gün</button>
+                        <button type="button" class="btn btn-outline-info btn-sm js-quick-range" data-range="ytd">Yılbaşından Bu Yana</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        var todayBtn = document.getElementById('todayRangeBtn');
+        var thisMonthBtn = document.getElementById('thisMonthRangeBtn');
+        var quickRangeBtns = document.querySelectorAll('.js-quick-range');
+        var startDateInput = document.getElementById('startDateInput');
+        var endDateInput = document.getElementById('endDateInput');
+        var form = document.getElementById('dateFilterForm');
+
+        if (todayBtn) {
+            todayBtn.addEventListener('click', function() {
+                var today = new Date();
+                var yyyy = today.getFullYear();
+                var mm = String(today.getMonth() + 1).padStart(2, '0');
+                var dd = String(today.getDate()).padStart(2, '0');
+                var todayStr = yyyy + '-' + mm + '-' + dd;
+                startDateInput.value = todayStr;
+                endDateInput.value = todayStr;
+                form.submit();
+            });
+        }
+        if (thisMonthBtn) {
+            thisMonthBtn.addEventListener('click', function() {
+                var today = new Date();
+                var yyyy = today.getFullYear();
+                var mm = String(today.getMonth() + 1).padStart(2, '0');
+                var firstDay = yyyy + '-' + mm + '-01';
+                var dd = String(today.getDate()).padStart(2, '0');
+                var todayStr = yyyy + '-' + mm + '-' + dd;
+                startDateInput.value = firstDay;
+                endDateInput.value = todayStr;
+                form.submit();
+            });
+        }
+        quickRangeBtns.forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var days = btn.getAttribute('data-days');
+                var range = btn.getAttribute('data-range');
+                var today = new Date();
+                var yyyy = today.getFullYear();
+                var mm = String(today.getMonth() + 1).padStart(2, '0');
+                var dd = String(today.getDate()).padStart(2, '0');
+                var todayStr = yyyy + '-' + mm + '-' + dd;
+                if (range === 'ytd') {
+                    startDateInput.value = yyyy + '-01-01';
+                    endDateInput.value = todayStr;
+                } else if (days) {
+                    var start = new Date();
+                    start.setDate(today.getDate() - parseInt(days) + 1);
+                    var smm = String(start.getMonth() + 1).padStart(2, '0');
+                    var sdd = String(start.getDate()).padStart(2, '0');
+                    var sStr = start.getFullYear() + '-' + smm + '-' + sdd;
+                    startDateInput.value = sStr;
+                    endDateInput.value = todayStr;
+                }
+                form.submit();
+            });
+        });
+    });
+    </script>
+    <!-- Tarih Filtresi Bitiş -->
+
     <ul class="nav nav-tabs mb-3" id="firmaTab" role="tablist">
         <li class="nav-item">
-            <button class="nav-link {{ 'active' if tab == 'hareket' else '' }}" id="hareket-tab" data-bs-toggle="tab" data-bs-target="#hareket" type="button"
-                onclick="setTab('hareket')">Cari Hareketler
-            </button>
+            <button class="nav-link {{ 'active' if tab == 'cari' else '' }}" id="cari-tab" data-bs-toggle="tab" data-bs-target="#cari" type="button" onclick="setTab('cari')">Cari</button>
         </li>
         <li class="nav-item">
-            <button class="nav-link {{ 'active' if tab == 'kiralama' else '' }}" id="kiralama-tab" data-bs-toggle="tab" data-bs-target="#kiralama" type="button"
-                onclick="setTab('kiralama')">Kiralamalar
-            </button>
+            <button class="nav-link {{ 'active' if tab == 'hareket' else '' }}" id="hareket-tab" data-bs-toggle="tab" data-bs-target="#hareket" type="button" onclick="setTab('hareket')">Form Bazlı Cari</button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link {{ 'active' if tab == 'kiralama' else '' }}" id="kiralama-tab" data-bs-toggle="tab" data-bs-target="#kiralama" type="button" onclick="setTab('kiralama')">Kiralamalar</button>
         </li>
         <li class="nav-item">
             <button class="nav-link" id="genel-tab" data-bs-toggle="tab" data-bs-target="#genel" type="button">Firma Kartı</button>
@@ -160,11 +260,12 @@
                             {% set is_nakliye = (islem.tur == 'Nakliye' and islem.ozel_id) %}
                             {% set nakliye_kiralama_id = islem.nakliye_kiralama_id if (is_nakliye and islem.nakliye_kiralama_id) else '' %}
                             <tr class="context-row"
-                                data-id="{{ islem.id }}" 
+                                data-id="{{ islem.id }}"
                                 data-type="{% if is_kiralama %}kiralama{% elif is_nakliye %}nakliye{% else %}{{ islem.tur_tipi.lower() }}{% endif %}"
-                                data-ozel-id="{{ islem.ozel_id or '' }}" 
+                                data-ozel-id="{{ islem.ozel_id or '' }}"
+                                data-nakliye-id="{{ islem.ozel_id if is_nakliye else '' }}"
                                 data-nakliye-kiralama-id="{{ nakliye_kiralama_id }}"
-                                data-desc="{{ islem.aciklama }}" 
+                                data-desc="{{ islem.aciklama }}"
                                 style="cursor: context-menu;">
                                 <td>{{ start + loop.index }}</td>
                                 <td>{{ islem.tarih.strftime('%d.%m.%Y') if islem.tarih else '-' }}</td>
@@ -303,7 +404,7 @@
                             <tr>
                                 <td>{{ start + loop.index }}</td>
                                 <td>
-                                    <a href="{{ url_for('kiralama.duzenle', kiralama_id=kiralama.id) }}">
+                                    <a href="{{ url_for('kiralama.duzenle', kiralama_id=kiralama.id, next=request.url) }}">
                                         <strong>{{ kiralama.kiralama_form_no or 'No Belirtilmemiş' }}</strong>
                                     </a>
                                 </td>
@@ -361,7 +462,7 @@
                                 </td>
                                 
                                 <td class="text-end">
-                                    <a href="{{ url_for('kiralama.duzenle', kiralama_id=kiralama.id) }}" class="btn btn-sm btn-outline-primary">
+                                    <a href="{{ url_for('kiralama.duzenle', kiralama_id=kiralama.id, next=request.url) }}" class="btn btn-sm btn-outline-primary">
                                         <i class="fa fa-search"></i>
                                     </a>
                                 </td>
@@ -401,6 +502,147 @@
                         {% endfor %}
                         <li class="page-item {% if not kiralama_pagination.has_next %}disabled{% endif %}">
                             <a class="page-link" href="{{ url_for('firmalar.bilgi', id=firma.id, tab='kiralama', kiralama_page=kiralama_pagination.next_num, kiralama_per_page=kiralama_per_page, hareket_page=hareket_pagination.page, hareket_per_page=hareket_per_page) }}">&raquo;</a>
+                        </li>
+                    </ul>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade {{ 'show active' if tab == 'cari' else '' }}" id="cari">
+            <div class="card card-body shadow-sm">
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped table-bordered table-sm mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 5%;">#</th>
+                                <th style="width: 120px;">Tarih / Form No</th>
+                                <th style="width: 150px;">İşlem Türü</th>
+                                <th style="min-width: 280px;">Açıklama</th>
+                                <th style="width: 100px;">Başlangıç</th>
+                                <th style="width: 100px;">Bitiş</th>
+                                <th class="text-center" style="width: 80px;">Çal. Gün</th>
+                                <th class="text-end" style="width: 120px;">Birim Fiyat</th>
+                                <th class="text-end" style="width: 120px;">Matrah</th>
+                                <th class="text-end" style="width: 100px;">KDV %</th>
+                                <th class="text-end text-danger fw-bold" style="width: 120px;">Borç</th>
+                                <th class="text-end text-success fw-bold" style="width: 120px;">Alacak</th>
+                                <th class="text-end fw-bold bg-light" style="width: 150px;">Bakiye</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% set start_no = (cari_pagination.page - 1) * cari_pagination.per_page + 1 %}
+                            {% for row in cari_rows %}
+                            <tr class="context-row"
+                                data-id="{% if row.islem_turu == 'nakliye_satis' or row.islem_turu == 'nakliye' %}{{ row.id }}{% elif row.islem_turu == 'kiralama' %}{{ row.kiralama_id }}{% elif row.islem_turu == 'fatura' %}{{ row.id }}{% elif row.islem_turu in ('tahsilat', 'odeme') %}{{ row.id }}{% else %}{{ row.id or '' }}{% endif %}"
+                                data-type="{% if row.islem_turu in ('tahsilat', 'odeme') %}odeme{% elif row.islem_turu == 'fatura' %}fatura{% elif row.islem_turu == 'nakliye_satis' %}nakliye{% elif row.islem_turu in ('kiralama', 'nakliye') %}{{ row.islem_turu }}{% endif %}"
+                                data-ozel-id="{{ row.kiralama_id or '' }}"
+                                data-nakliye-id="{% if row.islem_turu in ('nakliye_satis', 'nakliye') %}{{ row.id }}{% else %}{% endif %}"
+                                data-nakliye-kiralama-id="{{ row.kiralama_id or '' }}"
+                                data-desc="{{ row.aciklama }}"
+                                style="cursor: context-menu;">
+                                <td>{{ loop.index + start_no - 1 }}</td>
+                                <td>
+                                    {% if row.form_tarihi %}
+                                        <div style="font-size:0.85em; color:#444; font-weight:600;">{{ row.form_tarihi.strftime('%d.%m.%Y') }}</div>
+                                    {% endif %}
+                                    {% if row.kiralama_id %}
+                                        <a href="{{ url_for('kiralama.duzenle', kiralama_id=row.kiralama_id, next=request.url) }}" class="text-decoration-none text-primary" style="font-size:0.72em;">{{ row.form_no }}</a>
+                                    {% else %}
+                                        <span style="font-size:0.72em;">{{ row.form_no }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if row.islem_turu == 'kiralama' %}
+                                        <span class="badge bg-warning text-dark"><i class="fa fa-key"></i> Kiralama</span>
+                                    {% elif row.islem_turu == 'nakliye' %}
+                                        <span class="badge bg-primary"><i class="fa fa-truck"></i> Nakliye</span>
+                                    {% elif row.islem_turu == 'fatura' %}
+                                        <span class="badge bg-{% if 'Satış' in row.aciklama %}danger{% elif 'Alış' in row.aciklama %}success{% else %}secondary{% endif %}"><i class="fa fa-file-invoice"></i> Fatura</span>
+                                    {% elif row.islem_turu == 'harici_kiralama' %}
+                                        <span class="badge bg-danger"><i class="fa fa-arrow-up"></i> Tedarik</span>
+                                    {% elif row.islem_turu == 'nakliye_satis' %}
+                                        <span class="badge bg-info text-dark"><i class="fa fa-truck"></i> Nakliye Sat.</span>
+                                    {% elif row.islem_turu == 'tahsilat' %}
+                                        <span class="badge bg-success"><i class="fa fa-arrow-down"></i> Tahsilat</span>
+                                    {% elif row.islem_turu == 'odeme' %}
+                                        <span class="badge bg-danger"><i class="fa fa-arrow-up"></i> Ödeme</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary"><i class="fa fa-money-bill"></i> İşlem</span>
+                                    {% endif %}
+                                </td>
+                                <td class="small">
+                                    {{ row.aciklama }}
+                                    {% if row.seri_no %}
+                                        <div class="text-muted" style="font-size:0.8em;">S/N: {{ row.seri_no }}</div>
+                                    {% endif %}
+                                </td>
+                                <td class="small">{{ row.baslangic.strftime('%d.%m.%Y') if row.baslangic else '-' }}</td>
+                                <td class="small">
+                                    {% if row.gun_sayisi is none %}
+                                        <span class="text-muted">-</span>
+                                    {% elif row.bitis_bugun %}
+                                        <span class="text-success fw-bold">{{ row.bitis.strftime('%d.%m.%Y') }}</span>
+                                        <small class="text-muted d-block">(bugün)</small>
+                                    {% else %}
+                                        {{ row.bitis.strftime('%d.%m.%Y') if row.bitis else '-' }}
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">{{ row.gun_sayisi if row.gun_sayisi is not none else '-' }}</td>
+                                <td class="text-end">{{ "{:,.2f}".format(row.brm_fiyat).replace(',','X').replace('.',',').replace('X','.') }}</td>
+                                <td class="text-end">{{ "{:,.2f}".format(row.matrah).replace(',','X').replace('.',',').replace('X','.') }}</td>
+                                <td class="text-center">%{{ row.kdv_orani }}</td>
+                                <td class="text-end text-danger fw-bold">
+                                    {% if row.toplam >= 0 %}
+                                        {{ "{:,.2f}".format(row.toplam).replace(',','X').replace('.',',').replace('X','.') }}
+                                    {% else %}-{% endif %}
+                                </td>
+                                <td class="text-end text-success fw-bold">
+                                    {% if row.toplam < 0 %}
+                                        {{ "{:,.2f}".format(row.toplam | abs).replace(',','X').replace('.',',').replace('X','.') }}
+                                    {% else %}-{% endif %}
+                                </td>
+                                <td class="text-end fw-bold">{{ "{:,.2f}".format(row.bakiye).replace(',','X').replace('.',',').replace('X','.') }}</td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="13" class="text-center text-muted py-4">Kayıt bulunamadı.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
+                    <form method="GET" action="{{ url_for('firmalar.bilgi', id=firma.id) }}" class="d-flex align-items-center gap-2 mb-0">
+                        <input type="hidden" name="tab" value="cari">
+                        <input type="hidden" name="hareket_page" value="{{ hareket_pagination.page }}">
+                        <input type="hidden" name="hareket_per_page" value="{{ hareket_per_page }}">
+                        <input type="hidden" name="kiralama_page" value="{{ kiralama_pagination.page }}">
+                        <input type="hidden" name="kiralama_per_page" value="{{ kiralama_per_page }}">
+                        <label class="small text-muted mb-0">Sayfa başına</label>
+                        <select name="cari_per_page" class="form-select form-select-sm" style="max-width:130px;" onchange="this.form.submit()">
+                            <option value="10"  {{ 'selected' if cari_per_page == 10 else '' }}>10</option>
+                            <option value="25"  {{ 'selected' if cari_per_page == 25 else '' }}>25</option>
+                            <option value="50"  {{ 'selected' if cari_per_page == 50 else '' }}>50</option>
+                            <option value="100" {{ 'selected' if cari_per_page == 100 else '' }}>100</option>
+                        </select>
+                    </form>
+
+                    {% if cari_pagination %}
+                    <ul class="pagination mb-0">
+                        <li class="page-item {% if not cari_pagination.has_prev %}disabled{% endif %}">
+                            <a class="page-link" href="{{ url_for('firmalar.bilgi', id=firma.id, tab='cari', cari_page=cari_pagination.prev_num, cari_per_page=cari_per_page, hareket_page=hareket_pagination.page, hareket_per_page=hareket_per_page, kiralama_page=kiralama_pagination.page, kiralama_per_page=kiralama_per_page) }}">&laquo;</a>
+                        </li>
+                        {% for pn in cari_pagination.iter_pages() %}
+                            {% if pn %}
+                            <li class="page-item {% if pn == cari_pagination.page %}active{% endif %}">
+                                <a class="page-link" href="{{ url_for('firmalar.bilgi', id=firma.id, tab='cari', cari_page=pn, cari_per_page=cari_per_page, hareket_page=hareket_pagination.page, hareket_per_page=hareket_per_page, kiralama_page=kiralama_pagination.page, kiralama_per_page=kiralama_per_page) }}">{{ pn }}</a>
+                            </li>
+                            {% else %}
+                            <li class="page-item disabled"><span class="page-link">&hellip;</span></li>
+                            {% endif %}
+                        {% endfor %}
+                        <li class="page-item {% if not cari_pagination.has_next %}disabled{% endif %}">
+                            <a class="page-link" href="{{ url_for('firmalar.bilgi', id=firma.id, tab='cari', cari_page=cari_pagination.next_num, cari_per_page=cari_per_page, hareket_page=hareket_pagination.page, hareket_per_page=hareket_per_page, kiralama_page=kiralama_pagination.page, kiralama_per_page=kiralama_per_page) }}">&raquo;</a>
                         </li>
                     </ul>
                     {% endif %}
@@ -466,6 +708,7 @@
         // sayfa numarasını sıfırla ilgili sekme için
         if (name === 'hareket') url.searchParams.set('hareket_page', '1');
         if (name === 'kiralama') url.searchParams.set('kiralama_page', '1');
+        if (name === 'cari') url.searchParams.set('cari_page', '1');
         history.replaceState(null, '', url.toString());
 
         // Yazdır butonunun tab parametresini güncelle
@@ -478,21 +721,35 @@
     }
 
     const contextMenu = document.getElementById('custom-context-menu');
-    let selectedId, selectedType, selectedOzelId, selectedDesc;
+    let selectedId, selectedType, selectedOzelId, selectedDesc, selectedNakliyeKiralamaId, selectedNakliyeId;
 
     document.addEventListener('contextmenu', function(e) {
         const row = e.target.closest('.context-row');
         if (row) {
             e.preventDefault();
             selectedId = row.getAttribute('data-id');
-            selectedType = row.getAttribute('data-type').trim().toLowerCase();
+            selectedType = (row.getAttribute('data-type') || '').trim().toLowerCase();
             selectedOzelId = row.getAttribute('data-ozel-id');
             selectedDesc = row.getAttribute('data-desc');
+            selectedNakliyeKiralamaId = row.getAttribute('data-nakliye-kiralama-id') || '';
+            selectedNakliyeId = row.getAttribute('data-nakliye-id') || '';
 
+            // type boşsa menü gösterilmez (harici_kiralama, nakliye_satis vb.)
+            if (!selectedType) {
+                contextMenu.style.display = 'none';
+                return;
+            }
+
+            // Form Bazlı Cari'deki davranışın aynısı
             if (selectedType === 'odeme') {
                 document.getElementById('menu-edit').style.display = 'block';
                 document.getElementById('menu-delete').style.display = 'block';
+            } else if (selectedType === 'fatura' || selectedType === 'kiralama' || selectedType === 'nakliye') {
+                // Fatura, kiralama, nakliye → Düzelt menüsü
+                document.getElementById('menu-edit').style.display = 'block';
+                document.getElementById('menu-delete').style.display = 'none';
             } else {
+                // Diğer tipler
                 document.getElementById('menu-edit').style.display = 'block';
                 document.getElementById('menu-delete').style.display = 'none';
             }
@@ -514,12 +771,18 @@
                 alert("Hata: Kiralama ID bulunamadı!");
             }
         } else if (selectedType === 'nakliye') {
-            const kiralamaId = document.querySelector(`.context-row[data-id="${selectedId}"]`)?.getAttribute('data-nakliye-kiralama-id');
-            if (kiralamaId && kiralamaId !== '') {
-                window.location.href = "/kiralama/duzenle/" + kiralamaId;
+            // Nakliye: form bağlantılıysa kiralama, bağlantısızsa nakliye düzenle sayfası
+            if (selectedNakliyeKiralamaId && selectedNakliyeKiralamaId !== '') {
+                window.location.href = "/kiralama/duzenle/" + selectedNakliyeKiralamaId;
             } else {
-                window.location.href = "/nakliyeler/duzenle/" + cleanOzelId;
+                // Bağımsız nakliye: data-nakliye-id varsa onu kullan (Form Bazlı Cari),
+                // yoksa data-id'yi kullan (Cari sekmesi her ikisinde de nakliye.id tutar)
+                const nakliyeId = (selectedNakliyeId && selectedNakliyeId !== '') ? selectedNakliyeId : selectedId;
+                window.location.href = "/nakliyeler/duzenle/" + nakliyeId;
             }
+        } else if (selectedType === 'fatura') {
+            // Fatura → hizmet detay sayfası
+            window.location.href = "/cari/hizmet/duzelt/" + selectedId;
         } else if (selectedType === 'odeme') {
             window.location.href = "/cari/odeme/duzelt/" + selectedId;
         } else {
@@ -553,5 +816,110 @@
             }
         });
     });
+</script>
+
+<script>
+(function() {
+    const btn    = document.getElementById('firma-gecis-btn');
+    const panel  = document.getElementById('firma-gecis-panel');
+    const input  = document.getElementById('firma-gecis-input');
+    const liste  = document.getElementById('firma-gecis-liste');
+    let debounce  = null;
+    let aktifIdx  = -1;
+    let sonuclar  = [];
+
+    function acPaneli() {
+        panel.style.display = 'block';
+        input.value = '';
+        aktifIdx = -1;
+        yukle('');
+        input.focus();
+    }
+
+    function kapaPaneli() {
+        panel.style.display = 'none';
+        aktifIdx = -1;
+    }
+
+    function yukle(q) {
+        fetch('/cari/api/musteri_ara?q=' + encodeURIComponent(q))
+            .then(r => r.json())
+            .then(data => {
+                sonuclar = data;
+                aktifIdx = -1;
+                renderListe();
+            });
+    }
+
+    function renderListe() {
+        liste.innerHTML = '';
+        if (sonuclar.length === 0) {
+            liste.innerHTML = '<li style="padding:8px 12px;color:#999;font-size:13px;">Sonuç bulunamadı</li>';
+            return;
+        }
+        sonuclar.forEach(function(f, i) {
+            const li = document.createElement('li');
+            li.textContent = f.ad;
+            li.dataset.id  = f.id;
+            li.dataset.idx = i;
+            li.style.cssText = 'padding:9px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid #f1f1f1;transition:background 0.1s;';
+            li.addEventListener('mouseenter', function() {
+                setAktif(i);
+            });
+            li.addEventListener('click', function() {
+                window.location.href = '/firmalar/bilgi/' + f.id;
+            });
+            liste.appendChild(li);
+        });
+    }
+
+    function setAktif(idx) {
+        aktifIdx = idx;
+        liste.querySelectorAll('li[data-idx]').forEach(function(li) {
+            const i = parseInt(li.dataset.idx);
+            li.style.background = (i === aktifIdx) ? '#e8eeff' : '';
+            li.style.color       = (i === aktifIdx) ? '#3b5bdb' : '';
+            li.style.fontWeight  = (i === aktifIdx) ? '600'     : '';
+        });
+        // Seçili öğeyi görünür yap
+        const aktifLi = liste.querySelector('li[data-idx="' + aktifIdx + '"]');
+        if (aktifLi) aktifLi.scrollIntoView({ block: 'nearest' });
+    }
+
+    btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        panel.style.display !== 'none' ? kapaPaneli() : acPaneli();
+    });
+
+    document.addEventListener('click', function(e) {
+        if (!document.getElementById('firma-gecis-wrapper').contains(e.target)) {
+            kapaPaneli();
+        }
+    });
+
+    input.addEventListener('input', function() {
+        clearTimeout(debounce);
+        const q = this.value.trim();
+        debounce = setTimeout(function() { yukle(q); }, 200);
+    });
+
+    input.addEventListener('keydown', function(e) {
+        const toplam = sonuclar.length;
+        if (toplam === 0) return;
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setAktif((aktifIdx + 1) % toplam);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setAktif((aktifIdx - 1 + toplam) % toplam);
+        } else if (e.key === 'Enter' && aktifIdx >= 0) {
+            e.preventDefault();
+            window.location.href = '/firmalar/bilgi/' + sonuclar[aktifIdx].id;
+        } else if (e.key === 'Escape') {
+            kapaPaneli();
+        }
+    });
+})();
 </script>
 {% endblock %}

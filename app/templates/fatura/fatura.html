@@ -96,7 +96,7 @@
                         <!-- Butonlar -->
                         <div class="d-grid gap-2">
                             {{ form.submit(class="btn btn-primary btn-lg shadow-sm py-3 fw-bold") }}
-                            <a href="{{ url_for('fatura.index') }}" class="btn btn-link text-muted">Vazgeç ve Listeye Dön</a>
+                            <a href="{{ request.args.get('next') or request.referrer or url_for('fatura.index') }}" class="btn btn-link text-muted">Vazgeç ve Listeye Dön</a>
                         </div>
                     </form>
 

@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>{% if tab == 'kiralama' %}Kiralamalar{% else %}Cari Hesap Ekstresi{% endif %} - {{ firma.firma_adi }}</title>
+    <title>{% if tab == 'kiralama' %}Kiralamalar{% elif tab == 'cari' %}Cari{% else %}Form Bazlı Cari{% endif %} - {{ firma.firma_adi }}</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -237,7 +237,7 @@
 <!-- HEADER -->
 <div class="print-header">
     <div>
-        <h1>{% if tab == 'kiralama' %}Kiralama Listesi{% else %}Cari Hesap Ekstresi{% endif %}</h1>
+        <h1>{% if tab == 'kiralama' %}Kiralama Listesi{% elif tab == 'cari' %}Cari{% else %}Form Bazlı Cari Hesap Ekstresi{% endif %}</h1>
         <div class="firma-sub">{{ firma.firma_adi }}</div>
     </div>
     <div class="meta">
@@ -254,7 +254,120 @@
     </div>
 </div>
 
-{% if tab == 'kiralama' %}
+{% if tab == 'cari' %}
+<!-- CARİ TABLOSU -->
+<table>
+    <colgroup>
+        <col style="width:3%">
+        <col style="width:11%">
+        <col style="width:9%">
+        <col style="width:25%">
+        <col style="width:8%">
+        <col style="width:8%">
+        <col style="width:7%">
+        <col style="width:9%">
+        <col style="width:9%">
+        <col style="width:6%">
+        <col style="width:10%">
+        <col style="width:10%">
+    </colgroup>
+    <thead>
+        <tr>
+            <th>#</th>
+            <th>Tarih / Form No</th>
+            <th>İşlem Türü</th>
+            <th>Açıklama</th>
+            <th class="text-center">Başlangıç</th>
+            <th class="text-center">Bitiş</th>
+            <th class="text-center">Çal. Gün</th>
+            <th class="text-end">Birim Fiyat</th>
+            <th class="text-end">Matrah</th>
+            <th class="text-center">KDV %</th>
+            <th class="text-end">Borç</th>
+            <th class="text-end">Alacak</th>
+            <th class="text-end">Bakiye</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in cari_rows %}
+        <tr {% if row.islem_turu == 'tahsilat' %}style="background:#d1e7dd;"{% elif row.islem_turu == 'fatura' and 'Alış' in row.aciklama %}style="background:#d1e7dd;"{% elif row.islem_turu == 'harici_kiralama' %}style="background:#fff3cd;"{% elif row.islem_turu == 'nakliye_satis' %}style="background:#e2e3e5;"{% endif %}>
+            <td>{{ loop.index }}</td>
+            <td>
+                {% if row.form_tarihi %}
+                    <div style="font-size:9px; color:#6c757d;">{{ row.form_tarihi.strftime('%d.%m.%Y') }}</div>
+                {% endif %}
+                <span style="font-size:10px;">{{ row.form_no }}</span>
+            </td>
+            <td>
+                {% if row.islem_turu == 'kiralama' %}
+                    <span class="tur-badge tur-kiralama">Kiralama</span>
+                {% elif row.islem_turu == 'nakliye' %}
+                    <span class="tur-badge tur-nakliye">Nakliye</span>
+                {% elif row.islem_turu == 'fatura' %}
+                    <span class="tur-badge" style="background:{% if 'Satış' in row.aciklama %}#dc3545{% elif 'Alış' in row.aciklama %}#198754{% else %}#6c757d{% endif %};color:#fff;">Fatura</span>
+                {% elif row.islem_turu == 'harici_kiralama' %}
+                    <span class="tur-badge" style="background:#dc3545;color:#fff;">Tedarik</span>
+                {% elif row.islem_turu == 'nakliye_satis' %}
+                    <span class="tur-badge" style="background:#0dcaf0;color:#000;">Nakliye Sat.</span>
+                {% else %}
+                    <span class="tur-badge tur-tahsilat">Tahsilat</span>
+                {% endif %}
+            </td>
+            <td>
+                {{ row.aciklama }}
+                {% if row.seri_no %}
+                    <div style="font-size:9px; color:#6c757d;">S/N: {{ row.seri_no }}</div>
+                {% endif %}
+            </td>
+            <td class="text-center">{{ row.baslangic.strftime('%d.%m.%Y') if row.baslangic else '-' }}</td>
+            <td class="text-center">
+                {% if row.gun_sayisi is none %}
+                    -
+                {% elif row.bitis_bugun %}
+                    {{ row.bitis.strftime('%d.%m.%Y') }}<br><span class="text-muted">(bugün)</span>
+                {% else %}
+                    {{ row.bitis.strftime('%d.%m.%Y') if row.bitis else '-' }}
+                {% endif %}
+            </td>
+            <td class="text-center">{{ row.gun_sayisi if row.gun_sayisi is not none else '-' }}</td>
+            <td class="text-end">{{ "{:,.2f}".format(row.brm_fiyat).replace(',','X').replace('.',',').replace('X','.') }}</td>
+            <td class="text-end">{{ "{:,.2f}".format(row.matrah).replace(',','X').replace('.',',').replace('X','.') }}</td>
+            <td class="text-center">%{{ row.kdv_orani }}</td>
+            <td class="text-end text-danger fw-bold">
+                {% if row.toplam >= 0 %}
+                    {{ "{:,.2f}".format(row.toplam).replace(',','X').replace('.',',').replace('X','.') }}
+                {% else %}-{% endif %}
+            </td>
+            <td class="text-end text-success fw-bold">
+                {% if row.toplam < 0 %}
+                    {{ "{:,.2f}".format(row.toplam | abs).replace(',','X').replace('.',',').replace('X','.') }}
+                {% else %}-{% endif %}
+            </td>
+            <td class="text-end fw-bold">{{ "{:,.2f}".format(row.bakiye).replace(',','X').replace('.',',').replace('X','.') }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="13" class="text-center" style="padding:20px;">Kayıt bulunamadı.</td></tr>
+        {% endfor %}
+    </tbody>
+    {% if cari_rows %}
+    <tfoot>
+        <tr>
+            <td colspan="10" class="text-end">TOPLAM:</td>
+            <td class="text-end">{{ "{:,.2f}".format(cari_rows | selectattr('toplam', 'ge', 0) | sum(attribute='toplam')).replace(',','X').replace('.',',').replace('X','.') }} TL</td>
+            <td class="text-end text-success">{{ "{:,.2f}".format(cari_rows | selectattr('toplam', 'lt', 0) | sum(attribute='toplam') | abs).replace(',','X').replace('.',',').replace('X','.') }} TL</td>
+            <td class="text-end {% if cari_rows[-1].bakiye > 0 %}bakiye-pozitif{% endif %}">
+                {{ "{:,.2f}".format(cari_rows[-1].bakiye).replace(',','X').replace('.',',').replace('X','.') }} TL
+            </td>
+        </tr>
+    </tfoot>
+    {% endif %}
+</table>
+<div class="print-footer">
+    <div>{{ cari_rows | length }} satır listelendi — {{ firma.firma_adi }}</div>
+    <div>Rapor Tarihi: {{ rapor_tarihi }} — Bu belge bilgi amacıyla hazırlanmıştır.</div>
+</div>
+
+{% elif tab == 'kiralama' %}
 <!-- KİRALAMALAR TABLOSU -->
 <table>
     <colgroup>
@@ -343,7 +456,7 @@
 </div>
 
 {% else %}
-<!-- CARİ HAREKETLER TABLOSU -->
+<!-- FORM BAZLI CARİ HAREKETLER TABLOSU -->
 <table>
     <colgroup>
         <col class="col-no">

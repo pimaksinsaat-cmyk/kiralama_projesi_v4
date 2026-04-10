@@ -384,22 +384,43 @@
         const bitisInput = document.getElementById('nakliye-bitis');
 
         // FIRMA AUTOCOMPLETE
-        const firmaAramaInput = document.getElementById('firma-arama');
-        const firmaDropdown = document.getElementById('firma-dropdown');
-        const firmaIdInput = document.getElementById('firma_id');
+        const firmaAramaInput    = document.getElementById('firma-arama');
+        const firmaDropdown      = document.getElementById('firma-dropdown');
+        const firmaIdInput       = document.getElementById('firma_id');
         const firmaDropdownToggle = document.getElementById('firma-dropdown-toggle');
-        const firmaListesi = [
-            {% for f in firma_listesi %}
-            { id: {{ f.id }}, firma_adi: '{{ f.firma_adi | replace("'", "\\'") }}' }{{ "," if not loop.last }}
-            {% endfor %}
-        ];
+        const firmaListesi = {{ firma_listesi | tojson | safe }};
+        const firmaListesiSirali = [...firmaListesi].sort((a, b) => a.firma_adi.localeCompare(b.firma_adi, 'tr'));
+
+        let aktifIdx  = -1;
+        let sonuclar  = [];
 
         function truncateName(name) {
             return name.split(' ').slice(0, 4).join(' ');
         }
 
+        function setAktif(idx) {
+            aktifIdx = idx;
+            firmaDropdown.querySelectorAll('li[data-idx]').forEach(function(li) {
+                const i = parseInt(li.dataset.idx);
+                if (i === aktifIdx) {
+                    li.style.background = '#e8eeff';
+                    li.style.color      = '#3b5bdb';
+                    li.style.fontWeight = '600';
+                    li.style.borderLeft = '3px solid #667eea';
+                    li.scrollIntoView({ block: 'nearest' });
+                } else {
+                    li.style.background = '';
+                    li.style.color      = '';
+                    li.style.fontWeight = '';
+                    li.style.borderLeft = '';
+                }
+            });
+        }
+
         function renderFirmaList(firmalar) {
             firmaDropdown.innerHTML = '';
+            sonuclar = firmalar;
+            aktifIdx = -1;
             if (firmalar.length === 0) {
                 const item = document.createElement('li');
                 item.className = 'list-group-item small text-muted';
@@ -407,65 +428,72 @@
                 firmaDropdown.appendChild(item);
                 return;
             }
-
-            firmalar.slice(0, 20).forEach(firma => {
+            firmalar.forEach(function(firma, i) {
                 const item = document.createElement('li');
-                item.className = 'list-group-item list-group-item-action small cursor-pointer';
+                item.className = 'list-group-item list-group-item-action small';
                 item.textContent = truncateName(firma.firma_adi);
                 item.title = firma.firma_adi;
-                item.onclick = (e) => {
+                item.dataset.idx = i;
+                item.style.cursor = 'pointer';
+                item.style.transition = 'background 0.1s';
+                item.addEventListener('mouseenter', function() { setAktif(i); });
+                item.addEventListener('click', function(e) {
                     e.preventDefault();
                     firmaAramaInput.value = truncateName(firma.firma_adi);
-                    firmaIdInput.value = firma.id;
+                    firmaIdInput.value    = firma.id;
                     firmaDropdown.style.display = 'none';
                     filtreForm.submit();
-                };
-                item.style.cursor = 'pointer';
+                });
                 firmaDropdown.appendChild(item);
             });
         }
 
-        // Input değiştiğinde filtrele
-        firmaAramaInput.addEventListener('input', function() {
-            const arama = this.value.toLowerCase().trim();
-
-            if (arama.length === 0) {
-                firmaDropdown.style.display = 'none';
-                return;
-            }
-
-            const eslesen = firmaListesi.filter(f =>
-                f.firma_adi.toLowerCase().includes(arama)
-            );
-
-            renderFirmaList(eslesen);
+        function acDropdown() {
+            const arama = firmaAramaInput.value.toLocaleLowerCase('tr-TR').trim();
+            const liste = arama ? firmaListesiSirali.filter(f => f.firma_adi.toLocaleLowerCase('tr-TR').includes(arama)) : firmaListesiSirali;
+            renderFirmaList(liste);
             firmaDropdown.style.display = 'block';
-        });
+        }
 
-        // Dropdown toggle butonuna tıklandığında tüm firmalar göster
+        firmaAramaInput.addEventListener('input', acDropdown);
+        firmaAramaInput.addEventListener('focus', acDropdown);
+
         firmaDropdownToggle.addEventListener('click', function(e) {
             e.preventDefault();
             if (firmaDropdown.style.display === 'none') {
-                renderFirmaList(firmaListesi.sort((a, b) => a.firma_adi.localeCompare(b.firma_adi)));
-                firmaDropdown.style.display = 'block';
+                acDropdown();
                 firmaAramaInput.focus();
             } else {
                 firmaDropdown.style.display = 'none';
             }
         });
 
-        // Focus olduğunda dropdown göster (eğer içerik varsa)
-        firmaAramaInput.addEventListener('focus', function() {
-            if (firmaListesi.length > 0 && this.value.length === 0) {
-                renderFirmaList(firmaListesi.sort((a, b) => a.firma_adi.localeCompare(b.firma_adi)));
-                firmaDropdown.style.display = 'block';
+        firmaAramaInput.addEventListener('keydown', function(e) {
+            const toplam = sonuclar.length;
+            if (firmaDropdown.style.display === 'none' && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+                acDropdown();
+                return;
+            }
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setAktif((aktifIdx + 1) % toplam);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setAktif((aktifIdx - 1 + toplam) % toplam);
+            } else if (e.key === 'Enter' && aktifIdx >= 0) {
+                e.preventDefault();
+                const f = sonuclar[aktifIdx];
+                firmaAramaInput.value = truncateName(f.firma_adi);
+                firmaIdInput.value    = f.id;
+                firmaDropdown.style.display = 'none';
+                filtreForm.submit();
+            } else if (e.key === 'Escape') {
+                firmaDropdown.style.display = 'none';
             }
         });
 
-        // Dropdown dışına tıklandığında kapat
         document.addEventListener('click', function(e) {
-            const container = document.querySelector('.firma-search-container');
-            if (!container.contains(e.target)) {
+            if (!document.querySelector('.firma-search-container').contains(e.target)) {
                 firmaDropdown.style.display = 'none';
             }
         });
@@ -570,7 +598,7 @@
 
                 // Kiralama Kilidi Mantığı
                 if (isKiralama) {
-                    kiralamaGitLink.href = kiralamaUrl;
+                    kiralamaGitLink.href = kiralamaUrl + '?next=' + encodeURIComponent(window.location.href);
                     kiralamaGitLink.style.display = 'block';
                     duzenleGrup.style.display = 'none';
                     kilitliMesaj.style.display = 'none';

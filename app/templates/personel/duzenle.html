@@ -368,7 +368,7 @@
             <h1>Personel Bilgilerini Duzenle</h1>
             <p>{{ personel.tam_ad }} kaydini yeni personel modulu icinden guncelliyorsunuz.</p>
         </div>
-        <a class="back-link" href="{{ url_for('personel.index', sube_id=selected_sube_id) if selected_sube_id else url_for('personel.index') }}">Listeye Don</a>
+        <a class="back-link" href="{{ request.args.get('next') or request.referrer or url_for('personel.index') }}">Listeye Don</a>
     </div>
 
     <div class="edit-card">
@@ -548,7 +548,7 @@
             </div>
 
             <div class="form-actions">
-                <a href="{{ url_for('personel.index', sube_id=selected_sube_id) if selected_sube_id else url_for('personel.index') }}">Iptal</a>
+                <a href="{{ request.args.get('next') or request.referrer or url_for('personel.index') }}">Iptal</a>
                 <button type="submit" data-submitting-text="Kaydediliyor...">Kaydet</button>
             </div>
         </form>

@@ -138,7 +138,7 @@
                 <button type="submit" class="btn-kaydet">
                     <i class="fas fa-check"></i> Kaydet
                 </button>
-                <a href="{{ url_for('araclar.bakim_gecmisi', arac_id=bakim.arac_id) }}" class="btn-iptal">
+                <a href="{{ request.args.get('next') or request.referrer or url_for('araclar.bakim_gecmisi', arac_id=bakim.arac_id) }}" class="btn-iptal">
                     <i class="fas fa-times"></i> İptal
                 </a>
             </div>

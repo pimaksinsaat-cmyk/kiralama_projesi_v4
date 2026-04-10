@@ -15,6 +15,23 @@ _TR_UPPER_MAP = str.maketrans({
     'ü': 'Ü',
 })
 
+_TR_LOWER_MAP = str.maketrans({
+    'İ': 'i',
+    'I': 'ı',
+    'Ç': 'ç',
+    'Ğ': 'ğ',
+    'Ö': 'ö',
+    'Ş': 'ş',
+    'Ü': 'ü',
+})
+
+
+def bugun():
+    """Türkiye saatiyle bugünün tarihini döner (UTC+3).
+    date.today() yerine her yerde bu kullanılmalıdır."""
+    from datetime import datetime, timezone, timedelta
+    return datetime.now(timezone(timedelta(hours=3))).date()
+
 
 def admin_required(f):
     @wraps(f)
@@ -33,6 +50,30 @@ def turkish_upper(value):
     if value is None:
         return None
     return str(value).translate(_TR_UPPER_MAP).upper()
+
+
+def tr_lower(s: str) -> str:
+    """Türkçe uyumlu küçük harf dönüşümü: İ→i, I→ı, Ş→ş vb."""
+    if s is None:
+        return None
+    return str(s).translate(_TR_LOWER_MAP).lower()
+
+
+def tr_ilike(column, term: str):
+    """
+    Türkçe uyumlu büyük/küçük harf duyarsız SQL LIKE filtresi.
+    PostgreSQL C locale'de ilike İ/i, Ş/ş vb. eşleştiremez;
+    bu fonksiyon her iki tarafı da Türkçe kural ile normalize eder.
+    """
+    from sqlalchemy import func
+    normalized_col = func.lower(
+        func.replace(func.replace(func.replace(
+            func.replace(func.replace(func.replace(func.replace(
+                column,
+                'İ', 'i'), 'I', 'ı'), 'Ş', 'ş'), 'Ğ', 'ğ'), 'Ö', 'ö'), 'Ü', 'ü'), 'Ç', 'ç')
+    )
+    normalized_term = tr_lower(term)
+    return normalized_col.like(normalized_term)
 
 
 def normalize_turkish_upper(value, strip=True):

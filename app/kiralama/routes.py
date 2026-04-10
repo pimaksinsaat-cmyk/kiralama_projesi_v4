@@ -25,7 +25,7 @@ from app.kiralama.forms import KiralamaForm
 from app.services.kiralama_services import KiralamaService, KiralamaKalemiService
 from app.services.base import ValidationError
 from app.services.operation_log_service import OperationLogService
-from app.utils import ensure_active_sube_exists
+from app.utils import ensure_active_sube_exists, tr_ilike
 
 # --- BELLEK İÇİ ÖNBELLEKLEME (IN-MEMORY CACHE) ---
 _CACHE_DATA = {
@@ -146,9 +146,8 @@ def index():
         )
 
         if q:
-            search = f"%{q}%"
             query = query.join(Firma, Kiralama.firma_musteri_id == Firma.id)\
-                         .filter(or_(Kiralama.kiralama_form_no.ilike(search), Firma.firma_adi.ilike(search)))
+                         .filter(or_(Kiralama.kiralama_form_no.ilike(f"%{q}%"), tr_ilike(Firma.firma_adi, f"%{q}%")))
 
         pagination = query.order_by(Kiralama.kiralama_form_no.desc()).paginate(page=page, per_page=per_page)
 

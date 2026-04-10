@@ -5,6 +5,7 @@ from sqlalchemy import func, inspect, or_
 from sqlalchemy.orm import joinedload
 
 from app.extensions import db
+from app.utils import bugun as _bugun
 from app.araclar.models import Arac, AracBakim
 from app.filo.models import Ekipman, BakimKaydi, StokHareket
 from app.kiralama.models import KiralamaKalemi
@@ -213,7 +214,7 @@ class RaporlamaService:
         if sube_id:
             query = query.filter(PersonelMaasDonemi.sube_id == sube_id)
 
-        today = date.today()
+        today = _bugun()
         for donem in query.all():
             effective_end = min(donem.bitis_tarihi or today, today)
             for month_start in cls._iterate_month_starts(start_date, end_date):
@@ -252,7 +253,7 @@ class RaporlamaService:
             if k not in en_eski or d.baslangic_tarihi < en_eski[k]:
                 en_eski[k] = d.baslangic_tarihi
 
-        today = date.today()
+        today = _bugun()
         for donem in donemler:
             k = (donem.sube_id, donem.kategori)
             # İlk kayıt ilerideyse rapor döneminden itibaren aktif say
@@ -482,7 +483,7 @@ class RaporlamaService:
                 query = query.filter(PersonelMaasDonemi.sube_id == sube_id)
 
             for donem in query.all():
-                effective_end = min(donem.bitis_tarihi or date.today(), date.today())
+                effective_end = min(donem.bitis_tarihi or _bugun(), _bugun())
                 for month_row in month_rows:
                     month_overlap = cls._overlap_range(
                         donem.baslangic_tarihi,
@@ -524,7 +525,7 @@ class RaporlamaService:
                     if donem.baslangic_tarihi > end_date:
                         continue
                     effective_start = donem.baslangic_tarihi
-                effective_end = min(donem.bitis_tarihi or date.today(), date.today())
+                effective_end = min(donem.bitis_tarihi or _bugun(), _bugun())
                 for month_row in month_rows:
                     month_overlap = cls._overlap_range(
                         effective_start,
@@ -1149,6 +1150,30 @@ class RaporlamaService:
                 row["work_days"] / row["available_days"] * 100.0 if row["available_days"] else 0.0
             )
 
+        # Makine tipi bazlı kullanım özeti (genel bakış kartı için)
+        tip_stats = defaultdict(lambda: {"makine_sayisi": 0, "work_days": 0, "available_days": 0})
+        for ekipman in rapor_makineler:
+            tip = (ekipman.tipi or "").strip() or "Diğer"
+            machine_stat = metrics_by_machine.get(ekipman.id, {})
+            tip_stats[tip]["makine_sayisi"] += 1
+            tip_stats[tip]["work_days"] += machine_stat.get("work_days", 0)
+            tip_stats[tip]["available_days"] += machine_stat.get("available_days", 0)
+        makine_tipi_ozet = sorted(
+            [
+                {
+                    "tip": tip,
+                    "makine_sayisi": v["makine_sayisi"],
+                    "work_days": v["work_days"],
+                    "available_days": v["available_days"],
+                    "utilization_pct": (
+                        v["work_days"] / v["available_days"] * 100.0 if v["available_days"] else 0.0
+                    ),
+                }
+                for tip, v in tip_stats.items()
+            ],
+            key=lambda x: x["tip"].lower(),
+        )
+
         transport_metrics = cls._calculate_transport_metrics(start_date, end_date, sube_id=sube_id)
         transport_totals = transport_metrics["totals"]
         external_rental_metrics = cls._calculate_external_rental_metrics(start_date, end_date, sube_id=sube_id)
@@ -1295,6 +1320,7 @@ class RaporlamaService:
             },
             "branch_rows": branch_rows,
             "machine_rows": machine_rows,
+            "makine_tipi_ozet": makine_tipi_ozet,
             "transport_vehicle_rows": transport_metrics["vehicle_rows"],
             "external_rental_rows": external_rental_metrics["rows"],
             "monthly_revenue_rows": monthly_revenue_rows,

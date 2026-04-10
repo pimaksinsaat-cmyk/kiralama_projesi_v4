@@ -10,6 +10,7 @@ from sqlalchemy.orm import joinedload
 from app.extensions import db
 from app.filo.models import Ekipman, BakimKaydi, KullanilanParca, StokHareket
 from app.kiralama.models import Kiralama, KiralamaKalemi
+from app.utils import bugun as _bugun
 
 
 class EkipmanRaporuService:
@@ -40,7 +41,7 @@ class EkipmanRaporuService:
         
         # Varsayılan tarih aralığı
         if end_date is None:
-            end_date = date.today()
+            end_date = _bugun()
         
         # Döviz kurları (0 ise kur yok kabul edilir)
         usd_rate = float(ekipman.temin_doviz_kuru_usd or 0)

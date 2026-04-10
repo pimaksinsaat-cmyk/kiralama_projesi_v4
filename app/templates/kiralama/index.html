@@ -856,7 +856,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Menu Click İşlemleri
-    document.getElementById('menu-duzenle').onclick = () => { if(state.kUrl) window.location.href = state.kUrl; };
+    document.getElementById('menu-duzenle').onclick = () => { if(state.kUrl) window.location.href = state.kUrl + '?next=' + encodeURIComponent(window.location.href); };
     // --- MENÜ AÇILIŞ (FİRMALAR AYARI - iPHONE DOSTU) ---
     const openFormMenu = (e, row) => {
         closeModals();

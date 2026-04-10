@@ -4,7 +4,7 @@ from app.kiralama.models import KiralamaKalemi
 from app.extensions import db
 from datetime import datetime, date
 from decimal import Decimal
-from app.utils import normalize_turkish_upper
+from app.utils import normalize_turkish_upper, bugun as _bugun
 
 class EkipmanService(BaseService):
     """
@@ -112,7 +112,7 @@ class BakimService(BaseService):
 
     @classmethod
     def get_active_rental(cls, ekipman_id, reference_date=None):
-        reference_date = reference_date or date.today()
+        reference_date = reference_date or _bugun()
         return KiralamaKalemi.query.filter(
             KiralamaKalemi.ekipman_id == ekipman_id,
             KiralamaKalemi.is_deleted == False,

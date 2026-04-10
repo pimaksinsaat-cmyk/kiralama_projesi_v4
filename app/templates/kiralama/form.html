@@ -379,7 +379,7 @@
             {% else %}
             {{ form.submit(class="btn btn-primary btn-lg px-5 shadow") }}
             {% endif %}
-            <a href="{{ url_for('kiralama.index') }}" class="btn btn-outline-secondary btn-lg px-4">İptal Et</a>
+            <a href="{{ request.args.get('next') or request.referrer or url_for('kiralama.index') }}" class="btn btn-outline-secondary btn-lg px-4">İptal Et</a>
         </div>
     </form>
 </div>

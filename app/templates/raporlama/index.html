@@ -109,9 +109,31 @@
                 <div class="col-md-4">
                     <div class="card border-0 shadow-sm h-100">
                         <div class="card-body">
-                            <small class="text-muted d-block">Makine Kullanim Orani</small>
-                            <h4 class="mb-0">{{ '%.1f'|format(dashboard.summary.utilization_pct) }}%</h4>
-                            <small class="text-muted">{{ dashboard.summary.work_days }} / {{ dashboard.summary.available_days }} gun</small>
+                            <div class="d-flex justify-content-between align-items-start mb-1">
+                                <small class="text-muted">Makine Kullanim Orani</small>
+                                {% if dashboard.makine_tipi_ozet %}
+                                <select id="makine-tipi-secim" class="form-select form-select-sm" style="max-width:145px; font-size:0.75rem;">
+                                    <option value="__tum__"
+                                        data-pct="{{ '%.1f'|format(dashboard.summary.utilization_pct) }}"
+                                        data-work="{{ dashboard.summary.work_days }}"
+                                        data-avail="{{ dashboard.summary.available_days }}"
+                                        data-count="{{ dashboard.summary.machine_count }}">
+                                        Tüm Makineler
+                                    </option>
+                                    {% for tip in dashboard.makine_tipi_ozet %}
+                                    <option value="{{ tip.tip }}"
+                                        data-pct="{{ '%.1f'|format(tip.utilization_pct) }}"
+                                        data-work="{{ tip.work_days }}"
+                                        data-avail="{{ tip.available_days }}"
+                                        data-count="{{ tip.makine_sayisi }}">
+                                        {{ tip.tip }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                {% endif %}
+                            </div>
+                            <h4 class="mb-0" id="kullanim-pct-label">{{ '%.1f'|format(dashboard.summary.utilization_pct) }}%</h4>
+                            <small class="text-muted" id="kullanim-alt-label">{{ dashboard.summary.work_days }} / {{ dashboard.summary.available_days }} gün — {{ dashboard.summary.machine_count }} makine</small>
                         </div>
                     </div>
                 </div>
@@ -1151,5 +1173,16 @@
             },
         });
     })();
+
+    // Makine tipi seçim anahtarı
+    const makineSecim = document.getElementById('makine-tipi-secim');
+    if (makineSecim) {
+        makineSecim.addEventListener('change', function () {
+            const opt = this.options[this.selectedIndex];
+            document.getElementById('kullanim-pct-label').textContent = opt.dataset.pct + '%';
+            document.getElementById('kullanim-alt-label').textContent =
+                opt.dataset.work + ' / ' + opt.dataset.avail + ' gün — ' + opt.dataset.count + ' makine';
+        });
+    }
 </script>
 {% endblock %}

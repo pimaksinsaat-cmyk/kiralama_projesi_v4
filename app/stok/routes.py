@@ -13,6 +13,7 @@ from app.services.base import ValidationError
 from app.services.operation_log_service import OperationLogService
 from app.services.stok_services import StokHareketService, StokKartiService
 from app.stok import stok_bp
+from app.utils import tr_ilike
 
 
 def get_actor_id():
@@ -48,12 +49,11 @@ def index():
     )
     query = base_query
     if q:
-        term = f'%{q}%'
         query = query.outerjoin(StokKarti.varsayilan_tedarikci).filter(
             or_(
-                StokKarti.parca_kodu.ilike(term),
-                StokKarti.parca_adi.ilike(term),
-                Firma.firma_adi.ilike(term),
+                StokKarti.parca_kodu.ilike(f'%{q}%'),
+                tr_ilike(StokKarti.parca_adi, f'%{q}%'),
+                tr_ilike(Firma.firma_adi, f'%{q}%'),
             )
         )
 
@@ -101,12 +101,11 @@ def arsiv():
     )
 
     if q:
-        term = f'%{q}%'
         query = query.outerjoin(StokKarti.varsayilan_tedarikci).filter(
             or_(
-                StokKarti.parca_kodu.ilike(term),
-                StokKarti.parca_adi.ilike(term),
-                Firma.firma_adi.ilike(term),
+                StokKarti.parca_kodu.ilike(f'%{q}%'),
+                tr_ilike(StokKarti.parca_adi, f'%{q}%'),
+                tr_ilike(Firma.firma_adi, f'%{q}%'),
             )
         )
 

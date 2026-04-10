@@ -19,7 +19,7 @@ from app.kiralama.models import Kiralama, KiralamaKalemi
 from app.subeler.models import Sube
 from app.araclar.models import Arac as NakliyeAraci
 from app.firmalar.models import Firma
-from app.utils import ensure_active_sube_exists, normalize_turkish_upper
+from app.utils import ensure_active_sube_exists, normalize_turkish_upper, tr_ilike
 from app.extensions import db
 from app.services.operation_log_service import OperationLogService
 
@@ -141,14 +141,12 @@ def index():
         )
         
         if q:
-            search_term = f'%{q}%'
             base_query = base_query.filter(
                 or_(
-                    Ekipman.kod.ilike(search_term),
-                    Ekipman.tipi.ilike(search_term),
-                    Ekipman.seri_no.ilike(search_term),
-                    Ekipman.marka.ilike(search_term)
-                    
+                    tr_ilike(Ekipman.kod, f'%{q}%'),
+                    tr_ilike(Ekipman.tipi, f'%{q}%'),
+                    Ekipman.seri_no.ilike(f'%{q}%'),
+                    tr_ilike(Ekipman.marka, f'%{q}%'),
                 )
             )
 

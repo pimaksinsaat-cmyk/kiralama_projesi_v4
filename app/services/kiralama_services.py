@@ -9,6 +9,7 @@ from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
+from app.utils import bugun as _bugun
 # En güncel yapı: app/services/base_service.py
 from app.services.base import BaseService, ValidationError
 
@@ -441,7 +442,7 @@ class KiralamaService(BaseService):
             return Decimal('0.00')
 
         if referans_tarih is None:
-            referans_tarih = date.today()
+            referans_tarih = _bugun()
 
         if bas > referans_tarih:
             return Decimal('0.00')
@@ -482,7 +483,7 @@ class KiralamaService(BaseService):
         if not (bas and bit):
             return Decimal('0.00')
         if referans_tarih is None:
-            referans_tarih = date.today()
+            referans_tarih = _bugun()
         if bas > referans_tarih:
             return Decimal('0.00')
         ust_sinir = bit if kalem.sonlandirildi else referans_tarih
@@ -709,7 +710,7 @@ class KiralamaService(BaseService):
                         kalem.harici_ekipman_uretim_yili = to_int_or_none(k_data.get('harici_ekipman_uretim_tarihi'))
                         makine_adi = kalem.harici_ekipman_marka or "Dış Ekipman"
                         if kalem.kiralama_alis_fiyat > 0 and kalem.harici_ekipman_tedarikci_id > 0:
-                            ust_sinir = bit if kalem.sonlandirildi else min(bit, date.today())
+                            ust_sinir = bit if kalem.sonlandirildi else min(bit, _bugun())
                             gun = cls._hesapla_gun_sayisi(bas, ust_sinir)
                             tedarikci_id = kalem.harici_ekipman_tedarikci_id if kalem.harici_ekipman_tedarikci_id and kalem.harici_ekipman_tedarikci_id > 0 else kalem.nakliye_tedarikci_id
                             logger.debug(f"[CREATE] Dış ekipman/nakliye HizmetKaydi ekleniyor: tedarikci_id={tedarikci_id}, tutar={kalem.kiralama_alis_fiyat * gun}, kdv_orani={kalem.kiralama_alis_kdv}, nakliye_alis_kdv={kalem.nakliye_alis_kdv}")
@@ -863,7 +864,7 @@ class KiralamaService(BaseService):
                     makine_adi = aktif.harici_ekipman_marka or "Dış Ekipman"
 
                     if aktif.kiralama_alis_fiyat > 0 and aktif.harici_ekipman_tedarikci_id > 0:
-                        ust_sinir = bit if aktif.sonlandirildi else min(bit, date.today())
+                        ust_sinir = bit if aktif.sonlandirildi else min(bit, _bugun())
                         gun = cls._hesapla_gun_sayisi(bas, ust_sinir)
                         db.session.add(HizmetKaydi(
                             firma_id=aktif.harici_ekipman_tedarikci_id, tarih=date.today(),

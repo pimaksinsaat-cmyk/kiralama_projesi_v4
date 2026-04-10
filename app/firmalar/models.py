@@ -87,12 +87,16 @@ class Firma(BaseModel):
         h_borc_kdvli  = Decimal('0.00')
         h_alacak_kdvli = Decimal('0.00')
 
+        from app.services.cari_services import hizmet_kaydi_bakiyeye_dahil_mi
+
         kayitlar = HizmetKaydi.query.filter(
             HizmetKaydi.firma_id == self.id,
             HizmetKaydi.is_deleted == False
         ).all()
 
         for h in kayitlar:
+            if not hizmet_kaydi_bakiyeye_dahil_mi(h):
+                continue
             tutar = KiralamaService.hesapla_hizmet_kaydi_canli_tutari(h)
             # KDV oranı: nakliye_alis_kdv → kiralama_alis_kdv → kdv_orani öncelik sırası
             kdv_oran = (

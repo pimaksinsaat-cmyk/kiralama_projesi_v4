@@ -206,7 +206,7 @@
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0">
                             <!-- HAKEDİŞ MENÜSÜ BURAYA TAŞINDI -->
-                            <li><a class="dropdown-item fw-semibold" href="{{ url_for('fatura.index') }}"><i class="fas fa-file-invoice-dollar me-2 text-primary"></i>Hakedişler</a></li>
+                            <li><a class="dropdown-item fw-semibold disabled" href="#" tabindex="-1" aria-disabled="true" title="Hakediş modülü devre dışı" style="color:#aaa;pointer-events:none;opacity:0.6;"><i class="fas fa-file-invoice-dollar me-2 text-primary"></i>Hakedişler</a></li>
                             <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item" href="{{ url_for('cari.odeme_ekle', yon='tahsilat') }}">Ödeme Al (Tahsilat)</a></li>
                             <li><a class="dropdown-item" href="{{ url_for('cari.odeme_ekle', yon='odeme') }}">Ödeme Yap (Tediye)</a></li>

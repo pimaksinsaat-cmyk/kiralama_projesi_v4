@@ -1,6 +1,6 @@
 from app.firmalar import firmalar_bp
 from flask_login import login_required
-from app.utils import admin_required
+from app.utils import admin_required, bugun
 # -------------------------------------------------------------------------
 # Sözleşme No Düzelt (Admin)
 # -------------------------------------------------------------------------
@@ -25,6 +25,13 @@ from app.services.base import ValidationError
 def get_actor_id():
     """Kullanıcı giriş yapmışsa ID'sini döner, aksi halde None."""
     return getattr(current_user, 'id', None)
+
+
+def _build_cari_rows(firma, today_date):
+    """FirmaService.build_cari_rows için ince sarmalayıcı — geriye dönük uyumluluk."""
+    return FirmaService.build_cari_rows(firma, today_date)
+
+
 
 
 class ListPagination:
@@ -235,28 +242,74 @@ def duzelt(id):
 @login_required
 def bilgi(id):
     try:
-        tab = request.args.get('tab', 'hareket')
+        tab = request.args.get('tab', 'cari')
 
         hareket_per_page = request.args.get('hareket_per_page', 25, type=int)
         hareket_page     = request.args.get('hareket_page', 1, type=int)
         kiralama_per_page = request.args.get('kiralama_per_page', 25, type=int)
         kiralama_page     = request.args.get('kiralama_page', 1, type=int)
+        cari_per_page    = request.args.get('cari_per_page', 25, type=int)
+        cari_page        = request.args.get('cari_page', 1, type=int)
 
         allowed_pp = {10, 25, 50, 100}
         if hareket_per_page not in allowed_pp:   hareket_per_page = 25
         if kiralama_per_page not in allowed_pp:  kiralama_per_page = 25
+        if cari_per_page not in allowed_pp:      cari_per_page = 25
+
+        # --- Tarih filtresi ---
+        from datetime import datetime, timedelta
+        start_date_str = request.args.get('start_date')
+        end_date_str = request.args.get('end_date')
+        today_date = bugun()
+        if end_date_str:
+            try:
+                end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+            except Exception:
+                end_date = today_date
+        else:
+            end_date = today_date
 
         finans_verileri = FirmaService.get_financial_summary(id)
 
+        if start_date_str:
+            try:
+                start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+            except Exception:
+                start_date = today_date
+        else:
+            # Varsayılan başlangıç: firmanın kayıt tarihi
+            firma_obj = finans_verileri.get('firma')
+            if firma_obj and getattr(firma_obj, 'created_at', None):
+                start_date = firma_obj.created_at.date()
+            else:
+                start_date = today_date
+
         # --- Cari Hareketler sayfalama ---
         hareketler_all = finans_verileri.pop('hareketler')
-        h_pag = ListPagination(total=len(hareketler_all), page=hareket_page, per_page=hareket_per_page)
+        # Hareketler filtreleme (örnek: hareketler_all'da tarih alanı varsa)
+        hareketler_filtered = []
+        for h in hareketler_all:
+            tarih = None
+            if hasattr(h, 'tarih'):
+                tarih = getattr(h, 'tarih', None)
+            elif isinstance(h, dict):
+                tarih = h.get('tarih')
+            if tarih is None:
+                hareketler_filtered.append(h)
+            else:
+                try:
+                    t = tarih if isinstance(tarih, date) else datetime.strptime(tarih, '%Y-%m-%d').date()
+                    if start_date <= t <= end_date:
+                        hareketler_filtered.append(h)
+                except Exception:
+                    hareketler_filtered.append(h)
+        h_pag = ListPagination(total=len(hareketler_filtered), page=hareket_page, per_page=hareket_per_page)
         hb = (h_pag.page - 1) * h_pag.per_page
-        hareketler_sayfa = hareketler_all[hb: hb + h_pag.per_page]
+        hareketler_sayfa = hareketler_filtered[hb: hb + h_pag.per_page]
 
         # --- LOG: Taşeron Nakliye Bedeli ---
         try:
-            nakliye_hareketler = [h for h in hareketler_all if (getattr(h, 'tur', None) == 'Nakliye') or (isinstance(h, dict) and h.get('tur') == 'Nakliye')]
+            nakliye_hareketler = [h for h in hareketler_filtered if (getattr(h, 'tur', None) == 'Nakliye') or (isinstance(h, dict) and h.get('tur') == 'Nakliye')]
             for i, islem in enumerate(nakliye_hareketler):
                 if isinstance(islem, dict):
                     log_str = f"[NAKLIYE] Hareket {i+1}: id={islem.get('id')}, aciklama={islem.get('aciklama')}, kdv_orani={islem.get('kdv_orani')}, tutar={islem.get('tutar')}"
@@ -269,18 +322,43 @@ def bilgi(id):
         # --- Kiralamalar sayfalama ---
         firma = finans_verileri['firma']
         kiralamalar_all = sorted(firma.kiralamalar, key=lambda k: k.kiralama_form_no or '', reverse=True)
-        k_pag = ListPagination(total=len(kiralamalar_all), page=kiralama_page, per_page=kiralama_per_page)
+        # Kiralamalar filtreleme (örnek: kiralama.kiralama_olusturma_tarihi)
+        kiralamalar_filtered = []
+        for k in kiralamalar_all:
+            tarih = getattr(k, 'kiralama_olusturma_tarihi', None)
+            if tarih is None:
+                kiralamalar_filtered.append(k)
+            else:
+                try:
+                    t = tarih if isinstance(tarih, date) else datetime.strptime(tarih, '%Y-%m-%d').date()
+                    if start_date <= t <= end_date:
+                        kiralamalar_filtered.append(k)
+                except Exception:
+                    kiralamalar_filtered.append(k)
+        k_pag = ListPagination(total=len(kiralamalar_filtered), page=kiralama_page, per_page=kiralama_per_page)
         kb = (k_pag.page - 1) * k_pag.per_page
-        kiralamalar_sayfa = kiralamalar_all[kb: kb + k_pag.per_page]
+        kiralamalar_sayfa = kiralamalar_filtered[kb: kb + k_pag.per_page]
+
+        # --- Cari Tab ---
+        try:
+            cari_rows_all = _build_cari_rows(firma, end_date)
+            # Tarih aralığına göre filtrele (satırların sort_date alanı baz alınır)
+            cari_rows_all = [r for r in cari_rows_all if r.get('sort_date') and start_date <= r.get('sort_date') <= end_date]
+        except Exception as cari_ex:
+            current_app.logger.error(f"[CARI] _build_cari_rows hatası: {cari_ex}", exc_info=True)
+            cari_rows_all = []
+        c_pag = ListPagination(total=len(cari_rows_all), page=cari_page, per_page=cari_per_page)
+        cb = (c_pag.page - 1) * c_pag.per_page
+        cari_rows_sayfa = cari_rows_all[cb: cb + c_pag.per_page]
 
         # --- LOG: firmalar.bilgi.html render öncesi ---
         try:
             current_app.logger.debug(f"[BILGI] Firma ID: {firma.id}, Adı: {firma.firma_adi}")
-            current_app.logger.debug(f"[BILGI] Toplam hareket: {len(hareketler_all)}, Toplam kiralama: {len(kiralamalar_all)}")
-            for i, islem in enumerate(hareketler_all[:3]):
+            current_app.logger.debug(f"[BILGI] Toplam hareket: {len(hareketler_filtered)}, Toplam kiralama: {len(kiralamalar_filtered)}")
+            for i, islem in enumerate(hareketler_filtered[:3]):
                 kdv = getattr(islem, 'kdv_orani', None)
                 current_app.logger.debug(f"[BILGI] Hareket {i+1}: id={getattr(islem, 'id', None)}, tur={getattr(islem, 'tur', None)}, kdv_orani={kdv}")
-            for i, kiralama in enumerate(kiralamalar_all[:3]):
+            for i, kiralama in enumerate(kiralamalar_filtered[:3]):
                 kdv = getattr(kiralama, 'kdv_orani', None)
                 current_app.logger.debug(f"[BILGI] Kiralama {i+1}: id={getattr(kiralama, 'id', None)}, kdv_orani={kdv}")
         except Exception as log_ex:
@@ -288,6 +366,8 @@ def bilgi(id):
 
         return render_template(
             'firmalar/bilgi.html',
+            start_date=start_date,
+            end_date=end_date,
             **finans_verileri,
             hareketler=hareketler_sayfa,
             hareket_pagination=h_pag,
@@ -295,13 +375,17 @@ def bilgi(id):
             kiralamalar_sayfa=kiralamalar_sayfa,
             kiralama_pagination=k_pag,
             kiralama_per_page=kiralama_per_page,
+            cari_rows=cari_rows_sayfa,
+            cari_pagination=c_pag,
+            cari_per_page=cari_per_page,
             tab=tab,
+            today=today_date,
         )
     except ValidationError as e:
         flash(str(e), "danger")
         return redirect(url_for('firmalar.index'))
     except Exception as e:
-        current_app.logger.error(f"Cari özet yükleme hatası (Firma ID: {id}): {str(e)}")
+        current_app.logger.error(f"Cari özet yükleme hatası (Firma ID: {id}): {str(e)}", exc_info=True)
         flash("Finansal veriler şu an hesaplanamıyor.", "danger")
         return redirect(url_for('firmalar.index'))
 
@@ -312,18 +396,24 @@ def bilgi(id):
 @login_required
 def bilgi_yazdir(id):
     try:
-        tab = request.args.get('tab', 'hareket')
+        tab = request.args.get('tab', 'cari')
         finans_verileri = FirmaService.get_financial_summary(id)
         hareketler = finans_verileri.pop('hareketler')
         firma = finans_verileri['firma']
         kiralamalar_all = sorted(firma.kiralamalar, key=lambda k: k.id, reverse=True)
+
+        # Cari tab için tüm satırlar hesaplanır
+        today_date = bugun()
+        cari_rows = _build_cari_rows(firma, today_date)
+
         return render_template(
             'firmalar/yazdir.html',
             **finans_verileri,
             hareketler=hareketler,
             kiralamalar=kiralamalar_all,
+            cari_rows=cari_rows,
             tab=tab,
-            rapor_tarihi=date.today().strftime('%d.%m.%Y'),
+            rapor_tarihi=today_date.strftime('%d.%m.%Y'),
         )
     except Exception as e:
         flash("Yazdırma verisi yüklenemedi.", "danger")
