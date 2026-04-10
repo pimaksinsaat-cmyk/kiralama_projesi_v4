@@ -605,17 +605,10 @@ class FirmaService(BaseService):
                 'brm_fiyat': 0.0, 'matrah': tutar, 'kdv_orani': 0,
                 'kdv_tutar': 0.0, 'toplam': toplam_sign, 'bakiye': 0.0})
 
-        # --- Tarihe göre sırala, kümülatif bakiye hesapla ---
-        form_tarihleri = {}
-        for r in rows:
-            fn = r['form_no'] or ''
-            if fn not in form_tarihleri:
-                form_tarihleri[fn] = r['sort_date'] or date.min
-
+        # --- Başlangıç tarihine göre sırala, kümülatif bakiye hesapla ---
         rows.sort(key=lambda r: (
-            (form_tarihleri.get(r['form_no'] or '', date.min)).toordinal(),
+            (r['baslangic'] or date.min).toordinal(),
             r['nakliye_sira'],
-            (r['sort_date'] or date.min).toordinal()
         ))
         kumulatif = 0.0
         for r in rows:
