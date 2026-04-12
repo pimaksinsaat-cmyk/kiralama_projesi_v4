@@ -22,9 +22,16 @@ jobs:
             pip install -r requirements.txt
             export FLASK_APP=run.py
 
+            # .env dosyasından environment variables'ları yükle
+            set -a
+            source .env
+            set +a
+
+            # SERVICE_ENV'den SECRET_KEY'i override et (eğer tanımlıysa)
             SERVICE_ENV=$(systemctl show kiralama_v4.service -p Environment --value)
-            export SECRET_KEY=$(printf '%s\n' "$SERVICE_ENV" | tr ' ' '\n' | sed -n 's/^SECRET_KEY=//p')
-            export DATABASE_URL=$(printf '%s\n' "$SERVICE_ENV" | tr ' ' '\n' | sed -n 's/^DATABASE_URL=//p')
+            if echo "$SERVICE_ENV" | grep -q "SECRET_KEY="; then
+              export SECRET_KEY=$(printf '%s\n' "$SERVICE_ENV" | tr ' ' '\n' | sed -n 's/^SECRET_KEY=//p')
+            fi
 
             if [ -z "$DATABASE_URL" ]; then
               echo ">>> DATABASE_URL bulunamadi"
