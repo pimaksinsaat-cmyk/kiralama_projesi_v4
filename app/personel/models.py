@@ -29,24 +29,20 @@ class Personel(BaseModel):
         return f"{self.ad} {self.soyad}"
 
 
-class PersonelIzin(db.Model):
+class PersonelIzin(BaseModel):
     __tablename__ = 'personel_izin'
 
-    id = db.Column(db.Integer, primary_key=True)
     personel_id = db.Column(db.Integer, db.ForeignKey('personel.id'), nullable=False, index=True)
     izin_turu = db.Column(db.String(30), nullable=False)
     baslangic_tarihi = db.Column(db.Date, nullable=False)
     bitis_tarihi = db.Column(db.Date, nullable=False)
     gun_sayisi = db.Column(db.Integer, nullable=False)
     aciklama = db.Column(db.String(250), nullable=True)
-    is_deleted = db.Column(db.Boolean, default=False, nullable=False, index=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
-class PersonelMaasDonemi(db.Model):
+class PersonelMaasDonemi(BaseModel):
     __tablename__ = 'personel_maas_donemleri'
 
-    id = db.Column(db.Integer, primary_key=True)
     personel_id = db.Column(db.Integer, db.ForeignKey('personel.id'), nullable=False, index=True)
     sube_id = db.Column(db.Integer, db.ForeignKey('subeler.id'), nullable=True, index=True)
     baslangic_tarihi = db.Column(db.Date, nullable=False, index=True)
@@ -58,7 +54,6 @@ class PersonelMaasDonemi(db.Model):
     yan_haklar_tutari = db.Column(db.Numeric(15, 2), nullable=True)
     diger_gider_tutari = db.Column(db.Numeric(15, 2), nullable=True)
     aciklama = db.Column(db.String(250), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
     sube = db.relationship('Sube')
 

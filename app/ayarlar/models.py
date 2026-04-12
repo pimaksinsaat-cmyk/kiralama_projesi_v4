@@ -1,4 +1,5 @@
 from sqlalchemy import inspect as sa_inspect
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.extensions import db
 from app.models.base_model import BaseModel
@@ -38,14 +39,28 @@ class AppSettings(BaseModel):
         except Exception:
             return None
 
-        settings = cls.query.order_by(cls.id.asc()).first()
+        def _fetch_first():
+            return cls.query.order_by(cls.id.asc()).first()
+
+        settings = None
+        for _ in range(2):
+            try:
+                settings = _fetch_first()
+                break
+            except SQLAlchemyError:
+                db.session.rollback()
+
         if settings:
             return settings
 
-        settings = cls()
-        db.session.add(settings)
-        db.session.commit()
-        return settings
+        try:
+            settings = cls()
+            db.session.add(settings)
+            db.session.commit()
+            return settings
+        except SQLAlchemyError:
+            db.session.rollback()
+            return None
 
     @property
     def display_name(self):

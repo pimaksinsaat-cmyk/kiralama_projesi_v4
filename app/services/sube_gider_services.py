@@ -11,6 +11,7 @@ from app.utils import bugun as _bugun
 
 class SubeGiderService(BaseService):
     model = SubeGideri
+    use_soft_delete = True
     updatable_fields = ['sube_id', 'arac_id', 'tarih', 'kategori', 'tutar', 'litre', 'birim_fiyat', 'km', 'istasyon', 'aciklama', 'fatura_no']
 
     @staticmethod
@@ -105,6 +106,7 @@ class SubeGiderService(BaseService):
 
 class SubeSabitGiderDonemiService(BaseService):
     model = SubeSabitGiderDonemi
+    use_soft_delete = True
     updatable_fields = ['kategori', 'baslangic_tarihi', 'bitis_tarihi', 'aylik_tutar', 'kdv_orani', 'aciklama', 'is_active', 'apply_retroactively']
 
     @staticmethod

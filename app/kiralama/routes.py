@@ -57,6 +57,7 @@ def get_cached_subeler():
                 cache['last_update'] = datetime.now()
             except Exception as e:
                 current_app.logger.error(f"Sube Cache Hatası: {e}")
+                db.session.rollback()
                 return cache['data'] or []
     return cache['data']
 
@@ -75,6 +76,7 @@ def get_cached_aktif_araclar():
                 cache['last_update'] = datetime.now()
             except Exception as e:
                 current_app.logger.error(f"Arac Cache Hatası: {e}")
+                db.session.rollback()
                 return cache['data'] or []
     return cache['data']
 
@@ -165,17 +167,25 @@ def index():
         }
 
         # Liste ekranında görünen kiralamalar için bekleyen cari tutarı güncel tut.
-        # Bu işlem bağımsız bir try bloğunda çalışır; başarısız olursa
-        # liste yine de gösterilir, sadece cari tutarlar güncellenmemiş olur.
+        # PostgreSQL: Tek transaction içinde bir kiralamada SQL hatası tüm oturumu
+        # "aborted" yapar; her kiralama için SAVEPOINT (begin_nested) ile izole et.
         try:
             for kiralama in pagination.items:
-                KiralamaService.guncelle_cari_toplam(kiralama.id, auto_commit=False)
+                try:
+                    with db.session.begin_nested():
+                        KiralamaService.guncelle_cari_toplam(kiralama.id, auto_commit=False)
+                except Exception as row_err:
+                    current_app.logger.warning(
+                        "Kiralama cari senkronizasyon (id=%s): %s",
+                        kiralama.id,
+                        row_err,
+                        exc_info=True,
+                    )
             if pagination.items:
                 db.session.commit()
         except Exception as sync_err:
             db.session.rollback()
-            current_app.logger.warning(f"Kiralama cari senkronizasyon uyarısı: {sync_err}")
-            # Rollback sonrası objeler expire oldu, listeyi yeniden yükle
+            current_app.logger.warning(f"Kiralama cari senkronizasyon toplu commit: {sync_err}", exc_info=True)
             pagination = query.order_by(Kiralama.kiralama_form_no.desc()).paginate(page=page, per_page=per_page)
 
         return render_template(
