@@ -56,10 +56,16 @@ def create_app(config_class=Config):
     from app.makinedegisim.models import MakineDegisim
     from app.filo.models import Ekipman
 
-    ensure_admin()
     # Sadece ana uygulama çalışırken migrate başlatılsın, scriptlerde gerek yok
     if os.environ.get("FLASK_RUN_FROM_CLI") == "true":
         migrate.init_app(app, db)
+
+    # Admin kullanıcısını oluştur (migration'dan sonra)
+    try:
+        ensure_admin()
+    except Exception:
+        # Migration sırasında database schema eksik olabilir, bunu ignore et
+        pass
     # CSRF uygulamasını başlat
     csrf.init_app(app)
     server_session.init_app(app)
