@@ -193,9 +193,9 @@
                                         <i class="fas fa-ban me-1"></i>İptal
                                     {% endif %}
                                 </span>
-                                {% if h.is_faturalasti %}
+                                {% if h.durum == 'faturalasti' %}
                                     <div class="mt-1 small text-primary">
-                                        <i class="fas fa-cloud-upload-alt me-1"></i>e-Fatura Hazır
+                                        <i class="fas fa-cloud-upload-alt me-1"></i>GİB faturalandı
                                     </div>
                                 {% endif %}
                             </td>
@@ -256,8 +256,9 @@
             </a>
         </li>
         <li>
-            <a id="menu-pdf" href="#" class="dropdown-item rounded py-2">
+            <a id="menu-pdf" href="#" class="dropdown-item rounded py-2 disabled" aria-disabled="true">
                 <i class="fas fa-file-pdf me-2 text-danger"></i>PDF İndir
+                <span class="badge bg-secondary ms-1" style="font-size:0.7rem;">Yakında</span>
             </a>
         </li>
         <li><hr class="dropdown-divider my-1"></li>
@@ -266,9 +267,14 @@
                 <i class="fas fa-check-circle me-2"></i>Cariye İşle
             </a>
         </li>
+        <li id="menu-faturalandi-li">
+            <a id="menu-faturalandi" href="#" class="dropdown-item rounded py-2 text-primary">
+                <i class="fas fa-file-invoice me-2"></i>GİB ile faturalandı
+            </a>
+        </li>
         <li>
             <a id="menu-gib" href="#" class="dropdown-item rounded py-2 disabled">
-                <i class="fas fa-cloud-upload-alt me-2"></i>GİB'e Gönder
+                <i class="fas fa-cloud-upload-alt me-2"></i>GİB'e Gönder (otomatik)
                 <span class="badge bg-secondary ms-1" style="font-size:0.7rem;">Yakında</span>
             </a>
         </li>
@@ -323,15 +329,25 @@
 
         // Linkleri güncelle
         document.getElementById('menu-detay').href = `/fatura/detay/${id}`;
-        document.getElementById('menu-xml').href   = `/fatura/xml/${id}`;
-        document.getElementById('menu-pdf').href   = `/fatura/pdf/${id}`;
+        const menuXml = document.getElementById('menu-xml');
+        if (durum === 'taslak') {
+            menuXml.href = '#';
+            menuXml.classList.add('disabled');
+            menuXml.setAttribute('aria-disabled', 'true');
+        } else {
+            menuXml.href = `/fatura/xml-indir/${id}`;
+            menuXml.classList.remove('disabled');
+            menuXml.removeAttribute('aria-disabled');
+        }
 
         // Duruma göre menü öğelerini göster/gizle
         const cariyeLi = document.getElementById('menu-cariye-li');
+        const faturalandiLi = document.getElementById('menu-faturalandi-li');
         const iptalLi  = document.getElementById('menu-iptal-li');
         const silLi    = document.getElementById('menu-sil-li');
 
         cariyeLi.style.display = durum === 'taslak'                          ? 'block' : 'none';
+        faturalandiLi.style.display = durum === 'onaylandi'                  ? 'block' : 'none';
         iptalLi.style.display  = ['taslak', 'onaylandi'].includes(durum)     ? 'block' : 'none';
         silLi.style.display    = ['taslak', 'iptal'].includes(durum)         ? 'block' : 'none';
 
@@ -341,6 +357,15 @@
             kapatMenu();
             if (confirm('Hakediş cariye işlenecek, onaylıyor musunuz?')) {
                 submitForm(`/fatura/cariye-isle/${id}`);
+            }
+        };
+
+        // GİB ile faturalandı (yeni cari kaydı yok)
+        document.getElementById('menu-faturalandi').onclick = function(e) {
+            e.preventDefault();
+            kapatMenu();
+            if (confirm('GİB / e-Fatura kesildi — faturalandı olarak işaretlenecek. Cariye yeni borç eklenmeyecek. Onaylıyor musunuz?')) {
+                submitForm(`/fatura/faturalandi/${id}`);
             }
         };
 

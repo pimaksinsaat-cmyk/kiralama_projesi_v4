@@ -149,6 +149,51 @@ def cariye_isle(id):
 
 
 # -------------------------------------------------------------------------
+# 4b. GİB FATURALANDI (durum: onaylandi → faturalasti, yeni cari kaydı YOK)
+# -------------------------------------------------------------------------
+@fatura_bp.route('/faturalandi/<int:id>', methods=['POST'])
+@login_required
+def faturalandi(id):
+    try:
+        hakedis = FaturaService.hakedis_durumu_guncelle(
+            id, 'faturalasti', actor_id=current_user.id
+        )
+        OperationLogService.log(
+            module='fatura', action='faturalandi',
+            user_id=current_user.id, username=getattr(current_user, 'username', None),
+            entity_type='Hakedis', entity_id=id,
+            description=f"Hakedış #{id} GİB faturalandı olarak işaretlendi: {hakedis.hakedis_no}.",
+            success=True
+        )
+        flash(
+            "Hakediş resmi fatura (GİB) ile faturalandı olarak işaretlendi. "
+            "Cariye ek borç yazılmadı.",
+            "success",
+        )
+    except ValidationError as e:
+        OperationLogService.log(
+            module='fatura', action='faturalandi',
+            user_id=current_user.id, username=getattr(current_user, 'username', None),
+            entity_type='Hakedis', entity_id=id,
+            description=f"GİB faturalama hatası: {str(e)}",
+            success=False
+        )
+        flash(str(e), "warning")
+    except Exception:
+        OperationLogService.log(
+            module='fatura', action='faturalandi',
+            user_id=current_user.id, username=getattr(current_user, 'username', None),
+            entity_type='Hakedis', entity_id=id,
+            description="GİB faturalama sırasında sistem hatası.",
+            success=False
+        )
+        logger.error("Hakediş faturalandi hatası — hakedis_id: %s", id, exc_info=True)
+        flash("İşlem sırasında bir hata oluştu.", "danger")
+
+    return redirect(url_for('fatura.detay', id=id))
+
+
+# -------------------------------------------------------------------------
 # 5. İPTAL
 # -------------------------------------------------------------------------
 @fatura_bp.route('/iptal/<int:id>', methods=['POST'])

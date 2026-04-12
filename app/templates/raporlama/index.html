@@ -37,6 +37,7 @@
                     <div class="d-flex flex-wrap gap-2 mt-1">
                         <button type="button" class="btn btn-outline-success btn-sm" id="todayRangeBtn">Bugün</button>
                         <button type="button" class="btn btn-outline-primary btn-sm" id="thisMonthRangeBtn">Bu Ay</button>
+                        <button type="button" class="btn btn-outline-primary btn-sm" id="lastMonthRangeBtn">Geçen Ay</button>
                         <button type="button" class="btn btn-outline-secondary btn-sm js-quick-range" data-days="30">Son 30 Gun</button>
                         <button type="button" class="btn btn-outline-secondary btn-sm js-quick-range" data-days="60">Son 60 Gun</button>
                         <button type="button" class="btn btn-outline-secondary btn-sm js-quick-range" data-days="90">Son 90 Gun</button>
@@ -45,14 +46,17 @@
 
                 <script>
                 document.addEventListener('DOMContentLoaded', function() {
+                    function toYmd(d) {
+                        var yyyy = d.getFullYear();
+                        var mm = String(d.getMonth() + 1).padStart(2, '0');
+                        var dd = String(d.getDate()).padStart(2, '0');
+                        return yyyy + '-' + mm + '-' + dd;
+                    }
                     var todayBtn = document.getElementById('todayRangeBtn');
                     if (todayBtn) {
                         todayBtn.addEventListener('click', function() {
                             var today = new Date();
-                            var yyyy = today.getFullYear();
-                            var mm = String(today.getMonth() + 1).padStart(2, '0');
-                            var dd = String(today.getDate()).padStart(2, '0');
-                            var todayStr = yyyy + '-' + mm + '-' + dd;
+                            var todayStr = toYmd(today);
                             document.getElementById('startDateInput').value = todayStr;
                             document.getElementById('endDateInput').value = todayStr;
                             // Formu submit et
@@ -64,13 +68,23 @@
                     if (thisMonthBtn) {
                         thisMonthBtn.addEventListener('click', function() {
                             var today = new Date();
-                            var yyyy = today.getFullYear();
-                            var mm = String(today.getMonth() + 1).padStart(2, '0');
-                            var dd = String(today.getDate()).padStart(2, '0');
-                            var firstDay = yyyy + '-' + mm + '-01';
-                            var todayStr = yyyy + '-' + mm + '-' + dd;
-                            document.getElementById('startDateInput').value = firstDay;
-                            document.getElementById('endDateInput').value = todayStr;
+                            var firstThis = new Date(today.getFullYear(), today.getMonth(), 1);
+                            document.getElementById('startDateInput').value = toYmd(firstThis);
+                            document.getElementById('endDateInput').value = toYmd(today);
+                            var form = document.getElementById('startDateInput').closest('form');
+                            if (form) { form.submit(); }
+                        });
+                    }
+                    var lastMonthBtn = document.getElementById('lastMonthRangeBtn');
+                    if (lastMonthBtn) {
+                        lastMonthBtn.addEventListener('click', function() {
+                            var today = new Date();
+                            var y = today.getFullYear();
+                            var m = today.getMonth();
+                            var firstPrev = new Date(y, m - 1, 1);
+                            var lastPrev = new Date(y, m, 0);
+                            document.getElementById('startDateInput').value = toYmd(firstPrev);
+                            document.getElementById('endDateInput').value = toYmd(lastPrev);
                             var form = document.getElementById('startDateInput').closest('form');
                             if (form) { form.submit(); }
                         });
@@ -117,7 +131,10 @@
                                         data-pct="{{ '%.1f'|format(dashboard.summary.utilization_pct) }}"
                                         data-work="{{ dashboard.summary.work_days }}"
                                         data-avail="{{ dashboard.summary.available_days }}"
-                                        data-count="{{ dashboard.summary.machine_count }}">
+                                        data-count="{{ dashboard.summary.machine_count }}"
+                                        data-gelir="{{ '%.0f'|format(dashboard.summary.machine_revenue or 0) }}"
+                                        data-gpwd="{{ '%.0f'|format(dashboard.summary.machine_revenue_per_work_day or 0) }}"
+                                        data-haswork="{{ 1 if dashboard.summary.work_days else 0 }}">
                                         Tüm Makineler
                                     </option>
                                     {% for tip in dashboard.makine_tipi_ozet %}
@@ -125,7 +142,10 @@
                                         data-pct="{{ '%.1f'|format(tip.utilization_pct) }}"
                                         data-work="{{ tip.work_days }}"
                                         data-avail="{{ tip.available_days }}"
-                                        data-count="{{ tip.makine_sayisi }}">
+                                        data-count="{{ tip.makine_sayisi }}"
+                                        data-gelir="{{ '%.0f'|format(tip.gelir or 0) }}"
+                                        data-gpwd="{{ '%.0f'|format(tip.gelir_aktif_gun or 0) }}"
+                                        data-haswork="{{ 1 if tip.work_days else 0 }}">
                                         {{ tip.tip }}
                                     </option>
                                     {% endfor %}
@@ -140,18 +160,47 @@
                 <div class="col-md-4">
                     <div class="card border-0 shadow-sm h-100">
                         <div class="card-body">
-                            <small class="text-muted d-block">Makine Geliri</small>
-                            <h4 class="mb-0">{{ '{:,.0f}'.format(dashboard.summary.machine_revenue) }} TL</h4>
-                            <small class="text-muted">{{ dashboard.summary.machine_count }} makine kapsamda</small>
+                            <div class="d-flex align-items-stretch">
+                                <div class="flex-fill pe-3">
+                                    <small class="text-muted d-block mb-1">Makine Geliri</small>
+                                    <h4 class="mb-0" id="makine-gelir-tl">{{ '{:,.0f}'.format(dashboard.summary.machine_revenue) }} TL</h4>
+                                </div>
+                                <div class="flex-fill ps-3 text-end border-start">
+                                    <small class="text-muted d-block mb-1">Ort. günlük getiri</small>
+                                    <div id="makine-gelir-pergun-active" class="text-end text-nowrap" {% if not dashboard.summary.work_days %}style="display:none"{% endif %}>
+                                        <h4 class="mb-0 d-inline" id="makine-gelir-pergun-h4">{{ '{:,.0f}'.format(dashboard.summary.machine_revenue_per_work_day) }} TL</h4><small class="text-muted fw-normal"> / aktif gün</small>
+                                    </div>
+                                    <div id="makine-gelir-pergun-empty" {% if dashboard.summary.work_days %}style="display:none"{% endif %}>
+                                        <h4 class="mb-0 text-muted">—</h4>
+                                        <small class="text-muted">Aktif gün yok</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <small class="text-muted d-block mt-2 pt-2 border-top" id="makine-gelir-kapsam">{{ dashboard.summary.machine_count }} makine kapsamda</small>
                         </div>
                     </div>
                 </div>
                 <div class="col-md-4">
                     <div class="card border-0 shadow-sm h-100">
                         <div class="card-body">
-                            <small class="text-muted d-block">Nakliye Ciro / Sefer</small>
-                            <h4 class="mb-0">{{ '{:,.0f}'.format(dashboard.summary.transport_revenue) }} TL</h4>
-                            <small class="text-muted">{{ dashboard.summary.transport_sefer }} sefer</small>
+                            <div class="d-flex align-items-stretch">
+                                <div class="flex-fill pe-3">
+                                    <small class="text-muted d-block mb-1">Nakliye cirosu</small>
+                                    <h4 class="mb-0">{{ '{:,.0f}'.format(dashboard.summary.transport_revenue) }} TL</h4>
+                                </div>
+                                <div class="flex-fill ps-3 text-end border-start">
+                                    <small class="text-muted d-block mb-1">Sefer başına ort. getiri</small>
+                                    {% if dashboard.summary.transport_sefer %}
+                                    <div class="text-end text-nowrap">
+                                        <h4 class="mb-0 d-inline">{{ '{:,.0f}'.format(dashboard.summary.transport_revenue_per_sefer) }} TL</h4><small class="text-muted fw-normal"> / sefer</small>
+                                    </div>
+                                    {% else %}
+                                    <h4 class="mb-0 text-muted">—</h4>
+                                    <small class="text-muted">Sefer yok</small>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <small class="text-muted d-block mt-2 pt-2 border-top">{{ dashboard.summary.transport_sefer }} sefer</small>
                         </div>
                     </div>
                 </div>
@@ -1174,14 +1223,40 @@
         });
     })();
 
-    // Makine tipi seçim anahtarı
+    // Makine tipi seçim anahtarı (kullanım + makine geliri kartları)
     const makineSecim = document.getElementById('makine-tipi-secim');
     if (makineSecim) {
+        function fmtTrInt(n) {
+            return Number(n || 0).toLocaleString('tr-TR', { maximumFractionDigits: 0 });
+        }
         makineSecim.addEventListener('change', function () {
             const opt = this.options[this.selectedIndex];
             document.getElementById('kullanim-pct-label').textContent = opt.dataset.pct + '%';
             document.getElementById('kullanim-alt-label').textContent =
                 opt.dataset.work + ' / ' + opt.dataset.avail + ' gün — ' + opt.dataset.count + ' makine';
+
+            const gelirTl = document.getElementById('makine-gelir-tl');
+            const perActive = document.getElementById('makine-gelir-pergun-active');
+            const perEmpty = document.getElementById('makine-gelir-pergun-empty');
+            const perH4 = document.getElementById('makine-gelir-pergun-h4');
+            const kapsam = document.getElementById('makine-gelir-kapsam');
+            if (gelirTl) {
+                gelirTl.textContent = fmtTrInt(opt.dataset.gelir) + ' TL';
+            }
+            if (kapsam) {
+                kapsam.textContent = opt.dataset.count + ' makine kapsamda';
+            }
+            const hasWork = opt.dataset.haswork === '1';
+            if (perActive && perEmpty && perH4) {
+                if (hasWork) {
+                    perActive.style.display = '';
+                    perEmpty.style.display = 'none';
+                    perH4.textContent = fmtTrInt(opt.dataset.gpwd) + ' TL';
+                } else {
+                    perActive.style.display = 'none';
+                    perEmpty.style.display = '';
+                }
+            }
         });
     }
 </script>

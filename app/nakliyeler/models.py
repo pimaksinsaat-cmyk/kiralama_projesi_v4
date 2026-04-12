@@ -10,12 +10,14 @@ from app.araclar.models import Arac
 class Nakliye(db.Model):
     __tablename__ = 'nakliye'
 
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    is_active = db.Column(db.Boolean, default=True, nullable=False, index=True)
+
     # --- KİRALAMA BAĞLANTISI (Dirsek Teması İçin) ---
     kiralama_id = db.Column(db.Integer, db.ForeignKey('kiralama.id', ondelete='CASCADE'), nullable=True)
     kiralama = db.relationship('Kiralama', back_populates='nakliyeler')
-    
+
     # --- Temel Kimlik Bilgileri ---
-    id = db.Column(db.Integer, primary_key=True)
     tarih = db.Column(db.Date, default=date.today, nullable=False)
     
     # --- Müşteri (Kime Fatura Keseceğiz / Kimin İşini Yapıyoruz) ---
@@ -49,7 +51,6 @@ class Nakliye(db.Model):
     
     # --- Durum ve Arşiv Kontrolleri ---
     cari_islendi_mi = db.Column(db.Boolean, default=False, index=True)
-    is_active = db.Column(db.Boolean, default=True, nullable=False)
 
     cari_hareket = db.relationship(
         'HizmetKaydi', 
@@ -81,6 +82,28 @@ class Nakliye(db.Model):
             return kdv * (payda - pay) / payda
         except (ValueError, ZeroDivisionError):
             return kdv
+
+    def delete(self, soft=True, user_id=None):
+        """
+        Nakliye'yi siler ve ilişkili HizmetKaydi'yi de soft delete eder.
+        Bakiye tutarlılığı ve audit trail için gereklidir.
+        """
+        # İlişkili HizmetKaydi'yi soft delete et
+        if self.cari_hareket:
+            self.cari_hareket.delete(soft=True, user_id=user_id)
+
+        if soft:
+            self.is_active = False
+            db.session.add(self)
+        else:
+            db.session.delete(self)
+        db.session.commit()
+
+    def save(self, commit=True):
+        db.session.add(self)
+        if commit:
+            db.session.commit()
+        return self
 
     def __repr__(self):
         return f'<Nakliye #{self.id} | Tip: {self.nakliye_tipi} | {self.guzergah}>'

@@ -68,7 +68,7 @@
 <body>
 
 <div class="container">
-    <img class="logo" src="{{ url_for('static', filename=(system_settings.logo_path if system_settings and system_settings.logo_path else 'img/logo.JPG')) }}" alt="{{ system_settings.company_name if system_settings else 'Pimaks Logosu' }}">
+    <img class="logo" src="{{ url_for('static', filename=navbar_logo_filename) }}" alt="{{ system_settings.company_name if system_settings else 'Pimaks Logosu' }}">
     
     <h1>{{ system_settings.company_short_name or system_settings.company_name or 'Pimaks' }}</h1>
     <p class="welcome-text">Hoş geldiniz, lütfen işlem seçiniz.</p>
@@ -90,7 +90,7 @@
     </nav>
     
     <div style="margin-top: 30px; font-size: 0.8em; color: #adb5bd;">
-        &copy; 2026 {{ system_settings.company_short_name or system_settings.company_name or 'Pimaks' }}
+        &copy; 2026 Pimaks Software
     </div>
 </div>
 

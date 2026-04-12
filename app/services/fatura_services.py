@@ -7,9 +7,12 @@ from app.fatura.models import Hakedis, HakedisKalemi
 from app.kiralama.models import Kiralama, KiralamaKalemi
 from app.services.base import BaseService, ValidationError
 from app.cari.models import HizmetKaydi
-from app.services.cari_services import HizmetKaydiService
+from app.services.cari_services import HizmetKaydiService, _sync_firma_bakiye
 
 logger = logging.getLogger(__name__)
+
+# Hakediş durum makinesi — DB check constraint ile uyumlu
+HAKEDIS_DURUMLARI = frozenset({'taslak', 'onaylandi', 'faturalasti', 'iptal'})
 
 
 class FaturaService(BaseService):
@@ -169,84 +172,134 @@ class FaturaService(BaseService):
             raise Exception(f"Sistemsel hata: {str(e)}")
 
     @staticmethod
-    def cariye_isle(hakedis_id, actor_id=None):
+    def hakedis_durumu_guncelle(hakedis_id, yeni_durum, actor_id=None):
         """
-        Hakedişi onaylar ve Cari modüle borç olarak kaydeder.
-        Sadece 'taslak' durumundaki hakedişler onaylanabilir.
+        Hakediş durum makinesi + çift yazım koruması.
+
+        - taslak → onaylandi: Müşteri carisine borç (HizmetKaydi) yansıtılır,
+          köprü `cari_hareket_id` ile kurulur. `is_faturalasti` False kalır (GİB öncesi).
+        - onaylandi → faturalasti: Yeni cari/HizmetKaydı YAZILMAZ; sadece durum ve
+          `is_faturalasti=True` güncellenir.
+        - → iptal: GİB faturalıysa (`is_faturalasti` veya durum faturalasti) izin yok.
+          Aksi halde bağlı HizmetKaydı soft-delete edilerek cari geri alınır (onaylandi ise).
         """
+        if yeni_durum not in ('onaylandi', 'faturalasti', 'iptal'):
+            raise ValidationError(
+                f"Geçersiz hedef durum: {yeni_durum}. "
+                "Kullanılabilir: onaylandi, faturalasti, iptal."
+            )
+
         try:
             hakedis = db.session.get(Hakedis, hakedis_id)
-
             if not hakedis:
                 raise ValidationError("Hakediş bulunamadı.")
             if hakedis.is_deleted:
-                raise ValidationError("Silinmiş hakediş onaylanamaz.")
-            if hakedis.durum != 'taslak':
-                raise ValidationError(
-                    f"Sadece taslak durumundaki hakedişler onaylanabilir. "
-                    f"Mevcut durum: {hakedis.durum}"
+                raise ValidationError("Silinmiş hakediş üzerinde işlem yapılamaz.")
+
+            eski = hakedis.durum
+            if eski not in HAKEDIS_DURUMLARI:
+                raise ValidationError(f"Bilinmeyen mevcut durum: {eski}")
+
+            if yeni_durum == eski:
+                return hakedis
+
+            if yeni_durum == 'onaylandi':
+                if eski != 'taslak':
+                    raise ValidationError(
+                        "Sadece taslak hakediş cariye onaylanabilir. "
+                        f"Mevcut durum: {eski}"
+                    )
+                aciklama = (
+                    f"{hakedis.hakedis_no} Nolu Hakediş "
+                    f"({hakedis.baslangic_tarihi} - {hakedis.bitis_tarihi})"
                 )
+                hizmet = HizmetKaydi(
+                    firma_id=hakedis.firma_id,
+                    tarih=date.today(),
+                    tutar=hakedis.genel_toplam,
+                    yon='giden',
+                    ozel_id=hakedis.id,
+                    aciklama=aciklama,
+                    created_by_id=actor_id,
+                )
+                HizmetKaydiService.save(
+                    hizmet, is_new=True, actor_id=actor_id, commit=False
+                )
+                hakedis.cari_hareket_id = hizmet.id
+                hakedis.durum = 'onaylandi'
+                hakedis.is_faturalasti = False
+                hakedis.updated_by_id = actor_id
+                db.session.commit()
+                _sync_firma_bakiye(hizmet.firma_id)
+                logger.info("Hakediş cariye onaylandı: %s", hakedis.hakedis_no)
+                return hakedis
 
-            # Cari Hizmet Kaydı Oluştur
-            aciklama = (
-                f"{hakedis.hakedis_no} Nolu Hakediş "
-                f"({hakedis.baslangic_tarihi} - {hakedis.bitis_tarihi})"
+            if yeni_durum == 'faturalasti':
+                if eski != 'onaylandi':
+                    raise ValidationError(
+                        "Sadece onaylanmış hakediş GİB faturalandı olarak işaretlenebilir. "
+                        f"Mevcut durum: {eski}"
+                    )
+                if not hakedis.cari_hareket_id:
+                    raise ValidationError(
+                        "Cari köprüsü yok; önce cariye onaylanmalıdır."
+                    )
+                hakedis.durum = 'faturalasti'
+                hakedis.is_faturalasti = True
+                hakedis.updated_by_id = actor_id
+                db.session.commit()
+                logger.info("Hakediş GİB faturalandı olarak işaretlendi: %s", hakedis.hakedis_no)
+                return hakedis
+
+            # iptal
+            if hakedis.is_faturalasti or eski == 'faturalasti':
+                raise ValidationError(
+                    "GİB'e faturalanmış hakediş iptal edilemez."
+                )
+            if eski == 'iptal':
+                return hakedis
+            if eski == 'taslak':
+                hakedis.durum = 'iptal'
+                hakedis.updated_by_id = actor_id
+                db.session.commit()
+                logger.info("Hakediş iptal edildi (taslak): %s", hakedis.hakedis_no)
+                return hakedis
+            if eski == 'onaylandi':
+                hk_id = hakedis.cari_hareket_id
+                if hk_id:
+                    HizmetKaydiService.delete(hk_id, actor_id=actor_id)
+                hakedis = db.session.get(Hakedis, hakedis_id)
+                if not hakedis:
+                    raise ValidationError("Hakediş bulunamadı.")
+                hakedis.cari_hareket_id = None
+                hakedis.durum = 'iptal'
+                hakedis.updated_by_id = actor_id
+                db.session.commit()
+                logger.info("Hakediş iptal edildi (cari geri alındı): %s", hakedis.hakedis_no)
+                return hakedis
+
+            raise ValidationError(
+                f"'{eski}' durumundan iptal geçişi tanımlı değil."
             )
-            hizmet = HizmetKaydi(
-                firma_id=hakedis.firma_id,
-                tarih=date.today(),
-                tutar=hakedis.genel_toplam,
-                yon='giden',        # Gelir: Müşteri borçlanır
-                ozel_id=hakedis.id, # Hakedişe geri referans
-                aciklama=aciklama,
-                created_by_id=actor_id
-            )
-
-            # HizmetKaydiService üzerinden kaydet — cari bakiye otomatik güncellenir
-            HizmetKaydiService.save(hizmet, is_new=True, actor_id=actor_id)
-
-            # Hakediş durumunu güncelle
-            hakedis.cari_hareket_id = hizmet.id  # FK bağlantısı
-            hakedis.durum           = 'onaylandi'
-            hakedis.is_faturalasti  = True
-
-            db.session.commit()
-            logger.info(f"Hakediş cariye işlendi: {hakedis.hakedis_no}")
-            return hakedis
 
         except ValidationError:
             db.session.rollback()
             raise
         except Exception as e:
             db.session.rollback()
-            logger.error(f"Cariye işleme hatası: {str(e)}", exc_info=True)
-            raise Exception(f"Sistemsel hata: {str(e)}")
+            logger.error("Hakediş durum güncelleme hatası: %s", str(e), exc_info=True)
+            raise Exception(f"Sistemsel hata: {str(e)}") from e
+
+    @staticmethod
+    def cariye_isle(hakedis_id, actor_id=None):
+        """Taslak → onaylandi: cari borç + köprü (geriye dönük API)."""
+        return FaturaService.hakedis_durumu_guncelle(
+            hakedis_id, 'onaylandi', actor_id=actor_id
+        )
 
     @staticmethod
     def hakedis_iptal(hakedis_id, actor_id=None):
-        """
-        Hakedişi iptal eder.
-        Cariye işlenmiş hakedişler iptal edilemez.
-        """
-        try:
-            hakedis = db.session.get(Hakedis, hakedis_id)
-            if not hakedis:
-                raise ValidationError("Hakediş bulunamadı.")
-            if hakedis.durum in ('onaylandi', 'faturalasti'):
-                raise ValidationError(
-                    "Cariye işlenmiş veya faturalanmış hakediş iptal edilemez. "
-                    "Lütfen muhasebe ile iletişime geçin."
-                )
-            hakedis.durum          = 'iptal'
-            hakedis.updated_by_id  = actor_id
-            db.session.commit()
-            logger.info(f"Hakediş iptal edildi: {hakedis.hakedis_no}")
-            return hakedis
-
-        except ValidationError:
-            db.session.rollback()
-            raise
-        except Exception as e:
-            db.session.rollback()
-            logger.error(f"Hakediş iptal hatası: {str(e)}", exc_info=True)
-            raise Exception(f"Sistemsel hata: {str(e)}")
+        """Hakedişi iptal durumuna alır (kurallar `hakedis_durumu_guncelle` ile)."""
+        return FaturaService.hakedis_durumu_guncelle(
+            hakedis_id, 'iptal', actor_id=actor_id
+        )

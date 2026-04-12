@@ -57,6 +57,23 @@
             </form>
             {% endif %}
 
+            {% if hakedis.durum == 'onaylandi' %}
+            <form action="{{ url_for('fatura.faturalandi', id=hakedis.id) }}" method="POST"
+                  onsubmit="return confirm('GİB / e-Fatura kesildi — hakediş faturalandı olarak işaretlenecek. Cariye yeni borç eklenmeyecek. Onaylıyor musunuz?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-primary shadow-sm">
+                    <i class="fas fa-file-invoice me-2"></i>GİB ile faturalandı
+                </button>
+            </form>
+            <form action="{{ url_for('fatura.iptal', id=hakedis.id) }}" method="POST"
+                  onsubmit="return confirm('Onaylanmış hakediş iptal edilecek; cari borç kaydı silinecek. Emin misiniz?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-outline-warning shadow-sm">
+                    <i class="fas fa-ban me-2"></i>İptal Et
+                </button>
+            </form>
+            {% endif %}
+
             {% if hakedis.durum in ('taslak', 'iptal') %}
             <form action="{{ url_for('fatura.sil', id=hakedis.id) }}" method="POST"
                   onsubmit="return confirm('Bu hakedişi silmek istediğinize emin misiniz?');">

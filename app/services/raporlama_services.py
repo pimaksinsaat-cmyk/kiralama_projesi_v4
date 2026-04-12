@@ -1151,13 +1151,16 @@ class RaporlamaService:
             )
 
         # Makine tipi bazlı kullanım özeti (genel bakış kartı için)
-        tip_stats = defaultdict(lambda: {"makine_sayisi": 0, "work_days": 0, "available_days": 0})
+        tip_stats = defaultdict(
+            lambda: {"makine_sayisi": 0, "work_days": 0, "available_days": 0, "gelir": 0.0}
+        )
         for ekipman in rapor_makineler:
             tip = (ekipman.tipi or "").strip() or "Diğer"
             machine_stat = metrics_by_machine.get(ekipman.id, {})
             tip_stats[tip]["makine_sayisi"] += 1
             tip_stats[tip]["work_days"] += machine_stat.get("work_days", 0)
             tip_stats[tip]["available_days"] += machine_stat.get("available_days", 0)
+            tip_stats[tip]["gelir"] += float(machine_stat.get("revenue") or 0)
         makine_tipi_ozet = sorted(
             [
                 {
@@ -1165,6 +1168,10 @@ class RaporlamaService:
                     "makine_sayisi": v["makine_sayisi"],
                     "work_days": v["work_days"],
                     "available_days": v["available_days"],
+                    "gelir": v["gelir"],
+                    "gelir_aktif_gun": (
+                        (v["gelir"] / v["work_days"]) if v["work_days"] else 0.0
+                    ),
                     "utilization_pct": (
                         v["work_days"] / v["available_days"] * 100.0 if v["available_days"] else 0.0
                     ),
@@ -1295,6 +1302,14 @@ class RaporlamaService:
         sube_gideri_toplam = sum(row.get("sube_gideri", 0.0) for row in monthly_revenue_rows)
         net_katki_toplam = sum(row.get("net_katki", 0.0) for row in monthly_revenue_rows)
 
+        wd = machine_totals["work_days"]
+        rev = float(machine_totals["revenue"] or 0)
+        machine_revenue_per_work_day = (rev / wd) if wd else 0.0
+
+        tf = int(transport_totals["sefer_sayisi"] or 0)
+        tg = float(transport_totals["gelir"] or 0)
+        transport_revenue_per_sefer = (tg / tf) if tf else 0.0
+
         return {
             "summary": {
                 "machine_count": machine_totals["machine_count"],
@@ -1302,6 +1317,7 @@ class RaporlamaService:
                 "available_days": machine_totals["available_days"],
                 "utilization_pct": machine_totals["utilization_pct"],
                 "machine_revenue": machine_totals["revenue"],
+                "machine_revenue_per_work_day": machine_revenue_per_work_day,
                 "equipment_maintenance_cost": equipment_maintenance_cost,
                 "vehicle_maintenance_cost": vehicle_maintenance_cost,
                 "maintenance_cost": maintenance_cost,
@@ -1313,6 +1329,7 @@ class RaporlamaService:
                 "external_rental_count": external_rental_metrics["count"],
                 "transport_sefer": transport_totals["sefer_sayisi"],
                 "transport_revenue": transport_totals["gelir"],
+                "transport_revenue_per_sefer": transport_revenue_per_sefer,
                 "transport_cost": transport_totals["maliyet"],
                 "transport_taseron_odeme": transport_totals.get("taseron_odeme_toplam", 0.0),
                 "transport_net": transport_totals["net"],

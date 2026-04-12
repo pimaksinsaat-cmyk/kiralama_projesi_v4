@@ -2,6 +2,7 @@ from io import BytesIO
 
 from flask import render_template, redirect, url_for, flash, request, send_file
 from flask_login import current_user
+from sqlalchemy.orm import joinedload
 from app.extensions import db
 from app.nakliyeler import nakliye_bp
 from app.nakliyeler.models import Nakliye
@@ -43,6 +44,48 @@ def to_decimal(value):
         return Decimal(clean_val)
     except (InvalidOperation, ValueError):
         return Decimal('0.00')
+
+
+def _nakliye_stats(rows):
+    """Decimal alanlarda `x or 0` kullanma: Decimal('0') falsy olduğunda int ile karışır ve sum() patlar."""
+    zero = Decimal('0')
+    return {
+        'sefer_sayisi': len(rows),
+        'ciro': sum((to_decimal(n.toplam_tutar) for n in rows), zero),
+        'maliyet': sum((to_decimal(n.taseron_maliyet) for n in rows), zero),
+        'kar': sum((to_decimal(n.tahmini_kar) for n in rows), zero),
+    }
+
+
+class _NakliyeListPagination:
+    """Filtrelenmiş liste için bellek içi sayfalama (paginate + aynı Query üzerinde all() riskinden kaçınır)."""
+
+    def __init__(self, items, page, per_page):
+        self._all = list(items)
+        self.total = len(self._all)
+        self.per_page = max(1, int(per_page or 1))
+        self.pages = max(1, (self.total + self.per_page - 1) // self.per_page) if self.total else 1
+        p = int(page or 1)
+        self.page = max(1, min(p, self.pages))
+        start = (self.page - 1) * self.per_page
+        self.items = self._all[start : start + self.per_page]
+        self.has_prev = self.page > 1
+        self.has_next = self.page < self.pages
+        self.prev_num = self.page - 1
+        self.next_num = self.page + 1
+
+    def iter_pages(self, left_edge=1, left_current=1, right_current=2, right_edge=1):
+        last = 0
+        for num in range(1, self.pages + 1):
+            if (
+                num <= left_edge
+                or (self.page - left_current - 1 < num < self.page + right_current)
+                or num > self.pages - right_edge
+            ):
+                if last + 1 != num:
+                    yield None
+                yield num
+                last = num
 
 
 def _nakliye_filtered_query(baslangic, bitis, secili_plaka, secili_taseron_id, secili_firma_id):
@@ -108,7 +151,15 @@ def index():
         baslangic = baslangic_explicit or (bugun - timedelta(days=15)).isoformat()
         bitis = bitis_explicit or bugun.isoformat()
 
+    stage = 'baslangic'
     try:
+        from flask import current_app
+        current_app.logger.info(
+            "Nakliye index basladi | page=%s per_page=%s baslangic=%s bitis=%s plaka=%s taseron_id=%s firma_id=%s",
+            page, per_page, baslangic, bitis, secili_plaka, secili_taseron_id, secili_firma_id,
+        )
+
+        stage = 'ana_sorgu'
         query = Nakliye.query.filter(Nakliye.tutar > 0)
 
         # Filtreleri uygula
@@ -129,26 +180,46 @@ def index():
         if secili_firma_id and secili_firma_id.isdigit():
             query = query.filter(Nakliye.firma_id == int(secili_firma_id))
 
-        ordered_query = query.order_by(Nakliye.tarih.desc())
-        pagination = ordered_query.paginate(page=page, per_page=per_page, error_out=False)
+        stage = 'nakliye_listesi_yukleme'
+        filtered_all = (
+            query.options(
+                joinedload(Nakliye.firma),
+                joinedload(Nakliye.taseron_firma),
+            )
+            .order_by(Nakliye.tarih.desc())
+            .all()
+        )
+
+        current_app.logger.info(
+            "Nakliye index liste yuklendi | adet=%s", len(filtered_all)
+        )
+
+        stage = 'sayfalama'
+        pagination = _NakliyeListPagination(filtered_all, page, per_page)
         nakliyeler = pagination.items
-        filtered_all = ordered_query.all()
 
         # Dropdown listelerini hazırla
+        stage = 'dropdown_listeleri'
         plakalar = db.session.query(Nakliye.plaka).filter(Nakliye.plaka.isnot(None)).distinct().all()
         plaka_listesi = [p[0] for p in plakalar if p[0] and p[0].strip() != ""]
         taseron_listesi = Firma.query.filter_by(is_tedarikci=True, is_active=True).order_by(Firma.firma_adi).all()
         firma_listesi = [{'id': f.id, 'firma_adi': f.firma_adi}
                          for f in Firma.query.filter_by(is_active=True).order_by(Firma.firma_adi).all()]
 
-        # İstatistikler
-        stats = {
-            'sefer_sayisi': len(filtered_all),
-            'ciro': sum(n.toplam_tutar or 0 for n in filtered_all),
-            'maliyet': sum(n.taseron_maliyet or 0 for n in filtered_all),
-            'kar': sum(n.tahmini_kar or 0 for n in filtered_all)
-        }
+        current_app.logger.info(
+            "Nakliye index dropdownlar hazir | plakalar=%s tedarikciler=%s firmalar=%s",
+            len(plaka_listesi), len(taseron_listesi), len(firma_listesi)
+        )
 
+        stage = 'istatistik_hesabi'
+        stats = _nakliye_stats(filtered_all)
+
+        current_app.logger.info(
+            "Nakliye index istatistikleri hazir | sefer=%s ciro=%s maliyet=%s kar=%s",
+            stats['sefer_sayisi'], stats['ciro'], stats['maliyet'], stats['kar']
+        )
+
+        stage = 'template_render'
         return render_template('nakliyeler/index.html',
                                nakliyeler=nakliyeler,
                                pagination=pagination,
@@ -162,10 +233,13 @@ def index():
                                secili_taseron_id=secili_taseron_id,
                                secili_plaka=secili_plaka,
                                secili_firma_id=secili_firma_id)
-    except Exception as e:
+    except Exception:
         db.session.rollback()
         from flask import current_app
-        current_app.logger.error(f"Nakliye Liste Yükleme Hatası: {str(e)}")
+        current_app.logger.exception(
+            "Nakliye Liste Yükleme Hatası | stage=%s | page=%s per_page=%s baslangic=%s bitis=%s plaka=%s taseron_id=%s firma_id=%s",
+            stage, page, per_page, baslangic, bitis, secili_plaka, secili_taseron_id, secili_firma_id,
+        )
         flash("Liste yüklenirken bir hata oluştu.", "danger")
         return render_template('nakliyeler/index.html',
                                nakliyeler=[], pagination=None, per_page=per_page,
@@ -197,12 +271,7 @@ def yazdir():
     query = _nakliye_filtered_query(baslangic, bitis, secili_plaka, secili_taseron_id, secili_firma_id)
     nakliyeler = query.order_by(Nakliye.tarih.desc()).all()
 
-    stats = {
-        'sefer_sayisi': len(nakliyeler),
-        'ciro': sum(n.toplam_tutar or 0 for n in nakliyeler),
-        'maliyet': sum(n.taseron_maliyet or 0 for n in nakliyeler),
-        'kar': sum(n.tahmini_kar or 0 for n in nakliyeler)
-    }
+    stats = _nakliye_stats(nakliyeler)
 
     return render_template('nakliyeler/yazdir.html',
                            nakliyeler=nakliyeler,

@@ -70,16 +70,18 @@ class Hakedis(BaseModel):
     toplam_tevkifat = db.Column(db.Numeric(15, 2), default=0)
     genel_toplam = db.Column(db.Numeric(15, 2), default=0)
 
-    # --- Durum Takibi ---
-    # taslak:      Düzenlenebilir
-    # onaylandi:   Kilitlendi, Cari'ye işlenmeye hazır
-    # faturalasti: Cari'ye aktarıldı, resmi numara aldı
-    # iptal:       İptal edildi
+    # --- Durum takibi (durum makinesi) ---
+    # taslak:       Düzenlenebilir; cari borç yok
+    # onaylandi:    Cari köprüsü (HizmetKaydi) oluştu; GİB öncesi
+    # faturalasti:  Resmi fatura kesildi (GİB); cariye İKİNCİ borç yazılmaz
+    # iptal:        Taslak veya (faturasız) onay geri alındı
     durum = db.Column(db.String(20), default='taslak', index=True)
-    is_faturalasti = db.Column(db.Boolean, default=False)  # Yazım hatası düzeltildi
+    # GİB / e-Fatura kesildiğinde True; cari borcu taslak→onaylandı adımında oluşur
+    is_faturalasti = db.Column(db.Boolean, default=False)
+    # Köprü: Cari tarafındaki tekil HizmetKaydi (borç) kaydı — alan adı tarihî, FK hizmet_kaydi.id
     cari_hareket_id = db.Column(
         db.Integer,
-        db.ForeignKey('hizmet_kaydi.id'),  # Soft FK yerine gerçek FK
+        db.ForeignKey('hizmet_kaydi.id'),
         nullable=True
     )
 
@@ -107,7 +109,11 @@ class HakedisKalemi(BaseModel):
     )
 
     hakedis_id = db.Column(db.Integer, db.ForeignKey('hakedis.id'), nullable=False)
-    kiralama_kalemi_id = db.Column(db.Integer, nullable=False)  # Sözleşmedeki kalem referansı
+    kiralama_kalemi_id = db.Column(
+        db.Integer,
+        db.ForeignKey('kiralama_kalemi.id', ondelete='RESTRICT'),
+        nullable=False,
+    )
     ekipman_id = db.Column(db.Integer, db.ForeignKey('ekipman.id'), nullable=False)
 
     # GIB/Ubl satırında mal-hizmet adı zorunlu olduğu için ayrı alan
@@ -151,4 +157,7 @@ class HakedisKalemi(BaseModel):
     satir_toplami = db.Column(db.Numeric(15, 2), nullable=False)
 
     # --- İlişkiler ---
+    kiralama_kalemi = db.relationship(
+        'KiralamaKalemi', foreign_keys=[kiralama_kalemi_id]
+    )
     ekipman = db.relationship('Ekipman', foreign_keys=[ekipman_id])

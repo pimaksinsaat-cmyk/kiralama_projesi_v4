@@ -55,3 +55,16 @@ class Config:
     # Template ve statik dosya yenileme davranışı
     TEMPLATES_AUTO_RELOAD = _env_to_bool('TEMPLATES_AUTO_RELOAD', False)
     SEND_FILE_MAX_AGE_DEFAULT = 0 if _env_to_bool('DISABLE_STATIC_CACHE', False) else None
+
+
+class TestingConfig(Config):
+    """Pytest ve yerel otomatik testler için."""
+    TESTING = True
+    WTF_CSRF_ENABLED = False
+    SECRET_KEY = 'test-secret-key'
+    # Yerel: sqlite bellek. PostgreSQL ile tam entegrasyon için TEST_DATABASE_URL verin.
+    SQLALCHEMY_DATABASE_URI = os.environ.get(
+        'TEST_DATABASE_URL',
+        'sqlite:///:memory:',
+    )
+    SQLALCHEMY_ENGINE_OPTIONS = {}

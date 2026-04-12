@@ -172,7 +172,7 @@ class CariHareket(BaseModel):
         return float(self.kalan_tutar or 0)
 
     def __repr__(self):
-        return f'<CariHareket {self.id} {self.kaynak_tipi}:{self.kaynak_id} {self.yon} {self.tutar}>'
+        return f'<CariHareket {self.id} {self.kaynak_modul}:{self.kaynak_id} {self.yon} {self.tutar}>'
 
 
 # 9. CARI MAHSUP (Borç/Alacak Eşleştirme)

@@ -221,7 +221,7 @@ class HizmetKaydiService:
         return HizmetKaydi.query.get(id)
 
     @staticmethod
-    def save(hizmet, is_new=True, actor_id=None):
+    def save(hizmet, is_new=True, actor_id=None, commit=True):
         # KDV dahil toplam tutarı otomatik hesapla (KDV hariç giriliyor)
         if hizmet.tutar is not None and hizmet.kdv_orani is not None:
             try:
@@ -239,10 +239,11 @@ class HizmetKaydiService:
             hizmet.updated_by_id = actor_id
 
         db.session.add(hizmet)
-        db.session.commit()
-
-        # Fatura/Hizmet kasayı etkilemez, sadece cari bakiyeyi etkiler
-        _sync_firma_bakiye(hizmet.firma_id)
+        if commit:
+            db.session.commit()
+            _sync_firma_bakiye(hizmet.firma_id)
+        else:
+            db.session.flush()
 
         return hizmet
 

@@ -32,8 +32,6 @@ def _build_cari_rows(firma, today_date):
     return FirmaService.build_cari_rows(firma, today_date)
 
 
-
-
 class ListPagination:
     """In-memory list için sayfalama yardımcısı."""
     def __init__(self, total, page, per_page):
@@ -243,6 +241,8 @@ def duzelt(id):
 def bilgi(id):
     try:
         tab = request.args.get('tab', 'cari')
+        if tab == 'genel':
+            tab = 'cari'
 
         hareket_per_page = request.args.get('hareket_per_page', 25, type=int)
         hareket_page     = request.args.get('hareket_page', 1, type=int)
@@ -257,7 +257,7 @@ def bilgi(id):
         if cari_per_page not in allowed_pp:      cari_per_page = 25
 
         # --- Tarih filtresi ---
-        from datetime import datetime, timedelta
+        from datetime import datetime
         start_date_str = request.args.get('start_date')
         end_date_str = request.args.get('end_date')
         today_date = bugun()
@@ -270,6 +270,7 @@ def bilgi(id):
             end_date = today_date
 
         finans_verileri = FirmaService.get_financial_summary(id)
+        firma_pre = finans_verileri.get('firma')
 
         if start_date_str:
             try:
@@ -277,11 +278,11 @@ def bilgi(id):
             except Exception:
                 start_date = today_date
         else:
-            # Varsayılan başlangıç: firmanın kayıt tarihi
-            firma_obj = finans_verileri.get('firma')
-            if firma_obj and getattr(firma_obj, 'created_at', None):
-                start_date = firma_obj.created_at.date()
-            else:
+            start_date = FirmaService.firma_en_erken_islem_gunu(firma_pre.id)
+            if start_date is None and firma_pre and getattr(firma_pre, 'created_at', None):
+                ca = firma_pre.created_at
+                start_date = ca.date() if hasattr(ca, 'date') else None
+            if start_date is None:
                 start_date = today_date
 
         # --- Cari Hareketler sayfalama ---

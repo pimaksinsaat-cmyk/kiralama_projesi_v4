@@ -37,14 +37,17 @@ class KiralamaKalemi(BaseModel):
     ekipman_id = db.Column(db.Integer, db.ForeignKey('ekipman.id'), nullable=True)
     
     # --- DIŞ TEDARİK (HARİCİ) EKİPMAN BİLGİLERİ ---
+    # Not: Eski kayıtlarda bu alanlar yoktu (NULL olacak). is_dis_tedarik_ekipman=True iken
+    # bu alanlar doldurulmalı, ama mevcut verileri bozmamak için nullable=True tutuldu.
+    # Uygulama mantığında is_dis_tedarik_ekipman=True ise bu alanlar validate edilmeli.
     is_dis_tedarik_ekipman = db.Column(db.Boolean, default=False)
-    harici_ekipman_tipi = db.Column(db.String(100))
-    harici_ekipman_marka = db.Column(db.String(100))
-    harici_ekipman_model = db.Column(db.String(100))
-    harici_ekipman_seri_no = db.Column(db.String(100))
-    harici_ekipman_kapasite = db.Column(db.Integer) 
-    harici_ekipman_yukseklik = db.Column(db.Integer)
-    harici_ekipman_uretim_yili = db.Column(db.Integer)
+    harici_ekipman_tipi = db.Column(db.String(100), nullable=True)
+    harici_ekipman_marka = db.Column(db.String(100), nullable=True)
+    harici_ekipman_model = db.Column(db.String(100), nullable=True)
+    harici_ekipman_seri_no = db.Column(db.String(100), nullable=True)
+    harici_ekipman_kapasite = db.Column(db.Integer, nullable=True)
+    harici_ekipman_yukseklik = db.Column(db.Integer, nullable=True)
+    harici_ekipman_uretim_yili = db.Column(db.Integer, nullable=True)
     harici_ekipman_tedarikci_id = db.Column(db.Integer, db.ForeignKey('firma.id'), nullable=True)
     
     # --- TARİHLER ---
@@ -104,6 +107,24 @@ class KiralamaKalemi(BaseModel):
       
     # Aynı kalem ailesindeki tüm kayıtlar için ortak ID
     chain_id = db.Column(db.Integer, index=True)
+
+    def validate_harici_ekipman(self):
+        """
+        is_dis_tedarik_ekipman=True ise harici ekipman bilgilerinin doldurulup doldurulmadığını kontrol eder.
+        Mevcut kayıtlar NULL olabilir, ama yenileri validation gerektirir.
+        """
+        if self.is_dis_tedarik_ekipman:
+            required_fields = [
+                self.harici_ekipman_tipi,
+                self.harici_ekipman_marka,
+                self.harici_ekipman_model,
+                self.harici_ekipman_seri_no
+            ]
+            if not all(required_fields):
+                raise ValueError(
+                    "Dış tedarik ekipman seçildiyse şunlar zorunludur: "
+                    "tип, marka, model, seri no"
+                )
 
     def __repr__(self):
         status = "AKTİF" if self.is_active else "PASİF/REVİZE"

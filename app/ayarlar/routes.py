@@ -11,6 +11,26 @@ from app.ayarlar.forms import AppSettingsForm
 from app.ayarlar.models import AppSettings
 from app.utils import admin_required, normalize_turkish_upper
 
+_PLACEHOLDER_LOGO = 'img/placeholder.svg'
+
+
+def _resolve_navbar_logo_path(settings):
+    """DB'deki logo yolu diskte yoksa (gitignore/uploads, yeni konteyner) yerel placeholder."""
+    if not settings or not getattr(settings, 'logo_path', None):
+        return _PLACEHOLDER_LOGO
+    rel = str(settings.logo_path).replace('\\', '/').strip()
+    if not rel or rel.startswith('/') or '..' in rel.split('/'):
+        return _PLACEHOLDER_LOGO
+    abs_path = os.path.join(current_app.static_folder, *rel.split('/'))
+    real_static = os.path.realpath(current_app.static_folder)
+    try:
+        real_file = os.path.realpath(abs_path)
+    except OSError:
+        return _PLACEHOLDER_LOGO
+    if not real_file.startswith(real_static) or not os.path.isfile(real_file):
+        return _PLACEHOLDER_LOGO
+    return rel
+
 
 def _save_logo(file_storage):
     extension = os.path.splitext(file_storage.filename or '')[1].lower()
@@ -56,7 +76,10 @@ def _apply_uppercase_to_settings(settings, form):
 @ayarlar_bp.app_context_processor
 def inject_system_settings():
     settings = AppSettings.get_current()
-    return {'system_settings': settings}
+    return {
+        'system_settings': settings,
+        'navbar_logo_filename': _resolve_navbar_logo_path(settings),
+    }
 
 
 @ayarlar_bp.route('/', methods=['GET', 'POST'])

@@ -24,7 +24,8 @@ def create_app(config_class=Config):
 
     db_url = os.getenv("DATABASE_URL")
 
-    if db_url:
+    # Test modunda TEST_DATABASE_URL / TestingConfig URI korunur (SQLite veya ayrı test PG)
+    if db_url and not app.config.get("TESTING"):
         db_url = db_url.replace("postgres://", "postgresql://")
         app.config['SQLALCHEMY_DATABASE_URI'] = db_url
 

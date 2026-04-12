@@ -6,7 +6,7 @@
     <title>{% block title %}Pimaks Kiralama{% endblock %}</title>
     
     <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/font-awesome/css/all.min.css') }}">
     
     <style>
         body {
@@ -136,10 +136,10 @@
     <nav class="navbar navbar-expand-lg navbar-light mb-4 shadow-sm bg-white">
         <div class="container">
             <a class="navbar-brand" href="{{ url_for('main.index') }}">
-                <img src="{{ url_for('static', filename=(system_settings.logo_path if system_settings and system_settings.logo_path else 'img/logo.JPG')) }}"
+                <img src="{{ url_for('static', filename=navbar_logo_filename) }}"
                      alt="Logo"
                      class="navbar-logo"
-                     onerror="this.onerror=null; this.src='/static/img/placeholder.png';">
+                     onerror="this.onerror=null; this.src=&quot;{{ url_for('static', filename='img/placeholder.svg') }}&quot;;">
                 <span class="navbar-brand-text">{{ system_settings.company_name if system_settings and system_settings.company_name else 'Pimaks' }}</span>
             </a>
 
@@ -306,7 +306,7 @@
 
     <footer>
         <div class="container">
-            &copy; 2026 Pimaks Kiralama Yönetim Sistemi
+            &copy; 2026 Pimaks Software
         </div>
     </footer>
 

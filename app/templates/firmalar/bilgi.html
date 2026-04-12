@@ -51,10 +51,17 @@
                     </div>
                 </div>
             </div>
-            <div class="d-block mt-1">
-                <span class="badge bg-{{ 'success' if firma.is_musteri else 'secondary' }}">{{ 'Müşteri' if firma.is_musteri else '' }}</span>
-                <span class="badge bg-{{ 'warning' if firma.is_tedarikci else 'secondary' }}">{{ 'Tedarikçi' if firma.is_tedarikci else '' }}</span>
+            <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
+                {% if firma.is_musteri %}
+                <span class="badge bg-success">Müşteri</span>
+                {% endif %}
                 <span class="badge bg-{{ 'primary' if firma.is_active else 'danger' }}">{{ 'Aktif' if firma.is_active else 'Pasif' }}</span>
+                {% if firma.is_tedarikci %}
+                <span class="badge bg-warning text-dark">Tedarikçi</span>
+                {% endif %}
+                <button type="button" class="btn btn-sm btn-outline-info d-inline-flex align-items-center gap-1" data-bs-toggle="modal" data-bs-target="#firmaBilgiModal" title="Firma bilgileri">
+                    <i class="fa fa-info-circle"></i> Bilgi
+                </button>
             </div>
         </div>
         
@@ -228,9 +235,6 @@
         </li>
         <li class="nav-item">
             <button class="nav-link {{ 'active' if tab == 'kiralama' else '' }}" id="kiralama-tab" data-bs-toggle="tab" data-bs-target="#kiralama" type="button" onclick="setTab('kiralama')">Kiralamalar</button>
-        </li>
-        <li class="nav-item">
-            <button class="nav-link" id="genel-tab" data-bs-toggle="tab" data-bs-target="#genel" type="button">Firma Kartı</button>
         </li>
     </ul>
 
@@ -649,20 +653,32 @@
                 </div>
             </div>
         </div>
+    </div>
+</div>
 
-        <div class="tab-pane fade" id="genel">
-            <div class="card card-body shadow-sm">
+<div class="modal fade" id="firmaBilgiModal" tabindex="-1" aria-labelledby="firmaBilgiModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title" id="firmaBilgiModalLabel"><i class="fa fa-building text-primary me-2"></i>Firma bilgileri</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
+            </div>
+            <div class="modal-body pt-2">
                 <div class="row">
-                    <div class="col-md-6">
-                        <table class="table table-borderless">
-                            <tr><th>Yetkili Kişi:</th><td>{{ firma.yetkili_adi or '-' }}</td></tr>
-                            <tr><th>Telefon:</th><td>{{ firma.telefon or '-' }}</td></tr>
-                            <tr><th>Email:</th><td>{{ firma.eposta or '-' }}</td></tr>
-                            <tr><th>Vergi No:</th><td>{{ firma.vergi_no or '-' }}</td></tr>
-                            <tr><th>İletişim:</th><td>{{ firma.iletisim_bilgileri or '-' }}</td></tr>
+                    <div class="col-md-8">
+                        <table class="table table-borderless table-sm mb-0">
+                            <tr><th class="text-muted" style="width:40%;">Yetkili Kişi</th><td>{{ firma.yetkili_adi or '-' }}</td></tr>
+                            <tr><th class="text-muted">Telefon</th><td>{{ firma.telefon or '-' }}</td></tr>
+                            <tr><th class="text-muted">E-posta</th><td>{{ firma.eposta or '-' }}</td></tr>
+                            <tr><th class="text-muted">Vergi No</th><td>{{ firma.vergi_no or '-' }}</td></tr>
+                            <tr><th class="text-muted">İletişim</th><td>{{ firma.iletisim_bilgileri or '-' }}</td></tr>
                         </table>
                     </div>
                 </div>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <a href="{{ url_for('firmalar.duzelt', id=firma.id) }}" class="btn btn-warning btn-sm"><i class="fa fa-edit me-1"></i>Firmayı düzenle</a>
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Kapat</button>
             </div>
         </div>
     </div>

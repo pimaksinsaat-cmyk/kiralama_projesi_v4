@@ -159,10 +159,14 @@
                             <td class="ps-3">{{ nakliye.tarih.strftime('%d.%m.%Y') }}</td>
                             
                             <td>
+                                {% if nakliye.firma %}
                                 <a href="{{ url_for('firmalar.bilgi', id=nakliye.firma.id) }}" class="text-decoration-none fw-bold text-dark" title="{{ nakliye.firma.firma_adi }}">
-                                    {{ nakliye.firma.firma_adi | truncate_name }} 
+                                    {{ nakliye.firma.firma_adi | truncate_name }}
                                     <i class="fas fa-external-link-alt small text-muted ms-1" style="font-size: 0.7rem;"></i>
                                 </a>
+                                {% else %}
+                                <span class="text-muted small" title="Firma kaydı bulunamadı">Firma #{{ nakliye.firma_id }}</span>
+                                {% endif %}
                             </td>
                             
                             <td>
@@ -197,11 +201,7 @@
                                 {{ "{:,.2f}".format(nakliye.tutar or 0).replace(',', 'X').replace('.', ',').replace('X', '.') }} TL
                             </td>
                             <td class="text-end">
-                                {% if nakliye.kiralama_id and nakliye.kiralama and nakliye.kiralama.kalemler and nakliye.kiralama.kalemler[0].nakliye_satis_kdv %}
-                                    {% set efektif_kdv = nakliye.kiralama.kalemler[0].nakliye_satis_kdv %}
-                                {% else %}
-                                    {% set efektif_kdv = nakliye.kdv_orani or 0 %}
-                                {% endif %}
+                                {% set efektif_kdv = nakliye.kdv_orani or 0 %}
                                 {% if efektif_kdv and efektif_kdv != 0 %}
                                     {{ efektif_kdv }} %
                                 {% else %}
@@ -209,46 +209,41 @@
                                 {% endif %}
                             </td>
                             <td class="text-end">
-                                {% if nakliye.kiralama_id and nakliye.kiralama and nakliye.kiralama.kalemler and nakliye.kiralama.kalemler[0].nakliye_satis_kdv %}
-                                    {% set kdv_orani = nakliye.kiralama.kalemler[0].nakliye_satis_kdv or 0 %}
-                                    {% set tevkifat_str = nakliye.kiralama.kalemler[0].nakliye_satis_tevkifat_oran or '' %}
-                                {% else %}
-                                    {% set kdv_orani = nakliye.kdv_orani or 0 %}
-                                    {% set tevkifat_str = nakliye.tevkifat_orani or '' %}
-                                {% endif %}
+                                {% set kdv_orani = nakliye.kdv_orani or 0 %}
+                                {% set tevkifat_str = nakliye.tevkifat_orani or '' %}
                                 {% if kdv_orani and kdv_orani != 0 %}
                                     {% set kdv_tam = (nakliye.tutar|float) * (kdv_orani / 100.0) %}
-                                    {% if tevkifat_str %}
+                                    {% set net_kdv = kdv_tam %}
+                                    {% if tevkifat_str and '/' in tevkifat_str %}
                                         {% set tev_parts = tevkifat_str.split('/') %}
-                                        {% set net_kdv = kdv_tam * (tev_parts[1]|int - tev_parts[0]|int) / tev_parts[1]|int %}
-                                    {% else %}
-                                        {% set net_kdv = kdv_tam %}
+                                        {% if tev_parts|length >= 2 and (tev_parts[1]|int) != 0 %}
+                                            {% set net_kdv = kdv_tam * ((tev_parts[1]|int) - (tev_parts[0]|int)) / (tev_parts[1]|int) %}
+                                        {% endif %}
                                     {% endif %}
                                     {{ "{:,.2f}".format(net_kdv).replace(',', 'X').replace('.', ',').replace('X', '.') }} TL
-                                    {% if tevkifat_str %}
+                                    {% if tevkifat_str and '/' in tevkifat_str %}
+                                        {% set tev_parts = tevkifat_str.split('/') %}
+                                        {% if tev_parts|length >= 2 and (tev_parts[1]|int) != 0 %}
                                         <div class="text-muted fst-italic" style="font-size:0.7em; line-height:1.3; white-space:nowrap;">
                                             {{ "{:,.2f}".format(kdv_tam).replace(',', 'X').replace('.', ',').replace('X', '.') }} − {{ "{:,.2f}".format(kdv_tam).replace(',', 'X').replace('.', ',').replace('X', '.') }}×{{ tevkifat_str }}
                                         </div>
+                                        {% endif %}
                                     {% endif %}
                                 {% else %}
                                     0,00 TL
                                 {% endif %}
                             </td>
                             <td class="text-end fw-bold text-primary">
-                                {% if nakliye.kiralama_id and nakliye.kiralama and nakliye.kiralama.kalemler and nakliye.kiralama.kalemler[0].nakliye_satis_kdv %}
-                                    {% set kdv_orani = nakliye.kiralama.kalemler[0].nakliye_satis_kdv or 0 %}
-                                    {% set tevkifat_str = nakliye.kiralama.kalemler[0].nakliye_satis_tevkifat_oran or '' %}
-                                {% else %}
-                                    {% set kdv_orani = nakliye.kdv_orani or 0 %}
-                                    {% set tevkifat_str = nakliye.tevkifat_orani or '' %}
-                                {% endif %}
+                                {% set kdv_orani = nakliye.kdv_orani or 0 %}
+                                {% set tevkifat_str = nakliye.tevkifat_orani or '' %}
                                 {% set matrah = nakliye.tutar or 0 %}
                                 {% set kdv_tam = (matrah|float) * (kdv_orani / 100.0) %}
-                                {% if tevkifat_str %}
+                                {% set net_kdv = kdv_tam %}
+                                {% if tevkifat_str and '/' in tevkifat_str %}
                                     {% set tev_parts = tevkifat_str.split('/') %}
-                                    {% set net_kdv = kdv_tam * (tev_parts[1]|int - tev_parts[0]|int) / tev_parts[1]|int %}
-                                {% else %}
-                                    {% set net_kdv = kdv_tam %}
+                                    {% if tev_parts|length >= 2 and (tev_parts[1]|int) != 0 %}
+                                        {% set net_kdv = kdv_tam * ((tev_parts[1]|int) - (tev_parts[0]|int)) / (tev_parts[1]|int) %}
+                                    {% endif %}
                                 {% endif %}
                                 {{ "{:,.2f}".format((matrah|float) + net_kdv).replace(',', 'X').replace('.', ',').replace('X', '.') }} TL
                             </td>
