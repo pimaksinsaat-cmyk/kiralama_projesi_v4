@@ -290,15 +290,13 @@
     <!-- Flash Messages -->
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
-            <div class="bg-light border-bottom">
-                <div class="container">
-                    {% for category, message in messages %}
-                        <div class="alert alert-{{ category }} alert-dismissible fade show mb-0" role="alert" style="margin-top: 0; margin-bottom: 0; border: none; border-radius: 0;">
-                            {{ message }}
-                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Kapat"></button>
-                        </div>
-                    {% endfor %}
-                </div>
+            <div class="container">
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show mb-0" role="alert" style="margin-top: 0; margin-bottom: 0; border: none; border-radius: 0; text-align: center; padding: 12px 50px 12px 50px;">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Kapat"></button>
+                    </div>
+                {% endfor %}
             </div>
         {% endif %}
     {% endwith %}
