@@ -1,5 +1,7 @@
 from app.extensions import db
 from datetime import datetime
+from decimal import Decimal
+from sqlalchemy.orm import validates
 from app.models.base_model import BaseModel
 
 class Kiralama(BaseModel):
@@ -28,9 +30,15 @@ from app.extensions import db
 from datetime import datetime
 
 class KiralamaKalemi(BaseModel):
+    """
+    Kiralama detay satırları (rental line items).
+
+    VALIDATION RULES:
+    - kiralama_brm_fiyat: >= 0, max 15 digits (13 before decimal, 2 after)
+    """
     __tablename__ = 'kiralama_kalemi'
-    
-    
+
+
     kiralama_id = db.Column(db.Integer, db.ForeignKey('kiralama.id'), nullable=False)
     
     # --- PİMAKS FİLOSU ---
@@ -104,7 +112,20 @@ class KiralamaKalemi(BaseModel):
     # Bir kalemin alt revizyonlarını listelemek için
     revizyonlar = db.relationship('KiralamaKalemi', backref=db.backref('ust_kayit', remote_side='KiralamaKalemi.id'))
 
-      
+    # --- VALIDATION DECORATORS ---
+    @validates('kiralama_brm_fiyat')
+    def validate_kiralama_brm_fiyat(self, key, value):
+        """Validate kiralama_brm_fiyat: non-negative"""
+        if value is None:
+            return Decimal('0.00')
+        try:
+            price = Decimal(str(value))
+        except:
+            raise ValueError(f"Kiralama ücreti geçerli bir sayı olmalıdır, alınan: {value}")
+        if price < 0:
+            raise ValueError("Kiralama ücreti negatif olamaz")
+        return price
+
     # Aynı kalem ailesindeki tüm kayıtlar için ortak ID
     chain_id = db.Column(db.Integer, index=True)
 

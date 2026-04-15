@@ -1,98 +1,86 @@
-<!DOCTYPE html>
-<html lang="tr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ (system_settings.company_short_name or system_settings.company_name or 'Pimaks') }} Ana Ekran</title>
-    <style>
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; 
-            margin: 0; 
-            background-color: #f8f9fa; 
-            display: flex; 
-            justify-content: center; 
-            align-items: center; 
-            min-height: 100vh; 
-        }
-        .container { 
-            max-width: 500px; 
-            width: 90%; 
-            padding: 40px; 
-            background-color: #fff; 
-            border-radius: 12px; 
-            box-shadow: 0 10px 25px rgba(0,0,0,0.1); 
-            text-align: center;
-        }
-        .logo { 
-            max-width: 200px; 
-            margin-bottom: 30px; 
-            display: inline-block;
-        }
-        h1 { 
-            color: #343a40; 
-            margin-bottom: 10px; 
-            font-size: 1.5rem; 
-            font-weight: bold;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            max-width: 100%;
-        }
-        p.welcome-text { 
-            color: #6c757d; 
-            margin-bottom: 30px; 
-            font-size: 1rem; 
-        }
-        nav a { 
-            display: block; 
-            background-color: #ffffff; 
-            padding: 15px 20px; 
-            margin-bottom: 15px; 
-            text-decoration: none; 
-            color: #495057; 
-            border: 1px solid #dee2e6; 
-            border-radius: 8px; 
-            transition: all 0.2s ease-in-out; 
-            font-size: 1.1rem; 
-            font-weight: 600; 
-        }
-        nav a:hover { 
-            background-color: #007bff; 
-            color: white; 
-            border-color: #007bff; 
-            transform: translateY(-2px); 
-            box-shadow: 0 4px 10px rgba(0,123,255,0.2); 
-        }
-    </style>
-</head>
-<body>
+{% extends "base.html" %}
 
-<div class="container">
+{% block title %}{% endblock %}
+
+{% block head %}
+<style>
+    .main-content {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+    .welcome-container {
+        max-width: 500px;
+        width: 100%;
+        padding: 40px;
+        background-color: #fff;
+        border-radius: 12px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        text-align: center;
+    }
+    .logo {
+        max-width: 200px;
+        margin-bottom: 30px;
+        display: inline-block;
+    }
+    h1 {
+        color: #343a40;
+        margin-bottom: 10px;
+        font-size: 1.5rem;
+        font-weight: bold;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 100%;
+    }
+    p.welcome-text {
+        color: #6c757d;
+        margin-bottom: 30px;
+        font-size: 1rem;
+    }
+    .welcome-nav a {
+        display: block;
+        background-color: #ffffff;
+        padding: 15px 20px;
+        margin-bottom: 15px;
+        text-decoration: none;
+        color: #495057;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        transition: all 0.2s ease-in-out;
+        font-size: 1.1rem;
+        font-weight: 600;
+    }
+    .welcome-nav a:hover {
+        background-color: #007bff;
+        color: white;
+        border-color: #007bff;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 10px rgba(0,123,255,0.2);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="welcome-container">
     <img class="logo" src="{{ url_for('static', filename=navbar_logo_filename) }}" alt="{{ system_settings.company_name if system_settings else 'Pimaks Logosu' }}">
-    
+
     <h1>{{ system_settings.company_short_name or system_settings.company_name or 'Pimaks' }}</h1>
     <p class="welcome-text">Hoş geldiniz, lütfen işlem seçiniz.</p>
 
-    <nav>
+    <nav class="welcome-nav">
         <a href="{{ url_for('filo.index') }}">MAKİNE PARKI</a>
         <a href="{{ url_for('firmalar.index') }}">MÜŞTERİLER & FİRMALAR</a>
         <a href="{{ url_for('kiralama.index') }}">KİRALAMALAR</a>
         <a href="{{ url_for('nakliyeler.index') }}">NAKLİYELER</a>
         <a href="{{ url_for('subeler.index') }}">ŞUBELER & DEPOLAR</a>
         <a href="{{ url_for('raporlama.index') }}">RAPORLAMA</a>
-        
-        <hr style="margin: 20px 0; border-top: 1px dashed #ccc;">
-        
-        <a href="{{ url_for('cari.finans_menu') }}" style="background-color: #f1f3f5; border-color: #6c757d; color: #343a40;">
-            FİNANSAL İŞLEMLER 
-        </a>
-        
-    </nav>
-    
-    <div style="margin-top: 30px; font-size: 0.8em; color: #adb5bd;">
-        &copy; 2026 Pimaks Software
-    </div>
-</div>
 
-</body>
-</html>
+        <hr style="margin: 20px 0; border-top: 1px dashed #ccc;">
+
+        <a href="{{ url_for('cari.finans_menu') }}" style="background-color: #f1f3f5; border-color: #6c757d; color: #343a40;">
+            FİNANSAL İŞLEMLER
+        </a>
+    </nav>
+</div>
+{% endblock %}

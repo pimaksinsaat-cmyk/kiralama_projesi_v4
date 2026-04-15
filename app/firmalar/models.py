@@ -1,12 +1,16 @@
 from app.extensions import db
 from datetime import date
 from sqlalchemy import func
+from sqlalchemy.orm import validates
 from app.models.base_model import BaseModel
 
 class Firma(BaseModel):
     """
-    Sistemin ana Cari (Ledger) ve Firma modeli. 
+    Sistemin ana Cari (Ledger) ve Firma modeli.
     Tüm modüller (Stok, Kiralama, Nakliye, Cari) bu modele bağlıdır.
+
+    VALIDATION RULES:
+    - firma_adi: 1-150 characters, non-empty, automatically trimmed
     """
     __tablename__ = 'firma'
     
@@ -66,6 +70,20 @@ class Firma(BaseModel):
         from app.cari.models import HizmetKaydi
         return self.hizmet_kayitlari.filter(HizmetKaydi.is_deleted == False).order_by(HizmetKaydi.tarih.desc()).all()
     # -----------------------------------------------------------------------------
+
+    # --- VALIDATION DECORATORS ---
+    @validates('firma_adi')
+    def validate_firma_adi(self, key, value):
+        """Validate firma_adi: non-empty, max 150 chars, trimmed"""
+        if not value:
+            raise ValueError("Firma adı boş olamaz")
+        # Trim first, then check if empty after stripping
+        trimmed = value.strip()
+        if not trimmed:
+            raise ValueError("Firma adı boş olamaz")
+        if len(trimmed) > 150:
+            raise ValueError("Firma adı maksimum 150 karakter olabilir")
+        return trimmed
 
     # --- Ledger (Muhasebe) Hesaplama ---
     @property

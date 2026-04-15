@@ -72,7 +72,7 @@
         <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
             <div>
                 <h1 class="h3 fw-bold text-slate-800 mb-1">Makine Parkı</h1>
-                <p class="text-muted small mb-0">Pimaks Filosundaki tüm aktif ekipmanların listesi</p>
+                <p class="text-muted small mb-0">{{ system_settings.company_short_name or system_settings.company_name or 'Pimaks' }} Filosundaki tüm aktif ekipmanların listesi</p>
             </div>
             <div class="d-flex gap-2">
                 <a href="{{ url_for('filo.ekle') }}" class="btn btn-primary shadow-sm rounded-3">

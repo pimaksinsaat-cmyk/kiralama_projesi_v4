@@ -1,0 +1,272 @@
+VALIDATION HATALARI DÜZELTME - HIZLI KONTROL LİSTESİ
+═════════════════════════════════════════════════════════════════════════════
+
+3 VALIDATION HATASI BULUNDU:
+═════════════════════════════════════════════════════════════════════════════
+
+ERROR #1: firma_adi Max Length Yok
+─────────────────────────────────────────────────────────────────────────────
+Severity:   MEDIUM
+File:       app/firmalar/models.py
+Field:      firma_adi = db.Column(db.String(150), ...)
+Problem:    Accepts 200+ chars, limit is 150
+Solution:   Add @validates + CHECK constraint
+Time:       15 minutes
+
+
+ERROR #2: Negative Prices Accepted
+─────────────────────────────────────────────────────────────────────────────
+Severity:   HIGH
+File:       app/kiralama/models.py
+Field:      kiralama_brm_fiyat = db.Column(db.Numeric(15, 2), ...)
+Problem:    Accepts negative values (-100.00)
+Solution:   Add @validates + CHECK constraint
+Time:       15 minutes
+
+
+ERROR #3: Negative Quantities Accepted
+─────────────────────────────────────────────────────────────────────────────
+Severity:   HIGH
+File:       app/filo/models.py
+Field:      mevcut_stok = db.Column(db.Integer, ...)
+Problem:    Accepts negative values (-5)
+Solution:   Add @validates + CHECK constraint
+Time:       15 minutes
+
+
+IMPLEMENTATION ROADMAP (3 HOURS)
+═════════════════════════════════════════════════════════════════════════════
+
+PHASE 1: APPLICATION VALIDATORS (30 MINUTES)
+─────────────────────────────────────────────────────────────────────────────
+
+File 1: app/firmalar/models.py
+[ ] Import @validates from sqlalchemy.orm
+[ ] Add @validates('firma_adi') method
+    - Check length <= 150
+    - Check not empty
+    - Return value.strip()
+
+File 2: app/kiralama/models.py
+[ ] Import @validates from sqlalchemy.orm
+[ ] Import Decimal from decimal
+[ ] Add @validates('kiralama_brm_fiyat') method
+    - Check >= 0
+    - Handle None values
+    - Return Decimal(value)
+
+File 3: app/filo/models.py
+[ ] Import @validates from sqlalchemy.orm
+[ ] Add @validates('mevcut_stok') method
+    - Check >= 0
+    - Handle None values
+    - Return int(value)
+
+Verification:
+[ ] Run: pytest tests/test_edge_cases.py -v
+[ ] All 27 tests should still pass
+
+
+PHASE 2: DATABASE CONSTRAINTS (30 MINUTES)
+─────────────────────────────────────────────────────────────────────────────
+
+Step 1: Create Migration
+[ ] Run: flask db migrate -m "Add validation constraints"
+[ ] Verify: migrations/versions/XXXXXXX_add_validation_constraints.py created
+
+Step 2: Update Migration File
+[ ] Add CHECK constraint for firma_adi length
+    op.execute('''
+        ALTER TABLE firma
+        ADD CONSTRAINT check_firma_adi_length
+        CHECK (LENGTH(firma_adi) > 0 AND LENGTH(firma_adi) <= 150)
+    ''')
+
+[ ] Add CHECK constraint for kiralama_brm_fiyat
+    op.execute('''
+        ALTER TABLE kiralama_kalemi
+        ADD CONSTRAINT check_kiralama_brm_fiyat_non_negative
+        CHECK (kiralama_brm_fiyat >= 0)
+    ''')
+
+[ ] Add CHECK constraint for mevcut_stok
+    op.execute('''
+        ALTER TABLE stok_karti
+        ADD CONSTRAINT check_mevcut_stok_non_negative
+        CHECK (mevcut_stok >= 0)
+    ''')
+
+Step 3: Apply Migration
+[ ] Run: flask db upgrade
+[ ] Verify: No errors
+
+Step 4: Verify Constraints
+[ ] Run: sqlite3 kiralama.db ".schema firma" | grep -i constraint
+[ ] Run: sqlite3 kiralama.db ".schema kiralama_kalemi" | grep -i constraint
+[ ] Run: sqlite3 kiralama.db ".schema stok_karti" | grep -i constraint
+
+
+PHASE 3: TESTING (30 MINUTES)
+─────────────────────────────────────────────────────────────────────────────
+
+[ ] Create tests/test_validation_fixes.py
+[ ] Add 9+ test cases:
+    - test_firma_adi_empty_rejected
+    - test_firma_adi_max_length_rejected
+    - test_firma_adi_trimmed
+    - test_firma_adi_valid_accepted
+    - test_kiralama_brm_fiyat_negative_rejected
+    - test_kiralama_brm_fiyat_zero_allowed
+    - test_kiralama_brm_fiyat_positive_allowed
+    - test_mevcut_stok_negative_rejected
+    - test_mevcut_stok_zero_allowed
+    - test_mevcut_stok_positive_allowed
+
+Verification:
+[ ] Run: pytest tests/test_validation_fixes.py -v
+[ ] All tests should pass
+[ ] Run: pytest tests/test_edge_cases.py -v
+[ ] All 27 edge case tests should still pass
+[ ] Run: pytest tests/ -v
+[ ] Full test suite should pass
+
+
+PHASE 4: DOCUMENTATION (15 MINUTES)
+─────────────────────────────────────────────────────────────────────────────
+
+[ ] Update model docstrings with validation rules
+    - firma_adi: 1-150 characters, non-empty, trimmed
+    - kiralama_brm_fiyat: >= 0, max 15 digits total
+    - mevcut_stok: >= 0, non-negative integer
+
+[ ] Create or update docs/VALIDATION_RULES.md
+
+
+BEFORE IMPLEMENTATION CHECKLIST
+═════════════════════════════════════════════════════════════════════════════
+
+[ ] Database backup created
+[ ] Current test suite passing (27/27)
+[ ] No uncommitted changes in models
+[ ] Migration environment ready
+[ ] Rollback plan documented
+
+
+DURING IMPLEMENTATION
+═════════════════════════════════════════════════════════════════════════════
+
+STEP-BY-STEP COMMANDS:
+
+# 1. Update models (Phase 1)
+vim app/firmalar/models.py          # Add @validates for firma_adi
+vim app/kiralama/models.py          # Add @validates for kiralama_brm_fiyat
+vim app/filo/models.py              # Add @validates for mevcut_stok
+
+# 2. Test application validators
+pytest tests/test_edge_cases.py -v  # Should still pass
+
+# 3. Create migration (Phase 2)
+flask db migrate -m "Add validation constraints"
+vim migrations/versions/XXXXXXX_add_validation_constraints.py
+
+# 4. Apply migration
+flask db upgrade
+
+# 5. Verify database constraints
+sqlite3 kiralama.db ".schema firma"
+sqlite3 kiralama.db ".schema kiralama_kalemi"
+sqlite3 kiralama.db ".schema stok_karti"
+
+# 6. Add comprehensive tests (Phase 3)
+vim tests/test_validation_fixes.py
+
+# 7. Run all tests
+pytest tests/test_validation_fixes.py -v
+pytest tests/test_edge_cases.py -v
+pytest tests/ -v --cov=app
+
+# 8. Update documentation
+vim docs/VALIDATION_RULES.md
+
+
+AFTER IMPLEMENTATION CHECKLIST
+═════════════════════════════════════════════════════════════════════════════
+
+[ ] All validators added to 3 models
+[ ] Migration created and applied successfully
+[ ] 3 CHECK constraints added to database
+[ ] 10+ new validation tests created
+[ ] All validation tests passing (10/10)
+[ ] All edge case tests still passing (27/27)
+[ ] Full test suite passing (50+/50+)
+[ ] No existing functionality broken
+[ ] Database constraints verified
+[ ] Documentation updated
+[ ] Code committed to git
+
+
+ROLLBACK PROCEDURE (IF NEEDED)
+═════════════════════════════════════════════════════════════════════════════
+
+If migration fails:
+[ ] Run: flask db downgrade
+
+If tests fail after Phase 1:
+[ ] Remove @validates decorators from models
+[ ] Revert test failures
+[ ] Diagnose root cause
+
+If database constraints break existing data:
+[ ] Restore database backup
+[ ] Run data validation queries
+[ ] Identify problematic records
+[ ] Fix records before re-running migration
+
+
+SUCCESS CRITERIA
+═════════════════════════════════════════════════════════════════════════════
+
+All of these must be true:
+✓ 3 models have @validates decorators
+✓ 3 CHECK constraints added to database
+✓ 10+ validation tests created and passing
+✓ 27 edge case tests still passing
+✓ Full test suite passing (no regressions)
+✓ No data validation errors
+✓ Documentation updated
+
+
+ESTIMATED TIMELINE
+═════════════════════════════════════════════════════════════════════════════
+
+Phase 1 (Validators):      30 minutes
+Phase 2 (Constraints):     30 minutes
+Phase 3 (Testing):         30 minutes
+Phase 4 (Documentation):   15 minutes
+                          ───────────
+TOTAL:                    2 hours 15 minutes
+
+
+QUESTIONS BEFORE STARTING?
+═════════════════════════════════════════════════════════════════════════════
+
+[ ] Database backup ready?
+[ ] All current tests passing?
+[ ] Git branch ready for commits?
+[ ] Rollback plan understood?
+
+
+START IMPLEMENTATION?
+═════════════════════════════════════════════════════════════════════════════
+
+Ready when you are! Run this to get started:
+
+  1. cp app/firmalar/models.py app/firmalar/models.py.bak
+  2. cp app/kiralama/models.py app/kiralama/models.py.bak
+  3. cp app/filo/models.py app/filo/models.py.bak
+  4. vim app/firmalar/models.py
+
+═════════════════════════════════════════════════════════════════════════════
+Reference: See VALIDATION_FIX_ROADMAP.md for detailed implementation code
+Generated: 2026-04-15 | Status: Ready for Implementation
+═════════════════════════════════════════════════════════════════════════════

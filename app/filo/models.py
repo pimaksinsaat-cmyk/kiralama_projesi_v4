@@ -1,6 +1,7 @@
 from app.extensions import db
 from app.models.base_model import BaseModel
 from datetime import date
+from sqlalchemy.orm import validates
 
 # 3. EKIPMAN (Filo)
 class Ekipman(BaseModel):
@@ -103,8 +104,14 @@ class KullanilanParca(BaseModel):
 
 # 8. STOK KARTI
 class StokKarti(BaseModel):
+    """
+    Parça envanteri ve stok takibi.
+
+    VALIDATION RULES:
+    - mevcut_stok: >= 0 (non-negative integer)
+    """
     __tablename__ = 'stok_karti'
-    
+
     parca_kodu = db.Column(db.String(100), unique=True, nullable=False, index=True)
     parca_adi = db.Column(db.String(250), nullable=False)
     mevcut_stok = db.Column(db.Integer, nullable=False, default=0)
@@ -113,8 +120,19 @@ class StokKarti(BaseModel):
     varsayilan_tedarikci = db.relationship('Firma', back_populates='tedarik_edilen_parcalar', foreign_keys=[varsayilan_tedarikci_id])
     hareketler = db.relationship('StokHareket', back_populates='stok_karti', cascade="all, delete-orphan")
     kullanim_kayitlari = db.relationship('KullanilanParca', back_populates='stok_karti')
-    
-    def __repr__(self): 
+
+    # --- VALIDATION DECORATORS ---
+    @validates('mevcut_stok')
+    def validate_mevcut_stok(self, key, value):
+        """Validate mevcut_stok: non-negative"""
+        if value is None:
+            return 0
+        quantity = int(value)
+        if quantity < 0:
+            raise ValueError("Stok miktarı negatif olamaz")
+        return quantity
+
+    def __repr__(self):
         return f'<Stok {self.parca_kodu}>'
 
 

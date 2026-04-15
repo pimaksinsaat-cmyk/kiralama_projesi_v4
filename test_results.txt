@@ -1,0 +1,113 @@
+============================= test session starts =============================
+platform win32 -- Python 3.13.0, pytest-9.0.3, pluggy-1.6.0 -- C:\Users\cuney\AppData\Local\Programs\Python\Python313\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\cuney\Drive'ým\kiralama_projesi_v4
+configfile: pytest.ini
+collecting ... collected 27 items
+
+tests/test_edge_cases.py::test_user_duplicate_username_rejected PASSED   [  3%]
+tests/test_edge_cases.py::test_user_null_password_rejected PASSED        [  7%]
+tests/test_edge_cases.py::test_firma_duplicate_vergi_no_rejected PASSED  [ 11%]
+tests/test_edge_cases.py::test_ekipman_duplicate_kod_rejected PASSED     [ 14%]
+tests/test_edge_cases.py::test_kiralama_invalid_firma_fk_rejected PASSED [ 18%]
+tests/test_edge_cases.py::test_kiralama_kalemi_invalid_ekipman_fk_rejected PASSED [ 22%]
+tests/test_edge_cases.py::test_harici_ekipman_validation_raises_value_error PASSED [ 25%]
+tests/test_edge_cases.py::test_kasa_and_odeme_check_constraint PASSED    [ 29%]
+tests/test_edge_cases.py::test_kiralama_kalemi_decimal_type_validation PASSED [ 33%]
+tests/test_edge_cases.py::test_turkish_characters_are_persisted PASSED   [ 37%]
+tests/test_edge_cases.py::test_stok_hareket_relationship_and_counts PASSED [ 40%]
+tests/test_edge_cases.py::test_personel_duplicate_tc_no_rejected PASSED  [ 44%]
+tests/test_edge_cases.py::test_kiralama_kalemi_zero_price_allowed PASSED [ 48%]
+tests/test_edge_cases.py::test_kiralama_kalemi_negative_price_rejected PASSED [ 51%]
+tests/test_edge_cases.py::test_stok_karti_zero_quantity_allowed FAILED   [ 55%]
+tests/test_edge_cases.py::test_stok_karti_negative_quantity_rejected FAILED [ 59%]
+tests/test_edge_cases.py::test_kiralama_end_before_start_rejected PASSED [ 62%]
+tests/test_edge_cases.py::test_kiralama_kalemi_same_dates_allowed PASSED [ 66%]
+tests/test_edge_cases.py::test_kiralama_kalemi_future_dates PASSED       [ 70%]
+tests/test_edge_cases.py::test_firma_adi_empty_rejected PASSED           [ 74%]
+tests/test_edge_cases.py::test_firma_adi_max_length_rejected FAILED      [ 77%]
+tests/test_edge_cases.py::test_ekipman_kod_special_chars_accepted PASSED [ 81%]
+tests/test_edge_cases.py::test_personel_ad_with_numbers_accepted PASSED  [ 85%]
+tests/test_edge_cases.py::test_kiralama_deletion_cascades_kalemler PASSED [ 88%]
+tests/test_edge_cases.py::test_ekipman_deletion_cascades_stok FAILED     [ 92%]
+tests/test_edge_cases.py::test_kiralama_deletion_cascades_hizmet FAILED  [ 96%]
+tests/test_edge_cases.py::test_firma_deletion_cascades_kiralama PASSED   [100%]
+
+================================== FAILURES ===================================
+____________________ test_stok_karti_zero_quantity_allowed ____________________
+tests\test_edge_cases.py:334: in test_stok_karti_zero_quantity_allowed
+    stok = StokKarti(ekipman_id=ekipman.id, mevcut_adet=0)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<string>:4: in __init__
+    ???
+..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\state.py:596: in _initialize_instance
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\util\langhelpers.py:121: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\state.py:594: in _initialize_instance
+    manager.original_init(*mixed[1:], **kwargs)
+..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\decl_base.py:2179: in _declarative_constructor
+    raise TypeError(
+E   TypeError: 'ekipman_id' is an invalid keyword argument for StokKarti
+_________________ test_stok_karti_negative_quantity_rejected __________________
+tests\test_edge_cases.py:349: in test_stok_karti_negative_quantity_rejected
+    stok = StokKarti(ekipman_id=ekipman.id, mevcut_adet=-5)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<string>:4: in __init__
+    ???
+..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\state.py:596: in _initialize_instance
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\util\langhelpers.py:121: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\state.py:594: in _initialize_instance
+    manager.original_init(*mixed[1:], **kwargs)
+..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\decl_base.py:2179: in _declarative_constructor
+    raise TypeError(
+E   TypeError: 'ekipman_id' is an invalid keyword argument for StokKarti
+_____________________ test_firma_adi_max_length_rejected ______________________
+tests\test_edge_cases.py:487: in test_firma_adi_max_length_rejected
+    assert len(firma.firma_adi) <= 150, "firma_adi exceeds max length"
+E   AssertionError: firma_adi exceeds max length
+E   assert 200 <= 150
+E    +  where 200 = len('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
+E    +    where 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' = <Firma AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA>.firma_adi
+_____________________ test_ekipman_deletion_cascades_stok _____________________
+tests\test_edge_cases.py:578: in test_ekipman_deletion_cascades_stok
+    stok = StokKarti(ekipman_id=ekipman.id, mevcut_adet=10)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<string>:4: in __init__
+    ???
+..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\state.py:596: in _initialize_instance
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\util\langhelpers.py:121: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\state.py:594: in _initialize_instance
+    manager.original_init(*mixed[1:], **kwargs)
+..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\decl_base.py:2179: in _declarative_constructor
+    raise TypeError(
+E   TypeError: 'ekipman_id' is an invalid keyword argument for StokKarti
+___________________ test_kiralama_deletion_cascades_hizmet ____________________
+tests\test_edge_cases.py:601: in test_kiralama_deletion_cascades_hizmet
+    hizmet = HizmetKaydi(
+<string>:4: in __init__
+    ???
+..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\state.py:596: in _initialize_instance
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\util\langhelpers.py:121: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\state.py:594: in _initialize_instance
+    manager.original_init(*mixed[1:], **kwargs)
+..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\decl_base.py:2179: in _declarative_constructor
+    raise TypeError(
+E   TypeError: 'kiralama_id' is an invalid keyword argument for HizmetKaydi
+=========================== short test summary info ===========================
+FAILED tests/test_edge_cases.py::test_stok_karti_zero_quantity_allowed - Type...
+FAILED tests/test_edge_cases.py::test_stok_karti_negative_quantity_rejected
+FAILED tests/test_edge_cases.py::test_firma_adi_max_length_rejected - Asserti...
+FAILED tests/test_edge_cases.py::test_ekipman_deletion_cascades_stok - TypeEr...
+FAILED tests/test_edge_cases.py::test_kiralama_deletion_cascades_hizmet - Typ...
+======================== 5 failed, 22 passed in 2.61s =========================
