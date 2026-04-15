@@ -218,8 +218,18 @@ def create_app(config_class=Config):
             import atexit
             from apscheduler.schedulers.background import BackgroundScheduler
             from app.db_menu.routes import otomatik_yedek_al
+            from app.services.kiralama_services import KiralamaService
 
             _scheduler = BackgroundScheduler(daemon=True)
+            _scheduler.add_job(
+                func=lambda: KiralamaService.refresh_tcmb_kurlari(force=True),
+                trigger='interval',
+                hours=1,
+                id='saatlik_kur_guncelle',
+                replace_existing=True,
+                coalesce=True,
+                max_instances=1,
+            )
             _scheduler.add_job(
                 func=lambda: otomatik_yedek_al(app),
                 trigger='cron',
@@ -230,6 +240,8 @@ def create_app(config_class=Config):
             )
             _scheduler.start()
             atexit.register(lambda: _scheduler.shutdown(wait=False))
+            # Uygulama ilk başladığında kurları önceden çek (işlem anında ağ çağrısı olmasın)
+            KiralamaService.refresh_tcmb_kurlari(force=True)
             # Uygulama ilk başladığında bugünün yedeğini al
             otomatik_yedek_al(app)
         except Exception:

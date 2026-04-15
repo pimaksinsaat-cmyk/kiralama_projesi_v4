@@ -208,6 +208,11 @@ def index():
         except Exception as kur_err:
             current_app.logger.warning("TCMB kurlari alinamadı (index): %s", kur_err, exc_info=True)
             kurlar = {}
+        kur_son_guncelleme = KiralamaService.get_kur_son_guncelleme()
+        kur_son_guncelleme_text = (
+            kur_son_guncelleme.strftime('%d.%m.%Y %H:%M:%S')
+            if kur_son_guncelleme else 'Henüz güncellenmedi'
+        )
 
         try:
             subeler = get_cached_subeler()
@@ -234,6 +239,7 @@ def index():
             per_page=per_page,
             q=q,
             kurlar=kurlar,
+            kur_son_guncelleme=kur_son_guncelleme_text,
             today=date.today(),
             subeler=subeler,
             nakliye_araclari=nakliye_araclari,
@@ -244,7 +250,20 @@ def index():
         db.session.rollback()
         current_app.logger.error(f"Kiralama Liste Yükleme Hatası: {str(e)}\n{traceback.format_exc()}")
         flash(f"Liste yüklenirken bir hata oluştu.", "danger")
-        return render_template('kiralama/index.html', kiralamalar=[], pagination=None, per_page=25, q='', kurlar={}, today=date.today(), subeler=[], nakliye_araclari=[], nakliye_tedarikci_listesi=[], recently_returned_kalem_ids=set())
+        return render_template(
+            'kiralama/index.html',
+            kiralamalar=[],
+            pagination=None,
+            per_page=25,
+            q='',
+            kurlar={},
+            kur_son_guncelleme='Henüz güncellenmedi',
+            today=date.today(),
+            subeler=[],
+            nakliye_araclari=[],
+            nakliye_tedarikci_listesi=[],
+            recently_returned_kalem_ids=set()
+        )
 
 @kiralama_bp.route('/ekle', methods=['GET', 'POST'])
 @login_required
@@ -933,6 +952,36 @@ def api_ekipman_filtrele():
     except Exception as e:
         # Gerçek hatayı ekrana basması için 'error' anahtarı eklendi
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@kiralama_bp.route('/api/kurlar/guncelle', methods=['POST'])
+@login_required
+def api_kurlari_guncelle():
+    """TCMB kurlarını manuel tetikler ve güncel cache'i JSON olarak döner."""
+    try:
+        kurlar = KiralamaService.refresh_tcmb_kurlari(force=True)
+        son = KiralamaService.get_kur_son_guncelleme()
+        return jsonify({
+            'success': True,
+            'kurlar': {
+                'USD': str(kurlar.get('USD', '0.00')),
+                'EUR': str(kurlar.get('EUR', '0.00')),
+            },
+            'son_guncelleme': son.strftime('%d.%m.%Y %H:%M:%S') if son else 'Henüz güncellenmedi',
+        })
+    except Exception as e:
+        current_app.logger.warning("Kur manuel güncelleme hatası: %s", e, exc_info=True)
+        kurlar = KiralamaService.get_tcmb_kurlari()
+        son = KiralamaService.get_kur_son_guncelleme()
+        return jsonify({
+            'success': False,
+            'error': 'Kur güncellenemedi. Son bilinen değer gösteriliyor.',
+            'kurlar': {
+                'USD': str(kurlar.get('USD', '0.00')),
+                'EUR': str(kurlar.get('EUR', '0.00')),
+            },
+            'son_guncelleme': son.strftime('%d.%m.%Y %H:%M:%S') if son else 'Henüz güncellenmedi',
+        }), 500
 
 
 # ==================== EXCEL EXPORT/IMPORT ====================

@@ -369,6 +369,7 @@ class KiralamaService(BaseService):
     _kur_cache = None
     _kur_son_guncelleme = None
     _cache_suresi_dakika = 60 # 1 saatte bir güncelle
+    _kur_default = {'USD': Decimal('0.00'), 'EUR': Decimal('0.00')}
 
     @staticmethod
     def _extract_form_sequence(form_no, prefix, year):
@@ -406,47 +407,72 @@ class KiralamaService(BaseService):
         return f"{prefix}-{year}/{next_no:04d}"
 
     @classmethod
-    def get_tcmb_kurlari(cls):
-        """TCMB'den güncel döviz kurlarını çeker (Önbellekleme ile)."""
-        simdi = datetime.now()
-        
-        if cls._kur_cache and cls._kur_son_guncelleme:
-            fark = simdi - cls._kur_son_guncelleme
-            if fark < timedelta(minutes=cls._cache_suresi_dakika):
-                return cls._kur_cache
-
+    def _fetch_tcmb_kurlari(cls):
+        """TCMB'den kur çekme işlemi (ağ erişimi)."""
         rates = {'USD': Decimal('0.00'), 'EUR': Decimal('0.00')}
-        try:
-            url = "https://www.tcmb.gov.tr/kurlar/today.xml"
-            verify = _tcmb_request_verify()
-            timeout = _tcmb_request_timeout()
-            headers = {
-                "User-Agent": "KiralamaApp/1.0 (TCMB kur; +https://www.tcmb.gov.tr)",
-                "Accept": "application/xml, text/xml, */*;q=0.8",
-            }
-            response = requests.get(
-                url,
-                headers=headers,
-                verify=verify,
-                timeout=timeout,
-            )
-            if response.status_code == 200:
-                root = ET.fromstring(response.content)
-                usd = root.find("./Currency[@CurrencyCode='USD']/ForexSelling")
-                eur = root.find("./Currency[@CurrencyCode='EUR']/ForexSelling")
-                if usd is not None:
-                    rates['USD'] = Decimal(usd.text)
-                if eur is not None:
-                    rates['EUR'] = Decimal(eur.text)
-
-                cls._kur_cache = rates
-                cls._kur_son_guncelleme = simdi
-
-        except Exception as e:
-            logger.warning(f"TCMB Kur çekme hatası: {e}")
-            return cls._kur_cache if cls._kur_cache else rates
-
+        url = "https://www.tcmb.gov.tr/kurlar/today.xml"
+        verify = _tcmb_request_verify()
+        timeout = _tcmb_request_timeout()
+        headers = {
+            "User-Agent": "KiralamaApp/1.0 (TCMB kur; +https://www.tcmb.gov.tr)",
+            "Accept": "application/xml, text/xml, */*;q=0.8",
+        }
+        response = requests.get(
+            url,
+            headers=headers,
+            verify=verify,
+            timeout=timeout,
+        )
+        response.raise_for_status()
+        root = ET.fromstring(response.content)
+        usd = root.find("./Currency[@CurrencyCode='USD']/ForexSelling")
+        eur = root.find("./Currency[@CurrencyCode='EUR']/ForexSelling")
+        if usd is not None and usd.text:
+            rates['USD'] = Decimal(str(usd.text).replace(',', '.'))
+        if eur is not None and eur.text:
+            rates['EUR'] = Decimal(str(eur.text).replace(',', '.'))
         return rates
+
+    @classmethod
+    def refresh_tcmb_kurlari(cls, force=False):
+        """
+        Kur önbelleğini TCMB'den günceller.
+        - Uygulama açılışında ve scheduler ile saatlik çağrılması hedeflenir.
+        - Başarısız olursa mevcut cache korunur; yoksa default kullanılır.
+        """
+        simdi = datetime.now()
+        if (
+            not force
+            and cls._kur_cache is not None
+            and cls._kur_son_guncelleme is not None
+            and (simdi - cls._kur_son_guncelleme) < timedelta(minutes=cls._cache_suresi_dakika)
+        ):
+            return cls._kur_cache
+
+        try:
+            rates = cls._fetch_tcmb_kurlari()
+            cls._kur_cache = rates
+            cls._kur_son_guncelleme = simdi
+            return rates
+        except Exception as e:
+            logger.warning("TCMB Kur çekme hatası (refresh): %s", e)
+            if cls._kur_cache is None:
+                cls._kur_cache = dict(cls._kur_default)
+                cls._kur_son_guncelleme = simdi
+            return cls._kur_cache
+
+    @classmethod
+    def get_tcmb_kurlari(cls):
+        """
+        İşlem anında sadece bellekten kur döner.
+        Ağ çağrısı yapmaz; cache boşsa default değer döner.
+        """
+        return cls._kur_cache if cls._kur_cache is not None else dict(cls._kur_default)
+
+    @classmethod
+    def get_kur_son_guncelleme(cls):
+        """Kur cache'in son güncelleme zamanını döner (datetime | None)."""
+        return cls._kur_son_guncelleme
 
     @staticmethod
     def _get_gidis_nakliye_satis(kalem):

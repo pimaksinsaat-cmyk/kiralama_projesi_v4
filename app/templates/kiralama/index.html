@@ -44,6 +44,10 @@
     .stats-value { font-size: 1.1rem; font-weight: 800; color: #343a40; }
     
     .kur-box { font-size: 0.8rem; background: #f8f9fa; border-radius: 4px; padding: 4px 8px; border: 1px solid #e9ecef; }
+    .kur-refresh-badge { cursor: pointer; user-select: none; }
+    .kur-refresh-badge:hover .kur-box { border-color: #adb5bd; background: #f1f3f5; }
+    .kur-refresh-loading { display: none; font-size: 0.7rem; color: #6c757d; }
+    .kur-refresh-loading.show { display: inline-flex; align-items: center; gap: 6px; }
     
     .container { max-width: 1600px; margin: 20px auto; padding: 20px; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
     table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 0.85rem; }
@@ -171,16 +175,22 @@
             </div>
         </div>
 
-        <div class="text-end">
+        <div class="text-end kur-refresh-badge" id="kur-refresh-badge" title="Kurları manuel güncellemek için tıklayın">
             <div class="d-flex gap-2 justify-content-end mb-1">
                 <div class="kur-box shadow-sm">
-                    <span class="text-muted fw-bold">USD:</span> <span class="text-success fw-bold">{{ kurlar.USD if kurlar else '0.00' }}</span>
+                    <span class="text-muted fw-bold">USD:</span> <span class="text-success fw-bold" id="kur-usd">{{ kurlar.USD if kurlar else '0.00' }}</span>
                 </div>
                 <div class="kur-box shadow-sm">
-                    <span class="text-muted fw-bold">EUR:</span> <span class="text-primary fw-bold">{{ kurlar.EUR if kurlar else '0.00' }}</span>
+                    <span class="text-muted fw-bold">EUR:</span> <span class="text-primary fw-bold" id="kur-eur">{{ kurlar.EUR if kurlar else '0.00' }}</span>
                 </div>
             </div>
-            <small class="text-muted" style="font-size: 0.65rem;">TCMB Güncel Satış</small>
+            <small class="text-muted d-block" style="font-size: 0.65rem;">
+                TCMB Güncel Satış | Son Güncelleme: <span id="kur-son-guncelleme">{{ kur_son_guncelleme }}</span>
+            </small>
+            <small class="kur-refresh-loading" id="kur-refresh-loading">
+                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                Yükleniyor...
+            </small>
         </div>
     </div>
 
@@ -1114,6 +1124,53 @@ document.addEventListener('DOMContentLoaded', function() {
                 excelPasswordConfirmBtn.click();
             }
         });
+    }
+
+    // ==================== KUR MANUEL GUNCELLEME ====================
+    const kurRefreshBadge = document.getElementById('kur-refresh-badge');
+    const kurRefreshLoading = document.getElementById('kur-refresh-loading');
+    const kurUsd = document.getElementById('kur-usd');
+    const kurEur = document.getElementById('kur-eur');
+    const kurSonGuncelleme = document.getElementById('kur-son-guncelleme');
+
+    async function manuelKurGuncelle() {
+        if (!kurRefreshBadge || !kurRefreshLoading) return;
+        if (kurRefreshBadge.dataset.loading === '1') return;
+
+        kurRefreshBadge.dataset.loading = '1';
+        kurRefreshLoading.classList.add('show');
+        try {
+            const response = await fetch("{{ url_for('kiralama.api_kurlari_guncelle') }}", {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': "{{ csrf_token() }}",
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                credentials: 'same-origin',
+            });
+
+            const payload = await response.json();
+            if (payload && payload.kurlar) {
+                if (kurUsd) kurUsd.textContent = payload.kurlar.USD ?? '0.00';
+                if (kurEur) kurEur.textContent = payload.kurlar.EUR ?? '0.00';
+            }
+            if (kurSonGuncelleme && payload && payload.son_guncelleme) {
+                kurSonGuncelleme.textContent = payload.son_guncelleme;
+            }
+
+            if (!response.ok || !payload.success) {
+                console.warn(payload?.error || 'Kur güncelleme işlemi tamamlanamadı.');
+            }
+        } catch (err) {
+            console.error('Kur güncelleme isteği başarısız:', err);
+        } finally {
+            kurRefreshLoading.classList.remove('show');
+            kurRefreshBadge.dataset.loading = '0';
+        }
+    }
+
+    if (kurRefreshBadge) {
+        kurRefreshBadge.addEventListener('click', manuelKurGuncelle);
     }
 
     // ==================== KALEM LİSTESİ EXPAND/COLLAPSE ====================
