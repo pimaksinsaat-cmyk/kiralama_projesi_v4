@@ -152,25 +152,39 @@ def index():
                          .filter(or_(Kiralama.kiralama_form_no.ilike(f"%{q}%"), tr_ilike(Firma.firma_adi, f"%{q}%")))
 
         pagination = query.order_by(Kiralama.kiralama_form_no.desc()).paginate(page=page, per_page=per_page)
+        kiralamalar = pagination.items
 
         # ÖNCELİK: Kalem verilerini rollback'ten etkilenmeden önce hesapla.
         # (guncelle_cari_toplam rollback yaparsa session expire olur ve objelere erişim patlar)
         recent_threshold = datetime.now(timezone.utc) - timedelta(days=1)
-        recently_returned_kalem_ids = {
-            kalem.id
-            for kiralama in pagination.items
-            for kalem in kiralama.kalemler
-            if kalem.sonlandirildi
-            and kalem.is_active
-            and kalem.updated_at
-            and (kalem.updated_at if kalem.updated_at.tzinfo else kalem.updated_at.replace(tzinfo=timezone.utc)) >= recent_threshold
-        }
+        recently_returned_kalem_ids = set()
+        try:
+            recently_returned_kalem_ids = {
+                kalem.id
+                for kiralama in kiralamalar
+                for kalem in kiralama.kalemler
+                if kalem.sonlandirildi
+                and kalem.is_active
+                and kalem.updated_at
+                and (
+                    (kalem.updated_at if getattr(kalem.updated_at, 'tzinfo', None) else kalem.updated_at.replace(tzinfo=timezone.utc))
+                    >= recent_threshold
+                )
+            }
+        except Exception as date_err:
+            # Listeyi düşürme; bu alan sadece UI kolaylığıdır.
+            current_app.logger.warning(
+                "recently_returned_kalem_ids hesaplanamadi: %s",
+                date_err,
+                exc_info=True,
+            )
+            recently_returned_kalem_ids = set()
 
         # Liste ekranında görünen kiralamalar için bekleyen cari tutarı güncel tut.
         # PostgreSQL: Tek transaction içinde bir kiralamada SQL hatası tüm oturumu
         # "aborted" yapar; her kiralama için SAVEPOINT (begin_nested) ile izole et.
         try:
-            for kiralama in pagination.items:
+            for kiralama in kiralamalar:
                 try:
                     with db.session.begin_nested():
                         KiralamaService.guncelle_cari_toplam(kiralama.id, auto_commit=False)
@@ -181,27 +195,53 @@ def index():
                         row_err,
                         exc_info=True,
                     )
-            if pagination.items:
+            if kiralamalar:
                 db.session.commit()
         except Exception as sync_err:
             db.session.rollback()
             current_app.logger.warning(f"Kiralama cari senkronizasyon toplu commit: {sync_err}", exc_info=True)
             pagination = query.order_by(Kiralama.kiralama_form_no.desc()).paginate(page=page, per_page=per_page)
+            kiralamalar = pagination.items
+
+        try:
+            kurlar = KiralamaService.get_tcmb_kurlari()
+        except Exception as kur_err:
+            current_app.logger.warning("TCMB kurlari alinamadı (index): %s", kur_err, exc_info=True)
+            kurlar = {}
+
+        try:
+            subeler = get_cached_subeler()
+        except Exception as sube_err:
+            current_app.logger.warning("Sube cache okunamadi (index): %s", sube_err, exc_info=True)
+            subeler = []
+
+        try:
+            nakliye_araclari = get_cached_aktif_araclar()
+        except Exception as arac_err:
+            current_app.logger.warning("Arac cache okunamadi (index): %s", arac_err, exc_info=True)
+            nakliye_araclari = []
+
+        try:
+            nakliye_tedarikci_listesi = Firma.query.filter_by(is_tedarikci=True).order_by(Firma.firma_adi).all()
+        except Exception as tedarikci_err:
+            current_app.logger.warning("Tedarikci listesi okunamadi (index): %s", tedarikci_err, exc_info=True)
+            nakliye_tedarikci_listesi = []
 
         return render_template(
             'kiralama/index.html',
-            kiralamalar=pagination.items,
+            kiralamalar=kiralamalar,
             pagination=pagination,
             per_page=per_page,
             q=q,
-            kurlar=KiralamaService.get_tcmb_kurlari(),
+            kurlar=kurlar,
             today=date.today(),
-            subeler=get_cached_subeler(),
-            nakliye_araclari=get_cached_aktif_araclar(),
-            nakliye_tedarikci_listesi=Firma.query.filter_by(is_tedarikci=True).order_by(Firma.firma_adi).all(),
+            subeler=subeler,
+            nakliye_araclari=nakliye_araclari,
+            nakliye_tedarikci_listesi=nakliye_tedarikci_listesi,
             recently_returned_kalem_ids=recently_returned_kalem_ids
         )
     except Exception as e:
+        db.session.rollback()
         current_app.logger.error(f"Kiralama Liste Yükleme Hatası: {str(e)}\n{traceback.format_exc()}")
         flash(f"Liste yüklenirken bir hata oluştu.", "danger")
         return render_template('kiralama/index.html', kiralamalar=[], pagination=None, per_page=25, q='', kurlar={}, today=date.today(), subeler=[], nakliye_araclari=[], nakliye_tedarikci_listesi=[], recently_returned_kalem_ids=set())
