@@ -80,6 +80,9 @@
                 <a href="{{ url_for('cari.hizmet_ekle', firma_id=firma.id) }}" class="btn btn-info text-white">
                     <i class="fa fa-file-invoice"></i> Fatura/Hizmet
                 </a>
+                <a href="{{ url_for('cari.cari_durum_raporu', q=firma.firma_adi) }}" class="btn btn-outline-primary" title="Cari Durum Raporunu Görüntüle">
+                    <i class="fa fa-chart-bar"></i> Cari Durum
+                </a>
             </div>
             <a id="yazdir-btn" href="{{ url_for('firmalar.bilgi_yazdir', id=firma.id, tab=tab) }}" class="btn btn-dark" target="_blank">
                 <i class="fa fa-print"></i>
