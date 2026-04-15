@@ -1,5 +1,5 @@
 from app.extensions import db
-from datetime import datetime
+from datetime import datetime, timezone
 from app.models.base_model import BaseModel
 
 class Arac(BaseModel):
@@ -21,7 +21,7 @@ class Arac(BaseModel):
     bakim_kayitlari = db.relationship('AracBakim', back_populates='arac', cascade="all, delete-orphan")
 
     is_active = db.Column(db.Boolean, default=True)
-    kayit_tarihi = db.Column(db.DateTime, default=datetime.utcnow)
+    kayit_tarihi = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     @classmethod
     def aktif_query(cls):

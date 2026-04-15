@@ -8,6 +8,7 @@ from app.personel import personel_bp
 from app.personel.forms import IZIN_TURLERI, MESLEK_SECENEKLERI, PersonelForm, PersonelIzinForm
 from app.services.base import ValidationError
 from app.services.personel_services import PersonelIzinService, PersonelService
+from app.extensions import db
 from app.subeler.models import Sube
 
 
@@ -151,7 +152,7 @@ def index():
     if toplam_personel_maliyeti < 0:
         toplam_personel_maliyeti = Decimal('0')
 
-    selected_sube = Sube.query.get(selected_sube_id) if selected_sube_id else None
+    selected_sube = db.session.get(Sube, selected_sube_id) if selected_sube_id else None
     izin_default_baslangic = date.today()
     izin_default_bitis = izin_default_baslangic + timedelta(days=7)
 

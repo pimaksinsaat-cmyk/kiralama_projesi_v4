@@ -545,7 +545,7 @@ def test_kiralama_deletion_cascades_kalemler(app):
         db.session.commit()
 
         # KiralamaKalemi should be deleted too
-        deleted_kalem = KiralamaKalemi.query.get(kalem_id)
+        deleted_kalem = db.session.get(KiralamaKalemi, kalem_id)
         assert deleted_kalem is None, "KiralamaKalemi should be cascade deleted"
         print("[OK] Kiralama silme -> KiralamaKalemi cascade delete")
 
@@ -579,7 +579,7 @@ def test_stok_hareket_cascades_on_stok_delete(app):
         db.session.commit()
 
         # StokHareket should be deleted too (cascade)
-        deleted_hareket = StokHareket.query.get(hareket_id)
+        deleted_hareket = db.session.get(StokHareket, hareket_id)
         assert deleted_hareket is None, "StokHareket should be cascade deleted"
         print("[OK] StokKarti silme -> StokHareket cascade delete")
 
@@ -612,7 +612,7 @@ def test_nakliye_cascade_on_kiralama_delete(app):
         db.session.delete(kiralama)
         db.session.commit()
 
-        deleted_kiralama = Kiralama.query.get(kiralama_id)
+        deleted_kiralama = db.session.get(Kiralama, kiralama_id)
         assert deleted_kiralama is None, "Kiralama should be deleted"
         print("[OK] Kiralama silme successful")
 
@@ -633,6 +633,6 @@ def test_firma_deletion_cascades_kiralama(app):
         db.session.commit()
 
         # Kiralama should be deleted too
-        deleted_kiralama = Kiralama.query.get(kiralama_id)
+        deleted_kiralama = db.session.get(Kiralama, kiralama_id)
         assert deleted_kiralama is None, "Kiralama should be cascade deleted"
         print("[OK] Firma silme -> Kiralama cascade delete")

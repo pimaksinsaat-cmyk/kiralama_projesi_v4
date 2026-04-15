@@ -923,7 +923,7 @@ def finansal_rapor_api(ekipman_id):
     """
     Finansal rapor verilerini JSON formatında döner (grafik oluşturma için)
     """
-    ekipman = Ekipman.query.get(ekipman_id)
+    ekipman = db.session.get(Ekipman, ekipman_id)
     if not ekipman:
         return jsonify({'error': 'Makine bulunamadı'}), 404
     

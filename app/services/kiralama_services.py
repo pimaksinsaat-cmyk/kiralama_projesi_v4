@@ -1,10 +1,10 @@
+import os
 import requests
 import xml.etree.ElementTree as ET
 from datetime import datetime, date, timedelta
 from decimal import Decimal, InvalidOperation
 import logging
 import re
-import urllib3
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 
@@ -22,8 +22,39 @@ from app.araclar.models import Arac as NakliyeAraci
 from app.subeler.models import Sube
 from app.ayarlar.models import AppSettings
 
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 logger = logging.getLogger(__name__)
+
+
+def _tcmb_request_verify():
+    """
+    TCMB HTTPS istegi icin SSL dogrulama parametresi.
+    Varsayilan: guvenli (certifi yolu veya True).
+    Sadece gelistirme / ozel ag ortamlari icin TCMB_SSL_VERIFY=0 ile kapatilabilir.
+    """
+    flag = os.environ.get("TCMB_SSL_VERIFY", "1").strip().lower()
+    if flag in ("0", "false", "no", "off"):
+        logger.warning(
+            "TCMB istegi SSL dogrulamasiz yapiliyor (TCMB_SSL_VERIFY=%s). "
+            "Uretimde kullanmayin.",
+            flag,
+        )
+        return False
+    try:
+        import certifi
+
+        return certifi.where()
+    except ImportError:
+        return True
+
+
+def _tcmb_request_timeout():
+    """Baglanti + okuma icin saniye (tek sayi). Ortam: TCMB_REQUEST_TIMEOUT, varsayilan 10."""
+    raw = os.environ.get("TCMB_REQUEST_TIMEOUT", "10").strip()
+    try:
+        t = float(raw)
+        return max(3.0, min(t, 60.0))
+    except ValueError:
+        return 10.0
 
 # ==============================================================================
 # YARDIMCI FONKSİYONLAR (Veri Güvenliği ve Dönüşümler)
@@ -387,7 +418,18 @@ class KiralamaService(BaseService):
         rates = {'USD': Decimal('0.00'), 'EUR': Decimal('0.00')}
         try:
             url = "https://www.tcmb.gov.tr/kurlar/today.xml"
-            response = requests.get(url, verify=False, timeout=3)
+            verify = _tcmb_request_verify()
+            timeout = _tcmb_request_timeout()
+            headers = {
+                "User-Agent": "KiralamaApp/1.0 (TCMB kur; +https://www.tcmb.gov.tr)",
+                "Accept": "application/xml, text/xml, */*;q=0.8",
+            }
+            response = requests.get(
+                url,
+                headers=headers,
+                verify=verify,
+                timeout=timeout,
+            )
             if response.status_code == 200:
                 root = ET.fromstring(response.content)
                 usd = root.find("./Currency[@CurrencyCode='USD']/ForexSelling")

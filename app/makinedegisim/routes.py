@@ -128,7 +128,7 @@ def makine_degistir(kalem_id):
         form.degisim_tarihi.data = date.today()
         form.kiralama_brm_fiyat.data = eski_kalem.kiralama_brm_fiyat
 
-    eski_makine = Ekipman.query.get(eski_kalem.ekipman_id) if eski_kalem.ekipman_id else None
+    eski_makine = db.session.get(Ekipman, eski_kalem.ekipman_id) if eski_kalem.ekipman_id else None
     
     # --- UX İYİLEŞTİRMESİ: Mevcut makinenin özelliklerini ipucu olarak hazırlıyoruz ---
     filtre_ipuclari = {

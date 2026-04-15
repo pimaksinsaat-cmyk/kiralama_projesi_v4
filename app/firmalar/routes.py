@@ -892,7 +892,7 @@ def sozlesme_no_duzelt():
     firma_id = int(form.firma_id.data)
     yeni_sozlesme_no = form.sozlesme_no.data.strip()
     yeni_sozlesme_tarihi = form.sozlesme_tarihi.data
-    firma = Firma.query.get(firma_id)
+    firma = db.session.get(Firma, firma_id)
     if not firma:
         flash('Firma bulunamadı.', 'danger')
         return redirect(url_for('firmalar.index'))

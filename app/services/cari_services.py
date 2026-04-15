@@ -42,7 +42,7 @@ def _sync_firma_bakiye(firma_id):
     """Bir firmanın bakiyesini hareketlerden (Ledger) yeniden hesaplar ve günceller."""
     from app.firmalar.models import Firma
     if not firma_id: return
-    firma = Firma.query.get(firma_id)
+    firma = db.session.get(Firma, firma_id)
     if firma:
         ozet = firma.bakiye_ozeti
         firma.bakiye = ozet['net_bakiye']
@@ -52,7 +52,7 @@ def _sync_kasa_bakiye(kasa_id):
     """Bir kasanın bakiyesini ödeme hareketlerinden yeniden hesaplar ve günceller."""
     from app.cari.models import Kasa
     if not kasa_id: return
-    kasa = Kasa.query.get(kasa_id)
+    kasa = db.session.get(Kasa, kasa_id)
     if kasa:
         kasa.bakiye = kasa.hesaplanan_bakiye
         db.session.commit()
@@ -81,7 +81,7 @@ class KasaService:
     @staticmethod
     def get_by_id(kasa_id):
         from app.cari.models import Kasa
-        return Kasa.query.get(kasa_id)
+        return db.session.get(Kasa, kasa_id)
 
     @staticmethod
     def find_by(**kwargs):
@@ -108,8 +108,8 @@ class KasaService:
         if tutar <= 0:
             raise ValidationError("Transfer tutarı sıfırdan büyük olmalıdır.")
             
-        kaynak = Kasa.query.get(kaynak_id)
-        hedef = Kasa.query.get(hedef_id)
+        kaynak = db.session.get(Kasa, kaynak_id)
+        hedef = db.session.get(Kasa, hedef_id)
         
         # --- TRANSFER İÇİN YETERSİZ BAKİYE KONTROLÜ EKLENDİ ---
         if kaynak.bakiye < tutar:
@@ -131,7 +131,7 @@ class KasaService:
     @staticmethod
     def kasa_kapat_ve_devret(kasa_id, hedef_kasa_id, actor_id=None):
         from app.cari.models import Kasa
-        kasa = Kasa.query.get(kasa_id)
+        kasa = db.session.get(Kasa, kasa_id)
         if not kasa: raise ValidationError("Kasa bulunamadı.")
         
         if kasa.bakiye != 0:
@@ -152,14 +152,14 @@ class OdemeService:
     @staticmethod
     def get_by_id(odeme_id):
         from app.cari.models import Odeme
-        return Odeme.query.get(odeme_id)
+        return db.session.get(Odeme, odeme_id)
 
     @staticmethod
     def save(odeme, is_new=True, actor_id=None):
         """Ödeme/Tahsilat ekler veya günceller. Kasayı ve Firmayı senkronize eder."""
         from app.cari.models import Kasa, Odeme as OdemeModel
         
-        kasa = Kasa.query.get(odeme.kasa_id)
+        kasa = db.session.get(Kasa, odeme.kasa_id)
         if not kasa: 
             raise ValidationError("Geçerli bir kasa seçilmelidir.")
 
@@ -170,7 +170,7 @@ class OdemeService:
                     raise ValidationError(f"İşlem Başarısız: Seçili kasada yeterli bakiye yok! (Mevcut Kasa Bakiyesi: {kasa.bakiye:,.2f} TL)")
             else:
                 # Düzenleme modunda, eski kaydın tutarını kasaya iade edip "gerçek" bakiyeyi buluyoruz
-                eski_kayit = OdemeModel.query.get(odeme.id)
+                eski_kayit = db.session.get(OdemeModel, odeme.id)
                 gercek_bakiye = kasa.bakiye
                 if eski_kayit.yon == 'odeme':
                     gercek_bakiye += eski_kayit.tutar
@@ -198,7 +198,7 @@ class OdemeService:
     @staticmethod
     def delete(odeme_id, actor_id=None):
         from app.cari.models import Odeme
-        odeme = Odeme.query.get(odeme_id)
+        odeme = db.session.get(Odeme, odeme_id)
         if not odeme: return
         
         kasa_id = odeme.kasa_id
@@ -218,7 +218,7 @@ class HizmetKaydiService:
     @staticmethod
     def get_by_id(id):
         from app.cari.models import HizmetKaydi
-        return HizmetKaydi.query.get(id)
+        return db.session.get(HizmetKaydi, id)
 
     @staticmethod
     def save(hizmet, is_new=True, actor_id=None, commit=True):
@@ -250,7 +250,7 @@ class HizmetKaydiService:
     @staticmethod
     def delete(id, actor_id=None):
         from app.cari.models import HizmetKaydi
-        hizmet = HizmetKaydi.query.get(id)
+        hizmet = db.session.get(HizmetKaydi, id)
         if not hizmet: return
         
         firma_id = hizmet.firma_id

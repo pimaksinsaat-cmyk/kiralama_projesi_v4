@@ -1,5 +1,5 @@
 from app.extensions import db
-from datetime import datetime
+from datetime import datetime, timezone
 from app.models.base_model import BaseModel
 class MakineDegisim(BaseModel):
     __tablename__ = 'makine_degisim'
@@ -15,7 +15,7 @@ class MakineDegisim(BaseModel):
     swap_kira_hizmet_id = db.Column(db.Integer, db.ForeignKey('hizmet_kaydi.id', ondelete='SET NULL'), nullable=True)
     
     neden = db.Column(db.String(50), nullable=False) 
-    tarih = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    tarih = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     aciklama = db.Column(db.Text, nullable=True)
     eski_ekipman_donus_saati = db.Column(db.Integer, nullable=True)
     yeni_ekipman_cikis_saati = db.Column(db.Integer, nullable=True)

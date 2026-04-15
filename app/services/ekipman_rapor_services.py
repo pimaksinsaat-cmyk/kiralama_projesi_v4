@@ -35,7 +35,7 @@ class EkipmanRaporuService:
         Returns:
             dict: Finansal özet bilgileri
         """
-        ekipman = Ekipman.query.get(ekipman_id)
+        ekipman = db.session.get(Ekipman, ekipman_id)
         if not ekipman:
             return None
         

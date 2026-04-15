@@ -273,7 +273,7 @@ def hizmet_ekle():
     firma = None
     if form.firma_id.data:
         try:
-            firma = Firma.query.get(form.firma_id.data)
+            firma = db.session.get(Firma, form.firma_id.data)
         except Exception:
             pass
 
