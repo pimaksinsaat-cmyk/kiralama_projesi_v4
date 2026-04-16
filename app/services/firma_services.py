@@ -794,6 +794,9 @@ class FirmaService(BaseService):
             )
         ).order_by(HizmetKaydi.tarih).all()
         for hizmet in taseron_nakliye_kayitlari:
+            if hizmet.id in included_hizmet_kaydi_ids:
+                # harici_kalemler adımında zaten harici_kiralama satırı olarak eklendi
+                continue
             islem_tarih = getattr(hizmet, 'islem_tarihi', None) or hizmet.tarih
             matrah = float(hizmet.tutar or 0)
             kdv_pct = (
@@ -828,9 +831,6 @@ class FirmaService(BaseService):
             # Önceki adımlarda zaten satıra dönüştürülen HKD'ler (harici kiralama, taşeron)
             if fatura.id in included_hizmet_kaydi_ids:
                 continue
-            # ozel_id dolu → kiralama modülü muhasebe kaydı (Kiralama Bekleyen Bakiye vb.)
-            # Finansal karşılığı kiralama kalem satırlarında zaten var; tekrar ekleme.
-            # İstisna: "Dış Kiralama" fatura kayıtları — pasif kalem için gösterilmeli.
             ozel_id = getattr(fatura, 'ozel_id', None)
             if ozel_id is not None:
                 aciklama_text = (fatura.aciklama or '').strip()
@@ -838,29 +838,48 @@ class FirmaService(BaseService):
                     aciklama_text.startswith('Dış Kiralama')
                     or aciklama_text.startswith('Dis Kiralama')
                 )
-                if not is_harici_kiralama_fatura:
-                    continue
-                kalem_obj = db.session.get(KiralamaKalemi, ozel_id)
-                if kalem_obj and getattr(kalem_obj, 'is_active', True):
-                    continue
-            tutar = float(fatura.tutar or 0)
-            kdv_pct = (
-                fatura.nakliye_alis_kdv
-                if fatura.nakliye_alis_kdv is not None
-                else (
-                    fatura.kiralama_alis_kdv
-                    if fatura.kiralama_alis_kdv is not None
-                    else (fatura.kdv_orani or 0)
+                is_donus_nakliye = (
+                    aciklama_text.startswith('Dönüş Nakliye')
+                    or aciklama_text.startswith('Nakliye Farkı')
                 )
+                if not is_harici_kiralama_fatura and not is_donus_nakliye:
+                    continue
+                if is_harici_kiralama_fatura:
+                    kalem_obj = db.session.get(KiralamaKalemi, ozel_id)
+                    if kalem_obj and getattr(kalem_obj, 'is_active', True):
+                        continue
+            tutar = float(fatura.tutar or 0)
+            aciklama_text_lower = (fatura.aciklama or '').strip()
+            is_donus_nakliye_row = (
+                aciklama_text_lower.startswith('Dönüş Nakliye')
+                or aciklama_text_lower.startswith('Nakliye Farkı')
             )
+            if is_donus_nakliye_row:
+                kdv_pct = float(fatura.kdv_orani or 0)
+            else:
+                kdv_pct = (
+                    fatura.nakliye_alis_kdv
+                    if fatura.nakliye_alis_kdv is not None
+                    else (
+                        fatura.kiralama_alis_kdv
+                        if fatura.kiralama_alis_kdv is not None
+                        else (fatura.kdv_orani or 0)
+                    )
+                )
             kdv_tutar = tutar * kdv_pct / 100
             toplam = tutar + kdv_tutar
             if fatura.yon == 'giden':
                 toplam_sign = toplam
             else:
                 toplam_sign = -toplam
-            tur_adi = 'Fatura (Satış)' if fatura.yon == 'giden' else 'Fatura (Alış)'
-            islem_turu = 'fatura'
+            if is_donus_nakliye_row:
+                tur_adi = 'Nakliye'
+                islem_turu = 'nakliye'
+                nakliye_sira_val = 2
+            else:
+                tur_adi = 'Fatura (Satış)' if fatura.yon == 'giden' else 'Fatura (Alış)'
+                islem_turu = 'fatura'
+                nakliye_sira_val = 3
             kiralama_link_id = None
             if ozel_id is not None:
                 kalem_obj = db.session.get(KiralamaKalemi, ozel_id)
@@ -868,7 +887,7 @@ class FirmaService(BaseService):
                     kiralama_link_id = kalem_obj.kiralama_id
             rows.append({'id': fatura.id, 'sort_date': islem_tarih,
                 'form_no': fatura.fatura_no or '-', 'form_tarihi': islem_tarih,
-                'kiralama_id': kiralama_link_id, 'islem_turu': islem_turu, 'nakliye_sira': 3,
+                'kiralama_id': kiralama_link_id, 'islem_turu': islem_turu, 'nakliye_sira': nakliye_sira_val,
                 'aciklama': fatura.aciklama or tur_adi, 'seri_no': '',
                 'baslangic': islem_tarih, 'bitis': None,
                 'bitis_bugun': False, 'gun_sayisi': None,
