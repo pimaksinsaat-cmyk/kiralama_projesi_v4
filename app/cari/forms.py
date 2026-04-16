@@ -21,7 +21,8 @@ class OdemeForm(BaseForm):
     firma_musteri_id = SelectField('Firma/Müşteri', coerce=int, default=0, validators=[DataRequired(message=secim_hata_mesaji)])
     kasa_id = SelectField('Kasa/Banka', coerce=int, default=0, validators=[DataRequired(message="Lütfen geçerli bir kasa seçiniz.")])
     
-    tarih = TRDateField('Tarih', format='%Y-%m-%d', validators=[DataRequired()])
+    tarih = TRDateField('Kayıt Tarihi', format='%Y-%m-%d', validators=[DataRequired()])
+    islem_tarihi = TRDateField('İşlem Tarihi', format='%Y-%m-%d', validators=[DataRequired()])
     
     tutar = MoneyField('Tutar', places=2, validators=[
         DataRequired(message="Tutar alanı boş bırakılamaz."), 
@@ -41,8 +42,9 @@ class OdemeForm(BaseForm):
 
     def validate_vade_tarihi(self, field):
         """Vade tarihinin işlem tarihinden önce olmamasını sağlar."""
-        if field.data and self.tarih.data:
-            if field.data < self.tarih.data:
+        referans_tarih = self.islem_tarihi.data or self.tarih.data
+        if field.data and referans_tarih:
+            if field.data < referans_tarih:
                 raise ValidationError("Vade tarihi, işlem tarihinden önce olamaz!")
 
 # -------------------------------------------------------------------------
@@ -50,7 +52,8 @@ class OdemeForm(BaseForm):
 # -------------------------------------------------------------------------
 class HizmetKaydiForm(BaseForm):
     firma_id = SelectField('İlgili Firma', coerce=int, default=0, validators=[DataRequired(message=secim_hata_mesaji)])
-    tarih = TRDateField('İşlem Tarihi', format='%Y-%m-%d', validators=[InputRequired()])
+    tarih = TRDateField('Kayıt Tarihi', format='%Y-%m-%d', validators=[InputRequired()])
+    islem_tarihi = TRDateField('İşlem Tarihi', format='%Y-%m-%d', validators=[InputRequired()])
     
     tutar = MoneyField('Tutar', places=2, validators=[
         InputRequired(message="Tutar zorunludur."), 
@@ -73,8 +76,9 @@ class HizmetKaydiForm(BaseForm):
     submit = SubmitField('Hizmet Kaydını Oluştur')
 
     def validate_vade_tarihi(self, field):
-        if field.data and self.tarih.data:
-            if field.data < self.tarih.data:
+        referans_tarih = self.islem_tarihi.data or self.tarih.data
+        if field.data and referans_tarih:
+            if field.data < referans_tarih:
                 raise ValidationError("Vade tarihi, işlem tarihinden önce olamaz!")
 
 # -------------------------------------------------------------------------

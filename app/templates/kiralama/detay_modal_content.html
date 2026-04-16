@@ -1,0 +1,212 @@
+{% set k = kiralama %}
+<style>
+    .detay-label { font-size: 0.75rem; color: #6c757d; font-weight: 700; text-transform: uppercase; margin-bottom: 2px; }
+    .detay-value { font-size: 0.95rem; font-weight: 600; color: #212529; }
+    .detay-card { border: 1px solid #e9ecef; border-radius: 8px; padding: 16px; background: #f8f9fa; }
+    .kalem-card { border: 1px solid #dee2e6; border-radius: 8px; background: #fff; margin-bottom: 12px; }
+    .kalem-card .kalem-header { padding: 10px 16px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+    .kalem-card .kalem-body { padding: 12px 16px; }
+    .kalem-card .kalem-body .row > div { margin-bottom: 8px; }
+    .dis-tedarik-badge { font-size: 0.65rem; padding: 3px 8px; background: #dc3545; color: #fff; border-radius: 4px; font-weight: 700; }
+    .durum-badge { font-size: 0.7rem; padding: 4px 10px; border-radius: 4px; font-weight: 700; }
+    .finansal-box { background: #e8f5e9; border: 1px solid #c8e6c9; border-radius: 6px; padding: 10px 14px; text-align: center; }
+    .finansal-box .val { font-size: 1rem; font-weight: 800; color: #2e7d32; }
+    .alis-box { background: #fce4ec; border-color: #f8bbd0; }
+    .alis-box .val { color: #c62828; }
+    .nakliye-info { background: #e3f2fd; border: 1px solid #bbdefb; border-radius: 6px; padding: 8px 12px; font-size: 0.82rem; }
+</style>
+
+<div class="detay-card mb-3">
+    <div class="row g-3">
+        <div class="col-md-3">
+            <div class="detay-label">Form No</div>
+            <div class="detay-value text-primary">{{ k.kiralama_form_no }}</div>
+        </div>
+        <div class="col-md-5">
+            <div class="detay-label">Kiracı Müşteri</div>
+            <div class="detay-value">
+                {% if k.firma_musteri %}
+                    <a href="{{ url_for('firmalar.bilgi', id=k.firma_musteri.id) }}" class="text-decoration-none">{{ k.firma_musteri.firma_adi }}</a>
+                {% else %}
+                    <span class="text-danger">Tanımsız</span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="detay-label">Oluşturma Tarihi</div>
+            <div class="detay-value">{{ k.kiralama_olusturma_tarihi.strftime('%d.%m.%Y') if k.kiralama_olusturma_tarihi else '-' }}</div>
+        </div>
+        <div class="col-md-2">
+            <div class="detay-label">KDV Oranı</div>
+            <div class="detay-value">%{{ k.kdv_orani or 0 }}</div>
+        </div>
+    </div>
+    {% if k.makine_calisma_adresi %}
+    <div class="mt-2">
+        <div class="detay-label">Çalışma Adresi</div>
+        <div class="detay-value" style="font-weight:500;">{{ k.makine_calisma_adresi }}</div>
+    </div>
+    {% endif %}
+    {% if k.doviz_kuru_usd or k.doviz_kuru_eur %}
+    <div class="mt-2 d-flex gap-3">
+        {% if k.doviz_kuru_usd %}
+        <span class="badge bg-light text-dark border shadow-sm px-3 py-2"><strong>USD:</strong> {{ k.doviz_kuru_usd }}</span>
+        {% endif %}
+        {% if k.doviz_kuru_eur %}
+        <span class="badge bg-light text-dark border shadow-sm px-3 py-2"><strong>EUR:</strong> {{ k.doviz_kuru_eur }}</span>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+
+<h6 class="fw-bold text-dark mb-2"><i class="fas fa-th-list me-1"></i> Kalemler ({{ k.kalemler|length }})</h6>
+
+{% set genel_toplam = namespace(val=0) %}
+
+{% for kalem in k.kalemler %}
+{% set gun = (kalem.kiralama_bitis - kalem.kiralama_baslangici).days + 1 if kalem.kiralama_baslangici and kalem.kiralama_bitis else 0 %}
+{% set kira_tutari = (kalem.kiralama_brm_fiyat or 0) * gun %}
+{% set nakliye_tutari = kalem.nakliye_satis_fiyat or 0 %}
+{% set kalem_toplam = kira_tutari + nakliye_tutari %}
+{% set genel_toplam.val = genel_toplam.val + kalem_toplam|float %}
+
+<div class="kalem-card {{ 'opacity-50' if not kalem.is_active else '' }}">
+    <div class="kalem-header">
+        <div>
+            {% if kalem.is_dis_tedarik_ekipman %}
+                <span class="dis-tedarik-badge me-1">DIŞ TEDARİK</span>
+                <strong>{{ kalem.harici_ekipman_marka }} {{ kalem.harici_ekipman_model }}</strong>
+                <small class="text-muted ms-1">S/N: {{ kalem.harici_ekipman_seri_no or '-' }}</small>
+            {% elif kalem.ekipman %}
+                <strong class="text-dark">{{ kalem.ekipman.kod }}</strong>
+                <small class="text-muted ms-1">({{ kalem.ekipman.tipi or '' }})</small>
+                <small class="text-muted ms-1">{{ kalem.ekipman.marka or '' }}</small>
+            {% else %}
+                <span class="text-muted">Ekipman Verisi Eksik</span>
+            {% endif %}
+        </div>
+        <div>
+            {% if not kalem.is_active %}
+                <span class="durum-badge bg-dark text-white">REVİZE EDİLDİ</span>
+            {% elif kalem.sonlandirildi %}
+                <span class="durum-badge bg-secondary text-white">TAMAMLANDI</span>
+            {% else %}
+                {% if today %}
+                    {% set kalan = (kalem.kiralama_bitis - today).days %}
+                    {% if kalan < 0 %}
+                        <span class="durum-badge bg-danger text-white">GECİKTİ ({{ kalan|abs }}g)</span>
+                    {% elif kalan <= 3 %}
+                        <span class="durum-badge bg-warning text-dark">{{ kalan }}g KALDI</span>
+                    {% else %}
+                        <span class="durum-badge bg-success text-white">AKTİF ({{ kalan }}g)</span>
+                    {% endif %}
+                {% endif %}
+            {% endif %}
+            {% if kalem.versiyon_no > 1 %}
+                <span class="badge bg-info text-dark ms-1">v{{ kalem.versiyon_no }}</span>
+            {% endif %}
+        </div>
+    </div>
+    <div class="kalem-body">
+        <div class="row g-2">
+            <div class="col-md-2">
+                <div class="detay-label">Başlangıç</div>
+                <div class="detay-value">{{ kalem.kiralama_baslangici.strftime('%d.%m.%Y') if kalem.kiralama_baslangici else '-' }}</div>
+            </div>
+            <div class="col-md-2">
+                <div class="detay-label">Bitiş</div>
+                <div class="detay-value">{{ kalem.kiralama_bitis.strftime('%d.%m.%Y') if kalem.kiralama_bitis else '-' }}</div>
+            </div>
+            <div class="col-md-1">
+                <div class="detay-label">Gün</div>
+                <div class="detay-value">{{ gun }}</div>
+            </div>
+            <div class="col-md-2">
+                <div class="finansal-box">
+                    <div class="detay-label">Birim Fiyat</div>
+                    <div class="val">{{ "{:,.2f}".format(kalem.kiralama_brm_fiyat or 0).replace(",","X").replace(".",",").replace("X",".") }} TL</div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="finansal-box">
+                    <div class="detay-label">Nakliye (Satış)</div>
+                    <div class="val">{{ "{:,.2f}".format(nakliye_tutari).replace(",","X").replace(".",",").replace("X",".") }} TL</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="finansal-box" style="background:#c8e6c9;">
+                    <div class="detay-label">Kalem Toplam</div>
+                    <div class="val" style="font-size:1.1rem;">{{ "{:,.2f}".format(kalem_toplam).replace(",","X").replace(".",",").replace("X",".") }} TL</div>
+                </div>
+            </div>
+        </div>
+
+        {% if kalem.is_dis_tedarik_ekipman %}
+        <div class="row g-2 mt-1">
+            <div class="col-md-4">
+                <div class="detay-label">Tedarikçi Firma</div>
+                <div class="detay-value text-primary" style="font-size:0.85rem;">
+                    {% if kalem.harici_tedarikci %}
+                        {{ kalem.harici_tedarikci.firma_adi }}
+                    {% else %}
+                        <span class="text-muted">-</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="finansal-box alis-box">
+                    <div class="detay-label">Alış Fiyat</div>
+                    <div class="val">{{ "{:,.2f}".format(kalem.kiralama_alis_fiyat or 0).replace(",","X").replace(".",",").replace("X",".") }} TL</div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="finansal-box alis-box">
+                    <div class="detay-label">Alış KDV</div>
+                    <div class="val">%{{ kalem.kiralama_alis_kdv if kalem.kiralama_alis_kdv is not none else '-' }}</div>
+                </div>
+            </div>
+            {% if kalem.harici_ekipman_kapasite or kalem.harici_ekipman_yukseklik %}
+            <div class="col-md-4">
+                <div class="detay-label">Teknik Özellikler</div>
+                <div class="detay-value" style="font-size:0.85rem;">
+                    {{ kalem.harici_ekipman_tipi or '' }}
+                    {% if kalem.harici_ekipman_kapasite %} | {{ kalem.harici_ekipman_kapasite }}kg{% endif %}
+                    {% if kalem.harici_ekipman_yukseklik %} | {{ kalem.harici_ekipman_yukseklik }}m{% endif %}
+                    {% if kalem.harici_ekipman_uretim_yili %} | {{ kalem.harici_ekipman_uretim_yili }}{% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <div class="nakliye-info mt-2">
+            <i class="fas fa-truck me-1"></i>
+            <strong>Nakliye:</strong>
+            {% if kalem.is_harici_nakliye %}
+                Taşeron
+                {% if kalem.nakliye_tedarikci %} — {{ kalem.nakliye_tedarikci.firma_adi }}{% endif %}
+                {% if kalem.nakliye_alis_fiyat %} | Alış: {{ "{:,.2f}".format(kalem.nakliye_alis_fiyat or 0).replace(",","X").replace(".",",").replace("X",".") }} TL{% endif %}
+                {% if kalem.nakliye_alis_kdv is not none %} (KDV %{{ kalem.nakliye_alis_kdv }}){% endif %}
+                {% if kalem.nakliye_alis_tevkifat_oran %} | Tevkifat: {{ kalem.nakliye_alis_tevkifat_oran }}{% endif %}
+            {% elif kalem.nakliye_araci %}
+                Öz Mal — {{ kalem.nakliye_araci.plaka if kalem.nakliye_araci.plaka else kalem.nakliye_araci.kod }}
+            {% else %}
+                Öz Mal
+            {% endif %}
+            {% if kalem.donus_nakliye_fatura_et %}
+                | <span class="text-success fw-bold">Dönüş nakliye dahil</span>
+                {% if kalem.donus_nakliye_satis_fiyat is not none %}
+                    ({{ "{:,.2f}".format(kalem.donus_nakliye_satis_fiyat).replace(",","X").replace(".",",").replace("X",".") }} TL)
+                {% endif %}
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+<div class="d-flex justify-content-end mt-3">
+    <div class="finansal-box" style="background:#1b5e20; min-width:220px;">
+        <div class="detay-label" style="color:#a5d6a7;">Sözleşme Toplam</div>
+        <div class="val" style="color:#fff; font-size:1.2rem;">{{ "{:,.2f}".format(genel_toplam.val).replace(",","X").replace(".",",").replace("X",".") }} TL</div>
+    </div>
+</div>

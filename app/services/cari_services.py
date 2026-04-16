@@ -116,10 +116,29 @@ class KasaService:
             raise ValidationError(f"Transfer Başarısız: Kaynak kasada yeterli bakiye yok! (Mevcut Bakiye: {kaynak.bakiye:,.2f} TL)")
         
         dahili_firma = get_dahili_islem_firmasi()
+        transfer_tarihi = datetime.now(timezone.utc).date()
         
         # Transfer işlemi çift taraflı (Double-Entry) kaydedilir
-        cikis = Odeme(firma_musteri_id=dahili_firma.id, kasa_id=kaynak.id, tutar=tutar, yon='odeme', aciklama=f"{hedef.kasa_adi} kasasına transfer", created_by_id=actor_id)
-        giris = Odeme(firma_musteri_id=dahili_firma.id, kasa_id=hedef.id, tutar=tutar, yon='tahsilat', aciklama=f"{kaynak.kasa_adi} kasasından transfer", created_by_id=actor_id)
+        cikis = Odeme(
+            firma_musteri_id=dahili_firma.id,
+            kasa_id=kaynak.id,
+            tarih=transfer_tarihi,
+            islem_tarihi=transfer_tarihi,
+            tutar=tutar,
+            yon='odeme',
+            aciklama=f"{hedef.kasa_adi} kasasına transfer",
+            created_by_id=actor_id
+        )
+        giris = Odeme(
+            firma_musteri_id=dahili_firma.id,
+            kasa_id=hedef.id,
+            tarih=transfer_tarihi,
+            islem_tarihi=transfer_tarihi,
+            tutar=tutar,
+            yon='tahsilat',
+            aciklama=f"{kaynak.kasa_adi} kasasından transfer",
+            created_by_id=actor_id
+        )
         
         db.session.add_all([cikis, giris])
         db.session.commit()
@@ -181,6 +200,9 @@ class OdemeService:
                     raise ValidationError(f"İşlem Başarısız: Seçili kasada yeterli bakiye yok! (İşlem yapılabilecek maksimum tutar: {gercek_bakiye:,.2f} TL)")
         # ----------------------------------------------
 
+        if not getattr(odeme, 'islem_tarihi', None):
+            odeme.islem_tarihi = odeme.tarih
+
         if is_new:
             odeme.created_by_id = actor_id
         else:
@@ -222,6 +244,8 @@ class HizmetKaydiService:
 
     @staticmethod
     def save(hizmet, is_new=True, actor_id=None, commit=True):
+        if not getattr(hizmet, 'islem_tarihi', None):
+            hizmet.islem_tarihi = hizmet.tarih
         # KDV dahil toplam tutarı otomatik hesapla (KDV hariç giriliyor)
         if hizmet.tutar is not None and hizmet.kdv_orani is not None:
             try:
@@ -283,18 +307,25 @@ class CariRaporService:
 
     @staticmethod
     def get_durum_raporu():
+        """Cari durum raporu: Firma tablosundaki cache alanlarından tek SQL ile okur.
+        Cache, firma bilgi sayfası açılırken ve finansal işlemlerde güncellenir.
+        Kaynak: build_cari_rows (firma bilgi sayfasıyla birebir aynı)."""
         from app.firmalar.models import Firma
-        # Dahili sistem firmaları rapor listesinden ve genel toplamdan dışlandı
+        from decimal import Decimal
+
         firmalar = Firma.query.filter(
             Firma.is_deleted == False,
             Firma.firma_adi.notin_(['DAHİLİ İŞLEMLER', 'Dahili Kasa İşlemleri'])
         ).all()
+
         rapor = []
-        g_borc, g_alacak = 0, 0
-        g_borc_kdvli, g_alacak_kdvli = 0, 0
+        g_borc_kdvli, g_alacak_kdvli = Decimal('0'), Decimal('0')
+
         for f in firmalar:
-            ozet = f.bakiye_ozeti
-            # Tüm firmaları göster (sıfır bakiyeli olanları da dahil et)
+            borc = Decimal(str(f.cari_borc_kdvli or 0))
+            alacak = Decimal(str(f.cari_alacak_kdvli or 0))
+            bakiye = Decimal(str(f.cari_bakiye_kdvli or 0))
+
             rapor.append({
                 'id': f.id,
                 'firma_adi': f.firma_adi,
@@ -305,22 +336,21 @@ class CariRaporService:
                     else 'Tedarikçi' if f.is_tedarikci
                     else 'Firma'
                 ),
-                'borc': ozet['borc'],
-                'alacak': ozet['alacak'],
-                'bakiye': ozet['net_bakiye'],
-                'borc_kdvli': ozet['borc_kdvli'],
-                'alacak_kdvli': ozet['alacak_kdvli'],
-                'bakiye_kdvli': ozet['net_bakiye_kdvli']
+                'borc': borc,
+                'alacak': alacak,
+                'bakiye': bakiye,
+                'borc_kdvli': borc,
+                'alacak_kdvli': alacak,
+                'bakiye_kdvli': bakiye,
             })
-            g_borc += ozet['borc']
-            g_alacak += ozet['alacak']
-            g_borc_kdvli += ozet['borc_kdvli']
-            g_alacak_kdvli += ozet['alacak_kdvli']
+            g_borc_kdvli += borc
+            g_alacak_kdvli += alacak
+
         return rapor, {
-            'borc': g_borc,
-            'alacak': g_alacak,
-            'bakiye': g_borc - g_alacak,
+            'borc': g_borc_kdvli,
+            'alacak': g_alacak_kdvli,
+            'bakiye': g_borc_kdvli - g_alacak_kdvli,
             'borc_kdvli': g_borc_kdvli,
             'alacak_kdvli': g_alacak_kdvli,
-            'bakiye_kdvli': g_borc_kdvli - g_alacak_kdvli
+            'bakiye_kdvli': g_borc_kdvli - g_alacak_kdvli,
         }

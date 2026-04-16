@@ -156,20 +156,14 @@ def index():
 
         # ÖNCELİK: Kalem verilerini rollback'ten etkilenmeden önce hesapla.
         # (guncelle_cari_toplam rollback yaparsa session expire olur ve objelere erişim patlar)
-        recent_threshold = datetime.now(timezone.utc) - timedelta(days=1)
+        # İade iptal kısıtlaması kaldırıldı - tüm sonlandırılmış kalemler iptal edilebilir
         recently_returned_kalem_ids = set()
         try:
             recently_returned_kalem_ids = {
                 kalem.id
                 for kiralama in kiralamalar
                 for kalem in kiralama.kalemler
-                if kalem.sonlandirildi
-                and kalem.is_active
-                and kalem.updated_at
-                and (
-                    (kalem.updated_at if getattr(kalem.updated_at, 'tzinfo', None) else kalem.updated_at.replace(tzinfo=timezone.utc))
-                    >= recent_threshold
-                )
+                if kalem.sonlandirildi and kalem.is_active
             }
         except Exception as date_err:
             # Listeyi düşürme; bu alan sadece UI kolaylığıdır.
@@ -264,6 +258,21 @@ def index():
             nakliye_tedarikci_listesi=[],
             recently_returned_kalem_ids=set()
         )
+
+@kiralama_bp.route('/detay/<int:kiralama_id>')
+@login_required
+def detay_modal(kiralama_id):
+    """AJAX: Kiralama detay bilgilerini modal içeriği olarak döner."""
+    kiralama = Kiralama.query.options(
+        joinedload(Kiralama.firma_musteri),
+        joinedload(Kiralama.kalemler).joinedload(KiralamaKalemi.ekipman),
+    ).get_or_404(kiralama_id)
+    return render_template(
+        'kiralama/detay_modal_content.html',
+        kiralama=kiralama,
+        today=date.today(),
+    )
+
 
 @kiralama_bp.route('/ekle', methods=['GET', 'POST'])
 @login_required

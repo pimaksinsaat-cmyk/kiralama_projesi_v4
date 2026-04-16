@@ -4,6 +4,7 @@ from flask import render_template, redirect, url_for, flash, request, send_file
 from flask_login import current_user
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from sqlalchemy import func
 
 from app.extensions import db
 from app.cari import cari_bp
@@ -77,6 +78,17 @@ def get_actor():
     """Audit Log için işlemi yapan kullanıcının ID'sini döndürür."""
     return current_user.id if current_user.is_authenticated else None
 
+
+def _guncelle_firma_cari_cache(firma_id):
+    """Firma cari cache'ini (rapor için) build_cari_rows ile günceller."""
+    if not firma_id:
+        return
+    try:
+        from app.services.firma_services import FirmaService
+        FirmaService.guncelle_firma_cari_cache(firma_id)
+    except Exception as e:
+        logging.warning(f"Firma cari cache güncelleme hatası (firma_id={firma_id}): {e}")
+
 # -------------------------------------------------------------------------
 # 1. ÖDEME VE TAHSİLAT
 # -------------------------------------------------------------------------
@@ -100,6 +112,7 @@ def odeme_ekle():
     if request.method == 'GET':
         if firma_id: form.firma_musteri_id.data = firma_id
         form.tarih.data = date.today()
+        form.islem_tarihi.data = date.today()
         form.yon.data = yon_param
 
     if form.validate_on_submit():
@@ -108,6 +121,7 @@ def odeme_ekle():
                 firma_musteri_id=form.firma_musteri_id.data,
                 kasa_id=form.kasa_id.data,
                 tarih=form.tarih.data,
+                islem_tarihi=form.islem_tarihi.data or form.tarih.data,
                 tutar=form.tutar.data, # MoneyField sayesinde otomatik Decimal
                 yon=form.yon.data,
                 aciklama=form.aciklama.data,
@@ -116,6 +130,7 @@ def odeme_ekle():
             )
             
             OdemeService.save(yeni_odeme, is_new=True, actor_id=get_actor())
+            _guncelle_firma_cari_cache(form.firma_musteri_id.data)
             OperationLogService.log(
                 module='cari', action='odeme_ekle',
                 user_id=get_actor(), username=getattr(current_user, 'username', None),
@@ -180,6 +195,7 @@ def odeme_duzelt(id):
             odeme.firma_musteri_id = form.firma_musteri_id.data
             odeme.kasa_id = form.kasa_id.data
             odeme.tarih = form.tarih.data
+            odeme.islem_tarihi = form.islem_tarihi.data or form.tarih.data
             odeme.tutar = form.tutar.data
             odeme.yon = form.yon.data
             odeme.aciklama = form.aciklama.data
@@ -187,6 +203,7 @@ def odeme_duzelt(id):
             odeme.vade_tarihi = form.vade_tarihi.data
 
             OdemeService.save(odeme, is_new=False, actor_id=get_actor())
+            _guncelle_firma_cari_cache(odeme.firma_musteri_id)
             OperationLogService.log(
                 module='cari', action='odeme_duzelt',
                 user_id=get_actor(), username=getattr(current_user, 'username', None),
@@ -221,6 +238,7 @@ def odeme_sil(id):
     f_id = odeme.firma_musteri_id
     try:
         OdemeService.delete(id, actor_id=get_actor())
+        _guncelle_firma_cari_cache(f_id)
         OperationLogService.log(
             module='cari', action='odeme_sil',
             user_id=get_actor(), username=getattr(current_user, 'username', None),
@@ -269,6 +287,7 @@ def hizmet_ekle():
         if firma_id:
             form.firma_id.data = firma_id
         form.tarih.data = date.today()
+        form.islem_tarihi.data = date.today()
 
     firma = None
     if form.firma_id.data:
@@ -283,6 +302,7 @@ def hizmet_ekle():
             yeni_hizmet = HizmetKaydi(
                 firma_id=form.firma_id.data,
                 tarih=form.tarih.data,
+                islem_tarihi=form.islem_tarihi.data or form.tarih.data,
                 tutar=form.tutar.data,
                 yon=form.yon.data,
                 aciklama=form.aciklama.data,
@@ -290,6 +310,7 @@ def hizmet_ekle():
                 kdv_orani=int(form.kdv_orani.data) if form.kdv_orani.data is not None else None  # Decimal yerine int
             )
             HizmetKaydiService.save(yeni_hizmet, actor_id=get_actor())
+            _guncelle_firma_cari_cache(form.firma_id.data)
             OperationLogService.log(
                 module='cari', action='hizmet_ekle',
                 user_id=get_actor(), username=getattr(current_user, 'username', None),
@@ -332,6 +353,7 @@ def hizmet_duzelt(id):
         try:
             hizmet.firma_id = form.firma_id.data
             hizmet.tarih = form.tarih.data
+            hizmet.islem_tarihi = form.islem_tarihi.data or form.tarih.data
             hizmet.tutar = form.tutar.data
             hizmet.kdv_orani = int(form.kdv_orani.data) if form.kdv_orani.data is not None else None
             hizmet.yon = form.yon.data
@@ -339,6 +361,7 @@ def hizmet_duzelt(id):
             hizmet.fatura_no = form.fatura_no.data
 
             HizmetKaydiService.save(hizmet, is_new=False, actor_id=get_actor())
+            _guncelle_firma_cari_cache(hizmet.firma_id)
             OperationLogService.log(
                 module='cari', action='hizmet_duzelt',
                 user_id=get_actor(), username=getattr(current_user, 'username', None),
@@ -371,6 +394,7 @@ def hizmet_sil(id):
     f_id = hizmet.firma_id
     try:
         HizmetKaydiService.delete(id, actor_id=get_actor())
+        _guncelle_firma_cari_cache(f_id)
         OperationLogService.log(
             module='cari', action='hizmet_sil',
             user_id=get_actor(), username=getattr(current_user, 'username', None),
@@ -496,6 +520,7 @@ def kasa_hizli_islem():
                 firma_musteri_id=dahili.id,
                 kasa_id=form.kasa_id.data,
                 tarih=date.today(),
+                islem_tarihi=date.today(),
                 tutar=form.tutar.data, # MoneyField sayesinde temiz Decimal gelir
                 yon=yon,
                 aciklama=f"Hızlı Kasa İşlemi: {form.aciklama.data}"
@@ -666,7 +691,7 @@ def kasa_hareketleri(id):
 
     try:
         hareketler = Odeme.query.filter_by(kasa_id=kasa.id, is_deleted=False)\
-                          .order_by(Odeme.tarih.desc(), Odeme.id.desc()).all()
+                          .order_by(func.coalesce(Odeme.islem_tarihi, Odeme.tarih).desc(), Odeme.id.desc()).all()
     except Exception as e:
         db.session.rollback()
         logging.error(f"Kasa hareketleri yükleme hatası: {str(e)}")
@@ -684,7 +709,7 @@ def kasa_hareketleri_yazdir(id):
 
     try:
         hareketler = Odeme.query.filter_by(kasa_id=kasa.id, is_deleted=False)\
-                          .order_by(Odeme.tarih.desc(), Odeme.id.desc()).all()
+                          .order_by(func.coalesce(Odeme.islem_tarihi, Odeme.tarih).desc(), Odeme.id.desc()).all()
     except Exception as e:
         db.session.rollback()
         logging.error(f"Kasa hareketleri yazdır yükleme hatası: {str(e)}")
@@ -707,7 +732,7 @@ def kasa_hareketleri_excel(id):
 
     try:
         hareketler = Odeme.query.filter_by(kasa_id=kasa.id, is_deleted=False)\
-                          .order_by(Odeme.tarih.desc(), Odeme.id.desc()).all()
+                          .order_by(func.coalesce(Odeme.islem_tarihi, Odeme.tarih).desc(), Odeme.id.desc()).all()
     except Exception as e:
         db.session.rollback()
         logging.error(f"Kasa hareketleri Excel yükleme hatası: {str(e)}")
@@ -790,7 +815,7 @@ def kasa_hareketleri_excel(id):
 
         row_data = [
             index,
-            islem.tarih.strftime('%d.%m.%Y') if islem.tarih else '',
+            (islem.islem_tarihi or islem.tarih).strftime('%d.%m.%Y') if (islem.islem_tarihi or islem.tarih) else '',
             firma_adi,
             aciklama,
             tutar,

@@ -33,10 +33,12 @@ class CariServis:
 
         aciklama = f"Nakliye Hizmeti: {nakliye.plaka or ''} | {nakliye.guzergah}"
         
+        nakliye_islem_tarihi = getattr(nakliye, 'islem_tarihi', None) or nakliye.tarih
         if hizmet:
             # Varsa güncelle (Firma, Tarih, Tutar veya KDV değişmiş olabilir)
             hizmet.firma_id = nakliye.firma_id
             hizmet.tarih = nakliye.tarih
+            hizmet.islem_tarihi = nakliye_islem_tarihi
             hizmet.tutar = nakliye.toplam_tutar
             hizmet.aciklama = aciklama
             hk_kdv = getattr(nakliye, 'kdv_orani', None) or 0
@@ -47,6 +49,7 @@ class CariServis:
             hizmet = HizmetKaydi(
                 firma_id=nakliye.firma_id,
                 tarih=nakliye.tarih,
+                islem_tarihi=nakliye_islem_tarihi,
                 tutar=nakliye.toplam_tutar,
                 yon='giden', # Müşteriye giden hizmet = Borç
                 aciklama=aciklama,
@@ -63,6 +66,7 @@ class CariServis:
         # Taşeron maliyetlerini ozel_id üzerinden takip ediyoruz
         eski_maliyet = HizmetKaydi.query.filter_by(ozel_id=nakliye.id, yon='gelen').first()
 
+        nakliye_islem_tarihi = getattr(nakliye, 'islem_tarihi', None) or nakliye.tarih
         if nakliye.nakliye_tipi == 'taseron' and nakliye.taseron_firma_id and nakliye.taseron_maliyet > 0:
             aciklama = f"Nakliye Taşeron Gideri: {nakliye.guzergah} ({nakliye.plaka or ''})"
             if eski_maliyet:
@@ -70,6 +74,7 @@ class CariServis:
                 eski_maliyet.firma_id = nakliye.taseron_firma_id
                 eski_maliyet.tutar = nakliye.taseron_maliyet
                 eski_maliyet.tarih = nakliye.tarih
+                eski_maliyet.islem_tarihi = nakliye_islem_tarihi
                 eski_maliyet.aciklama = aciklama
             else:
                 # Yeni maliyet kaydı oluştur
@@ -79,6 +84,7 @@ class CariServis:
                 yeni_maliyet = HizmetKaydi(
                     firma_id=nakliye.taseron_firma_id,
                     tarih=nakliye.tarih,
+                    islem_tarihi=nakliye_islem_tarihi,
                     tutar=nakliye.taseron_maliyet,
                     yon='gelen', # Bize gelen hizmet = Taşeron Alacağı (Gider)
                     aciklama=aciklama,

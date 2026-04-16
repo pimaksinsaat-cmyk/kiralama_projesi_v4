@@ -166,6 +166,7 @@ class KiralamaKalemiService(BaseService):
             hizmet_kaydi = HizmetKaydi( 
                 firma_id=kalem.kiralama.firma_musteri_id, 
                 tarih=date.today(), 
+                islem_tarihi=kalem.kiralama_bitis or date.today(),
                 tutar=fiili_donus_satis, 
                 yon='giden', 
                 fatura_no=kalem.kiralama.kiralama_form_no if kalem.kiralama else None, 
@@ -195,6 +196,7 @@ class KiralamaKalemiService(BaseService):
             hizmet_kaydi = HizmetKaydi( 
                 firma_id=kalem.kiralama.firma_musteri_id, 
                 tarih=date.today(), 
+                islem_tarihi=kalem.kiralama_bitis or date.today(),
                 tutar=abs(nakliye_farki), 
                 yon='giden' if pozitif else 'gelen', 
                 fatura_no=kalem.kiralama.kiralama_form_no if kalem.kiralama else None, 
@@ -265,6 +267,7 @@ class KiralamaKalemiService(BaseService):
             hizmet_kaydi = HizmetKaydi(
                 firma_id=kalem.nakliye_tedarikci_id,
                 tarih=date.today(),
+                islem_tarihi=kalem.kiralama_bitis or date.today(),
                 tutar=to_decimal(kalem.nakliye_alis_fiyat),
                 yon='gelen',
                 fatura_no=kalem.kiralama.kiralama_form_no if kalem.kiralama else None,
@@ -292,6 +295,7 @@ class KiralamaKalemiService(BaseService):
                 kiralama_id=kalem.kiralama_id,
                 firma_id=kalem.kiralama.firma_musteri_id,
                 tarih=kalem.kiralama_bitis or date.today(),
+                islem_tarihi=kalem.kiralama_bitis or date.today(),
                 guzergah=donus_guzergah,
                 tutar=KiralamaService._get_donus_nakliye_satis(kalem),
                 kdv_orani=kalem.nakliye_satis_kdv if kalem.nakliye_satis_kdv is not None else (kalem.kiralama.kdv_orani if kalem.kiralama.kdv_orani is not None else 20),
@@ -675,6 +679,7 @@ class KiralamaService(BaseService):
                 cari_kayit = HizmetKaydi(
                     firma_id=kiralama.firma_musteri_id,
                     tarih=date.today(),
+                    islem_tarihi=date.today(),
                     tutar=toplam_gelir,
                     yon='giden',
                     fatura_no=kiralama.kiralama_form_no,
@@ -694,6 +699,7 @@ class KiralamaService(BaseService):
                 cari_kayit.fatura_no = kiralama.kiralama_form_no
                 cari_kayit.ozel_id = kiralama.id
                 cari_kayit.tarih = date.today()
+                cari_kayit.islem_tarihi = date.today()
                 cari_kayit.tutar = toplam_gelir
                 cari_kayit.kdv_orani = kdv_orani
                 cari_kayit.aciklama = f"Kiralama Bekleyen Bakiye - {kiralama.kiralama_form_no}"
@@ -719,6 +725,71 @@ class KiralamaService(BaseService):
                 db.session.rollback()
                 logger.error(f"Cari Toplam Güncelleme Commit Hatası: {e}")
                 raise ValidationError("Finansal kayıt güncellenemedi.")
+
+    @staticmethod
+    def guncelle_tedarikci_cari_toplam(firma_id, auto_commit=True):
+        """Firma tedarikçi olarak bağlı olduğu aktif harici kiralama kalemlerinin
+        'Dış Kiralama' HKD kayıtlarını bugüne kadar tahakkuk eden tutarla günceller.
+        guncelle_cari_toplam'ın müşteri versiyonunun TEDARİKÇİ karşılığıdır."""
+        if not firma_id:
+            return
+        aktif_kalemler = KiralamaKalemi.query.filter(
+            KiralamaKalemi.harici_ekipman_tedarikci_id == firma_id,
+            KiralamaKalemi.is_active == True,
+            KiralamaKalemi.is_deleted == False,
+        ).all()
+
+        for kalem in aktif_kalemler:
+            kir = kalem.kiralama
+            if not kir or kir.is_deleted:
+                continue
+
+            mevcut_kayitlar = HizmetKaydi.query.filter(
+                HizmetKaydi.ozel_id == kalem.id,
+                HizmetKaydi.firma_id == firma_id,
+                HizmetKaydi.yon == 'gelen',
+                HizmetKaydi.is_deleted == False,
+            ).order_by(HizmetKaydi.id.asc()).all()
+
+            cari_kayit = mevcut_kayitlar[0] if mevcut_kayitlar else None
+            for fazla in mevcut_kayitlar[1:]:
+                db.session.delete(fazla)
+
+            tahakkuk = KiralamaService._hesapla_bekleyen_alis_kalem_tutari(kalem)
+            makine_adi = kalem.harici_ekipman_marka or "Dış Ekipman"
+            bas = to_date(kalem.kiralama_baslangici) or date.today()
+
+            if cari_kayit:
+                cari_kayit.tutar = tahakkuk
+                cari_kayit.tarih = date.today()
+                cari_kayit.islem_tarihi = bas
+                cari_kayit.kdv_orani = kalem.kiralama_alis_kdv
+                cari_kayit.kiralama_alis_kdv = kalem.kiralama_alis_kdv
+                cari_kayit.nakliye_alis_kdv = kalem.nakliye_alis_kdv
+                cari_kayit.aciklama = f"Dış Kiralama (Güncelleme): {makine_adi}"
+                db.session.add(cari_kayit)
+            elif tahakkuk > 0:
+                yeni = HizmetKaydi(
+                    firma_id=firma_id,
+                    tarih=date.today(),
+                    islem_tarihi=bas,
+                    tutar=tahakkuk,
+                    yon='gelen',
+                    fatura_no=kir.kiralama_form_no,
+                    ozel_id=kalem.id,
+                    aciklama=f"Dış Kiralama (Güncelleme): {makine_adi}",
+                    kdv_orani=kalem.kiralama_alis_kdv,
+                    kiralama_alis_kdv=kalem.kiralama_alis_kdv,
+                    nakliye_alis_kdv=kalem.nakliye_alis_kdv,
+                )
+                db.session.add(yeni)
+
+        if auto_commit:
+            try:
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                logger.error(f"Tedarikçi Cari Toplam Güncelleme Commit Hatası: {e}")
 
     @classmethod
     def create_kiralama_with_relations(cls, kiralama_data, kalemler_data, actor_id=None):
@@ -766,6 +837,7 @@ class KiralamaService(BaseService):
                     logger.info(f"[CREATE-TUTAR-DOGRULAMA] Kalem ID (yeni): Gün={gun}, Günlük Fiyat={kalem.kiralama_brm_fiyat}, Nakliye={kalem.nakliye_satis_fiyat}, Hesaplanan Toplam={hesaplanan_tutar}")
                     is_dis_ekipman = int(k_data.get('dis_tedarik_ekipman') or 0) == 1
                     makine_adi = "Makine"
+                    dis_kiralama_hizmet = None
                     if is_dis_ekipman:
                         kalem.is_dis_tedarik_ekipman = True
                         kalem.harici_ekipman_tedarikci_id = int(k_data.get('harici_ekipman_tedarikci_id') or 0)
@@ -785,6 +857,7 @@ class KiralamaService(BaseService):
                             hizmet_kaydi = HizmetKaydi(
                                 firma_id=tedarikci_id,
                                 tarih=date.today(),
+                                islem_tarihi=bas,
                                 tutar=(kalem.kiralama_alis_fiyat * gun),
                                 yon='gelen',
                                 fatura_no=kiralama.kiralama_form_no,
@@ -796,6 +869,7 @@ class KiralamaService(BaseService):
                             )
                             logger.info(f"[HizmetKaydi] FİRMA_ID={hizmet_kaydi.firma_id} | NAKLIYE_ALIS_KDV={hizmet_kaydi.nakliye_alis_kdv}")
                             db.session.add(hizmet_kaydi)
+                            dis_kiralama_hizmet = hizmet_kaydi
                     else:
                         eid = int(k_data.get('ekipman_id') or 0)
                         if eid > 0:
@@ -818,6 +892,9 @@ class KiralamaService(BaseService):
                     KiralamaKalemiService.save(kalem, is_new=True, auto_commit=False, actor_id=actor_id)
                     db.session.flush()
                     logger.debug(f"[CREATE] Kalem flush sonrası id: {kalem.id}")
+                    if dis_kiralama_hizmet is not None and not getattr(dis_kiralama_hizmet, 'ozel_id', None):
+                        # Kalem ID'si flush sonrası belli olur; kayıt kiralama ile bağlansın.
+                        dis_kiralama_hizmet.ozel_id = kalem.id
                     if to_decimal(kalem.nakliye_satis_fiyat) > 0 or to_decimal(kalem.nakliye_alis_fiyat) > 0:
                         logger.debug(f"[CREATE] Nakliye ve cari oluşturuluyor: kalem_id={kalem.id}")
                         cls._create_nakliye_ve_cari(kiralama, kalem, makine_adi, bas)
@@ -936,6 +1013,7 @@ class KiralamaService(BaseService):
                         gun = cls._hesapla_gun_sayisi(bas, ust_sinir)
                         db.session.add(HizmetKaydi(
                             firma_id=aktif.harici_ekipman_tedarikci_id, tarih=date.today(),
+                            islem_tarihi=bas,
                             tutar=(aktif.kiralama_alis_fiyat * gun), yon='gelen',
                             fatura_no=kiralama.kiralama_form_no, ozel_id=aktif.id, aciklama=f"Dış Kiralama (Güncelleme): {makine_adi}",
                             kdv_orani=aktif.kiralama_alis_kdv,
@@ -1008,6 +1086,7 @@ class KiralamaService(BaseService):
             kiralama_id=kiralama.id,
             firma_id=kiralama.firma_musteri_id,
             tarih=bas_tarihi,
+            islem_tarihi=bas_tarihi,
             guzergah=guzergah_gidis,
             tutar=KiralamaService._get_gidis_nakliye_satis(kalem),
             kdv_orani=kalem.nakliye_satis_kdv if kalem.nakliye_satis_kdv is not None else (kiralama.kdv_orani if kiralama.kdv_orani is not None else 20),
@@ -1024,13 +1103,22 @@ class KiralamaService(BaseService):
 
             if yeni_sefer.taseron_maliyet > 0:
                 nakliye_kdv = kalem.nakliye_alis_kdv
-                # HİZMETKAYDI: yeni eklenen sütunları da ekle
+                # Yeniden oluşturma/güncelleme senaryolarında mükerrer taşeron satırını engelle.
+                HizmetKaydi.query.filter(
+                    HizmetKaydi.ozel_id == kalem.id,
+                    HizmetKaydi.yon == 'gelen',
+                    HizmetKaydi.aciklama.like('Taşeron Nakliye Bedeli%')
+                ).delete(synchronize_session=False)
+
+                # HİZMETKAYDI: taşeron nakliye giderini kalem bazında açıkça işaretle.
                 db.session.add(HizmetKaydi(
                     firma_id=yeni_sefer.taseron_firma_id,
-                    tarih=date.today(),
+                    tarih=bas_tarihi or date.today(),
+                    islem_tarihi=bas_tarihi or date.today(),
                     tutar=yeni_sefer.taseron_maliyet,
                     yon='gelen',
                     fatura_no=kiralama.kiralama_form_no,
+                    ozel_id=kalem.id,
                     aciklama=f"Taşeron Nakliye Bedeli ({makine_adi}) - {kiralama.kiralama_form_no}",
                     nakliye_alis_kdv=nakliye_kdv,
                     kdv_orani=None

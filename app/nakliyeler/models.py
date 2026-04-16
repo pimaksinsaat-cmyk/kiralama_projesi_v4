@@ -18,7 +18,10 @@ class Nakliye(db.Model):
     kiralama = db.relationship('Kiralama', back_populates='nakliyeler')
 
     # --- Temel Kimlik Bilgileri ---
+    # tarih: kayıt tarihi/legacy alan
     tarih = db.Column(db.Date, default=date.today, nullable=False)
+    # islem_tarihi: seferin fiilen gerçekleştiği tarih (geçmişe dönük kayıtlar için)
+    islem_tarihi = db.Column(db.Date, nullable=True, index=True)
     
     # --- Müşteri (Kime Fatura Keseceğiz / Kimin İşini Yapıyoruz) ---
     firma_id = db.Column(db.Integer, db.ForeignKey('firma.id'), nullable=False)

@@ -61,13 +61,20 @@
 
             <div class="row mb-3">
                 <div class="col-md-4">
+                    {{ form.islem_tarihi.label(class="form-label fw-bold") }}
+                    {{ form.islem_tarihi(class="form-control align-middle" + (' is-invalid' if form.islem_tarihi.errors else ''), type="date", style="height: 38px;") }}
+                    {% for error in form.islem_tarihi.errors %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                    {% endfor %}
+                </div>
+                <div class="col-md-4">
                     {{ form.tarih.label(class="form-label fw-bold") }}
                     {{ form.tarih(class="form-control align-middle" + (' is-invalid' if form.tarih.errors else ''), type="date", style="height: 38px;") }}
                     {% for error in form.tarih.errors %}
                         <div class="invalid-feedback d-block">{{ error }}</div>
                     {% endfor %}
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-2">
                     {{ form.kdv_orani.label(class="form-label fw-bold") }}
                     <div class="input-group align-middle">
                         {{ form.kdv_orani(class="form-control align-middle" + (' is-invalid' if form.kdv_orani.errors else ''), placeholder="KDV", min="0", max="99", maxlength="2", style="width:40px; text-align:right; height: 38px;", type="number") }}
@@ -77,7 +84,7 @@
                         <div class="invalid-feedback d-block">{{ error }}</div>
                     {% endfor %}
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-2">
                     {{ form.tutar.label(class="form-label fw-bold") }}
                     <div class="input-group align-middle">
                         <span class="input-group-text" style="height: 38px;">TL</span>
@@ -195,6 +202,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const requiredFields = [
                 {el: form.querySelector('[name="firma_id"]'), msg: 'Firma seçilmelidir.'},
                 {el: form.querySelector('[name="yon"]'), msg: 'Yön seçilmelidir.'},
+                {el: form.querySelector('[name="islem_tarihi"]'), msg: 'İşlem tarihi girilmelidir.'},
                 {el: form.querySelector('[name="tarih"]'), msg: 'Tarih girilmelidir.'},
                 {el: form.querySelector('[name="tutar"]'), msg: 'Tutar girilmelidir.'},
                 {el: form.querySelector('[name="aciklama"]'), msg: 'Açıklama girilmelidir.'}

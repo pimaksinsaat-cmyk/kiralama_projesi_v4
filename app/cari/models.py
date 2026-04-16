@@ -54,12 +54,16 @@ class Odeme(BaseModel):
     
     __table_args__ = (
         db.CheckConstraint("yon IN ('tahsilat', 'odeme')", name='check_odeme_yon'),
+        db.Index('ix_odeme_firma_deleted_yon', 'firma_musteri_id', 'is_deleted', 'yon'),
     )
     
     firma_musteri_id = db.Column(db.Integer, db.ForeignKey('firma.id'), nullable=False)
     kasa_id = db.Column(db.Integer, db.ForeignKey('kasa.id'), nullable=True)
     
+    # tarih: mevcut davranış için korunur (legacy)
     tarih = db.Column(db.Date, nullable=False, default=lambda: datetime.now(timezone.utc).date())
+    # islem_tarihi: işin fiilen gerçekleştiği tarih (geçmişe dönük girişlerde kullanılır)
+    islem_tarihi = db.Column(db.Date, nullable=True, index=True)
     tutar = db.Column(db.Numeric(15, 2), nullable=False, default=0)
     
     # 'tahsilat' = Kasaya Para Girişi (+) / Müşteri Bakiyesi Azalır (-)
@@ -87,6 +91,7 @@ class HizmetKaydi(BaseModel):
     
     __table_args__ = (
         db.CheckConstraint("yon IN ('gelen', 'giden')", name='check_hizmet_yon'),
+        db.Index('ix_hizmet_kaydi_firma_deleted_yon', 'firma_id', 'is_deleted', 'yon'),
     )
     
     firma_id = db.Column(db.Integer, db.ForeignKey('firma.id'), nullable=False)
@@ -97,7 +102,10 @@ class HizmetKaydi(BaseModel):
     )
     ozel_id = db.Column(db.Integer, nullable=True)
     
+    # tarih: mevcut davranış için korunur (legacy)
     tarih = db.Column(db.Date, nullable=False, default=lambda: datetime.now(timezone.utc).date())
+    # islem_tarihi: işin fiilen gerçekleştiği tarih (geçmişe dönük girişlerde kullanılır)
+    islem_tarihi = db.Column(db.Date, nullable=True, index=True)
     tutar = db.Column(db.Numeric(15, 2), nullable=False, default=0)
     
     # 'giden' = Satış Faturası (Gelir) -> Müşteri Borçlanır (+)
@@ -137,6 +145,7 @@ class CariHareket(BaseModel):
     __table_args__ = (
         db.CheckConstraint("yon IN ('gelen', 'giden')", name='check_cari_hareket_yon'),
         db.CheckConstraint("durum IN ('acik', 'kapali', 'iptal')", name='check_cari_hareket_durum'),
+        db.Index('ix_cari_hareket_firma_deleted_yon_durum', 'firma_id', 'is_deleted', 'yon', 'durum'),
     )
 
     firma_id = db.Column(db.Integer, db.ForeignKey('firma.id'), nullable=False, index=True)

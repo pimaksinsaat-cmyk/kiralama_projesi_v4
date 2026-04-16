@@ -86,6 +86,17 @@
 
             <div class="row mb-3">
                 <div class="col-md-4">
+                    {{ form.islem_tarihi.label(class="form-label fw-bold") }}
+                    {% if is_system_record %}
+                         <input type="text" class="form-control bg-light align-middle" value="{{ (hizmet.islem_tarihi or hizmet.tarih) }}" readonly style="height: 38px;">
+                    {% else %}
+                        {{ form.islem_tarihi(class="form-control align-middle" + (' is-invalid' if form.islem_tarihi.errors else ''), type="date", style="height: 38px;") }}
+                        {% for error in form.islem_tarihi.errors %}
+                            <div class="invalid-feedback d-block">{{ error }}</div>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+                <div class="col-md-4">
                     {{ form.tarih.label(class="form-label fw-bold") }}
                     {% if is_system_record %}
                          <input type="text" class="form-control bg-light align-middle" value="{{ hizmet.tarih }}" readonly style="height: 38px;">
@@ -96,7 +107,7 @@
                         {% endfor %}
                     {% endif %}
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-2">
                     {{ form.kdv_orani.label(class="form-label fw-bold") }}
                     <div class="input-group align-middle">
                         {% if is_system_record %}
@@ -110,7 +121,7 @@
                         <span class="input-group-text" style="height: 38px;">%</span>
                     </div>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-2">
                     {{ form.tutar.label(class="form-label fw-bold") }}
                     <div class="input-group align-middle">
                         <span class="input-group-text" style="height: 38px;">TL</span>
@@ -272,6 +283,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const requiredFields = [
                 {el: form.querySelector('[name="firma_id"]'), msg: 'Firma seçilmelidir.'},
                 {el: form.querySelector('[name="yon"]'), msg: 'Yön seçilmelidir.'},
+                {el: form.querySelector('[name="islem_tarihi"]'), msg: 'İşlem tarihi girilmelidir.'},
                 {el: form.querySelector('[name="tarih"]'), msg: 'Tarih girilmelidir.'},
                 {el: form.querySelector('[name="tutar"]'), msg: 'Tutar girilmelidir.'},
                 {el: form.querySelector('[name="aciklama"]'), msg: 'Açıklama girilmelidir.'}

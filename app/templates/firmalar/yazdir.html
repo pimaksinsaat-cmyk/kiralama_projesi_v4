@@ -293,8 +293,9 @@
         <tr {% if row.islem_turu == 'tahsilat' %}style="background:#d1e7dd;"{% elif row.islem_turu == 'fatura' and 'Alış' in row.aciklama %}style="background:#d1e7dd;"{% elif row.islem_turu == 'harici_kiralama' %}style="background:#fff3cd;"{% elif row.islem_turu == 'nakliye_satis' %}style="background:#e2e3e5;"{% endif %}>
             <td>{{ loop.index }}</td>
             <td>
-                {% if row.form_tarihi %}
-                    <div style="font-size:9px; color:#6c757d;">{{ row.form_tarihi.strftime('%d.%m.%Y') }}</div>
+                {% set islem_tarihi = row.sort_date or row.baslangic or row.form_tarihi %}
+                {% if islem_tarihi %}
+                    <div style="font-size:9px; color:#6c757d;">{{ islem_tarihi.strftime('%d.%m.%Y') }}</div>
                 {% endif %}
                 <span style="font-size:10px;">{{ row.form_no }}</span>
             </td>

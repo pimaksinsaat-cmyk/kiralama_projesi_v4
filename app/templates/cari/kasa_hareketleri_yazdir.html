@@ -242,7 +242,7 @@
 
             <tr>
                 <td class="text-center">{{ loop.index }}</td>
-                <td>{{ islem.tarih.strftime('%d.%m.%Y') if islem.tarih else '-' }}</td>
+                <td>{{ (islem.islem_tarihi or islem.tarih).strftime('%d.%m.%Y') if (islem.islem_tarihi or islem.tarih) else '-' }}</td>
                 <td>{{ islem.firma_musteri.firma_adi.split()[:6]|join(' ') if islem.firma_musteri else 'Sistem / Dahili' }}</td>
                 <td>
                     {{ islem.aciklama or '-' }}

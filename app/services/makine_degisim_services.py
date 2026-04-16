@@ -1,5 +1,6 @@
 from app.services.base import BaseService, ValidationError
 from app.extensions import db
+from sqlalchemy import func
 from app.kiralama.models import KiralamaKalemi
 from app.makinedegisim.models import MakineDegisim
 from app.filo.models import Ekipman
@@ -181,6 +182,7 @@ class MakineDegisimService(BaseService):
                 yeni_nakliye = Nakliye(
                     kiralama_id=ana_kiralama_id,
                     tarih=secilen_tarih,
+                    islem_tarihi=secilen_tarih,
                     firma_id=eski_kalem.kiralama.firma_musteri_id,
                     nakliye_tipi='taseron' if is_harici else 'oz_mal',
                     arac_id=arac_id if not is_harici else None,
@@ -217,6 +219,7 @@ class MakineDegisimService(BaseService):
                             firma_id=yeni_nakliye.taseron_firma_id,
                             nakliye_id=yeni_nakliye.id,
                             tarih=secilen_tarih,
+                            islem_tarihi=secilen_tarih,
                             tutar=alis_fiyat,
                             yon='gelen',
                             aciklama=ozel_guzergah,
@@ -231,6 +234,7 @@ class MakineDegisimService(BaseService):
                     swap_kira_hizmeti = HizmetKaydi(
                         firma_id=yeni_kalem.harici_ekipman_tedarikci_id,
                         tarih=secilen_tarih,
+                        islem_tarihi=secilen_tarih,
                         tutar=yeni_kalem.kiralama_alis_fiyat, 
                         yon='gelen',  
                         aciklama=f"{musteri_firma_adi} projesi {yeni_makine_ad} makinesi kira bedeli",
@@ -288,7 +292,7 @@ class MakineDegisimService(BaseService):
             if silinecek_nakliye is None:
                 silinecek_nakliye = Nakliye.query.filter(
                     Nakliye.kiralama_id == eski_kalem.kiralama_id,
-                    Nakliye.tarih == tarih_sorgu,
+                    func.coalesce(Nakliye.islem_tarihi, Nakliye.tarih) == tarih_sorgu,
                     Nakliye.aciklama.like(f"Makine Değişim (Swap) Operasyonu [Ref:{aktif_child.id}]%")
                 ).first()
 

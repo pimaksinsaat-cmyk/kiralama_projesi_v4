@@ -2,6 +2,7 @@ from io import BytesIO
 
 from flask import render_template, redirect, url_for, flash, request, send_file
 from flask_login import current_user
+from sqlalchemy import func
 from sqlalchemy.orm import joinedload
 from app.extensions import db
 from app.nakliyeler import nakliye_bp
@@ -90,15 +91,16 @@ class _NakliyeListPagination:
 
 def _nakliye_filtered_query(baslangic, bitis, secili_plaka, secili_taseron_id, secili_firma_id):
     query = Nakliye.query.filter(Nakliye.tutar > 0)
+    effective_date = func.coalesce(Nakliye.islem_tarihi, Nakliye.tarih)
 
     if baslangic:
         try:
-            query = query.filter(Nakliye.tarih >= datetime.strptime(baslangic, '%Y-%m-%d').date())
+            query = query.filter(effective_date >= datetime.strptime(baslangic, '%Y-%m-%d').date())
         except ValueError:
             pass
     if bitis:
         try:
-            query = query.filter(Nakliye.tarih <= datetime.strptime(bitis, '%Y-%m-%d').date())
+            query = query.filter(effective_date <= datetime.strptime(bitis, '%Y-%m-%d').date())
         except ValueError:
             pass
     if secili_plaka:
@@ -161,17 +163,18 @@ def index():
 
         stage = 'ana_sorgu'
         query = Nakliye.query.filter(Nakliye.tutar > 0)
+        effective_date = func.coalesce(Nakliye.islem_tarihi, Nakliye.tarih)
 
         # Filtreleri uygula
         if baslangic:
             try:
                 baslangic_date = datetime.strptime(baslangic, '%Y-%m-%d').date()
-                query = query.filter(Nakliye.tarih >= baslangic_date)
+                query = query.filter(effective_date >= baslangic_date)
             except ValueError: pass
         if bitis:
             try:
                 bitis_date = datetime.strptime(bitis, '%Y-%m-%d').date()
-                query = query.filter(Nakliye.tarih <= bitis_date)
+                query = query.filter(effective_date <= bitis_date)
             except ValueError: pass
         if secili_plaka:
             query = query.filter(Nakliye.plaka == secili_plaka)
@@ -186,7 +189,7 @@ def index():
                 joinedload(Nakliye.firma),
                 joinedload(Nakliye.taseron_firma),
             )
-            .order_by(Nakliye.tarih.desc())
+            .order_by(func.coalesce(Nakliye.islem_tarihi, Nakliye.tarih).desc(), Nakliye.id.desc())
             .all()
         )
 
@@ -269,7 +272,7 @@ def yazdir():
         bitis = bitis or bugun.isoformat()
 
     query = _nakliye_filtered_query(baslangic, bitis, secili_plaka, secili_taseron_id, secili_firma_id)
-    nakliyeler = query.order_by(Nakliye.tarih.desc()).all()
+    nakliyeler = query.order_by(func.coalesce(Nakliye.islem_tarihi, Nakliye.tarih).desc(), Nakliye.id.desc()).all()
 
     stats = _nakliye_stats(nakliyeler)
 
@@ -304,7 +307,7 @@ def excel_aktar():
         secili_plaka,
         secili_taseron_id,
         secili_firma_id,
-    ).order_by(Nakliye.tarih.desc()).all()
+    ).order_by(func.coalesce(Nakliye.islem_tarihi, Nakliye.tarih).desc(), Nakliye.id.desc()).all()
 
     workbook = Workbook()
     sheet = workbook.active
@@ -399,7 +402,7 @@ def excel_aktar():
 
         row_data = [
             index,
-            nakliye.tarih.strftime('%d.%m.%Y') if nakliye.tarih else '',
+            (nakliye.islem_tarihi or nakliye.tarih).strftime('%d.%m.%Y') if (nakliye.islem_tarihi or nakliye.tarih) else '',
             nakliye.firma.firma_adi if nakliye.firma else '-',
             guzergah,
             plaka_tedarikci,

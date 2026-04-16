@@ -1,5 +1,6 @@
-from app.extensions import db
+from app import db
 from datetime import date
+import sqlalchemy as sa
 from sqlalchemy import func
 from sqlalchemy.orm import validates
 from app.models.base_model import BaseModel
@@ -46,6 +47,12 @@ class Firma(BaseModel):
     is_tedarikci = db.Column(db.Boolean, default=False, nullable=False, index=True)
     bakiye = db.Column(db.Numeric(15, 2), default=0, nullable=False)
 
+    # --- Cari Durum Raporu Cache ---
+    cari_borc_kdvli = db.Column(db.Numeric(15, 2), default=0, nullable=False, server_default='0')
+    cari_alacak_kdvli = db.Column(db.Numeric(15, 2), default=0, nullable=False, server_default='0')
+    cari_bakiye_kdvli = db.Column(db.Numeric(15, 2), default=0, nullable=False, server_default='0')
+    cari_son_guncelleme = db.Column(db.DateTime, nullable=True)
+
     # --- Sözleşme ve Operasyon ---
     sozlesme_no = db.Column(db.String(50), unique=False, nullable=True)
     sozlesme_rev_no = db.Column(db.Integer, default=0, nullable=True)
@@ -89,58 +96,96 @@ class Firma(BaseModel):
     @property
     def bakiye_ozeti(self):
         """
-        Hareketlerden (Odeme ve HizmetKaydi) anlık borç/alacak raporu üretir.
-        KDV dahil toplamları da içerir.
-
-        'Kiralama Bekleyen Bakiye' ve 'Dış Kiralama' HizmetKaydi kayıtları için
-        DB'deki sabit tutar yerine bugünkü tahakkuk canlı hesaplanır. Böylece
-        ileri tarihli kontratların tutarı da gün geçtikçe doğru yansıtılır.
+        PostgreSQL üzerinde tek aggregation sorgusuyla borç/alacak özetini döner.
+        Python tarafında satır satır dolaşma yapmaz.
         """
         from app.cari.models import Odeme, HizmetKaydi
         from decimal import Decimal
-        from app.services.kiralama_services import KiralamaService
 
-        h_borc        = Decimal('0.00')
-        h_alacak      = Decimal('0.00')
-        h_borc_kdvli  = Decimal('0.00')
-        h_alacak_kdvli = Decimal('0.00')
+        aciklama_text = func.coalesce(HizmetKaydi.aciklama, '')
+        nakliye_muhasebe_kaydi = sa.or_(
+            aciklama_text.like('Müşteri Dönüş Nakliye Bedeli%'),
+            aciklama_text.like('Müşteri Nakliye Fark%'),
+        )
 
-        from app.services.cari_services import hizmet_kaydi_bakiyeye_dahil_mi
-
-        kayitlar = HizmetKaydi.query.filter(
+        dahil_hizmet = sa.and_(
             HizmetKaydi.firma_id == self.id,
-            HizmetKaydi.is_deleted == False
-        ).all()
+            HizmetKaydi.is_deleted.is_(False),
+            sa.or_(
+                HizmetKaydi.nakliye_id.isnot(None),
+                HizmetKaydi.ozel_id.is_(None),
+                sa.not_(nakliye_muhasebe_kaydi),
+            ),
+        )
 
-        for h in kayitlar:
-            if not hizmet_kaydi_bakiyeye_dahil_mi(h):
-                continue
-            tutar = KiralamaService.hesapla_hizmet_kaydi_canli_tutari(h)
-            # KDV oranı: nakliye_alis_kdv → kiralama_alis_kdv → kdv_orani öncelik sırası
-            kdv_oran = (
-                h.nakliye_alis_kdv if h.nakliye_alis_kdv is not None
-                else h.kiralama_alis_kdv if h.kiralama_alis_kdv is not None
-                else h.kdv_orani
+        # Nakliye'ye bağlı HizmetKaydi kayıtlarında KDV oranı öncelikle Nakliye
+        # tablosundan alınır. HizmetKaydi otomatik oluşturulurken kdv_orani
+        # sıfır bırakılabileceğinden bu join olmadan bakiye_ozeti ile
+        # build_cari_rows arasında tutarsızlık oluşur.
+        from app.nakliyeler.models import Nakliye as _Nakliye
+        nak_kdv_subq = (
+            sa.select(_Nakliye.kdv_orani)
+            .where(_Nakliye.id == HizmetKaydi.nakliye_id)
+            .correlate(HizmetKaydi)
+            .scalar_subquery()
+        )
+        kdv_oran_expr = sa.cast(
+            func.coalesce(
+                nak_kdv_subq,
+                HizmetKaydi.nakliye_alis_kdv,
+                HizmetKaydi.kiralama_alis_kdv,
+                HizmetKaydi.kdv_orani,
+                0,
+            ),
+            sa.Numeric(10, 4),
+        )
+        kdv_carpan_expr = sa.cast(1, sa.Numeric(10, 4)) + (kdv_oran_expr / sa.cast(100, sa.Numeric(10, 4)))
+        tutar_kdvli_expr = HizmetKaydi.tutar * kdv_carpan_expr
+
+        hizmet_agg = (
+            sa.select(
+                func.coalesce(func.sum(sa.case((HizmetKaydi.yon == 'giden', HizmetKaydi.tutar), else_=0)), 0).label('h_borc'),
+                func.coalesce(func.sum(sa.case((HizmetKaydi.yon == 'gelen', HizmetKaydi.tutar), else_=0)), 0).label('h_alacak'),
+                func.coalesce(func.sum(sa.case((HizmetKaydi.yon == 'giden', tutar_kdvli_expr), else_=0)), 0).label('h_borc_kdvli'),
+                func.coalesce(func.sum(sa.case((HizmetKaydi.yon == 'gelen', tutar_kdvli_expr), else_=0)), 0).label('h_alacak_kdvli'),
             )
-            kdv   = Decimal(str(kdv_oran or 0))
-            tutar_kdvli = tutar * (Decimal('1.00') + kdv / Decimal('100.00'))
-            if h.yon == 'giden':
-                h_borc       += tutar
-                h_borc_kdvli += tutar_kdvli
-            elif h.yon == 'gelen':
-                h_alacak       += tutar
-                h_alacak_kdvli += tutar_kdvli
+            .where(dahil_hizmet)
+            .subquery()
+        )
 
-        tahsilat = db.session.query(func.sum(Odeme.tutar)).filter(
-            Odeme.firma_musteri_id == self.id, Odeme.yon == 'tahsilat', Odeme.is_deleted == False
-        ).scalar() or 0
-        odeme = db.session.query(func.sum(Odeme.tutar)).filter(
-            Odeme.firma_musteri_id == self.id, Odeme.yon == 'odeme', Odeme.is_deleted == False
-        ).scalar() or 0
+        odeme_agg = (
+            sa.select(
+                func.coalesce(func.sum(sa.case((Odeme.yon == 'odeme', Odeme.tutar), else_=0)), 0).label('o_odeme'),
+                func.coalesce(func.sum(sa.case((Odeme.yon == 'tahsilat', Odeme.tutar), else_=0)), 0).label('o_tahsilat'),
+            )
+            .where(
+                Odeme.firma_musteri_id == self.id,
+                Odeme.is_deleted.is_(False),
+            )
+            .subquery()
+        )
 
-        total_debit       = h_borc + odeme
-        total_credit      = h_alacak + tahsilat
-        total_debit_kdvli  = h_borc_kdvli + odeme
+        totals = db.session.execute(
+            sa.select(
+                hizmet_agg.c.h_borc,
+                hizmet_agg.c.h_alacak,
+                hizmet_agg.c.h_borc_kdvli,
+                hizmet_agg.c.h_alacak_kdvli,
+                odeme_agg.c.o_odeme,
+                odeme_agg.c.o_tahsilat,
+            )
+        ).one()
+
+        h_borc = Decimal(str(totals.h_borc or 0))
+        h_alacak = Decimal(str(totals.h_alacak or 0))
+        h_borc_kdvli = Decimal(str(totals.h_borc_kdvli or 0))
+        h_alacak_kdvli = Decimal(str(totals.h_alacak_kdvli or 0))
+        odeme = Decimal(str(totals.o_odeme or 0))
+        tahsilat = Decimal(str(totals.o_tahsilat or 0))
+
+        total_debit = h_borc + odeme
+        total_credit = h_alacak + tahsilat
+        total_debit_kdvli = h_borc_kdvli + odeme
         total_credit_kdvli = h_alacak_kdvli + tahsilat
         return {
             'borc': total_debit,

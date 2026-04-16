@@ -74,11 +74,18 @@
 
                         <div class="row mb-3">
                             <div class="col-md-6">
+                                {{ form.islem_tarihi.label(class="form-label fw-bold") }}
+                                {{ form.islem_tarihi(class="form-control", type="date") }}
+                                {% for error in form.islem_tarihi.errors %}<span class="text-danger small">{{ error }}</span>{% endfor %}
+                            </div>
+                            <div class="col-md-6">
                                 {{ form.tarih.label(class="form-label fw-bold") }}
                                 {{ form.tarih(class="form-control", type="date") }}
                                 {% for error in form.tarih.errors %}<span class="text-danger small">{{ error }}</span>{% endfor %}
                             </div>
-                            
+                        </div>
+
+                        <div class="row mb-3">
                             <div class="col-md-6">
                                 {{ form.tutar.label(class="form-label fw-bold") }}
                                 <div class="input-group">

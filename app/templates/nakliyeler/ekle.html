@@ -21,9 +21,16 @@
 
                         <div class="row mb-3">
                             <div class="col-md-6">
-                                <label class="form-label fw-bold">Sefer Tarihi</label>
+                                <label class="form-label fw-bold">İşlem Tarihi</label>
+                                {{ form.islem_tarihi(class="form-control", type="date") }}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Kayıt Tarihi</label>
                                 {{ form.tarih(class="form-control", type="date") }}
                             </div>
+                        </div>
+
+                        <div class="row mb-3">
                             <div class="col-md-6">
                                 <label class="form-label fw-bold">Müşteri / Firma</label>
                                 {{ form.firma_id(class="form-select", id="firma_id") }}

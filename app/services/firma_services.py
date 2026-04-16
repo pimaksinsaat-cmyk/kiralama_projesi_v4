@@ -1,5 +1,5 @@
 import os
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal
 import re
 from sqlalchemy import or_, and_
@@ -57,6 +57,109 @@ class FirmaService(BaseService):
             return None
 
         return int(match.group(1))
+
+    @staticmethod
+    def _to_date_ordinal(d):
+        if isinstance(d, date):
+            return d.toordinal()
+        return 0
+
+    @staticmethod
+    def _parse_form_no_natural(form_no):
+        text = (form_no or '').strip().upper()
+        if not text or text == '-':
+            return (0, 0, 0, '')
+        m = re.match(r'^([A-Z]+)-(\d{4})[/-](\d+)(?:-(\d+))?', text)
+        if not m:
+            return (0, 0, 0, text)
+        prefix, year, seq, rev = m.groups()
+        return (int(year), int(seq), int(rev or 0), prefix)
+
+    @staticmethod
+    def _form_no_link_keys(form_no):
+        """
+        Form no link eşleştirmesi için toleranslı anahtarlar üretir.
+        Örn:
+          PF_2026/006-4 -> {"PF-2026/006-4", "PF-2026/006"}
+          pf-2026/006   -> {"PF-2026/006"}
+        """
+        text = (form_no or '').strip().upper()
+        if not text:
+            return []
+        text = text.replace('_', '-')
+        keys = [text]
+
+        # Revizyon eki varsa baz formu da ekle (sondaki -<sayi>)
+        m = re.match(r'^(.+)-(\d+)$', text)
+        if m:
+            keys.append(m.group(1))
+        return keys
+
+    @staticmethod
+    def _operation_rank(op_type, desc):
+        op = (op_type or '').strip().lower()
+        d = (desc or '').strip().lower()
+        if op == 'kiralama':
+            return 0
+        if op == 'nakliye':
+            if ('dönüş' in d) or ('getirildi' in d):
+                return 2
+            return 1
+        if op in ('nakliye_tedarik', 'nakliye_satis'):
+            return 3
+        if op == 'harici_kiralama':
+            return 4
+        if op == 'fatura':
+            return 5
+        if op in ('odeme', 'tahsilat'):
+            return 6
+        return 7
+
+    @staticmethod
+    def _to_decimal_amount(value):
+        """Kümülatif hesaplarda kayan nokta sapmasını engellemek için güvenli dönüşüm."""
+        if value is None:
+            return Decimal('0')
+        if isinstance(value, Decimal):
+            return value
+        try:
+            return Decimal(str(value))
+        except Exception:
+            return Decimal('0')
+
+    @classmethod
+    def _apply_unified_running_balance(cls, items, amount_key, balance_key, sort_key_fn, target_final_balance=None):
+        """
+        Kümülatif bakiyeyi tek formülle hesaplar:
+        1) Eski -> yeni sırada yürütür
+        2) İstenirse sonucu kanonik bakiyeye (bakiye_ozeti) sabitler.
+        """
+        running = Decimal('0')
+        for item in sorted(items, key=sort_key_fn):
+            running += cls._to_decimal_amount(item.get(amount_key))
+            item[balance_key] = running
+
+        if not items or target_final_balance is None:
+            return
+
+        newest_item = sorted(items, key=sort_key_fn, reverse=True)[0]
+        drift = cls._to_decimal_amount(target_final_balance) - cls._to_decimal_amount(newest_item.get(balance_key))
+        if drift == 0:
+            return
+        for item in items:
+            item[balance_key] = cls._to_decimal_amount(item.get(balance_key)) + drift
+
+    @classmethod
+    def _unified_sort_key(cls, form_no, olay_tarihi, form_tarihi, op_type, desc, row_id):
+        islem_rank = cls._operation_rank(op_type, desc)
+        rid = int(row_id or 0)
+        # Tek ve deterministik kural: tüm satırlar fiili olay/işlem tarihine göre sıralansın.
+        # Form numarası kırılımı kaldırıldı; böylece farklı formların eski tarihleri yukarı çıkamaz.
+        return (
+            -cls._to_date_ordinal(olay_tarihi),
+            islem_rank,
+            -rid,
+        )
 
     @classmethod
     def get_next_sozlesme_no(cls):
@@ -189,6 +292,16 @@ class FirmaService(BaseService):
         from app.services.kiralama_services import KiralamaService
         hareketler = []
         from app.services.cari_services import hizmet_kaydi_bakiyeye_dahil_mi
+        # Form-bazlı cari ile aynı sıralama davranışı için kiralama başlangıç haritası:
+        # kiralama hareketi (ozel_id=kiralama.id) varsa olay tarihi kalem başlangıcından gelsin.
+        kiralama_baslangic_map = {}
+        for kir in (firma.kiralamalar or []):
+            baslangiclar = [
+                k.kiralama_baslangici
+                for k in (kir.kalemler or [])
+                if getattr(k, 'kiralama_baslangici', None)
+            ]
+            kiralama_baslangic_map[kir.id] = min(baslangiclar) if baslangiclar else None
         for h in firma.hizmet_kayitlari:
             if not hizmet_kaydi_bakiyeye_dahil_mi(h):
                 continue
@@ -205,8 +318,16 @@ class FirmaService(BaseService):
             # Bekleyen kiralama ve dış tedarik kayıtları için canlı tahakkuk hesapla;
             # diğer kayıtlar (fatura, nakliye vb.) için DB'deki değeri kullan.
             tutar = KiralamaService.hesapla_hizmet_kaydi_canli_tutari(h)
+            aciklama_text = (h.aciklama or '').strip()
+            taseron_nakliye_kaydi = (
+                aciklama_text.startswith('Taşeron Nakliye Bedeli')
+                or aciklama_text.startswith('Dönüş Nakliye:')
+            )
             if getattr(h, 'nakliye_id', None):
                 tur_adi, tur_tipi, ozel_id = 'Nakliye', 'nakliye', h.nakliye_id
+            elif taseron_nakliye_kaydi:
+                # Kiralama kalemine bağlı olsa bile finansal olarak nakliye hareketidir.
+                tur_adi, tur_tipi, ozel_id = 'Nakliye', 'nakliye', h.id
             elif getattr(h, 'ozel_id', None): 
                 tur_adi, tur_tipi, ozel_id = 'Kiralama', 'kiralama', h.ozel_id
             else:
@@ -259,10 +380,15 @@ class FirmaService(BaseService):
                     abs_tutar_deger = abs(tutar_deger) if tutar_deger else Decimal('0')
                     borc = abs_tutar_deger if yon == 'giden' else Decimal('0')
                     alacak = -abs_tutar_deger if yon == 'gelen' else Decimal('0')
+            islem_tarih = getattr(h, 'islem_tarihi', None) or h.tarih
+            sort_tarih = islem_tarih
+            if tur_tipi == 'kiralama' and ozel_id:
+                sort_tarih = kiralama_baslangic_map.get(ozel_id) or islem_tarih
             hareketler.append({
                 'id': h.id,
                 'ozel_id': ozel_id,
-                'tarih': h.tarih,
+                'tarih': islem_tarih,
+                'sort_tarih': sort_tarih,
                 'tur': tur_adi,
                 'tur_tipi': tur_tipi,
                 'aciklama': h.aciklama,
@@ -290,12 +416,13 @@ class FirmaService(BaseService):
             yon = getattr(o, 'yon', 'tahsilat')
             tutar_sign = 1 if yon == 'odeme' else -1 if yon == 'tahsilat' else 0
             tutar_deger = tutar * tutar_sign
+            odeme_islem_tarihi = getattr(o, 'islem_tarihi', None) or o.tarih
             # Finansal işlemler: tahsilat (para girişi) → alacak, odeme (para çıkışı) → borç
             alacak = -tutar if yon == 'tahsilat' else Decimal('0')
             borc = tutar if yon == 'odeme' else Decimal('0')
             # Ödeme ve tahsilatlarda KDV yok, tutar_toplam = tutar_deger
             hareketler.append({
-                'id': o.id, 'ozel_id': o.id, 'tarih': o.tarih,
+                'id': o.id, 'ozel_id': o.id, 'tarih': odeme_islem_tarihi, 'sort_tarih': odeme_islem_tarihi,
                 'tur': 'Tahsilat (Giriş)' if yon == 'tahsilat' else 'Ödeme (Çıkış)',
                 'tur_tipi': 'odeme', 'aciklama': o.aciklama or 'Finansal İşlem',
                 'belge_no': f"{o.kasa.kasa_adi if o.kasa else 'Kasa Tanımsız'}",
@@ -335,18 +462,13 @@ class FirmaService(BaseService):
                 h['nakliye_sira'] = 3
 
         def _sort_key(x):
-            # Form numarasına göre (yeniden eskiye), form içinde tarihe göre (yeniden eskiye), nakliye_sira'ya göre
-            form_no = x.get('form_no') or ''
-            tarih = x.get('tarih') or date.min
-            nakliye_sira = x.get('nakliye_sira', 3)
-
-            tarih_ordinal = tarih.toordinal() if isinstance(tarih, date) else 0
-
-            return (
-                -len(form_no),  # form_no'su olan önce (daha uzun string)
-                tuple(127 - ord(c) for c in form_no) if form_no else (),  # form_no'ya göre ters
-                -tarih_ordinal,  # tarih yeniden eskiye
-                nakliye_sira  # nakliye sıraı artan
+            return cls._unified_sort_key(
+                form_no=x.get('form_no'),
+                olay_tarihi=x.get('sort_tarih') or x.get('tarih'),
+                form_tarihi=x.get('tarih'),
+                op_type=x.get('tur_tipi'),
+                desc=x.get('aciklama'),
+                row_id=x.get('id'),
             )
 
         hareketler.sort(key=_sort_key)
@@ -362,24 +484,17 @@ class FirmaService(BaseService):
         #     durum_metni, durum_rengi = "Alacaklı", "text-success"
         # else: 
         #     durum_metni, durum_rengi = "Hesap Kapalı", "text-muted"
-        # KDV dahil kümülatif bakiye hesaplama
-        yuruyen_bakiye = 0
-        for islem in hareketler:
-            # tutar_toplam yoksa 0 kabul edilir
-            tutar_toplam = islem.get('tutar_toplam') or 0
-            # Hareket tipi: giden/ödeme ise +, gelen/tahsilat ise -
-            if islem.get('tur_tipi') in ['giden', 'odeme']:
-                yuruyen_bakiye += tutar_toplam
-            elif islem.get('tur_tipi') in ['gelen', 'tahsilat']:
-                yuruyen_bakiye -= tutar_toplam
-            else:
-                yuruyen_bakiye += tutar_toplam  # default davranış
-            islem['kumulatif_bakiye'] = yuruyen_bakiye
-        # Toplam borç, alacak ve bakiye hesapla
-        toplam_borc = sum(islem.get('borc') or Decimal('0') for islem in hareketler)
-        toplam_alacak = sum(islem.get('alacak') or Decimal('0') for islem in hareketler)
-        # Güncel bakiye: Toplam Borç - abs(Toplam Alacak)
-        guncel_bakiye = toplam_borc - abs(toplam_alacak)
+        ozet = firma.bakiye_ozeti
+        toplam_borc = ozet.get('borc_kdvli', Decimal('0'))
+        toplam_alacak = ozet.get('alacak_kdvli', Decimal('0'))
+        guncel_bakiye = ozet.get('net_bakiye_kdvli', Decimal('0'))
+        cls._apply_unified_running_balance(
+            items=hareketler,
+            amount_key='tutar_toplam',
+            balance_key='kumulatif_bakiye',
+            sort_key_fn=_sort_key,
+            target_final_balance=guncel_bakiye,
+        )
 
         durum_metni, durum_rengi = '', ''
         return {
@@ -408,11 +523,11 @@ class FirmaService(BaseService):
 
         from app.cari.models import HizmetKaydi, Odeme, CariHareket
 
-        q_hiz = select(func.min(HizmetKaydi.tarih).label('d')).where(
+        q_hiz = select(func.min(func.coalesce(HizmetKaydi.islem_tarihi, HizmetKaydi.tarih)).label('d')).where(
             HizmetKaydi.firma_id == firma_id,
             HizmetKaydi.is_deleted.is_(False),
         )
-        q_od = select(func.min(Odeme.tarih).label('d')).where(
+        q_od = select(func.min(func.coalesce(Odeme.islem_tarihi, Odeme.tarih)).label('d')).where(
             Odeme.firma_musteri_id == firma_id,
             Odeme.is_deleted.is_(False),
         )
@@ -468,6 +583,17 @@ class FirmaService(BaseService):
         from app.cari.models import HizmetKaydi
 
         rows = []
+        included_hizmet_kaydi_ids = set()
+
+        def _unified_row_sort_key(row):
+            return FirmaService._unified_sort_key(
+                form_no=row.get('form_no'),
+                olay_tarihi=row.get('sort_date') or row.get('baslangic') or row.get('form_tarihi'),
+                form_tarihi=row.get('form_tarihi') or row.get('sort_date') or row.get('baslangic'),
+                op_type=row.get('islem_turu'),
+                desc=row.get('aciklama'),
+                row_id=row.get('id'),
+            )
 
         # --- Kiralama ve nakliye satırları ---
         for kir in sorted(firma.kiralamalar, key=lambda k: k.kiralama_form_no or ''):
@@ -504,7 +630,7 @@ class FirmaService(BaseService):
                     yuk = f"/{kalem.harici_ekipman_yukseklik}m" if kalem.harici_ekipman_yukseklik else ''
                     aciklama = f"{ekipman_kodu} {kalem.harici_ekipman_model or ''} - {kap}{yuk}".strip(' -')
 
-                rows.append({'id': kalem.id, 'sort_date': form_tarihi or kalem.kiralama_baslangici,
+                rows.append({'id': kalem.id, 'sort_date': kalem.kiralama_baslangici or form_tarihi,
                     'form_no': kir.kiralama_form_no, 'form_tarihi': form_tarihi,
                     'kiralama_id': kir.id, 'islem_turu': 'kiralama', 'nakliye_sira': 0,
                     'aciklama': aciklama, 'seri_no': seri_no,
@@ -533,7 +659,10 @@ class FirmaService(BaseService):
                 nak_tutar = float(nakliye.tutar or 0)
                 if nak_tutar <= 0:
                     continue
-                nak_kdv_pct = nakliye.kdv_orani or 0
+                nakliye_islem_tarihi = getattr(nakliye, 'islem_tarihi', None) or nakliye.tarih
+                # Muhasebe tek-kural: cari hareketler KDV dahil yürür ve box (bakiye_ozeti)
+                # ile aynı KDV kaynağını kullanır. Bu nedenle brüt kdv_orani esas alınır.
+                nak_kdv_pct = float(nakliye.kdv_orani or 0)
                 nak_kdv = nak_tutar * nak_kdv_pct / 100
                 gl = (nakliye.guzergah or '').lower()
                 if 'getirildi' in gl:
@@ -547,16 +676,20 @@ class FirmaService(BaseService):
                 else:
                     nak_aciklama = f"{ilk_kod} {sube_adi}→{firma_kisa}".strip(' →') if (sube_adi or firma_kisa) else 'Nakliye Hizmeti'
                     nak_sira = 1
-                rows.append({'id': nakliye.id, 'sort_date': nakliye.tarih or form_tarihi,
+                rows.append({'id': nakliye.id, 'sort_date': nakliye_islem_tarihi or form_tarihi,
                     'form_no': kir.kiralama_form_no, 'form_tarihi': form_tarihi,
                     'kiralama_id': kir.id, 'islem_turu': 'nakliye', 'nakliye_sira': nak_sira,
                     'aciklama': nak_aciklama, 'seri_no': '',
-                    'baslangic': nakliye.tarih, 'bitis': None,
+                    'baslangic': nakliye_islem_tarihi, 'bitis': None,
                     'bitis_bugun': False, 'gun_sayisi': None,
                     'brm_fiyat': nak_tutar, 'matrah': nak_tutar, 'kdv_orani': nak_kdv_pct,
-                    'kdv_tutar': nak_kdv, 'toplam': nak_tutar + nak_kdv, 'bakiye': 0.0})
+                    'kdv_tutar': nak_kdv, 'tevkifat_str': (nakliye.tevkifat_orani or ''),
+                    'toplam': nak_tutar + nak_kdv, 'bakiye': 0.0})
 
         # --- Dış tedarik kiralaması ---
+        # bakiye_ozeti ile tutarlılık için: aktif kalemler önce fatura kayıtlarına
+        # (HizmetKaydi gelen, ozel_id=kalem.id) bakılır. Fatura varsa faturadan
+        # satır üretilir; yoksa (henüz faturalanmamışsa) dinamik hesap kullanılır.
         harici_kalemler = KiralamaKalemi.query.filter_by(
             harici_ekipman_tedarikci_id=firma.id, is_active=True
         ).all()
@@ -565,69 +698,161 @@ class FirmaService(BaseService):
             if not kir:
                 continue
             form_tarihi = kir.kiralama_olusturma_tarihi or (kir.created_at.date() if kir.created_at else None)
-            alis_kdv_pct = kalem.kiralama_alis_kdv if kalem.kiralama_alis_kdv is not None else 0
-            if kalem.kiralama_baslangici:
-                if kalem.sonlandirildi and kalem.kiralama_bitis:
-                    bitis = kalem.kiralama_bitis
-                    bitis_bugun = False
-                else:
-                    bitis = today_date
-                    bitis_bugun = True
-                gun_sayisi = (bitis - kalem.kiralama_baslangici).days + 1
-            else:
-                bitis = None
-                bitis_bugun = False
-                gun_sayisi = 0
-            alis_fiyat = float(kalem.kiralama_alis_fiyat or 0)
-            matrah = alis_fiyat * gun_sayisi
-            kdv_tutar = matrah * alis_kdv_pct / 100
-            toplam = -(matrah + kdv_tutar)
             seri_no = kalem.harici_ekipman_seri_no or ''
             kap = f"{kalem.harici_ekipman_kapasite}kg" if kalem.harici_ekipman_kapasite else ''
             yuk = f"/{kalem.harici_ekipman_yukseklik}m" if kalem.harici_ekipman_yukseklik else ''
-            aciklama = f"{kalem.harici_ekipman_marka or ''} {kalem.harici_ekipman_model or ''} - {kap}{yuk}".strip(' -')
-            rows.append({'id': kalem.id, 'sort_date': form_tarihi or kalem.kiralama_baslangici,
-                'form_no': kir.kiralama_form_no, 'form_tarihi': form_tarihi,
-                'kiralama_id': kir.id, 'islem_turu': 'harici_kiralama', 'nakliye_sira': 0,
-                'aciklama': aciklama or 'Tedarik Edilen Ekipman', 'seri_no': seri_no,
-                'baslangic': kalem.kiralama_baslangici, 'bitis': bitis,
-                'bitis_bugun': bitis_bugun, 'gun_sayisi': gun_sayisi,
-                'brm_fiyat': alis_fiyat, 'matrah': matrah, 'kdv_orani': alis_kdv_pct,
-                'kdv_tutar': kdv_tutar, 'toplam': toplam, 'bakiye': 0.0})
+            aciklama_base = f"{kalem.harici_ekipman_marka or ''} {kalem.harici_ekipman_model or ''} - {kap}{yuk}".strip(' -') or 'Tedarik Edilen Ekipman'
+
+            # Fatura bazlı satırlar (bakiye_ozeti ile aynı kaynak)
+            harici_faturalar = HizmetKaydi.query.filter_by(
+                ozel_id=kalem.id, firma_id=firma.id, yon='gelen', is_deleted=False
+            ).order_by(HizmetKaydi.tarih).all()
+
+            if harici_faturalar:
+                for hkd in harici_faturalar:
+                    islem_tarih = getattr(hkd, 'islem_tarihi', None) or hkd.tarih
+                    hkd_tutar = float(hkd.tutar or 0)
+                    hkd_kdv_pct = float(
+                        hkd.kiralama_alis_kdv if hkd.kiralama_alis_kdv is not None
+                        else (hkd.kdv_orani or 0)
+                    )
+                    hkd_kdv = hkd_tutar * hkd_kdv_pct / 100
+                    rows.append({
+                        'id': hkd.id, 'sort_date': islem_tarih or form_tarihi,
+                        'form_no': kir.kiralama_form_no, 'form_tarihi': form_tarihi,
+                        'kiralama_id': kir.id, 'islem_turu': 'harici_kiralama', 'nakliye_sira': 0,
+                        'aciklama': hkd.aciklama or aciklama_base, 'seri_no': seri_no,
+                        'baslangic': islem_tarih, 'bitis': None,
+                        'bitis_bugun': False, 'gun_sayisi': None,
+                        'brm_fiyat': hkd_tutar, 'matrah': hkd_tutar, 'kdv_orani': hkd_kdv_pct,
+                        'kdv_tutar': hkd_kdv, 'toplam': -(hkd_tutar + hkd_kdv), 'bakiye': 0.0,
+                    })
+                    included_hizmet_kaydi_ids.add(hkd.id)
+            else:
+                # Henüz faturalanmamış: dinamik (tahakkuk) hesap
+                alis_kdv_pct = kalem.kiralama_alis_kdv if kalem.kiralama_alis_kdv is not None else 0
+                if kalem.kiralama_baslangici:
+                    if kalem.sonlandirildi and kalem.kiralama_bitis:
+                        bitis = kalem.kiralama_bitis
+                        bitis_bugun = False
+                    else:
+                        bitis = today_date
+                        bitis_bugun = True
+                    gun_sayisi = (bitis - kalem.kiralama_baslangici).days + 1
+                else:
+                    bitis = None
+                    bitis_bugun = False
+                    gun_sayisi = 0
+                alis_fiyat = float(kalem.kiralama_alis_fiyat or 0)
+                matrah = alis_fiyat * gun_sayisi
+                kdv_tutar = matrah * alis_kdv_pct / 100
+                toplam = -(matrah + kdv_tutar)
+                rows.append({
+                    'id': kalem.id, 'sort_date': kalem.kiralama_baslangici or form_tarihi,
+                    'form_no': kir.kiralama_form_no, 'form_tarihi': form_tarihi,
+                    'kiralama_id': kir.id, 'islem_turu': 'harici_kiralama', 'nakliye_sira': 0,
+                    'aciklama': aciklama_base, 'seri_no': seri_no,
+                    'baslangic': kalem.kiralama_baslangici, 'bitis': bitis,
+                    'bitis_bugun': bitis_bugun, 'gun_sayisi': gun_sayisi,
+                    'brm_fiyat': alis_fiyat, 'matrah': matrah, 'kdv_orani': alis_kdv_pct,
+                    'kdv_tutar': kdv_tutar, 'toplam': toplam, 'bakiye': 0.0,
+                })
 
         # --- Standalone nakliye satışları ---
         standalone_nakliyeler = Nakliye.query.filter(
             Nakliye.firma_id == firma.id,
             Nakliye.is_active == True,
             Nakliye.kiralama_id == None
-        ).order_by(Nakliye.tarih).all()
+        ).order_by(Nakliye.islem_tarihi, Nakliye.tarih).all()
         for nakliye in standalone_nakliyeler:
             nakliye_tutar = float(nakliye.tutar or 0)
-            nakliye_kdv_pct = nakliye.kdv_orani or 0
+            nakliye_islem_tarihi = getattr(nakliye, 'islem_tarihi', None) or nakliye.tarih
+            # Muhasebe tek-kural: cari hareketler KDV dahil yürür ve box (bakiye_ozeti)
+            # ile aynı KDV kaynağını kullanır. Bu nedenle brüt kdv_orani esas alınır.
+            nakliye_kdv_pct = float(nakliye.kdv_orani or 0)
             nakliye_kdv = nakliye_tutar * nakliye_kdv_pct / 100
             nakliye_toplam = nakliye_tutar + nakliye_kdv
-            rows.append({'id': nakliye.id, 'sort_date': nakliye.tarih,
-                'form_no': '-', 'form_tarihi': nakliye.tarih,
+            rows.append({'id': nakliye.id, 'sort_date': nakliye_islem_tarihi,
+                'form_no': '-', 'form_tarihi': nakliye_islem_tarihi,
                 'kiralama_id': None, 'islem_turu': 'nakliye_satis', 'nakliye_sira': 1,
                 'aciklama': nakliye.guzergah or 'Nakliye Hizmeti', 'seri_no': '',
-                'baslangic': nakliye.tarih, 'bitis': None,
+                'baslangic': nakliye_islem_tarihi, 'bitis': None,
                 'bitis_bugun': False, 'gun_sayisi': None,
                 'brm_fiyat': nakliye_tutar, 'matrah': nakliye_tutar, 'kdv_orani': nakliye_kdv_pct,
-                'kdv_tutar': nakliye_kdv, 'toplam': nakliye_toplam, 'bakiye': 0.0})
+                'kdv_tutar': nakliye_kdv, 'tevkifat_str': (nakliye.tevkifat_orani or ''),
+                'toplam': nakliye_toplam, 'bakiye': 0.0})
+
+        # --- Kiralama kalemi kaynaklı taşeron nakliye giderleri ---
+        taseron_nakliye_kayitlari = HizmetKaydi.query.filter(
+            HizmetKaydi.firma_id == firma.id,
+            HizmetKaydi.is_deleted == False,
+            HizmetKaydi.yon == 'gelen',
+            HizmetKaydi.ozel_id.isnot(None),
+            or_(
+                HizmetKaydi.aciklama.like('Taşeron Nakliye Bedeli%'),
+                HizmetKaydi.aciklama.like('Dönüş Nakliye:%')
+            )
+        ).order_by(HizmetKaydi.tarih).all()
+        for hizmet in taseron_nakliye_kayitlari:
+            islem_tarih = getattr(hizmet, 'islem_tarihi', None) or hizmet.tarih
+            matrah = float(hizmet.tutar or 0)
+            kdv_pct = (
+                hizmet.nakliye_alis_kdv
+                if hizmet.nakliye_alis_kdv is not None
+                else (hizmet.kdv_orani or 0)
+            )
+            kdv_tutar = matrah * kdv_pct / 100
+            toplam = -(matrah + kdv_tutar)
+            rows.append({
+                'id': hizmet.id, 'sort_date': islem_tarih,
+                'form_no': hizmet.fatura_no or '-', 'form_tarihi': islem_tarih,
+                'kiralama_id': None, 'islem_turu': 'nakliye_tedarik', 'nakliye_sira': 2,
+                'aciklama': hizmet.aciklama or 'Taşeron Nakliye',
+                'seri_no': '',
+                'baslangic': islem_tarih, 'bitis': None,
+                'bitis_bugun': False, 'gun_sayisi': None,
+                'brm_fiyat': matrah, 'matrah': matrah, 'kdv_orani': kdv_pct,
+                'kdv_tutar': kdv_tutar, 'toplam': toplam, 'bakiye': 0.0
+            })
+            included_hizmet_kaydi_ids.add(hizmet.id)
 
         # --- Fatura girişleri (HizmetKaydi) ---
         faturalar = HizmetKaydi.query.filter_by(
             firma_id=firma.id, is_deleted=False
         ).order_by(HizmetKaydi.tarih).all()
         for fatura in faturalar:
-            # nakliye_id dolu → nakliye satırı olarak zaten gösterildi, atla
+            islem_tarih = getattr(fatura, 'islem_tarihi', None) or fatura.tarih
+            # nakliye_id dolu → nakliye satırı olarak zaten gösterildi
             if getattr(fatura, 'nakliye_id', None):
                 continue
-            # ozel_id dolu → kiralama modülü muhasebe kaydı (Bekleyen Bakiye, Dönüş Nakliye vb.), atla
-            if getattr(fatura, 'ozel_id', None) is not None:
+            # Önceki adımlarda zaten satıra dönüştürülen HKD'ler (harici kiralama, taşeron)
+            if fatura.id in included_hizmet_kaydi_ids:
                 continue
+            # ozel_id dolu → kiralama modülü muhasebe kaydı (Kiralama Bekleyen Bakiye vb.)
+            # Finansal karşılığı kiralama kalem satırlarında zaten var; tekrar ekleme.
+            # İstisna: "Dış Kiralama" fatura kayıtları — pasif kalem için gösterilmeli.
+            ozel_id = getattr(fatura, 'ozel_id', None)
+            if ozel_id is not None:
+                aciklama_text = (fatura.aciklama or '').strip()
+                is_harici_kiralama_fatura = (
+                    aciklama_text.startswith('Dış Kiralama')
+                    or aciklama_text.startswith('Dis Kiralama')
+                )
+                if not is_harici_kiralama_fatura:
+                    continue
+                kalem_obj = db.session.get(KiralamaKalemi, ozel_id)
+                if kalem_obj and getattr(kalem_obj, 'is_active', True):
+                    continue
             tutar = float(fatura.tutar or 0)
-            kdv_pct = fatura.kdv_orani or 0
+            kdv_pct = (
+                fatura.nakliye_alis_kdv
+                if fatura.nakliye_alis_kdv is not None
+                else (
+                    fatura.kiralama_alis_kdv
+                    if fatura.kiralama_alis_kdv is not None
+                    else (fatura.kdv_orani or 0)
+                )
+            )
             kdv_tutar = tutar * kdv_pct / 100
             toplam = tutar + kdv_tutar
             if fatura.yon == 'giden':
@@ -635,11 +860,17 @@ class FirmaService(BaseService):
             else:
                 toplam_sign = -toplam
             tur_adi = 'Fatura (Satış)' if fatura.yon == 'giden' else 'Fatura (Alış)'
-            rows.append({'id': fatura.id, 'sort_date': fatura.tarih,
-                'form_no': fatura.fatura_no or '-', 'form_tarihi': fatura.tarih,
-                'kiralama_id': None, 'islem_turu': 'fatura', 'nakliye_sira': 3,
+            islem_turu = 'fatura'
+            kiralama_link_id = None
+            if ozel_id is not None:
+                kalem_obj = db.session.get(KiralamaKalemi, ozel_id)
+                if kalem_obj:
+                    kiralama_link_id = kalem_obj.kiralama_id
+            rows.append({'id': fatura.id, 'sort_date': islem_tarih,
+                'form_no': fatura.fatura_no or '-', 'form_tarihi': islem_tarih,
+                'kiralama_id': kiralama_link_id, 'islem_turu': islem_turu, 'nakliye_sira': 3,
                 'aciklama': fatura.aciklama or tur_adi, 'seri_no': '',
-                'baslangic': fatura.tarih, 'bitis': None,
+                'baslangic': islem_tarih, 'bitis': None,
                 'bitis_bugun': False, 'gun_sayisi': None,
                 'brm_fiyat': tutar, 'matrah': tutar, 'kdv_orani': kdv_pct,
                 'kdv_tutar': kdv_tutar, 'toplam': toplam_sign, 'bakiye': 0.0})
@@ -649,9 +880,10 @@ class FirmaService(BaseService):
             Odeme.firma_musteri_id == firma.id,
             Odeme.yon.in_(['tahsilat', 'odeme']),
             Odeme.is_deleted == False
-        ).order_by(Odeme.tarih).all()
+        ).order_by(Odeme.islem_tarihi, Odeme.tarih).all()
         for odeme in finansal_islemler:
             tutar = float(odeme.tutar or 0)
+            odeme_islem_tarihi = getattr(odeme, 'islem_tarihi', None) or odeme.tarih
             if odeme.yon == 'tahsilat':
                 toplam_sign = -tutar
                 aciklama    = odeme.aciklama or 'Tahsilat'
@@ -660,23 +892,65 @@ class FirmaService(BaseService):
                 toplam_sign = +tutar
                 aciklama    = odeme.aciklama or 'Ödeme (Çıkış)'
                 islem_turu  = 'odeme'
-            rows.append({'id': odeme.id, 'sort_date': odeme.tarih,
-                'form_no': odeme.fatura_no or '-', 'form_tarihi': odeme.tarih,
+            rows.append({'id': odeme.id, 'sort_date': odeme_islem_tarihi,
+                'form_no': odeme.fatura_no or '-', 'form_tarihi': odeme_islem_tarihi,
                 'kiralama_id': None, 'islem_turu': islem_turu, 'nakliye_sira': 3,
                 'aciklama': aciklama, 'seri_no': '',
-                'baslangic': odeme.tarih, 'bitis': None,
+                'baslangic': odeme_islem_tarihi, 'bitis': None,
                 'bitis_bugun': False, 'gun_sayisi': None,
                 'brm_fiyat': 0.0, 'matrah': tutar, 'kdv_orani': 0,
                 'kdv_tutar': 0.0, 'toplam': toplam_sign, 'bakiye': 0.0})
 
-        # --- Başlangıç tarihine göre sırala, kümülatif bakiye hesapla ---
-        rows.sort(key=lambda r: (
-            (r['baslangic'] or date.min).toordinal(),
-            r['nakliye_sira'],
-        ))
-        kumulatif = 0.0
-        for r in rows:
-            kumulatif += r['toplam']
-            r['bakiye'] = kumulatif
+        # --- Birleşik model ile sırala ---
+        # Bazı legacy satırlarda kiralama_id boş gelebilir; form no üzerinden linki tamamla.
+        kiralama_id_by_form_no = {}
+        for k in (firma.kiralamalar or []):
+            for key in FirmaService._form_no_link_keys(k.kiralama_form_no):
+                kiralama_id_by_form_no[key] = k.id
+        for row in rows:
+            if row.get('kiralama_id'):
+                continue
+            form_no = (row.get('form_no') or '').strip()
+            if not form_no or form_no == '-':
+                continue
+            for key in FirmaService._form_no_link_keys(form_no):
+                mapped_id = kiralama_id_by_form_no.get(key)
+                if mapped_id:
+                    row['kiralama_id'] = mapped_id
+                    break
+
+        rows.sort(key=_unified_row_sort_key)
+
+        # Kümülatif bakiye: KDV dahil signed toplam yürüyüşü.
+        # Dış kaynağa (bakiye_ozeti) sabitleme yok; satır seti kendi kanonik kaynağıdır.
+        FirmaService._apply_unified_running_balance(
+            items=rows,
+            amount_key='toplam',
+            balance_key='bakiye',
+            sort_key_fn=_unified_row_sort_key,
+        )
 
         return rows
+
+    @classmethod
+    def guncelle_firma_cari_cache(cls, firma_id, auto_commit=True):
+        """build_cari_rows sonucunu Firma tablosundaki cache alanlarına yazar.
+        Cari durum raporu bu cache'i tek SQL ile okur."""
+        firma = db.session.get(Firma, firma_id)
+        if not firma:
+            return
+        rows = cls.build_cari_rows(firma, date.today())
+        borc = Decimal('0')
+        alacak = Decimal('0')
+        for row in rows:
+            t = Decimal(str(row.get('toplam') or 0))
+            if t > 0:
+                borc += t
+            elif t < 0:
+                alacak += t
+        firma.cari_borc_kdvli = borc
+        firma.cari_alacak_kdvli = abs(alacak)
+        firma.cari_bakiye_kdvli = borc + alacak
+        firma.cari_son_guncelleme = datetime.now(timezone.utc)
+        if auto_commit:
+            db.session.commit()

@@ -241,7 +241,7 @@ def duzelt(id):
 def bilgi(id):
     try:
         tab = request.args.get('tab', 'cari')
-        if tab == 'genel':
+        if tab in ('genel', 'hareket'):
             tab = 'cari'
 
         hareket_per_page = request.args.get('hareket_per_page', 25, type=int)
@@ -285,28 +285,11 @@ def bilgi(id):
             if start_date is None:
                 start_date = today_date
 
-        # --- Cari Hareketler sayfalama ---
-        hareketler_all = finans_verileri.pop('hareketler')
-        # Hareketler filtreleme (örnek: hareketler_all'da tarih alanı varsa)
+        # Form Bazlı Cari sekmesi kaldırıldı: yalnızca mevcut cari/kiralama akışları kullanılıyor.
+        finans_verileri.pop('hareketler', None)
         hareketler_filtered = []
-        for h in hareketler_all:
-            tarih = None
-            if hasattr(h, 'tarih'):
-                tarih = getattr(h, 'tarih', None)
-            elif isinstance(h, dict):
-                tarih = h.get('tarih')
-            if tarih is None:
-                hareketler_filtered.append(h)
-            else:
-                try:
-                    t = tarih if isinstance(tarih, date) else datetime.strptime(tarih, '%Y-%m-%d').date()
-                    if start_date <= t <= end_date:
-                        hareketler_filtered.append(h)
-                except Exception:
-                    hareketler_filtered.append(h)
-        h_pag = ListPagination(total=len(hareketler_filtered), page=hareket_page, per_page=hareket_per_page)
-        hb = (h_pag.page - 1) * h_pag.per_page
-        hareketler_sayfa = hareketler_filtered[hb: hb + h_pag.per_page]
+        h_pag = ListPagination(total=0, page=1, per_page=hareket_per_page)
+        hareketler_sayfa = []
 
         # --- LOG: Taşeron Nakliye Bedeli ---
         try:
@@ -341,29 +324,85 @@ def bilgi(id):
         kiralamalar_sayfa = kiralamalar_filtered[kb: kb + k_pag.per_page]
 
         # --- Cari Tab ---
+        opening_balance = Decimal('0')
         try:
             cari_rows_all = _build_cari_rows(firma, end_date)
-            # Tarih aralığına göre filtrele (satırların sort_date alanı baz alınır)
-            cari_rows_all = [r for r in cari_rows_all if r.get('sort_date') and start_date <= r.get('sort_date') <= end_date]
+            # Tarih aralığına göre filtrele (tek anahtar: sort_date -> baslangic -> form_tarihi)
+            def _row_date(row):
+                return row.get('sort_date') or row.get('baslangic') or row.get('form_tarihi')
+
+            def _row_in_range(row):
+                row_type = row.get('islem_turu')
+                baslangic = row.get('baslangic')
+                bitis = row.get('bitis')
+
+                # Kiralama satırlarında aralık kesişimi esas alınır.
+                # Böylece başlangıcı filtre başından eski olup filtre döneminde devam eden
+                # kiralamalar listede görünür.
+                if row_type in ('kiralama', 'harici_kiralama') and baslangic:
+                    etkin_bitis = bitis or end_date
+                    return baslangic <= end_date and etkin_bitis >= start_date
+
+                d = _row_date(row)
+                return bool(d and start_date <= d <= end_date)
+
+            def _row_sort_key_asc(row):
+                d = _row_date(row)
+                # Cari ekranda muhasebe mantigi: eski -> yeni (artan tarih)
+                return (
+                    d or date.min,
+                    int(row.get('id') or 0),
+                )
+
+            # Gecici is kurali: Cari sekmesinde tarih filtresi pasif.
+            # Tum cari kayitlari listelenir.
+            opening_balance = Decimal('0')
+            # Filtreli listede kümülatif bakiyeyi yeniden hesapla.
+            # Aksi halde görünmeyen eski kayıtların etkisi bakiye sütununda kalır.
+            filtered_running = Decimal(str(opening_balance or 0))
+            rows_old_to_new = sorted(cari_rows_all, key=_row_sort_key_asc)
+            for row in rows_old_to_new:
+                filtered_running += Decimal(str(row.get('toplam') or 0))
+                row['bakiye'] = filtered_running
+
+            # Not: Cari tabloda satir bakiyeleri ham muhasebe yuruyusunu yansitmali.
+            # Karttaki guncel bakiye ile zorla esitleme (drift) uygulanmaz.
+
+            # Hesaplama eski->yeni yapılır; görüntüleme yeni->eski olacak.
+            cari_rows_all = list(reversed(rows_old_to_new))
+
+            # Kutu değerleri: cari satırlardan türetilir (tek kaynak prensibi).
+            cari_toplam_borc = Decimal('0')
+            cari_toplam_alacak = Decimal('0')
+            for row in cari_rows_all:
+                t = Decimal(str(row.get('toplam') or 0))
+                if t > 0:
+                    cari_toplam_borc += t
+                elif t < 0:
+                    cari_toplam_alacak += t
+            cari_guncel_bakiye = cari_toplam_borc + cari_toplam_alacak
+            finans_verileri['toplam_borc'] = cari_toplam_borc
+            finans_verileri['toplam_alacak'] = cari_toplam_alacak
+            finans_verileri['guncel_bakiye'] = cari_guncel_bakiye
+            finans_verileri['bakiye'] = cari_guncel_bakiye
+
+            # Cari cache güncelle (rapor sayfası bu cache'i okur)
+            try:
+                from datetime import timezone as _tz
+                firma.cari_borc_kdvli = cari_toplam_borc
+                firma.cari_alacak_kdvli = abs(cari_toplam_alacak)
+                firma.cari_bakiye_kdvli = cari_guncel_bakiye
+                firma.cari_son_guncelleme = datetime.now(_tz.utc)
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
         except Exception as cari_ex:
             current_app.logger.error(f"[CARI] _build_cari_rows hatası: {cari_ex}", exc_info=True)
             cari_rows_all = []
         c_pag = ListPagination(total=len(cari_rows_all), page=cari_page, per_page=cari_per_page)
         cb = (c_pag.page - 1) * c_pag.per_page
-        cari_rows_sayfa = cari_rows_all[cb: cb + c_pag.per_page]
-
-        # --- LOG: firmalar.bilgi.html render öncesi ---
-        try:
-            current_app.logger.debug(f"[BILGI] Firma ID: {firma.id}, Adı: {firma.firma_adi}")
-            current_app.logger.debug(f"[BILGI] Toplam hareket: {len(hareketler_filtered)}, Toplam kiralama: {len(kiralamalar_filtered)}")
-            for i, islem in enumerate(hareketler_filtered[:3]):
-                kdv = getattr(islem, 'kdv_orani', None)
-                current_app.logger.debug(f"[BILGI] Hareket {i+1}: id={getattr(islem, 'id', None)}, tur={getattr(islem, 'tur', None)}, kdv_orani={kdv}")
-            for i, kiralama in enumerate(kiralamalar_filtered[:3]):
-                kdv = getattr(kiralama, 'kdv_orani', None)
-                current_app.logger.debug(f"[BILGI] Kiralama {i+1}: id={getattr(kiralama, 'id', None)}, kdv_orani={kdv}")
-        except Exception as log_ex:
-            current_app.logger.warning(f"[BILGI] LOG sırasında hata: {log_ex}")
+        ce = cb + c_pag.per_page
+        cari_rows_sayfa = cari_rows_all[cb: ce]
 
         return render_template(
             'firmalar/bilgi.html',
@@ -406,6 +445,13 @@ def bilgi_yazdir(id):
         # Cari tab için tüm satırlar hesaplanır
         today_date = bugun()
         cari_rows = _build_cari_rows(firma, today_date)
+        cari_rows = sorted(
+            cari_rows,
+            key=lambda x: (
+                x.get('sort_date') or x.get('baslangic') or x.get('form_tarihi') or date.min,
+                int(x.get('id') or 0),
+            )
+        )
 
         return render_template(
             'firmalar/yazdir.html',
@@ -430,6 +476,8 @@ def bilgi_excel(id):
         hareketler = finans_verileri.pop('hareketler')
         firma = finans_verileri['firma']
         kiralamalar = sorted(firma.kiralamalar, key=lambda k: k.id, reverse=True)
+        today_date = bugun()
+        cari_rows = _build_cari_rows(firma, today_date)
         rapor_tarihi = date.today().strftime('%d.%m.%Y')
 
         workbook = Workbook()
@@ -578,84 +626,120 @@ def bilgi_excel(id):
                 set_cell(header_row, col_idx, header, font=header_font, fill=header_fill, border=header_border, alignment=align)
 
             current_row = 6
-            for index, islem in enumerate(hareketler, start=1):
-                islem_tur = item_value(islem, 'tur', '')
-                islem_ozel_id = item_value(islem, 'ozel_id')
-                islem_tur_tipi = item_value(islem, 'tur_tipi', '')
-                islem_aciklama = item_value(islem, 'aciklama', '')
-                islem_belge_no = item_value(islem, 'belge_no')
-                islem_tarih = item_value(islem, 'tarih')
-                islem_tutar = item_value(islem, 'tutar')
-                islem_kdv_tutari = item_value(islem, 'kdv_tutari')
-                islem_borc = item_value(islem, 'borc')
-                islem_alacak = item_value(islem, 'alacak')
-                islem_bakiye = item_value(islem, 'kumulatif_bakiye')
-                islem_kiralama_alis_kdv = item_value(islem, 'kiralama_alis_kdv')
-                islem_nakliye_alis_kdv = item_value(islem, 'nakliye_alis_kdv')
-                islem_kdv_orani = item_value(islem, 'kdv_orani')
+            if tab == 'cari':
+                for index, row in enumerate(cari_rows, start=1):
+                    islem_tarih = row.get('sort_date') or row.get('baslangic') or row.get('form_tarihi')
+                    islem_turu = row.get('islem_turu') or 'İşlem'
+                    aciklama = row.get('aciklama') or ''
+                    matrah = float(row.get('matrah') or 0) if row.get('matrah') is not None else None
+                    kdv_orani = float(row.get('kdv_orani') or 0) if row.get('kdv_orani') is not None else None
+                    kdv_tutari = float(row.get('kdv_tutar') or 0) if row.get('kdv_tutar') is not None else None
+                    toplam = float(row.get('toplam') or 0)
+                    borc = toplam if toplam > 0 else None
+                    alacak = abs(toplam) if toplam < 0 else None
+                    bakiye = float(row.get('bakiye') or 0)
 
-                is_kiralama = islem_tur == 'Kiralama' and islem_ozel_id
-                is_nakliye = islem_tur == 'Nakliye' and islem_ozel_id
-                if is_kiralama:
-                    islem_turu = 'Kiralama'
-                elif is_nakliye:
-                    islem_turu = 'Nakliye'
-                elif 'Fatura' in islem_tur or 'Hizmet' in islem_tur:
-                    islem_turu = 'Fatura'
-                elif islem_tur == 'Tahsilat (Giriş)':
-                    islem_turu = 'Tahsilat'
-                elif islem_tur == 'Ödeme (Çıkış)':
-                    islem_turu = 'Ödeme'
-                else:
-                    islem_turu = islem_tur
+                    row_data = [
+                        index,
+                        islem_tarih.strftime('%d.%m.%Y') if islem_tarih else '-',
+                        islem_turu,
+                        aciklama,
+                        matrah,
+                        kdv_orani,
+                        kdv_tutari,
+                        borc,
+                        alacak,
+                        bakiye,
+                    ]
 
-                aciklama = islem_aciklama or ''
-                if islem_belge_no:
-                    belge_metni = f"Kasa: {islem_belge_no}" if islem_tur_tipi == 'odeme' else f"No: {islem_belge_no}"
-                    aciklama = f"{aciklama}\n{belge_metni}" if aciklama else belge_metni
+                    for col_idx, value in enumerate(row_data, start=1):
+                        if col_idx in {5, 6, 7, 8, 9, 10} and value is not None:
+                            number_format = '0.00' if col_idx == 6 else '#,##0.00'
+                            set_cell(current_row, col_idx, value, font=body_font, border=cell_border, alignment=right_alignment, number_format=number_format)
+                        else:
+                            display_value = value if value not in (None, '') else '-'
+                            align = center_alignment if col_idx in {1, 2, 3} else left_alignment
+                            set_cell(current_row, col_idx, display_value, font=body_font, border=cell_border, alignment=align)
+                    current_row += 1
+            else:
+                for index, islem in enumerate(hareketler, start=1):
+                    islem_tur = item_value(islem, 'tur', '')
+                    islem_ozel_id = item_value(islem, 'ozel_id')
+                    islem_tur_tipi = item_value(islem, 'tur_tipi', '')
+                    islem_aciklama = item_value(islem, 'aciklama', '')
+                    islem_belge_no = item_value(islem, 'belge_no')
+                    islem_tarih = item_value(islem, 'tarih')
+                    islem_tutar = item_value(islem, 'tutar')
+                    islem_kdv_tutari = item_value(islem, 'kdv_tutari')
+                    islem_borc = item_value(islem, 'borc')
+                    islem_alacak = item_value(islem, 'alacak')
+                    islem_bakiye = item_value(islem, 'kumulatif_bakiye')
+                    islem_kiralama_alis_kdv = item_value(islem, 'kiralama_alis_kdv')
+                    islem_nakliye_alis_kdv = item_value(islem, 'nakliye_alis_kdv')
+                    islem_kdv_orani = item_value(islem, 'kdv_orani')
 
-                if islem_kiralama_alis_kdv is not None:
-                    kdv_orani = float(islem_kiralama_alis_kdv)
-                elif islem_nakliye_alis_kdv is not None:
-                    kdv_orani = float(islem_nakliye_alis_kdv)
-                elif islem_kdv_orani is not None:
-                    kdv_orani = float(islem_kdv_orani)
-                else:
-                    kdv_orani = None
-
-                matrah = None
-                if islem_tur_tipi != 'odeme' and islem_tutar not in (None, 0):
-                    matrah = abs(float(islem_tutar))
-
-                kdv_tutari = float(islem_kdv_tutari) if islem_kdv_tutari is not None else None
-                borc = float(islem_borc) if islem_borc not in (None, 0) else None
-                alacak = float(islem_alacak) if islem_alacak not in (None, 0) else None
-                bakiye = float(islem_bakiye) if islem_bakiye is not None else 0
-
-                row_data = [
-                    index,
-                    islem_tarih.strftime('%d.%m.%Y') if islem_tarih else '-',
-                    islem_turu,
-                    aciklama,
-                    matrah,
-                    kdv_orani,
-                    kdv_tutari,
-                    borc,
-                    alacak,
-                    bakiye,
-                ]
-
-                for col_idx, value in enumerate(row_data, start=1):
-                    if col_idx in {5, 6, 7, 8, 9, 10} and value is not None:
-                        number_format = '0.00' if col_idx == 6 else '#,##0.00'
-                        set_cell(current_row, col_idx, value, font=body_font, border=cell_border, alignment=right_alignment, number_format=number_format)
+                    is_kiralama = islem_tur == 'Kiralama' and islem_ozel_id
+                    is_nakliye = islem_tur == 'Nakliye' and islem_ozel_id
+                    if is_kiralama:
+                        islem_turu = 'Kiralama'
+                    elif is_nakliye:
+                        islem_turu = 'Nakliye'
+                    elif 'Fatura' in islem_tur or 'Hizmet' in islem_tur:
+                        islem_turu = 'Fatura'
+                    elif islem_tur == 'Tahsilat (Giriş)':
+                        islem_turu = 'Tahsilat'
+                    elif islem_tur == 'Ödeme (Çıkış)':
+                        islem_turu = 'Ödeme'
                     else:
-                        display_value = value if value not in (None, '') else '-'
-                        align = center_alignment if col_idx in {1, 2, 3} else left_alignment
-                        set_cell(current_row, col_idx, display_value, font=body_font, border=cell_border, alignment=align)
-                current_row += 1
+                        islem_turu = islem_tur
 
-            if hareketler:
+                    aciklama = islem_aciklama or ''
+                    if islem_belge_no:
+                        belge_metni = f"Kasa: {islem_belge_no}" if islem_tur_tipi == 'odeme' else f"No: {islem_belge_no}"
+                        aciklama = f"{aciklama}\n{belge_metni}" if aciklama else belge_metni
+
+                    if islem_kiralama_alis_kdv is not None:
+                        kdv_orani = float(islem_kiralama_alis_kdv)
+                    elif islem_nakliye_alis_kdv is not None:
+                        kdv_orani = float(islem_nakliye_alis_kdv)
+                    elif islem_kdv_orani is not None:
+                        kdv_orani = float(islem_kdv_orani)
+                    else:
+                        kdv_orani = None
+
+                    matrah = None
+                    if islem_tur_tipi != 'odeme' and islem_tutar not in (None, 0):
+                        matrah = abs(float(islem_tutar))
+
+                    kdv_tutari = float(islem_kdv_tutari) if islem_kdv_tutari is not None else None
+                    borc = float(islem_borc) if islem_borc not in (None, 0) else None
+                    alacak = float(islem_alacak) if islem_alacak not in (None, 0) else None
+                    bakiye = float(islem_bakiye) if islem_bakiye is not None else 0
+
+                    row_data = [
+                        index,
+                        islem_tarih.strftime('%d.%m.%Y') if islem_tarih else '-',
+                        islem_turu,
+                        aciklama,
+                        matrah,
+                        kdv_orani,
+                        kdv_tutari,
+                        borc,
+                        alacak,
+                        bakiye,
+                    ]
+
+                    for col_idx, value in enumerate(row_data, start=1):
+                        if col_idx in {5, 6, 7, 8, 9, 10} and value is not None:
+                            number_format = '0.00' if col_idx == 6 else '#,##0.00'
+                            set_cell(current_row, col_idx, value, font=body_font, border=cell_border, alignment=right_alignment, number_format=number_format)
+                        else:
+                            display_value = value if value not in (None, '') else '-'
+                            align = center_alignment if col_idx in {1, 2, 3} else left_alignment
+                            set_cell(current_row, col_idx, display_value, font=body_font, border=cell_border, alignment=align)
+                    current_row += 1
+
+            if (tab == 'cari' and cari_rows) or (tab != 'cari' and hareketler):
                 sheet.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=7)
                 set_cell(current_row, 1, 'NET BAKİYE:', font=total_font, fill=total_fill, border=total_border, alignment=right_alignment)
                 set_cell(current_row, 8, float(finans_verileri.get('toplam_borc', 0) or 0), font=total_font, fill=total_fill, border=total_border, alignment=right_alignment, number_format='#,##0.00')

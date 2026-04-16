@@ -156,7 +156,7 @@
                             data-kiralama-duzenle-url="{{ url_for('kiralama.duzenle', kiralama_id=nakliye.kiralama_id) if nakliye.kiralama_id else '' }}">
                             
                             <td>{{ (pagination.page - 1) * pagination.per_page + loop.index }}</td>
-                            <td class="ps-3">{{ nakliye.tarih.strftime('%d.%m.%Y') }}</td>
+                            <td class="ps-3">{{ (nakliye.islem_tarihi or nakliye.tarih).strftime('%d.%m.%Y') }}</td>
                             
                             <td>
                                 {% if nakliye.firma %}

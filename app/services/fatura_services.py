@@ -216,6 +216,7 @@ class FaturaService(BaseService):
                 hizmet = HizmetKaydi(
                     firma_id=hakedis.firma_id,
                     tarih=date.today(),
+                    islem_tarihi=hakedis.bitis_tarihi or date.today(),
                     tutar=hakedis.genel_toplam,
                     yon='giden',
                     ozel_id=hakedis.id,

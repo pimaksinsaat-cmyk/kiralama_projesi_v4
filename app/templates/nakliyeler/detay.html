@@ -60,8 +60,12 @@
         <h3><i class="fas fa-info-circle"></i> Operasyon Bilgileri</h3>
         <div class="detail-grid">
             <div class="detail-item">
-                <strong>Tarih</strong>
-                <span>{{ nakliye.tarih.strftime('%d.%m.%Y') }}</span>
+                <strong>İşlem Tarihi</strong>
+                <span>{{ (nakliye.islem_tarihi or nakliye.tarih).strftime('%d.%m.%Y') }}</span>
+            </div>
+            <div class="detail-item">
+                <strong>Kayıt Tarihi</strong>
+                <span>{{ nakliye.tarih.strftime('%d.%m.%Y') if nakliye.tarih else '-' }}</span>
             </div>
             <div class="detail-item">
                 <strong>Durum</strong>

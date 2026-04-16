@@ -297,7 +297,7 @@
 
             <tr>
                 <td>{{ loop.index }}</td>
-                <td>{{ nakliye.tarih.strftime('%d.%m.%Y') }}</td>
+                <td>{{ (nakliye.islem_tarihi or nakliye.tarih).strftime('%d.%m.%Y') }}</td>
                 <td class="firma-adi">
                     {{ nakliye.firma.firma_adi | truncate_name if nakliye.firma else '-' }}
                 </td>

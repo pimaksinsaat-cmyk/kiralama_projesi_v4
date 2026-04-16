@@ -392,7 +392,7 @@
                                                 data-kalem-id="{{ kalem.id }}"
                                                 data-csrf-token="{{ csrf_token() }}"
                                                 data-ekipman-kod="{{ kalem.ekipman.kod if kalem.ekipman else (kalem.harici_ekipman_marka ~ ' ' ~ kalem.harici_ekipman_model) }}"
-                                                title="İade işlemini geri al (yalnızca 24 saat içinde)">
+                                                title="İade işlemini geri al">
                                                 <i class="fas fa-undo-alt"></i> İade İptal
                                             </button>
                                         {% endif %}
@@ -429,7 +429,7 @@
                                                 data-kalem-id="{{ kalem.id }}"
                                                 data-csrf-token="{{ csrf_token() }}"
                                                 data-ekipman-kod="{{ kalem.ekipman.kod if kalem.ekipman else (kalem.harici_ekipman_marka ~ ' ' ~ kalem.harici_ekipman_model) }}"
-                                                title="İade işlemini geri al (yalnızca 24 saat içinde)">
+                                                title="İade işlemini geri al">
                                                 <i class="fas fa-undo-alt"></i> İade İptal
                                             </button>
                                         {% endif %}
@@ -530,6 +530,7 @@
 
 <div id="context-menu" class="context-menu shadow">
     <div class="px-3 py-2 small text-muted border-bottom fw-bold" id="menu-form-title">FORM İŞLEMLERİ</div>
+    <a class="context-menu-item" id="menu-detay"><i class="fas fa-info-circle me-2 text-info"></i>Detay Görüntüle</a>
     <a class="context-menu-item" id="menu-duzenle"><i class="fas fa-edit me-2 text-primary"></i>Kiralama Formunu Düzenle</a>
     
     <div style="height:1px; background:#eee; margin:5px 0;"></div>
@@ -671,6 +672,23 @@
     <input type="hidden" name="csrf_token" id="iptal-csrf-token">
     <input type="hidden" name="kalem_id" id="iptal-kalem-id">
 </form>
+
+<div class="modal fade" id="detayModal" tabindex="-1" aria-labelledby="detayModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-dark text-white py-2">
+                <h6 class="modal-title mb-0" id="detayModalLabel"><i class="fas fa-info-circle me-2"></i>Kiralama Detayı</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Kapat"></button>
+            </div>
+            <div class="modal-body" id="detayModalBody">
+                <div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div><p class="mt-2 text-muted">Yükleniyor...</p></div>
+            </div>
+            <div class="modal-footer py-1">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Kapat</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <script>
 // GLOBAL FONKSIYONLAR (DOMContentLoaded dışında tanımlı)
@@ -866,6 +884,19 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Menu Click İşlemleri
+    document.getElementById('menu-detay').onclick = () => {
+        if (!state.rentalId) return;
+        closeModals();
+        const body = document.getElementById('detayModalBody');
+        body.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div><p class="mt-2 text-muted">Yükleniyor...</p></div>';
+        const modal = new bootstrap.Modal(document.getElementById('detayModal'));
+        document.getElementById('detayModalLabel').innerHTML = '<i class="fas fa-info-circle me-2"></i>' + (state.fNo || 'Kiralama Detayı');
+        modal.show();
+        fetch('/kiralama/detay/' + state.rentalId)
+            .then(r => { if (!r.ok) throw new Error(r.status); return r.text(); })
+            .then(html => { body.innerHTML = html; })
+            .catch(() => { body.innerHTML = '<div class="alert alert-danger m-3">Detay bilgileri yüklenemedi.</div>'; });
+    };
     document.getElementById('menu-duzenle').onclick = () => { if(state.kUrl) window.location.href = state.kUrl + '?next=' + encodeURIComponent(window.location.href); };
     // --- MENÜ AÇILIŞ (FİRMALAR AYARI - iPHONE DOSTU) ---
     const openFormMenu = (e, row) => {
