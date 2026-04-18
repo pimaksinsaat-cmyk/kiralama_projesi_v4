@@ -130,6 +130,17 @@ def klasor_adi_temizle(firma_adi, firma_id):
     return f"{firma_id}_{kisa_ad}"
 
 
+def para_format(value, decimal_places=2):
+    """Sayıyı Türk finansal formatında formatlar: 1.234.567,89"""
+    try:
+        v = float(value or 0)
+        formatted = f"{v:,.{decimal_places}f}"
+        # Virgül → binlik, nokta → ondalık (TR formatı)
+        return formatted.replace(',', 'X').replace('.', ',').replace('X', '.')
+    except (TypeError, ValueError):
+        return '0,00'
+
+
 def truncate_name(name, word_limit=4):
     """Bir metni kelime sayısına göre böler ve belirtilen sayıda kelimeyi döndürür."""
     if not name:

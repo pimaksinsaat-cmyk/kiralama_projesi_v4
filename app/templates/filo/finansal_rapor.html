@@ -140,9 +140,9 @@
         <div class="kart temin">
             <div class="kart-etiket"><i class="fas fa-box me-2"></i>Satın Alma Maliyeti</div>
             <div class="kart-deger">
-                {{ "%.2f"|format(ozet.giris_maliyeti_orijinal) }} {{ ozet.para_birimi }}
+                {{ ozet.giris_maliyeti_orijinal|para }} {{ ozet.para_birimi }}
                 {% if ozet.para_birimi != 'TRY' %}
-                    <br><span style="font-size: 0.7em; color: #666;">{{ "%.2f"|format(ozet.temin_bedeli_try) }} TRY</span>
+                    <br><span style="font-size: 0.7em; color: #666;">{{ ozet.temin_bedeli_try|para }} TL</span>
                 {% endif %}
             </div>
             <div class="kart-detay">
@@ -170,10 +170,10 @@
             <div class="kart-etiket"><i class="fas fa-dollar-sign me-2"></i>Kiralama Geliri</div>
             <div class="kart-deger">
                 {% if ozet.para_birimi != 'TRY' %}
-                    {{ "%.2f"|format(ozet.kiralama_geliri_orijinal) }} {{ ozet.para_birimi }}
-                    <br><span style="font-size: 0.7em; color: #666;">{{ "%.2f"|format(ozet.kiralama_geliri_try) }} TRY</span>
+                    {{ ozet.kiralama_geliri_orijinal|para }} {{ ozet.para_birimi }}
+                    <br><span style="font-size: 0.7em; color: #666;">{{ ozet.kiralama_geliri_try|para }} TL</span>
                 {% else %}
-                    {{ "%.2f"|format(ozet.kiralama_geliri_try) }} TRY
+                    {{ ozet.kiralama_geliri_try|para }} TL
                 {% endif %}
             </div>
             <div class="kart-detay">
@@ -191,18 +191,18 @@
             <div class="kart-etiket"><i class="fas fa-truck me-2"></i>Nakliye</div>
             <div class="kart-deger">{{ ozet.nakliye_ozeti.sefer_sayisi }} Sefer</div>
             <div class="kart-detay">
-                <strong>Nakliye Satış Geliri:</strong> {{ "%.2f"|format(ozet.nakliye_ozeti.satis_geliri_try) }} TRY<br>
-                <strong>Nakliye Gideri:</strong> {{ "%.2f"|format(ozet.nakliye_giderleri_try) }} TRY
+                <strong>Nakliye Satış Geliri:</strong> {{ ozet.nakliye_ozeti.satis_geliri_try|para }} TL<br>
+                <strong>Nakliye Gideri:</strong> {{ ozet.nakliye_giderleri_try|para }} TL
             </div>
         </div>
 
         <!-- Masraflar -->
         <div class="kart masraf">
-            <div class="kart-etiket"><i class="fas fa-tools me-2"></i>Toplam Giderler (TRY)</div>
-            <div class="kart-deger">{{ "%.2f"|format(ozet.toplam_giderler_try) }} TRY</div>
+            <div class="kart-etiket"><i class="fas fa-tools me-2"></i>Toplam Giderler (TL)</div>
+            <div class="kart-deger">{{ ozet.toplam_giderler_try|para }} TL</div>
             <div class="kart-detay">
-                <strong>Servis (işçilik + malzeme):</strong> {{ "%.2f"|format(ozet.servis_giderleri_try) }} TRY<br>
-                <strong>Nakliye Alış:</strong> {{ "%.2f"|format(ozet.nakliye_giderleri_try) }} TRY
+                <strong>Servis (işçilik + malzeme):</strong> {{ ozet.servis_giderleri_try|para }} TL<br>
+                <strong>Nakliye Alış:</strong> {{ ozet.nakliye_giderleri_try|para }} TL
             </div>
         </div>
 
@@ -211,10 +211,10 @@
             <div class="kart-etiket"><i class="fas fa-wallet me-2"></i>Net Gelir</div>
             <div class="kart-deger {% if ozet.net_gelir_orijinal >= 0 %}deger-pozitif{% else %}deger-negatif{% endif %}">
                 {% if ozet.para_birimi != 'TRY' %}
-                    {{ "%.2f"|format(ozet.net_gelir_orijinal) }} {{ ozet.para_birimi }}
-                    <br><span style="font-size: 0.7em; color: #666;">{{ "%.2f"|format(ozet.net_gelir_try) }} TRY</span>
+                    {{ ozet.net_gelir_orijinal|para }} {{ ozet.para_birimi }}
+                    <br><span style="font-size: 0.7em; color: #666;">{{ ozet.net_gelir_try|para }} TL</span>
                 {% else %}
-                    {{ "%.2f"|format(ozet.net_gelir_try) }} TRY
+                    {{ ozet.net_gelir_try|para }} TL
                 {% endif %}
             </div>
             <div class="kart-detay">
@@ -286,15 +286,15 @@
                     </div>
                     <div class="amorti-metrik">
                         <span class="amorti-metrik-etiket">Yatırım Tutarı</span>
-                        <span class="amorti-metrik-deger">{{ "%.2f"|format(ozet.giris_maliyeti_orijinal) }} {{ ozet.para_birimi }}</span>
+                        <span class="amorti-metrik-deger">{{ ozet.giris_maliyeti_orijinal|para }} {{ ozet.para_birimi }}</span>
                     </div>
                     <div class="amorti-metrik">
                         <span class="amorti-metrik-etiket">Kalan Tutar</span>
-                        <span class="amorti-metrik-deger">{{ "%.2f"|format(kalan_tutar) }} {{ ozet.para_birimi }}</span>
+                        <span class="amorti-metrik-deger">{{ kalan_tutar|para }} {{ ozet.para_birimi }}</span>
                     </div>
                     <div class="amorti-metrik">
                         <span class="amorti-metrik-etiket">Fazla Getiri</span>
-                        <span class="amorti-metrik-deger">{{ "%.2f"|format(fazla_getiri) }} {{ ozet.para_birimi }}</span>
+                        <span class="amorti-metrik-deger">{{ fazla_getiri|para }} {{ ozet.para_birimi }}</span>
                     </div>
                 </div>
                 <div class="amorti-not">

@@ -19,8 +19,9 @@ def create_app(config_class=Config):
     app.jinja_env.auto_reload = app.config.get('TEMPLATES_AUTO_RELOAD', False)
 
     # Özel Jinja filtresini kaydet
-    from .utils import truncate_name
+    from .utils import truncate_name, para_format
     app.jinja_env.filters['truncate_name'] = truncate_name
+    app.jinja_env.filters['para'] = para_format
 
     db_url = os.getenv("DATABASE_URL")
 

@@ -183,7 +183,7 @@
                         <th style="width: 140px;">Başlangıç</th>
                         <th style="width: 140px;">Bitiş</th>
                         <th style="width: 100px; text-align: center;">Gün</th>
-                        <th style="width: 130px;" class="number">TRY Getiri</th>
+                        <th style="width: 130px;" class="number">TL Getiri</th>
                         <th style="width: 130px;" class="number">USD Getiri</th>
                         <th style="width: 130px;" class="number">EUR Getiri</th>
                     </tr>
@@ -196,9 +196,9 @@
                         <td><span class="tarih">{{ detay.baslangic_tarihi.strftime('%d.%m.%Y') }}</span></td>
                         <td><span class="tarih">{{ detay.bitis_tarihi.strftime('%d.%m.%Y') }}</span></td>
                         <td style="text-align: center; font-weight: 500;">{{ detay.gun_sayisi }}</td>
-                        <td class="number currency-try">{{ "%.2f"|format(detay.gelir_try) }} TL</td>
-                        <td class="number currency-usd">{{ "%.2f"|format(detay.gelir_usd) }} $</td>
-                        <td class="number currency-eur">{{ "%.2f"|format(detay.gelir_eur) }} €</td>
+                        <td class="number currency-try">{{ detay.gelir_try|para }} TL</td>
+                        <td class="number currency-usd">{{ detay.gelir_usd|para }} $</td>
+                        <td class="number currency-eur">{{ detay.gelir_eur|para }} €</td>
                     </tr>
                     {% endfor %}
                     
@@ -208,13 +208,13 @@
                         <td colspan="2"></td>
                         <td style="text-align: center; font-size: 1.1rem;">{{ total_gun }} gün</td>
                         <td class="number" style="font-size: 1rem;">
-                            <span class="currency-try">{{ "%.2f"|format(total_try) }} TL</span>
+                            <span class="currency-try">{{ total_try|para }} TL</span>
                         </td>
                         <td class="number" style="font-size: 1rem;">
-                            <span class="currency-usd">{{ "%.2f"|format(total_usd) }} $</span>
+                            <span class="currency-usd">{{ total_usd|para }} $</span>
                         </td>
                         <td class="number" style="font-size: 1rem;">
-                            <span class="currency-eur">{{ "%.2f"|format(total_eur) }} €</span>
+                            <span class="currency-eur">{{ total_eur|para }} €</span>
                         </td>
                     </tr>
                 </tbody>
