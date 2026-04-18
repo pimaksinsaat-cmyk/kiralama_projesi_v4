@@ -233,7 +233,7 @@ class EkipmanRaporuService:
         """
         query = db.session.query(KiralamaKalemi).filter(
             KiralamaKalemi.ekipman_id == ekipman_id,
-            KiralamaKalemi.is_active == True
+            KiralamaKalemi.is_deleted == False
         )
         
         # Tarih aralığı filtresi: kirlama ile aranan dönem çakışıyor mu?
@@ -315,14 +315,16 @@ class EkipmanRaporuService:
     @staticmethod
     def _calculate_nakliye_giderleri(ekipman_id: int, start_date: date = None, end_date: date = None) -> Decimal:
         """
-        Makinenin nakliye masraflarını hesaplar (nakliye aracı olarak kullanıldığında)
+        Makinenin kiralamalarında ödenen nakliye alış maliyetlerini hesaplar.
+        (Makinenin kendi kiralama kalemleri üzerindeki nakliye_alis_fiyat toplamı)
         """
         query = db.session.query(
             func.sum(KiralamaKalemi.nakliye_alis_fiyat).label('total_nakliye')
         ).filter(
-            KiralamaKalemi.nakliye_araci_id == ekipman_id
+            KiralamaKalemi.ekipman_id == ekipman_id,
+            KiralamaKalemi.is_deleted == False
         )
-        
+
         # Tarih aralığı filtresi: nakliye ile aranan dönem çakışıyor mu?
         if start_date:
             # Kiralama bitiş tarihi arama başlangıcından sonra olmalı
@@ -361,7 +363,7 @@ class EkipmanRaporuService:
         """
         query = KiralamaKalemi.query.filter(
             KiralamaKalemi.ekipman_id == ekipman_id,
-            KiralamaKalemi.is_active == True
+            KiralamaKalemi.is_deleted == False
         )
         
         # Tarih aralığı ile kesişen tüm kiralamalar (kırpılacak)
@@ -407,7 +409,8 @@ class EkipmanRaporuService:
         Makinenin belirtilen tarih aralığındaki tüm kiralama detaylarını döner
         """
         query = KiralamaKalemi.query.filter(
-            KiralamaKalemi.ekipman_id == ekipman_id
+            KiralamaKalemi.ekipman_id == ekipman_id,
+            KiralamaKalemi.is_deleted == False
         ).join(Kiralama).order_by(KiralamaKalemi.kiralama_baslangici.desc())
         
         # Tarih aralığı filtresi: kiralama ile aranan dönem çakışıyor mu?
