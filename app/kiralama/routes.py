@@ -41,19 +41,21 @@ _ARAC_CACHE_LOCK = threading.Lock()
 _CACHE_TIMEOUT_MINUTES = 60 
 
 def get_cached_subeler():
-    """Şubeleri thread-safe ve bağımsız bir kilitle bellekten getirir."""
+    """Şubeleri thread-safe ve bağımsız bir kilitle bellekten getirir.
+    ORM objeleri yerine düz dict döner; session detach sorunu oluşmaz."""
     now = datetime.now()
     cache = _CACHE_DATA['subeler']
-    
-    # 1. Hızlı Okuma (last_update None kontrolü: thread race condition'ı önler)
+
     if cache['data'] is not None and cache['last_update'] is not None and (now - cache['last_update']) < timedelta(minutes=_CACHE_TIMEOUT_MINUTES):
         return cache['data']
 
-    # 2. Kaynağa Özel Kilit
     with _SUBE_CACHE_LOCK:
         if cache['data'] is None or cache['last_update'] is None or (datetime.now() - cache['last_update']) > timedelta(minutes=_CACHE_TIMEOUT_MINUTES):
             try:
-                cache['data'] = Sube.query.all()
+                cache['data'] = [
+                    {'id': s.id, 'isim': s.isim, 'aktif': s.is_active}
+                    for s in Sube.query.all()
+                ]
                 cache['last_update'] = datetime.now()
             except Exception as e:
                 current_app.logger.error(f"Sube Cache Hatası: {e}")
@@ -62,17 +64,21 @@ def get_cached_subeler():
     return cache['data']
 
 def get_cached_aktif_araclar():
-    """Aktif nakliye araçlarını thread-safe ve bağımsız bir kilitle bellekten getirir."""
+    """Aktif nakliye araçlarını thread-safe ve bağımsız bir kilitle bellekten getirir.
+    ORM objeleri yerine düz dict döner; session detach sorunu oluşmaz."""
     now = datetime.now()
     cache = _CACHE_DATA['aktif_araclar']
-    
+
     if cache['data'] is not None and cache['last_update'] is not None and (now - cache['last_update']) < timedelta(minutes=_CACHE_TIMEOUT_MINUTES):
         return cache['data']
 
     with _ARAC_CACHE_LOCK:
         if cache['data'] is None or cache['last_update'] is None or (datetime.now() - cache['last_update']) > timedelta(minutes=_CACHE_TIMEOUT_MINUTES):
             try:
-                cache['data'] = NakliyeAraci.aktif_nakliye_query().order_by(NakliyeAraci.plaka).all()
+                cache['data'] = [
+                    {'id': a.id, 'plaka': a.plaka, 'arac_tipi': a.arac_tipi}
+                    for a in NakliyeAraci.aktif_nakliye_query().order_by(NakliyeAraci.plaka).all()
+                ]
                 cache['last_update'] = datetime.now()
             except Exception as e:
                 current_app.logger.error(f"Arac Cache Hatası: {e}")
@@ -117,7 +123,7 @@ def populate_kiralama_form_choices(form, include_ids=None):
     ]
 
     # 3. Nakliye Araçları (Cache destekli)
-    arac_choices = [(0, '--- Araç Seçiniz ---')] + [(a.id, f"{a.plaka} - {a.arac_tipi}") for a in get_cached_aktif_araclar()]
+    arac_choices = [(0, '--- Araç Seçiniz ---')] + [(a['id'], f"{a['plaka']} - {a['arac_tipi']}") for a in get_cached_aktif_araclar()]
 
     # 4. Kalemler Listesi Doldurma
     if not form.kalemler.entries:
