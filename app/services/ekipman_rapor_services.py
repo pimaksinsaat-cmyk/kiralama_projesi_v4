@@ -471,15 +471,12 @@ class EkipmanRaporuService:
             kalem_bas = kalem.kiralama_baslangici
             kalem_bit = kalem.kiralama_bitis or date.today()
 
-            # Gerçek kiralama süresi (görüntüleme için)
-            gercek_gun = max(0, (kalem_bit - kalem_bas).days + 1)
-
-            # Filtre aralığı ile kesişim (gelir hesabı için)
+            # Filtre aralığı ile kesişim (gün sayısı ve gelir hesabı için tutarlı)
             etkin_bas = max(kalem_bas, start_date) if start_date else kalem_bas
             etkin_bit = min(kalem_bit, end_date) if end_date else kalem_bit
             filtre_gun = max(0, (etkin_bit - etkin_bas).days + 1)
 
-            # Döviz cinsinden gelir hesapla (filtre aralığındaki günler için)
+            # Döviz cinsinden gelir hesapla
             gelir_try = float(kalem.kiralama_brm_fiyat or 0) * filtre_gun
             gelir_usd = gelir_try / float(kalem.kiralama.doviz_kuru_usd or 1) if kalem.kiralama.doviz_kuru_usd else 0
             gelir_eur = gelir_try / float(kalem.kiralama.doviz_kuru_eur or 1) if kalem.kiralama.doviz_kuru_eur else 0
@@ -489,7 +486,7 @@ class EkipmanRaporuService:
                 'musteri': kalem.kiralama.firma_musteri.firma_adi if kalem.kiralama.firma_musteri else '-',
                 'baslangic_tarihi': kalem_bas,
                 'bitis_tarihi': kalem_bit,
-                'gun_sayisi': gercek_gun,
+                'gun_sayisi': filtre_gun,
                 'gelir_try': gelir_try,
                 'gelir_usd': gelir_usd,
                 'gelir_eur': gelir_eur,
