@@ -183,14 +183,30 @@ def index():
         ekipmanlar = pagination.items
         recent_threshold = datetime.now(timezone.utc) - timedelta(days=1)
         
+        desync_fix_needed = False
         for ekipman in ekipmanlar:
             ekipman.aktif_kiralama_bilgisi = None
             ekipman.iade_iptal_kalem_id = None
             ekipman.son_musteri_adi = None
+
+            # is_active ve is_deleted filtresi ile gerçek aktif kalemleri bul
+            gercek_aktif_kalemler = [
+                k for k in ekipman.kiralama_kalemleri
+                if not k.sonlandirildi and k.is_active and not k.is_deleted
+            ]
+
+            # Desync kontrolü: DB 'kirada' diyor ama gerçekte aktif kalem yok
+            if ekipman.calisma_durumu == 'kirada' and not gercek_aktif_kalemler:
+                ekipman.calisma_durumu = 'bosta'
+                desync_fix_needed = True
+            # Desync kontrolü: Aktif kalem var ama DB 'bosta'/'serviste' diyor
+            elif gercek_aktif_kalemler and ekipman.calisma_durumu not in ('kirada', 'serviste'):
+                ekipman.calisma_durumu = 'kirada'
+                desync_fix_needed = True
+
             if ekipman.calisma_durumu == 'kirada':
-                aktif_kalemler = [k for k in ekipman.kiralama_kalemleri if not k.sonlandirildi]
-                if aktif_kalemler:
-                    ekipman.aktif_kiralama_bilgisi = max(aktif_kalemler, key=lambda k: k.id)
+                if gercek_aktif_kalemler:
+                    ekipman.aktif_kiralama_bilgisi = max(gercek_aktif_kalemler, key=lambda k: k.id)
             else:
                 sonlandirilmis_kalemler = [
                     k for k in ekipman.kiralama_kalemleri
@@ -204,10 +220,16 @@ def index():
                     kalem_updated_at = en_guncel_kalem.updated_at if en_guncel_kalem.updated_at.tzinfo else en_guncel_kalem.updated_at.replace(tzinfo=timezone.utc)
                     if kalem_updated_at >= recent_threshold:
                         ekipman.iade_iptal_kalem_id = en_guncel_kalem.id
-                    
+
                     # Son müşteri adını ata (boşta durumda)
                     if en_guncel_kalem.kiralama and en_guncel_kalem.kiralama.firma_musteri:
                         ekipman.son_musteri_adi = en_guncel_kalem.kiralama.firma_musteri.firma_adi
+
+        if desync_fix_needed:
+            try:
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
         
         subeler = Sube.query.all()
         tipler = [

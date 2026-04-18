@@ -85,6 +85,10 @@ class MakineDegisimService(BaseService):
                         # ŞUBE ATAMA ÇÖZÜMÜ
                         eski_makine_obj.calisma_durumu = data['neden']
                         eski_makine_obj.sube_id = int(donus_sube)
+                    else:
+                        # donus_sube_val geçersiz/eksik olsa bile swap tamamlandığında
+                        # eski makineyi 'neden' durumuna al (şube atanmadan)
+                        eski_makine_obj.calisma_durumu = data['neden']
 
             # 4. YENİ KALEM OLUŞTUR
             yeni_kalem = KiralamaKalemi(

@@ -216,6 +216,10 @@ class KiralamaKalemiService(BaseService):
             elif donus_sube_val and str(donus_sube_val).isdigit() and int(donus_sube_val) > 0:
                 kalem.ekipman.sube_id = int(donus_sube_val)
                 kalem.ekipman.calisma_durumu = 'bosta'
+            else:
+                # donus_sube_val geçersiz/eksik olsa bile kalem sonlandırıldığında
+                # makineyi bosta'ya al (şube atanmadan)
+                kalem.ekipman.calisma_durumu = 'bosta'
 
         # Dönüş nakliye bilgilerini güncelle
         kalem.is_harici_nakliye = bool(is_harici_nakliye)
@@ -254,7 +258,6 @@ class KiralamaKalemiService(BaseService):
 
         # Harici nakliye varsa tedarikçi carisine nakliye bedeli işle
         if kalem.is_harici_nakliye and kalem.nakliye_tedarikci_id and to_decimal(kalem.nakliye_alis_fiyat) > 0:
-            # Aynı kalem için önceki sonlandırma taşeron cari kaydını temizle (mükerrer engeli)
             HizmetKaydi.query.filter(
                 HizmetKaydi.ozel_id == kalem.id,
                 HizmetKaydi.yon == 'gelen',
@@ -275,40 +278,42 @@ class KiralamaKalemiService(BaseService):
                 aciklama=aciklama,
                 kdv_orani=getattr(kalem.kiralama, 'kdv_orani', None) or 20
             )
-            print(f"[DEBUG] HizmetKaydi oluşturuluyor (tedarikçi): kdv_orani={hizmet_kaydi.kdv_orani}")
             db.session.add(hizmet_kaydi)
 
-        # Özmal dönüş: nakliye aracı kaydına dönüş seferi ekle
-        elif not kalem.is_harici_nakliye and kalem.nakliye_araci_id and kalem.kiralama:
-            form_no = kalem.kiralama.kiralama_form_no or ''
-            # Önceki dönüş sefer kaydını temizle (yeniden sonlandırma durumunda mükerrer engeli)
-            Nakliye.query.filter(
-                Nakliye.kiralama_id == kalem.kiralama_id,
-                Nakliye.aciklama == f"Dönüş: {form_no} #{kalem.id}"
-            ).delete(synchronize_session=False)
+        # Müşteri carisine dönüş nakliye satış seferi ekle (hem öz mal hem harici)
+        if kalem.kiralama:
+            donus_satis = KiralamaService._get_donus_nakliye_satis(kalem)
+            if donus_satis and donus_satis > 0:
+                form_no = kalem.kiralama.kiralama_form_no or ''
+                Nakliye.query.filter(
+                    Nakliye.kiralama_id == kalem.kiralama_id,
+                    Nakliye.aciklama == f"Dönüş: {form_no} #{kalem.id}"
+                ).delete(synchronize_session=False)
 
-            donus_guzergah = (
-                f"{makine_bilgisi_donus} {musteri_adi} firmasının {is_yeri_donus}'nden "
-                f"{donus_sube_adi} şubesine getirildi"
-            )
-            donus_sefer = Nakliye(
-                kiralama_id=kalem.kiralama_id,
-                firma_id=kalem.kiralama.firma_musteri_id,
-                tarih=kalem.kiralama_bitis or date.today(),
-                islem_tarihi=kalem.kiralama_bitis or date.today(),
-                guzergah=donus_guzergah,
-                tutar=KiralamaService._get_donus_nakliye_satis(kalem),
-                kdv_orani=kalem.nakliye_satis_kdv if kalem.nakliye_satis_kdv is not None else (kalem.kiralama.kdv_orani if kalem.kiralama.kdv_orani is not None else 20),
-                tevkifat_orani=kalem.nakliye_satis_tevkifat_oran or None,
-                aciklama=f"Dönüş: {form_no} #{kalem.id}",
-                nakliye_tipi='oz_mal',
-                arac_id=kalem.nakliye_araci_id,
-            )
-            secilen_arac = db.session.get(NakliyeAraci, kalem.nakliye_araci_id)
-            if secilen_arac:
-                donus_sefer.plaka = secilen_arac.plaka
-            donus_sefer.hesapla_ve_guncelle()
-            db.session.add(donus_sefer)
+                donus_guzergah = (
+                    f"{makine_bilgisi_donus} {musteri_adi} firmasının {is_yeri_donus}'nden "
+                    f"{donus_sube_adi} şubesine getirildi"
+                )
+                nak_tipi = 'harici' if kalem.is_harici_nakliye else 'oz_mal'
+                donus_sefer = Nakliye(
+                    kiralama_id=kalem.kiralama_id,
+                    firma_id=kalem.kiralama.firma_musteri_id,
+                    tarih=kalem.kiralama_bitis or date.today(),
+                    islem_tarihi=kalem.kiralama_bitis or date.today(),
+                    guzergah=donus_guzergah,
+                    tutar=donus_satis,
+                    kdv_orani=kalem.nakliye_satis_kdv if kalem.nakliye_satis_kdv is not None else (kalem.kiralama.kdv_orani if kalem.kiralama.kdv_orani is not None else 20),
+                    tevkifat_orani=kalem.nakliye_satis_tevkifat_oran or None,
+                    aciklama=f"Dönüş: {form_no} #{kalem.id}",
+                    nakliye_tipi=nak_tipi,
+                    arac_id=kalem.nakliye_araci_id if not kalem.is_harici_nakliye else None,
+                )
+                if not kalem.is_harici_nakliye and kalem.nakliye_araci_id:
+                    secilen_arac = db.session.get(NakliyeAraci, kalem.nakliye_araci_id)
+                    if secilen_arac:
+                        donus_sefer.plaka = secilen_arac.plaka
+                donus_sefer.hesapla_ve_guncelle()
+                db.session.add(donus_sefer)
 
         cls.save(kalem, is_new=False, auto_commit=False, actor_id=actor_id)
         
@@ -1134,3 +1139,41 @@ class KiralamaService(BaseService):
 
         yeni_sefer.hesapla_ve_guncelle()
         db.session.add(yeni_sefer)
+
+        # Sonlandırılmış kalem ise dönüş nakliyeyi de yeniden oluştur
+        if kalem.sonlandirildi:
+            donus_satis = KiralamaService._get_donus_nakliye_satis(kalem)
+            if donus_satis and donus_satis > 0:
+                form_no = kiralama.kiralama_form_no or ''
+                Nakliye.query.filter(
+                    Nakliye.kiralama_id == kiralama.id,
+                    Nakliye.aciklama == f"Dönüş: {form_no} #{kalem.id}"
+                ).delete(synchronize_session=False)
+
+                donus_sube_adi = "Şube"
+                if kalem.ekipman and kalem.ekipman.sube:
+                    donus_sube_adi = kalem.ekipman.sube.isim
+                donus_guzergah = (
+                    f"{makine_adi} {firma_adi} firmasının {is_yeri}'nden "
+                    f"{donus_sube_adi} şubesine getirildi"
+                )
+                nak_tipi = 'harici' if kalem.is_harici_nakliye else 'oz_mal'
+                donus_sefer = Nakliye(
+                    kiralama_id=kiralama.id,
+                    firma_id=kiralama.firma_musteri_id,
+                    tarih=kalem.kiralama_bitis or date.today(),
+                    islem_tarihi=kalem.kiralama_bitis or date.today(),
+                    guzergah=donus_guzergah,
+                    tutar=donus_satis,
+                    kdv_orani=kalem.nakliye_satis_kdv if kalem.nakliye_satis_kdv is not None else (kiralama.kdv_orani if kiralama.kdv_orani is not None else 20),
+                    tevkifat_orani=kalem.nakliye_satis_tevkifat_oran or None,
+                    aciklama=f"Dönüş: {form_no} #{kalem.id}",
+                    nakliye_tipi=nak_tipi,
+                    arac_id=kalem.nakliye_araci_id if not kalem.is_harici_nakliye else None,
+                )
+                if not kalem.is_harici_nakliye and kalem.nakliye_araci_id:
+                    secilen_arac = db.session.get(NakliyeAraci, kalem.nakliye_araci_id)
+                    if secilen_arac:
+                        donus_sefer.plaka = secilen_arac.plaka
+                donus_sefer.hesapla_ve_guncelle()
+                db.session.add(donus_sefer)
