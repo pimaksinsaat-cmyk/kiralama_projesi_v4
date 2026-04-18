@@ -257,28 +257,27 @@ class EkipmanRaporuService:
         for kalem in kiralamalar:
             kalem_bas = kalem.kiralama_baslangici
             kalem_bit = kalem.kiralama_bitis
-            
+
             # Filtre ile kiralama aralığının kesişimini gün bazında (inclusive) hesapla
             etkin_bas = max(kalem_bas, start_date) if start_date else kalem_bas
             etkin_bit = min(kalem_bit, end_date) if end_date else kalem_bit
             gun_sayisi = max(0, (etkin_bit - etkin_bas).days + 1)
-            
+
             kiralama_fiyat = Decimal(kalem.kiralama_brm_fiyat or 0)
-            
-            # Filtre aralığındaki günler için toplam gelir = günlük fiyat * gün sayısı
             toplam_kalem_geliri = kiralama_fiyat * gun_sayisi
-            
+
+            # Kalemin kendi kurunu kullan; yoksa rapor kuruna düş
+            kalem_usd = float(kalem.kiralama.doviz_kuru_usd or 0) or usd_rate
+            kalem_eur = float(kalem.kiralama.doviz_kuru_eur or 0) or eur_rate
+
             # Hedef para birimine dönüştür
-            if target_currency == 'USD' and usd_rate > 0:
-                # TRY'den USD'ye: TRY / USD_KURU
-                converted = toplam_kalem_geliri / Decimal(usd_rate)
-            elif target_currency == 'EUR' and eur_rate > 0:
-                # TRY'den EUR'a: TRY / EUR_KURU
-                converted = toplam_kalem_geliri / Decimal(eur_rate)
+            if target_currency == 'USD' and kalem_usd > 0:
+                converted = toplam_kalem_geliri / Decimal(kalem_usd)
+            elif target_currency == 'EUR' and kalem_eur > 0:
+                converted = toplam_kalem_geliri / Decimal(kalem_eur)
             else:
-                # TRY cinsinden kalır
                 converted = toplam_kalem_geliri
-            
+
             total_gelir += converted
         
         return total_gelir
