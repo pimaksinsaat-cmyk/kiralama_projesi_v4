@@ -40,6 +40,8 @@
         .kart.net { border-left-color: #8b5cf6; }
         .kart.roi { border-left-color: #ec4899; }
         .kart.durum { border-left-color: #06b6d4; }
+        .kart.kiralama-ozet { border-left-color: #0ea5e9; }
+        .kart.nakliye { border-left-color: #f97316; }
         
         .kart-etiket { font-size: 0.74rem; color: #999; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 7px; }
         .kart-deger { font-size: 1.35rem; font-weight: 700; color: #1f2937; margin-bottom: 8px; }
@@ -176,9 +178,26 @@
                 {% endif %}
             </div>
             <div class="kart-detay">
-                <strong>Kiralama Sayısı:</strong> {{ ozet.kiralama_istatistikleri.toplam_kiralama_sayisi }}<br>
-                <strong>Toplam Gün:</strong> {{ ozet.kiralama_istatistikleri.toplam_gun_sayisi }} gün<br>
-                <strong>Müşteri Sayısı:</strong> {{ ozet.kiralama_istatistikleri.farkli_musteri_sayisi }}
+                <strong>Toplam Gün:</strong> {{ ozet.kiralama_istatistikleri.toplam_gun_sayisi }} gün
+            </div>
+        </div>
+
+        <!-- Kiralama Özeti -->
+        <div class="kart kiralama-ozet">
+            <div class="kart-etiket"><i class="fas fa-handshake me-2"></i>Kiralama Özeti</div>
+            <div class="kart-deger">{{ ozet.kiralama_istatistikleri.toplam_kiralama_sayisi }} Kiralama</div>
+            <div class="kart-detay">
+                <strong>Farklı Müşteri:</strong> {{ ozet.kiralama_istatistikleri.farkli_musteri_sayisi }}
+            </div>
+        </div>
+
+        <!-- Nakliye -->
+        <div class="kart nakliye">
+            <div class="kart-etiket"><i class="fas fa-truck me-2"></i>Nakliye</div>
+            <div class="kart-deger">{{ ozet.nakliye_ozeti.sefer_sayisi }} Sefer</div>
+            <div class="kart-detay">
+                <strong>Nakliye Satış Geliri:</strong> {{ "%.2f"|format(ozet.nakliye_ozeti.satis_geliri_try) }} TRY<br>
+                <strong>Nakliye Gideri:</strong> {{ "%.2f"|format(ozet.nakliye_giderleri_try) }} TRY
             </div>
         </div>
 
@@ -188,7 +207,7 @@
             <div class="kart-deger">{{ "%.2f"|format(ozet.toplam_giderler_try) }} TRY</div>
             <div class="kart-detay">
                 <strong>Servis (işçilik + malzeme):</strong> {{ "%.2f"|format(ozet.servis_giderleri_try) }} TRY<br>
-                <strong>Nakliye:</strong> {{ "%.2f"|format(ozet.nakliye_giderleri_try) }} TRY
+                <strong>Nakliye Alış:</strong> {{ "%.2f"|format(ozet.nakliye_giderleri_try) }} TRY
             </div>
         </div>
 

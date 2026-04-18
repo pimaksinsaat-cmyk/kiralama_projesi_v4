@@ -9,23 +9,28 @@
 {# Dashboard sayaçlarını hesaplamak için ön döngü #}
 {% for k in kiralamalar %}
     {% for kalem in k.kalemler %}
-        {% if not kalem.sonlandirildi %}
-            {# Sözleşme bedeli hesaplama (Gün x Fiyat + Nakliye) #}
-            {% set gun_fark = (kalem.kiralama_bitis - kalem.kiralama_baslangici).days + 1 %}
-            {% set bedel = (gun_fark * kalem.kiralama_brm_fiyat) + (kalem.nakliye_satis_fiyat or 0) %}
-            {% set stats.aktif_hacim = stats.aktif_hacim + bedel %}
+        {% if not kalem.sonlandirildi and kalem.is_active %}
+            {% if kalem.kiralama_baslangici and kalem.kiralama_bitis %}
+                {# Sözleşme bedeli: Gün x Birim Fiyat (nakliye hariç - backend ile tutarlı) #}
+                {% set gun_fark = (kalem.kiralama_bitis - kalem.kiralama_baslangici).days + 1 %}
+                {% if gun_fark > 0 %}
+                    {% set bedel = gun_fark * kalem.kiralama_brm_fiyat %}
+                    {% set stats.aktif_hacim = stats.aktif_hacim + bedel %}
+                {% endif %}
 
-            {% if today %}
-                {% set kalan = (kalem.kiralama_bitis - today).days %}
-                {% if kalan < 0 %}
-                    {% set stats.geciken = stats.geciken + 1 %}
-                {% elif kalan <= 3 %}
-                    {% set stats.yaklasan = stats.yaklasan + 1 %}
+                {% if today %}
+                    {% set kalan = (kalem.kiralama_bitis - today).days %}
+                    {% if kalan < 0 %}
+                        {% set stats.geciken = stats.geciken + 1 %}
+                    {% elif kalan <= 3 %}
+                        {% set stats.yaklasan = stats.yaklasan + 1 %}
+                    {% endif %}
                 {% endif %}
             {% endif %}
-        {% endif %}
-        {% if kalem.is_dis_tedarik_ekipman %}
-            {% set stats.harici = stats.harici + 1 %}
+
+            {% if kalem.is_dis_tedarik_ekipman %}
+                {% set stats.harici = stats.harici + 1 %}
+            {% endif %}
         {% endif %}
     {% endfor %}
 {% endfor %}

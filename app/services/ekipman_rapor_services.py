@@ -87,12 +87,17 @@ class EkipmanRaporuService:
         servis_giderleri_try = EkipmanRaporuService._calculate_servis_giderleri(
             ekipman_id, start_date, end_date
         )
-        
+
         # Nakliye masrafları
         nakliye_giderleri_try = EkipmanRaporuService._calculate_nakliye_giderleri(
             ekipman_id, start_date, end_date
         )
-        
+
+        # Nakliye özeti (sefer sayısı + satış geliri)
+        nakliye_ozeti = EkipmanRaporuService._calculate_nakliye_ozeti(
+            ekipman_id, start_date, end_date
+        )
+
         total_masraf = servis_giderleri_try + nakliye_giderleri_try
         
         # Net Gelir Hesaplama (TRY cinsinden)
@@ -154,7 +159,8 @@ class EkipmanRaporuService:
             'durum': durum,
             'start_date': start_date,
             'end_date': end_date,
-            'kiralama_istatistikleri': kiralama_stats
+            'kiralama_istatistikleri': kiralama_stats,
+            'nakliye_ozeti': nakliye_ozeti,
         }
     
     @staticmethod
@@ -340,6 +346,42 @@ class EkipmanRaporuService:
         
         return Decimal(result.total_nakliye)
     
+    @staticmethod
+    def _calculate_nakliye_ozeti(ekipman_id: int, start_date: date = None, end_date: date = None) -> dict:
+        """
+        Makinenin nakliye istatistiklerini döner:
+        - Nakliyeli sefer sayısı (gidiş + dönüş ayrı ayrı sayılır)
+        - Toplam nakliye satış geliri (TRY)
+        """
+        query = db.session.query(KiralamaKalemi).filter(
+            KiralamaKalemi.ekipman_id == ekipman_id,
+            KiralamaKalemi.is_deleted == False,
+        )
+        if start_date:
+            query = query.filter(KiralamaKalemi.kiralama_bitis >= start_date)
+        if end_date:
+            query = query.filter(KiralamaKalemi.kiralama_baslangici <= end_date)
+
+        sefer_sayisi = 0
+        satis_geliri = Decimal(0)
+
+        for kalem in query.all():
+            gidis_var = (kalem.nakliye_satis_fiyat or 0) > 0 or (kalem.nakliye_alis_fiyat or 0) > 0 or kalem.nakliye_araci_id or kalem.nakliye_tedarikci_id
+            donus_var = (kalem.donus_nakliye_satis_fiyat or 0) > 0
+
+            if gidis_var:
+                sefer_sayisi += 1
+            if donus_var:
+                sefer_sayisi += 1
+
+            satis_geliri += Decimal(kalem.nakliye_satis_fiyat or 0)
+            satis_geliri += Decimal(kalem.donus_nakliye_satis_fiyat or 0)
+
+        return {
+            'sefer_sayisi': sefer_sayisi,
+            'satis_geliri_try': float(satis_geliri),
+        }
+
     @staticmethod
     def _determine_status(roi_yuzde: float) -> str:
         """
