@@ -40,8 +40,7 @@
         .kart.net { border-left-color: #8b5cf6; }
         .kart.roi { border-left-color: #ec4899; }
         .kart.durum { border-left-color: #06b6d4; }
-        .kart.kiralama-ozet { border-left-color: #0ea5e9; }
-        .kart.nakliye { border-left-color: #f97316; }
+.kart.nakliye { border-left-color: #f97316; }
         
         .kart-etiket { font-size: 0.74rem; color: #999; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 7px; }
         .kart-deger { font-size: 1.35rem; font-weight: 700; color: #1f2937; margin-bottom: 8px; }
@@ -180,13 +179,9 @@
             <div class="kart-detay">
                 <strong>Toplam Gün:</strong> {{ ozet.kiralama_istatistikleri.toplam_gun_sayisi }} gün
             </div>
-        </div>
-
-        <!-- Kiralama Özeti -->
-        <div class="kart kiralama-ozet">
-            <div class="kart-etiket"><i class="fas fa-handshake me-2"></i>Kiralama Özeti</div>
-            <div class="kart-deger">{{ ozet.kiralama_istatistikleri.toplam_kiralama_sayisi }} Kiralama</div>
+            <hr style="border-color: rgba(0,0,0,0.1); margin: 10px 0;">
             <div class="kart-detay">
+                <strong>Kiralama Adedi:</strong> {{ ozet.kiralama_istatistikleri.toplam_kiralama_sayisi }}<br>
                 <strong>Farklı Müşteri:</strong> {{ ozet.kiralama_istatistikleri.farkli_musteri_sayisi }}
             </div>
         </div>
