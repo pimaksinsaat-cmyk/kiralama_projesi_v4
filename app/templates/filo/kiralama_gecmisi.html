@@ -178,11 +178,11 @@
             <table>
                 <thead>
                     <tr>
-                        <th style="width: 100px;">Kiralama No</th>
+                        <th style="width: 140px;">Kiralama No</th>
                         <th style="width: 180px;">Müşteri</th>
-                        <th style="width: 140px;">Başlangıç</th>
-                        <th style="width: 140px;">Bitiş</th>
-                        <th style="width: 100px; text-align: center;">Gün</th>
+                        <th style="width: 120px;">Başlangıç</th>
+                        <th style="width: 120px;">Bitiş</th>
+                        <th style="width: 70px; text-align: center;">Gün</th>
                         <th style="width: 130px;" class="number">TL Getiri</th>
                         <th style="width: 130px;" class="number">USD Getiri</th>
                         <th style="width: 130px;" class="number">EUR Getiri</th>
@@ -192,10 +192,10 @@
                     {% for detay in kiralama_detaylari %}
                     <tr>
                         <td><span class="no">{{ detay.kiralama_no }}</span></td>
-                        <td><span class="musteri-adi">{{ detay.musteri }}</span></td>
+                        <td><span class="musteri-adi" title="{{ detay.musteri }}">{{ detay.musteri|truncate_name(3) }}</span></td>
                         <td><span class="tarih">{{ detay.baslangic_tarihi.strftime('%d.%m.%Y') }}</span></td>
                         <td><span class="tarih">{{ detay.bitis_tarihi.strftime('%d.%m.%Y') }}</span></td>
-                        <td style="text-align: center; font-weight: 500;">{{ detay.gun_sayisi }}</td>
+                        <td style="text-align: center; font-weight: 600; color: #334155;">{{ detay.gun_sayisi }}</td>
                         <td class="number currency-try">{{ detay.gelir_try|para }} TL</td>
                         <td class="number currency-usd">{{ detay.gelir_usd|para }} $</td>
                         <td class="number currency-eur">{{ detay.gelir_eur|para }} €</td>
@@ -206,7 +206,7 @@
                     <tr class="total-row">
                         <td colspan="2" style="font-size: 1.1rem;">📈 TOPLAM</td>
                         <td colspan="2"></td>
-                        <td style="text-align: center; font-size: 1.1rem;">{{ total_gun }} gün</td>
+                        <td style="text-align: center; font-size: 1.1rem; color: #334155;">{{ total_gun }} gün</td>
                         <td class="number" style="font-size: 1rem;">
                             <span class="currency-try">{{ total_try|para }} TL</span>
                         </td>
