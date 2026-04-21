@@ -7,6 +7,7 @@ from app.extensions import db
 from app.subeler.models import Sube, SubeGideri
 from app.araclar.models import Arac
 from app.filo.models import Ekipman
+from app.kiralama.models import KiralamaKalemi
 from app.subeler.forms import SubeForm, SubeGideriForm, SubeSabitGiderDonemiForm, GIDER_KATEGORILERI, MANUEL_GIDER_KATEGORILERI
 from app.services.base import ValidationError
 from app.services.sube_gider_services import SubeGiderService, SubeSabitGiderDonemiService
@@ -110,11 +111,18 @@ def index():
             Ekipman.calisma_durumu != 'bosta',
             Ekipman.is_active == True
         ).count()
-        
+        harici_bekleyen = KiralamaKalemi.query.filter_by(
+            donus_sube_id=sube.id,
+            is_dis_tedarik_ekipman=True,
+            sonlandirildi=True,
+            is_active=True,
+        ).count()
+
         sube_verileri.append({
             'detay': sube,
             'istatistik': {
-                'toplam': toplam, 'kirada': kirada, 'bosta': bosta
+                'toplam': toplam, 'kirada': kirada, 'bosta': bosta,
+                'harici_bekleyen': harici_bekleyen,
             }
         })
     return render_template('subeler/index.html', sube_verileri=sube_verileri)
@@ -180,14 +188,28 @@ def sube_makineleri(sube_id):
         # 'plaka' yerine 'kod' kullan ve ekstra alanlar ekle
         bosta_list = [{'id': e.id, 'kod': e.kod, 'marka': e.marka, 'yukseklik': e.calisma_yuksekligi, 'kapasite': e.kaldirma_kapasitesi} for e in bosta]
         kirada_list = [{'id': e.id, 'kod': e.kod, 'marka': e.marka, 'yukseklik': e.calisma_yuksekligi, 'kapasite': e.kaldirma_kapasitesi} for e in kirada]
-        
+
+        harici_kalemler = (KiralamaKalemi.query
+            .filter_by(donus_sube_id=sube_id, is_dis_tedarik_ekipman=True, sonlandirildi=True, is_active=True)
+            .all()
+        )
+        harici_list = [{
+            'form_no': k.kiralama.kiralama_form_no if k.kiralama else '-',
+            'tip': k.harici_ekipman_tipi or '-',
+            'marka': k.harici_ekipman_marka or '-',
+            'model': k.harici_ekipman_model or '-',
+            'seri_no': k.harici_ekipman_seri_no or '-',
+            'tedarikci': k.harici_tedarikci.firma_adi if k.harici_tedarikci else '-',
+        } for k in harici_kalemler]
+
         return jsonify({
             'sube_id': sube.id,
             'sube_adi': sube.isim,
             'bosta': bosta_list,
             'kirada': kirada_list,
             'bosta_sayisi': len(bosta),
-            'kirada_sayisi': len(kirada)
+            'kirada_sayisi': len(kirada),
+            'harici': harici_list,
         })
     except Exception as e:
         import traceback

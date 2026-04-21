@@ -653,10 +653,90 @@ def geri_yukle(id):
         flash(str(e), "danger")
     return redirect(url_for('filo.arsiv'))
 
+@filo_bp.route('/harici/iade/<int:kalem_id>', methods=['POST'])
+def harici_iade(kalem_id):
+    from app.kiralama.models import KiralamaKalemi
+    from app.araclar.models import Arac
+    from decimal import Decimal, InvalidOperation as DecInvalid
+    kalem = KiralamaKalemi.query.get_or_404(kalem_id)
+    if not kalem.is_dis_tedarik_ekipman or not kalem.donus_sube_id:
+        flash("Bu kayıt için iade işlemi uygulanamaz.", "danger")
+        return redirect(url_for('filo.harici'))
+
+    # Temel bilgiler
+    iade_tarihi_str = request.form.get('iade_tarihi', '')
+    try:
+        from datetime import datetime as dt
+        kalem.iade_tarihi = dt.strptime(iade_tarihi_str, '%Y-%m-%d').date() if iade_tarihi_str else date.today()
+    except ValueError:
+        kalem.iade_tarihi = date.today()
+
+    kalem.iade_aciklama = request.form.get('iade_aciklama', '').strip() or None
+
+    # Nakliye
+    nakliye_var = request.form.get('iade_nakliye_var') == '1'
+    kalem.iade_nakliye_var = nakliye_var
+    if nakliye_var:
+        oz_mal = request.form.get('iade_nakliye_tipi') == 'oz_mal'
+        kalem.iade_nakliye_oz_mal = oz_mal
+        if oz_mal:
+            arac_id = request.form.get('iade_nakliye_arac_id', '')
+            kalem.iade_nakliye_arac_id = int(arac_id) if arac_id.isdigit() else None
+            kalem.iade_nakliye_tedarikci_id = None
+        else:
+            tedarikci_id = request.form.get('iade_nakliye_tedarikci_id', '')
+            kalem.iade_nakliye_tedarikci_id = int(tedarikci_id) if tedarikci_id.isdigit() else None
+            kalem.iade_nakliye_arac_id = None
+        fiyat_str = request.form.get('iade_nakliye_fiyat', '').replace(',', '.')
+        try:
+            kalem.iade_nakliye_fiyat = Decimal(fiyat_str) if fiyat_str else None
+        except DecInvalid:
+            kalem.iade_nakliye_fiyat = None
+        kdv_str = request.form.get('iade_nakliye_kdv', '')
+        kalem.iade_nakliye_kdv = int(kdv_str) if kdv_str.isdigit() else None
+    else:
+        kalem.iade_nakliye_oz_mal = None
+        kalem.iade_nakliye_arac_id = None
+        kalem.iade_nakliye_tedarikci_id = None
+        kalem.iade_nakliye_fiyat = None
+        kalem.iade_nakliye_kdv = None
+
+    kalem.donus_sube_id = None
+    db.session.commit()
+    tedarikci = kalem.harici_tedarikci.firma_adi if kalem.harici_tedarikci else "tedarikçiye"
+    flash(f"Makine {tedarikci} iade edildi olarak işaretlendi.", "success")
+    return redirect(url_for('filo.harici'))
+
+
 @filo_bp.route('/harici')
 def harici():
+    from app.araclar.models import Arac
+    from app.firmalar.models import Firma
     ekipmanlar = Ekipman.query.filter(Ekipman.firma_tedarikci_id.isnot(None), Ekipman.is_active == True).all()
-    return render_template('filo/harici.html', ekipmanlar=ekipmanlar)
+    bekleyen_kalemler = (KiralamaKalemi.query
+        .filter(
+            KiralamaKalemi.is_dis_tedarik_ekipman == True,
+            KiralamaKalemi.sonlandirildi == True,
+            KiralamaKalemi.donus_sube_id.isnot(None),
+            KiralamaKalemi.is_active == True,
+        )
+        .options(
+            joinedload(KiralamaKalemi.donus_sube),
+            joinedload(KiralamaKalemi.harici_tedarikci),
+            joinedload(KiralamaKalemi.kiralama),
+        )
+        .all()
+    )
+    nakliye_araclari = Arac.aktif_nakliye_query().order_by(Arac.plaka).all()
+    nakliye_firmalari = Firma.query.filter_by(is_active=True, is_tedarikci=True).order_by(Firma.firma_adi).all()
+    return render_template(
+        'filo/harici.html',
+        ekipmanlar=ekipmanlar,
+        bekleyen_kalemler=bekleyen_kalemler,
+        nakliye_araclari=nakliye_araclari,
+        nakliye_firmalari=nakliye_firmalari,
+        today=date.today().isoformat(),
+    )
 
 
 # -------------------------------------------------------------------------

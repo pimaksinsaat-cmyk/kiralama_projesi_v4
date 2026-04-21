@@ -220,6 +220,12 @@ class KiralamaKalemiService(BaseService):
                 # donus_sube_val geçersiz/eksik olsa bile kalem sonlandırıldığında
                 # makineyi bosta'ya al (şube atanmadan)
                 kalem.ekipman.calisma_durumu = 'bosta'
+        elif kalem.is_dis_tedarik_ekipman:
+            # Dış tedarik makinesini şubeye ata (tedarikçiye iade edilene kadar bekleme)
+            if donus_sube_val and str(donus_sube_val).isdigit() and int(donus_sube_val) > 0:
+                kalem.donus_sube_id = int(donus_sube_val)
+            else:
+                kalem.donus_sube_id = None
 
         # Dönüş nakliye bilgilerini güncelle
         kalem.is_harici_nakliye = bool(is_harici_nakliye)

@@ -84,6 +84,17 @@ class KiralamaKalemi(BaseModel):
     # --- DURUM VE VERSİYONLAMA (YENİ EKLENENLER) ---
     sonlandirildi = db.Column(db.Boolean, default=False, nullable=False)
     is_active = db.Column(db.Boolean, default=True, nullable=False) # Şu anki aktif versiyon mu?
+    donus_sube_id = db.Column(db.Integer, db.ForeignKey('subeler.id'), nullable=True)
+
+    # --- DIŞ TEDARİK İADE NAKLİYESİ ---
+    iade_tarihi = db.Column(db.Date, nullable=True)
+    iade_nakliye_var = db.Column(db.Boolean, default=False, nullable=True)
+    iade_nakliye_oz_mal = db.Column(db.Boolean, nullable=True)  # True=kendi aracı, False=harici
+    iade_nakliye_arac_id = db.Column(db.Integer, db.ForeignKey('araclar.id'), nullable=True)
+    iade_nakliye_tedarikci_id = db.Column(db.Integer, db.ForeignKey('firma.id'), nullable=True)
+    iade_nakliye_fiyat = db.Column(db.Numeric(15, 2), nullable=True)
+    iade_nakliye_kdv = db.Column(db.Integer, nullable=True)
+    iade_aciklama = db.Column(db.Text, nullable=True)
     
     parent_id = db.Column(db.Integer, db.ForeignKey('kiralama_kalemi.id'), nullable=True)
     versiyon_no = db.Column(db.Integer, default=1, nullable=False)
@@ -107,6 +118,9 @@ class KiralamaKalemi(BaseModel):
     nakliye_araci = db.relationship('Ekipman', foreign_keys=[nakliye_araci_id], backref='yapilan_nakliyeler')
     harici_tedarikci = db.relationship('Firma', foreign_keys=[harici_ekipman_tedarikci_id])
     nakliye_tedarikci = db.relationship('Firma', foreign_keys=[nakliye_tedarikci_id])
+    donus_sube = db.relationship('Sube', foreign_keys=[donus_sube_id])
+    iade_nakliye_arac = db.relationship('Arac', foreign_keys=[iade_nakliye_arac_id])
+    iade_nakliye_tedarikci = db.relationship('Firma', foreign_keys=[iade_nakliye_tedarikci_id])
 
     # Versiyon Ağacı İlişkisi (Self-Referential)
     # Bir kalemin alt revizyonlarını listelemek için

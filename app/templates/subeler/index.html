@@ -171,7 +171,7 @@
                 <div class="status-badge" title="Aktif"></div>
             </div>
 
-            <div class="stat-row">
+            <div class="stat-row" style="grid-template-columns: {% if item.istatistik.harici_bekleyen %}1fr 1fr 1fr 1fr{% else %}1fr 1fr 1fr{% endif %};">
                 <div class="stat-item" style="border-right: 1px solid #eee;">
                     <span class="stat-value">{{ item.istatistik.toplam }}</span>
                     <span class="stat-label">Ekipman</span>
@@ -180,10 +180,16 @@
                     <span class="stat-value" style="color: var(--success-green);">{{ item.istatistik.kirada }}</span>
                     <span class="stat-label">Sahada</span>
                 </div>
-                <div class="stat-item">
+                <div class="stat-item" {% if item.istatistik.harici_bekleyen %}style="border-right: 1px solid #eee;"{% endif %}>
                     <span class="stat-value" style="color: var(--warning-orange);">{{ item.istatistik.bosta }}</span>
                     <span class="stat-label">Depoda</span>
                 </div>
+                {% if item.istatistik.harici_bekleyen %}
+                <div class="stat-item">
+                    <span class="stat-value" style="color: #856404;">{{ item.istatistik.harici_bekleyen }}</span>
+                    <span class="stat-label">Harici</span>
+                </div>
+                {% endif %}
             </div>
 
             <div class="card-body">
@@ -256,7 +262,7 @@
             </div>
 
             <!-- Kirada Makineler -->
-            <div>
+            <div style="margin-bottom: 2rem;">
                 <h5 style="color: #c0392b; font-weight: 700; margin: 0 0 0.8rem 0; display: flex; align-items: center; gap: 8px; padding: 0.5rem 0.8rem; background-color: #ffeaea; border-left: 4px solid #c0392b; border-radius: 4px;">
                     <span style="font-size: 1.2rem;">🔴</span> Sahada / Kirada (<span id="kirada-count">0</span>)
                 </h5>
@@ -271,6 +277,26 @@
                             </tr>
                         </thead>
                         <tbody id="kirada-list"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Harici (Dış Tedarik) Makineler -->
+            <div id="harici-section" style="display:none;">
+                <h5 style="color: #856404; font-weight: 700; margin: 0 0 0.8rem 0; display: flex; align-items: center; gap: 8px; padding: 0.5rem 0.8rem; background-color: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">
+                    <span style="font-size: 1.2rem;">🟡</span> Harici / İade Bekliyor (<span id="harici-count">0</span>)
+                </h5>
+                <div style="overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+                        <thead>
+                            <tr style="background-color: #f5f5f5; border: 1px solid #ddd;">
+                                <th style="padding: 0.75rem; text-align: left; font-weight: 600; border-right: 1px solid #ddd; color: #333;">Form No</th>
+                                <th style="padding: 0.75rem; text-align: left; font-weight: 600; border-right: 1px solid #ddd; color: #333;">Tip / Marka / Model</th>
+                                <th style="padding: 0.75rem; text-align: left; font-weight: 600; border-right: 1px solid #ddd; color: #333;">Seri No</th>
+                                <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: #333;">Tedarikçi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="harici-list"></tbody>
                     </table>
                 </div>
             </div>
@@ -541,18 +567,37 @@
                 const kiradaList = document.getElementById('kirada-list');
                 const kiradaCount = document.getElementById('kirada-count');
                 kiradaCount.textContent = data.kirada.length;
-                
+
                 if (data.kirada.length === 0) {
                     kiradaList.innerHTML = '<tr><td colspan="4" style="padding: 1rem; text-align: center; color: #999;">Sahada makine bulunmuyor</td></tr>';
                 } else {
                     kiradaList.innerHTML = data.kirada.map((e, i) => renderTableRow(e, i)).join('');
-                    
+
                     // Context menu listeners ekle
                     document.querySelectorAll('#kirada-list .makine-satiri').forEach(row => {
                         row.addEventListener('contextmenu', (e) => showContextMenu(e, row));
                     });
                 }
-                
+
+                // Harici (dış tedarik) makineler
+                const hariciSection = document.getElementById('harici-section');
+                const hariciList = document.getElementById('harici-list');
+                const hariciCount = document.getElementById('harici-count');
+                if (data.harici && data.harici.length > 0) {
+                    hariciCount.textContent = data.harici.length;
+                    hariciList.innerHTML = data.harici.map((h, i) => `
+                        <tr style="border: 1px solid #eee; background-color: ${i % 2 === 0 ? '#fffef5' : '#fff9e6'};">
+                            <td style="padding: 0.75rem; border-right: 1px solid #eee; font-weight: 500; color: #856404;">${h.form_no}</td>
+                            <td style="padding: 0.75rem; border-right: 1px solid #eee; color: #555;">${h.tip} / ${h.marka} ${h.model}</td>
+                            <td style="padding: 0.75rem; border-right: 1px solid #eee; color: #555;">${h.seri_no}</td>
+                            <td style="padding: 0.75rem; color: #555;">${h.tedarikci}</td>
+                        </tr>
+                    `).join('');
+                    hariciSection.style.display = 'block';
+                } else {
+                    hariciSection.style.display = 'none';
+                }
+
                 // Modal'ı aç
                 makineModal.style.display = 'flex';
                 
