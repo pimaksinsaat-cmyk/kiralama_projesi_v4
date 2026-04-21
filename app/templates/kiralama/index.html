@@ -3,38 +3,6 @@
 {% block title %}Kiralama Yönetimi{% endblock %}
 
 {% block content %}
-{# Sayaçları ve finansal toplamları döngü dışında tanımlıyoruz #}
-{% set stats = namespace(geciken=0, yaklasan=0, harici=0, aktif_hacim=0) %}
-
-{# Dashboard sayaçlarını hesaplamak için ön döngü #}
-{% for k in kiralamalar %}
-    {% for kalem in k.kalemler %}
-        {% if not kalem.sonlandirildi and kalem.is_active %}
-            {% if kalem.kiralama_baslangici and kalem.kiralama_bitis %}
-                {# Sözleşme bedeli: Gün x Birim Fiyat (nakliye hariç - backend ile tutarlı) #}
-                {% set gun_fark = (kalem.kiralama_bitis - kalem.kiralama_baslangici).days + 1 %}
-                {% if gun_fark > 0 %}
-                    {% set bedel = gun_fark * kalem.kiralama_brm_fiyat %}
-                    {% set stats.aktif_hacim = stats.aktif_hacim + bedel %}
-                {% endif %}
-
-                {% if today %}
-                    {% set kalan = (kalem.kiralama_bitis - today).days %}
-                    {% if kalan < 0 %}
-                        {% set stats.geciken = stats.geciken + 1 %}
-                    {% elif kalan <= 3 %}
-                        {% set stats.yaklasan = stats.yaklasan + 1 %}
-                    {% endif %}
-                {% endif %}
-            {% endif %}
-
-            {% if kalem.is_dis_tedarik_ekipman %}
-                {% set stats.harici = stats.harici + 1 %}
-            {% endif %}
-        {% endif %}
-    {% endfor %}
-{% endfor %}
-
 <style>
     /* Dashboard Stilleri */
     .stats-card-mini {
@@ -47,6 +15,8 @@
     }
     .stats-label { font-size: 0.7rem; color: #6c757d; text-transform: uppercase; font-weight: 700; margin-bottom: 2px; }
     .stats-value { font-size: 1.1rem; font-weight: 800; color: #343a40; }
+    .stats-inline-row { display: flex; gap: 12px; align-items: center; flex-wrap: nowrap; white-space: nowrap; font-size: 0.85rem; font-weight: 700; }
+    .stats-inline-row > span + span { border-left: 1px solid #dee2e6; padding-left: 12px; }
     
     .kur-box { font-size: 0.8rem; background: #f8f9fa; border-radius: 4px; padding: 4px 8px; border: 1px solid #e9ecef; }
     .kur-refresh-badge { cursor: pointer; user-select: none; }
@@ -159,25 +129,23 @@
 <div class="container">
     <div class="d-flex justify-content-between align-items-end mb-4">
         <div class="d-flex gap-3 flex-grow-1">
-            <div class="stats-card-mini border-start border-danger border-4 shadow-sm">
-                <div class="stats-label">Gecikenler</div>
-                <div class="stats-value text-danger">{{ stats.geciken }}</div>
-            </div>
-
             <div class="stats-card-mini border-start border-warning border-4 shadow-sm">
-                <div class="stats-label">Yaklaşanlar (3G)</div>
-                <div class="stats-value text-warning">{{ stats.yaklasan }}</div>
+                <div class="stats-label">Operasyon Özeti</div>
+                <div class="stats-inline-row">
+                    <span class="text-warning">Yaklaşan: {{ dashboard_stats.yaklasan }}</span>
+                    <span class="text-danger">Geciken: {{ dashboard_stats.geciken }}</span>
+                    <span class="text-info">Dış Tedarik: {{ dashboard_stats.harici }}</span>
+                </div>
             </div>
 
             <div class="stats-card-mini border-start border-success border-4 shadow-sm">
                 <div class="stats-label">Sözleşme Hacmi</div>
-                <div class="stats-value text-success">{{ "{:,.2f}".format(stats.aktif_hacim).replace(",", "X").replace(".", ",").replace("X", ".") }} TL</div>
+                <div class="stats-inline-row">
+                    <span class="text-primary">Aktif: {{ "{:,.2f}".format(dashboard_stats.aktif_sozlesme_hacmi).replace(",", "X").replace(".", ",").replace("X", ".") }} TL</span>
+                    <span class="text-success">Toplam: {{ "{:,.2f}".format(dashboard_stats.toplam_hacim).replace(",", "X").replace(".", ",").replace("X", ".") }} TL</span>
+                </div>
             </div>
 
-            <div class="stats-card-mini border-start border-info border-4 shadow-sm">
-                <div class="stats-label">Dış Tedarik</div>
-                <div class="stats-value text-info">{{ stats.harici }}</div>
-            </div>
         </div>
 
         <div class="text-end kur-refresh-badge" id="kur-refresh-badge" title="Kurları manuel güncellemek için tıklayın">
@@ -202,17 +170,6 @@
     <div class="d-flex justify-content-between align-items-center mb-3">
         <div>
             <a href="{{ url_for('kiralama.ekle') }}" class="btn btn-primary btn-sm px-4 fw-bold shadow-sm"><i class="fas fa-plus me-2"></i>Yeni Kiralama Kaydı</a>
-            
-            <!-- Diğer İşlemler Dropdown -->
-            <div class="btn-group ms-2" role="group">
-                <button type="button" class="btn btn-outline-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
-                    <i class="fas fa-bars me-1"></i>Diğer İşlemler
-                </button>
-                <ul class="dropdown-menu shadow border-0">
-                    <li><a class="dropdown-item" href="{{ url_for('kiralama.excel_disari_aktar') }}"><i class="fas fa-file-excel me-2 text-success"></i>Excel Dışa Aktar</a></li>
-                    <li><a class="dropdown-item" href="#" id="excel-ice-yukle-ac"><i class="fas fa-upload me-2 text-success"></i>Excel'den Yükle</a></li>
-                </ul>
-            </div>
         </div>
         
         <form method="GET" action="{{ url_for('kiralama.index') }}" class="d-flex mb-0" style="width: 35%;">
@@ -504,34 +461,6 @@
     {% endif %}
 </div>
 
-<!-- Excel İçe Aktarım Formu (Gizli) -->
-<form id="excel-ice-yukle-form" method="POST" action="{{ url_for('kiralama.excel_ice_yukle') }}" enctype="multipart/form-data" style="display:none;">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <input type="hidden" name="confirm_password" id="excel-confirm-password-hidden">
-    <input type="file" name="excel_file" id="excel-ice-yukle-input" accept=".xlsx">
-</form>
-
-<!-- Şifre Doğrulama Modal -->
-<div class="modal fade" id="excel-password-modal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 shadow">
-            <div class="modal-header bg-light border-0">
-                <h5 class="modal-title fw-bold"><i class="fas fa-shield-alt me-2 text-warning"></i>Güvenlik Doğrulaması</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
-            </div>
-            <div class="modal-body">
-                <p class="text-muted small mb-3">Excel'den toplu veri yüklemesi için kullanıcı şifrenizi tekrar girin.</p>
-                <label for="excel-confirm-password" class="form-label fw-semibold">Şifre</label>
-                <input type="password" id="excel-confirm-password" class="form-control" autocomplete="current-password" placeholder="Şifrenizi girin">
-                <div class="form-text">Doğrulama sonrası Excel dosyası seçimi açılacaktır.</div>
-            </div>
-            <div class="modal-footer border-0">
-                <button type="button" class="btn btn-light" data-bs-dismiss="modal">İptal</button>
-                <button type="button" class="btn btn-primary" id="excel-password-confirm-btn">Devam Et</button>
-            </div>
-        </div>
-    </div>
-</div>
 
 <div id="context-menu" class="context-menu shadow">
     <div class="px-3 py-2 small text-muted border-bottom fw-bold" id="menu-form-title">FORM İŞLEMLERİ</div>
@@ -1113,54 +1042,6 @@ document.addEventListener('DOMContentLoaded', function() {
             uyari.classList.add('d-none');
         }
     });
-
-    // ==================== EXCEL İÇE/DIŞA AKTARIMI ====================
-    const excelImportTrigger = document.getElementById('excel-ice-yukle-ac');
-    const excelImportInput = document.getElementById('excel-ice-yukle-input');
-    const excelImportForm = document.getElementById('excel-ice-yukle-form');
-    const excelPasswordModalEl = document.getElementById('excel-password-modal');
-    const excelPasswordInput = document.getElementById('excel-confirm-password');
-    const excelPasswordHidden = document.getElementById('excel-confirm-password-hidden');
-    const excelPasswordConfirmBtn = document.getElementById('excel-password-confirm-btn');
-    const excelPasswordModal = excelPasswordModalEl ? new bootstrap.Modal(excelPasswordModalEl) : null;
-
-    if (
-        excelImportTrigger && excelImportInput && excelImportForm &&
-        excelPasswordModal && excelPasswordInput && excelPasswordHidden && excelPasswordConfirmBtn
-    ) {
-        excelImportTrigger.addEventListener('click', function(e) {
-            e.preventDefault();
-            excelPasswordInput.value = '';
-            excelPasswordHidden.value = '';
-            excelPasswordModal.show();
-        });
-
-        excelPasswordConfirmBtn.addEventListener('click', function() {
-            const pwd = (excelPasswordInput.value || '').trim();
-            if (!pwd) {
-                excelPasswordInput.focus();
-                return;
-            }
-            excelPasswordHidden.value = pwd;
-            excelPasswordModal.hide();
-            excelImportInput.click();
-        });
-
-        excelImportInput.addEventListener('change', function() {
-            if (this.files && this.files.length > 0) {
-                excelImportForm.submit();
-            } else {
-                excelPasswordHidden.value = '';
-            }
-        });
-
-        excelPasswordInput.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                excelPasswordConfirmBtn.click();
-            }
-        });
-    }
 
     // ==================== KUR MANUEL GUNCELLEME ====================
     const kurRefreshBadge = document.getElementById('kur-refresh-badge');

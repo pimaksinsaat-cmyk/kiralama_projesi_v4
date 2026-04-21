@@ -321,11 +321,11 @@
                                 </td>
                                 <td class="text-end">
                                     {% if islem.kiralama_alis_kdv is defined and islem.kiralama_alis_kdv is not none %}
-                                        {{ islem.kiralama_alis_kdv }}% (Kiralama)
+                                        {{ islem.kiralama_alis_kdv | int }}% (Kiralama)
                                     {% elif islem.nakliye_alis_kdv is defined and islem.nakliye_alis_kdv is not none %}
-                                        {{ islem.nakliye_alis_kdv }}% (Nakliye)
+                                        {{ islem.nakliye_alis_kdv | int }}% (Nakliye)
                                     {% elif islem.kdv_orani is defined and islem.kdv_orani is not none %}
-                                        {{ islem.kdv_orani }}%
+                                        {{ islem.kdv_orani | int }}%
                                     {% else %}-{% endif %}
                                 </td>
                                 <td class="text-end">
@@ -609,7 +609,7 @@
                                 <td class="text-end">{{ "{:,.2f}".format(row.brm_fiyat).replace(',','X').replace('.',',').replace('X','.') }}</td>
                                 <td class="text-end">{{ "{:,.2f}".format(row.matrah).replace(',','X').replace('.',',').replace('X','.') }}</td>
                                 <td class="text-center">
-                                    %{{ row.kdv_orani }}
+                                    %{{ row.kdv_orani | int }}
                                     {% if row.tevkifat_str is defined and row.tevkifat_str %}
                                         <div class="text-muted fst-italic" style="font-size:0.7em; line-height:1.3; white-space:nowrap;">
                                             Tevkifat: {{ row.tevkifat_str }}

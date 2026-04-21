@@ -2,12 +2,10 @@ import traceback
 import threading
 import json
 from datetime import datetime, date, timedelta, timezone
-from io import BytesIO
-from flask import render_template, redirect, url_for, flash, request, current_app, jsonify, send_file
+from flask import render_template, redirect, url_for, flash, request, current_app, jsonify
 from flask_login import current_user, login_required
 from sqlalchemy import or_
 from sqlalchemy.orm import joinedload
-from openpyxl import Workbook, load_workbook
 
 from app import db
 from app.kiralama import kiralama_bp
@@ -157,6 +155,56 @@ def index():
             query = query.join(Firma, Kiralama.firma_musteri_id == Firma.id)\
                          .filter(or_(Kiralama.kiralama_form_no.ilike(f"%{q}%"), tr_ilike(Firma.firma_adi, f"%{q}%")))
 
+        # Dashboard kartları sayfalamadan bağımsız olarak, filtreye uyan tüm kayıtlar üzerinden hesaplanır.
+        stats_raw = query.all()
+        stats_kiralamalar = {}
+        for kiralama in stats_raw:
+            stats_kiralamalar[kiralama.id] = kiralama
+
+        dashboard_stats = {
+            'geciken': 0,
+            'yaklasan': 0,
+            'harici': 0,
+            'toplam_hacim': 0,
+            'aktif_sozlesme_adedi': 0,
+            'aktif_sozlesme_hacmi': 0,
+        }
+
+        today = date.today()
+        for kiralama in stats_kiralamalar.values():
+            kiralama_toplam_hacim = 0
+            kiralama_aktif_hacim = 0
+            kiralama_aktif_kalem_var = False
+
+            for kalem in kiralama.kalemler:
+                if not kalem.kiralama_baslangici or not kalem.kiralama_bitis:
+                    continue
+
+                gun_fark = (kalem.kiralama_bitis - kalem.kiralama_baslangici).days + 1
+                if gun_fark <= 0:
+                    continue
+
+                bedel = gun_fark * (kalem.kiralama_brm_fiyat or 0)
+                kiralama_toplam_hacim += bedel
+
+                if kalem.is_active and not kalem.sonlandirildi:
+                    kiralama_aktif_kalem_var = True
+                    kiralama_aktif_hacim += bedel
+
+                    kalan = (kalem.kiralama_bitis - today).days
+                    if kalan < 0:
+                        dashboard_stats['geciken'] += 1
+                    elif kalan <= 3:
+                        dashboard_stats['yaklasan'] += 1
+
+                    if kalem.is_dis_tedarik_ekipman:
+                        dashboard_stats['harici'] += 1
+
+            dashboard_stats['toplam_hacim'] += kiralama_toplam_hacim
+            dashboard_stats['aktif_sozlesme_hacmi'] += kiralama_aktif_hacim
+            if kiralama_aktif_kalem_var:
+                dashboard_stats['aktif_sozlesme_adedi'] += 1
+
         pagination = query.order_by(Kiralama.kiralama_form_no.desc()).paginate(page=page, per_page=per_page)
         kiralamalar = pagination.items
 
@@ -244,7 +292,8 @@ def index():
             subeler=subeler,
             nakliye_araclari=nakliye_araclari,
             nakliye_tedarikci_listesi=nakliye_tedarikci_listesi,
-            recently_returned_kalem_ids=recently_returned_kalem_ids
+            recently_returned_kalem_ids=recently_returned_kalem_ids,
+            dashboard_stats=dashboard_stats
         )
     except Exception as e:
         db.session.rollback()
@@ -262,7 +311,15 @@ def index():
             subeler=[],
             nakliye_araclari=[],
             nakliye_tedarikci_listesi=[],
-            recently_returned_kalem_ids=set()
+            recently_returned_kalem_ids=set(),
+            dashboard_stats={
+                'geciken': 0,
+                'yaklasan': 0,
+                'harici': 0,
+                'toplam_hacim': 0,
+                'aktif_sozlesme_adedi': 0,
+                'aktif_sozlesme_hacmi': 0,
+            }
         )
 
 @kiralama_bp.route('/detay/<int:kiralama_id>')
@@ -998,141 +1055,4 @@ def api_kurlari_guncelle():
             'son_guncelleme': son.strftime('%d.%m.%Y %H:%M:%S') if son else 'Henüz güncellenmedi',
         }), 500
 
-
-# ==================== EXCEL EXPORT/IMPORT ====================
-
-@kiralama_bp.route('/excel-disari-aktar', methods=['GET'])
-@login_required
-def excel_disari_aktar():
-    """Tüm kiralama kaydını Excel'e aktar."""
-    try:
-        kiralamalar = Kiralama.query.filter(Kiralama.is_active == True).options(
-            joinedload(Kiralama.firma_musteri),
-            joinedload(Kiralama.kalemler)
-        ).all()
-
-        wb = Workbook()
-        ws = wb.active
-        ws.title = 'Kiralamalar'
-
-        headers = [
-            'Form No', 'Müşteri', 'Başlangıç Tarihi', 'Bitiş Tarihi', 
-            'Birim Fiyat', 'Satış Fiyat', 'KDV Oranı (%)', 'Makine Kodu',
-            'Makine Tipi', 'Makine Marka', 'Dış Tedarik Mi', 'Sonlanmış mı'
-        ]
-        ws.append(headers)
-
-        for kiralama in kiralamalar:
-            for kalem in kiralama.kalemler:
-                makine_kodu = kalem.ekipman.kod if kalem.ekipman else (kalem.harici_ekipman_tipi or '')
-                makine_tipi = kalem.ekipman.tipi if kalem.ekipman else (kalem.harici_ekipman_tipi or '')
-                makine_marka = kalem.ekipman.marka if kalem.ekipman else (kalem.harici_ekipman_marka or '')
-                
-                ws.append([
-                    kiralama.kiralama_form_no,
-                    kiralama.firma_musteri.firma_adi if kiralama.firma_musteri else '',
-                    kalem.kiralama_baslangici,
-                    kalem.kiralama_bitis,
-                    float(kalem.kiralama_brm_fiyat or 0),
-                    float(kalem.kiralama_alis_fiyat or 0),
-                    kiralama.kdv_orani,
-                    makine_kodu,
-                    makine_tipi,
-                    makine_marka,
-                    'Evet' if kalem.is_dis_tedarik_ekipman else 'Hayir',
-                    'Evet' if kalem.sonlandirildi else 'Hayir',
-                ])
-
-        stream = BytesIO()
-        wb.save(stream)
-        stream.seek(0)
-
-        filename = f"kiralamalar_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-        return send_file(
-            stream,
-            as_attachment=True,
-            download_name=filename,
-            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        )
-    except Exception as e:
-        flash(f'Excel dışa aktarım başarısız: {e}', 'danger')
-        return redirect(url_for('kiralama.index'))
-
-
-@kiralama_bp.route('/excel-ice-yukle', methods=['POST'])
-@login_required
-def excel_ice_yukle():
-    """Excel'den kiralama kaydını yükle (güncelle)."""
-    confirm_password = (
-        request.form.get('confirm_password')
-        or request.form.get('password')
-        or request.form.get('sifre')
-        or ''
-    ).strip()
-    if not (
-        getattr(current_user, 'is_authenticated', False)
-        and hasattr(current_user, 'check_password')
-        and current_user.check_password(confirm_password)
-    ):
-        flash('Excel içe aktarım için kullanıcı şifrenizi doğru girmeniz gerekiyor.', 'danger')
-        return redirect(url_for('kiralama.index'))
-
-    file = request.files.get('excel_file')
-    if not file or not file.filename:
-        flash('Lütfen bir Excel dosyası seçiniz.', 'warning')
-        return redirect(url_for('kiralama.index'))
-
-    if not file.filename.lower().endswith('.xlsx'):
-        flash('Sadece .xlsx uzantılı dosyalar destekleniyor.', 'danger')
-        return redirect(url_for('kiralama.index'))
-
-    try:
-        wb = load_workbook(file, data_only=True)
-        ws = wb.active
-    except Exception as exc:
-        flash(f'Excel dosyası okunamadı: {exc}', 'danger')
-        return redirect(url_for('kiralama.index'))
-
-    updated = 0
-    skipped = 0
-    errors = []
-
-    rows = ws.iter_rows(min_row=2, values_only=True)
-    for row_idx, row in enumerate(rows, start=2):
-        try:
-            form_no = (row[0] or '').strip() if row[0] else ''
-            
-            if not form_no:
-                skipped += 1
-                continue
-
-            mevcut_kiralama = Kiralama.query.filter_by(kiralama_form_no=form_no).first()
-            if not mevcut_kiralama:
-                errors.append(f'Satır {row_idx}: Form No {form_no} bulunamadı.')
-                continue
-
-            # KDV Oranı güncelle
-            try:
-                mevcut_kiralama.kdv_orani = int(row[6]) if row[6] else 20
-            except (ValueError, TypeError):
-                mevcut_kiralama.kdv_orani = 20
-
-            updated += 1
-
-        except Exception as exc:
-            errors.append(f'Satır {row_idx}: {exc}')
-
-    try:
-        db.session.commit()
-    except Exception as exc:
-        db.session.rollback()
-        flash(f'Excel içe aktarma başarısız: {exc}', 'danger')
-        return redirect(url_for('kiralama.index'))
-
-    message = f'Excel içe aktarım tamamlandı. Güncellenen: {updated}, Atlanan: {skipped}.'
-    if errors:
-        message += f' Hatalar: {", ".join(errors[:5])}'
-    
-    flash(message, 'success' if not errors else 'warning')
-    return redirect(url_for('kiralama.index'))
 

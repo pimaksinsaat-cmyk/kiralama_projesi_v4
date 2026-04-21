@@ -86,20 +86,11 @@
                         <li><a class="dropdown-item" href="{{ url_for('filo.harici') }}"><i class="fas fa-external-link-alt me-2"></i>Harici Ekipmanlar</a></li>
                         <li><a class="dropdown-item" href="{{ url_for('servis.bakimda') }}"><i class="fas fa-tools me-2"></i>Bakımdakiler</a></li>
                         <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item" href="{{ url_for('filo.excel_disari_aktar') }}"><i class="fas fa-file-excel me-2 text-success"></i>Excel Dışa Aktar</a></li>
-                        <li><a class="dropdown-item" href="#" id="excel-ice-yukle-ac"><i class="fas fa-upload me-2 text-success"></i>Excel'den Yükle</a></li>
-                        <li><hr class="dropdown-divider"></li>
                         <li><a class="dropdown-item" href="{{ url_for('filo.arsiv') }}"><i class="fas fa-archive me-2"></i>Arşivlenmiş Makineler</a></li>
                     </ul>
                 </div>
             </div>
         </div>
-
-        <form id="excel-ice-yukle-form" method="POST" action="{{ url_for('filo.excel_ice_yukle') }}" enctype="multipart/form-data" style="display:none;">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="confirm_password" id="excel-confirm-password-hidden">
-            <input type="file" name="excel_file" id="excel-ice-yukle-input" accept=".xlsx">
-        </form>
 
         <form method="GET" action="{{ url_for('filo.index') }}" class="mb-4">
             <div class="input-group shadow-sm" style="max-width: 600px;">
@@ -453,26 +444,6 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 </form>
 
-<div class="modal fade" id="excel-password-modal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 shadow">
-            <div class="modal-header bg-light border-0">
-                <h5 class="modal-title fw-bold"><i class="fas fa-shield-alt me-2 text-warning"></i>Güvenlik Doğrulaması</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
-            </div>
-            <div class="modal-body">
-                <p class="text-muted small mb-3">Excel'den toplu veritabanı kaydı için kullanıcı şifrenizi tekrar girin.</p>
-                <label for="excel-confirm-password" class="form-label fw-semibold">Şifre</label>
-                <input type="password" id="excel-confirm-password" class="form-control" autocomplete="current-password" placeholder="Şifrenizi girin">
-                <div class="form-text">Doğrulama sonrası Excel dosyası seçimi açılacaktır.</div>
-            </div>
-            <div class="modal-footer border-0">
-                <button type="button" class="btn btn-light" data-bs-dismiss="modal">İptal</button>
-                <button type="button" class="btn btn-primary" id="excel-password-confirm-btn">Devam Et</button>
-            </div>
-        </div>
-    </div>
-</div>
 
 <form id="filo-iade-iptal-form" method="POST" action="{{ url_for('kiralama.iptal_et_kalem') }}" style="display:none;">
     <input type="hidden" name="csrf_token" id="filo-iptal-csrf-token">
@@ -791,53 +762,6 @@
                 await originalOnClick(e);
                 const params = new URLSearchParams();
             };
-        }
-
-        const excelImportTrigger = document.getElementById('excel-ice-yukle-ac');
-        const excelImportInput = document.getElementById('excel-ice-yukle-input');
-        const excelImportForm = document.getElementById('excel-ice-yukle-form');
-        const excelPasswordModalEl = document.getElementById('excel-password-modal');
-        const excelPasswordInput = document.getElementById('excel-confirm-password');
-        const excelPasswordHidden = document.getElementById('excel-confirm-password-hidden');
-        const excelPasswordConfirmBtn = document.getElementById('excel-password-confirm-btn');
-        const excelPasswordModal = excelPasswordModalEl ? new bootstrap.Modal(excelPasswordModalEl) : null;
-
-        if (
-            excelImportTrigger && excelImportInput && excelImportForm &&
-            excelPasswordModal && excelPasswordInput && excelPasswordHidden && excelPasswordConfirmBtn
-        ) {
-            excelImportTrigger.addEventListener('click', function(e) {
-                e.preventDefault();
-                excelPasswordInput.value = '';
-                excelPasswordHidden.value = '';
-                excelPasswordModal.show();
-            });
-
-            excelPasswordConfirmBtn.addEventListener('click', function() {
-                const pwd = (excelPasswordInput.value || '').trim();
-                if (!pwd) {
-                    excelPasswordInput.focus();
-                    return;
-                }
-                excelPasswordHidden.value = pwd;
-                excelPasswordModal.hide();
-                excelImportInput.click();
-            });
-
-            excelImportInput.addEventListener('change', function() {
-                if (this.files && this.files.length > 0) {
-                    excelImportForm.submit();
-                } else {
-                    excelPasswordHidden.value = '';
-                }
-            });
-
-            excelPasswordInput.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    excelPasswordConfirmBtn.click();
-                }
-            });
         }
 
         const searchInput = document.querySelector('input[name="q"]');

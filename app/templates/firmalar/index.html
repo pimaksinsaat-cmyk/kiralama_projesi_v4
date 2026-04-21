@@ -92,17 +92,6 @@
                             <i class="fas fa-archive me-2"></i>Arşivlenmiş Firmalar
                         </a>
                     </li>
-                    <li><hr class="dropdown-divider"></li>
-                    <li>
-                        <a class="dropdown-item" href="{{ url_for('firmalar.excel_disari_aktar') }}">
-                            <i class="fas fa-file-excel me-2 text-success"></i>DB'yi Excel'e Aktar
-                        </a>
-                    </li>
-                    <li>
-                        <a class="dropdown-item" href="#" id="firmalar-excel-ice-yukle-ac">
-                            <i class="fas fa-upload me-2 text-success"></i>Excel'den Yükle
-                        </a>
-                    </li>
                 </ul>
             </div>
         </div>
@@ -118,11 +107,6 @@
             {% endfor %}
         {% endif %}
     {% endwith %}
-
-    <form id="firmalar-excel-ice-yukle-form" method="POST" action="{{ url_for('firmalar.excel_ice_yukle') }}" enctype="multipart/form-data" style="display:none;">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="file" name="excel_file" id="firmalar-excel-ice-yukle-input" accept=".xlsx">
-    </form>
 
     <form method="GET" action="{{ url_for('firmalar.index') }}" class="search-form">
         <input type="text" name="q" placeholder="Firma adı, yetkili, vergi no veya iletişim bilgisi ile hızlı ara..." value="{{ q or '' }}">
@@ -564,22 +548,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    const excelImportTrigger = document.getElementById('firmalar-excel-ice-yukle-ac');
-    const excelImportInput = document.getElementById('firmalar-excel-ice-yukle-input');
-    const excelImportForm = document.getElementById('firmalar-excel-ice-yukle-form');
-
-    if (excelImportTrigger && excelImportInput && excelImportForm) {
-        excelImportTrigger.addEventListener('click', function(e) {
-            e.preventDefault();
-            excelImportInput.click();
-        });
-
-        excelImportInput.addEventListener('change', function() {
-            if (this.files && this.files.length > 0) {
-                excelImportForm.submit();
-            }
-        });
-    }
 });
 </script>
 {% endblock %}
