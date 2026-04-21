@@ -581,6 +581,7 @@ class FirmaService(BaseService):
         diğer özet görünümler bu metodu kullanmalıdır.
         """
         from app.cari.models import HizmetKaydi
+        from app.services.kiralama_services import KiralamaService
 
         rows = []
         included_hizmet_kaydi_ids = set()
@@ -711,22 +712,41 @@ class FirmaService(BaseService):
             if harici_faturalar:
                 for hkd in harici_faturalar:
                     islem_tarih = getattr(hkd, 'islem_tarihi', None) or hkd.tarih
-                    hkd_tutar = float(hkd.tutar or 0)
+                    # Aktif (sonlanmamış) kalemlerde saklı tutar bayatlar; canlı hesap kullan
+                    if not kalem.sonlandirildi and (hkd.aciklama or '').startswith('Dış Kiralama'):
+                        hkd_tutar = float(KiralamaService.hesapla_hizmet_kaydi_canli_tutari(hkd))
+                    else:
+                        hkd_tutar = float(hkd.tutar or 0)
                     hkd_kdv_pct = float(
                         hkd.kiralama_alis_kdv if hkd.kiralama_alis_kdv is not None
                         else (hkd.kdv_orani or 0)
                     )
                     hkd_kdv = hkd_tutar * hkd_kdv_pct / 100
-                    rows.append({
-                        'id': hkd.id, 'sort_date': islem_tarih or form_tarihi,
-                        'form_no': kir.kiralama_form_no, 'form_tarihi': form_tarihi,
-                        'kiralama_id': kir.id, 'islem_turu': 'harici_kiralama', 'nakliye_sira': 0,
-                        'aciklama': hkd.aciklama or aciklama_base, 'seri_no': seri_no,
-                        'baslangic': islem_tarih, 'bitis': None,
-                        'bitis_bugun': False, 'gun_sayisi': None,
-                        'brm_fiyat': hkd_tutar, 'matrah': hkd_tutar, 'kdv_orani': hkd_kdv_pct,
-                        'kdv_tutar': hkd_kdv, 'toplam': -(hkd_tutar + hkd_kdv), 'bakiye': 0.0,
-                    })
+                    # Aktif kalemde bitiş tarihi bugün, gün sayısı dinamik
+                    if not kalem.sonlandirildi and kalem.kiralama_baslangici:
+                        alis_fiyat = float(kalem.kiralama_alis_fiyat or 0)
+                        gun_sayisi = (today_date - kalem.kiralama_baslangici).days + 1
+                        rows.append({
+                            'id': hkd.id, 'sort_date': islem_tarih or form_tarihi,
+                            'form_no': kir.kiralama_form_no, 'form_tarihi': form_tarihi,
+                            'kiralama_id': kir.id, 'islem_turu': 'harici_kiralama', 'nakliye_sira': 0,
+                            'aciklama': hkd.aciklama or aciklama_base, 'seri_no': seri_no,
+                            'baslangic': kalem.kiralama_baslangici, 'bitis': today_date,
+                            'bitis_bugun': True, 'gun_sayisi': gun_sayisi,
+                            'brm_fiyat': alis_fiyat, 'matrah': hkd_tutar, 'kdv_orani': hkd_kdv_pct,
+                            'kdv_tutar': hkd_kdv, 'toplam': -(hkd_tutar + hkd_kdv), 'bakiye': 0.0,
+                        })
+                    else:
+                        rows.append({
+                            'id': hkd.id, 'sort_date': islem_tarih or form_tarihi,
+                            'form_no': kir.kiralama_form_no, 'form_tarihi': form_tarihi,
+                            'kiralama_id': kir.id, 'islem_turu': 'harici_kiralama', 'nakliye_sira': 0,
+                            'aciklama': hkd.aciklama or aciklama_base, 'seri_no': seri_no,
+                            'baslangic': islem_tarih, 'bitis': None,
+                            'bitis_bugun': False, 'gun_sayisi': None,
+                            'brm_fiyat': hkd_tutar, 'matrah': hkd_tutar, 'kdv_orani': hkd_kdv_pct,
+                            'kdv_tutar': hkd_kdv, 'toplam': -(hkd_tutar + hkd_kdv), 'bakiye': 0.0,
+                        })
                     included_hizmet_kaydi_ids.add(hkd.id)
             else:
                 # Henüz faturalanmamış: dinamik (tahakkuk) hesap
