@@ -722,6 +722,7 @@ function updateSystem() {
 
 // LİSTEYE EKLEME / GÜNCELLEME
 g_btn_ekle.onclick = function() {
+    try {
     const bas = val('g-baslangic'), bit = val('g-bitis');
     if (!bas || !bit) { alert("⚠️ Başlangıç ve Bitiş tarihleri zorunludur!"); return; }
     if (new Date(bas) > new Date(bit)) { alert("⚠️ Başlangıç tarihi bitiş tarihinden önce olmalıdır!"); return; }
@@ -748,11 +749,11 @@ g_btn_ekle.onclick = function() {
     const nakAlisTevkifatVal = (alisTevkifatToggle && alisTevkifatToggle.checked) ? val('nakliye-alis-tevkifat-oran') : "";
     const nakSatisTevkifatVal = (satisTevkifatToggle && satisTevkifatToggle.checked) ? val('nakliye-satis-tevkifat-oran') : "";
 
-    // Tamamlanmış kalem kontrolü
+    // Tamamlanmış kalem kontrolü (sadece edit modunda beklenen alan)
     let isSonlandirildiExisting = false;
-    if (editingIdx !== null) {
+    if (IS_EDIT && editingIdx !== null) {
         const existingGroup = hiddenContainer.querySelectorAll('.kalem-group')[editingIdx];
-        isSonlandirildiExisting = existingGroup.querySelector('[name$="-sonlandirildi"]').value === '1';
+        isSonlandirildiExisting = existingGroup?.querySelector('[name$="-sonlandirildi"]')?.value === '1';
     }
 
     const duzenleBtn = isSonlandirildiExisting
@@ -762,38 +763,52 @@ g_btn_ekle.onclick = function() {
         ? `<button type="button" class="btn btn-sm btn-outline-secondary" disabled title="Tamamlanmış kalemler silinemez"><i class="fas fa-trash opacity-50"></i></button>`
         : `<button type="button" class="btn btn-sm btn-outline-danger sil-btn"><i class="fas fa-trash"></i></button>`;
 
-    const satirHTML = `<td></td><td>${makineAdi}</td><td>${turDetay}</td><td>${bas} / ${bit} (${gun}g)</td><td>${gun}x${sFiyat} + ${nkAdet}x${nkBirim.toFixed(2)} TL${donusFatura ? ' (Dönüş dahil)' : ' (Tek Yön)'}</td><td><b>${toplam.toFixed(2)} TL</b></td><td class="text-center">${duzenleBtn} ${silBtn}</td>`;
+    const satirHTML = `<td></td><td>${makineAdi}</td><td>${turDetay}</td><td>${formatTRDate(bas)} / ${formatTRDate(bit)} (${gun}g)</td><td>${gun}x${formatTRCurrency(sFiyat)} + ${nkAdet}x${formatTRCurrency(nkBirim)} TL${donusFatura ? ' (Dönüş dahil)' : ' (Tek Yön)'}</td><td><b>${formatTRCurrency(toplam)} TL</b></td><td class="text-center">${duzenleBtn} ${silBtn}</td>`;
 
     if (editingIdx !== null) {
         const tr = tbody.querySelectorAll('tr')[editingIdx];
         const group = hiddenContainer.querySelectorAll('.kalem-group')[editingIdx];
+        // Alan yoksa yarat (eski render'lı gruplarda eksik alan olabilir). Null crash'ini engeller.
+        const setField = (suffix, value) => {
+            let f = group.querySelector(`[name$="-${suffix}"]`);
+            if (!f) {
+                const ref = group.querySelector('input[name^="kalemler-"]');
+                if (!ref) return;
+                const prefix = ref.name.replace(/[^-]+$/, '');
+                f = document.createElement('input');
+                f.type = 'hidden';
+                f.name = prefix + suffix;
+                group.appendChild(f);
+            }
+            f.value = value;
+        };
         tr.dataset.toplam = toplam;
         tr.innerHTML = satirHTML;
-        group.querySelector('[name$="-dis_tedarik_ekipman"]').value = isDis ? 1 : 0;
-        group.querySelector('[name$="-ekipman_id"]').value = isDis ? 0 : g_ekipman.value;
-        group.querySelector('[name$="-harici_ekipman_tedarikci_id"]').value = val('g-harici-tedarikci');
-        group.querySelector('[name$="-harici_ekipman_seri_no"]').value = val('g-harici-seri');
-        group.querySelector('[name$="-harici_ekipman_marka"]').value = val('g-harici-marka');
-        group.querySelector('[name$="-harici_ekipman_model"]').value = val('g-harici-model');
-        group.querySelector('[name$="-harici_ekipman_tipi"]').value = val('g-harici-tip');
-        group.querySelector('[name$="-harici_ekipman_calisma_yuksekligi"]').value = val('g-harici-yukseklik');
-        group.querySelector('[name$="-harici_ekipman_kaldirma_kapasitesi"]').value = val('g-harici-kapasite');
-        group.querySelector('[name$="-harici_ekipman_uretim_tarihi"]').value = val('g-harici-yil');
-        group.querySelector('[name$="-kiralama_alis_fiyat"]').value = val('g-alis-fiyat');
-        group.querySelector('[name$="-kiralama_alis_kdv"]').value = val('g-alis-kdv');
-        group.querySelector('[name$="-dis_tedarik_nakliye"]').value = isDisNak ? 1 : 0;
-        group.querySelector('[name$="-nakliye_tedarikci_id"]').value = val('g-nakliye-tedarikci');
-        group.querySelector('[name$="-nakliye_alis_fiyat"]').value = val('g-nakliye-alis');
-        group.querySelector('[name$="-nakliye_alis_kdv"]').value = val('g-nakliye-alis-kdv');
-        group.querySelector('[name$="-nakliye_satis_kdv"]').value = val('g-nakliye-kdv');
-        group.querySelector('[name$="-nakliye_alis_tevkifat_oran"]').value = nakAlisTevkifatVal;
-        group.querySelector('[name$="-nakliye_satis_tevkifat_oran"]').value = nakSatisTevkifatVal;
-        group.querySelector('[name$="-kiralama_baslangici"]').value = bas;
-        group.querySelector('[name$="-kiralama_bitis"]').value = bit;
-        group.querySelector('[name$="-kiralama_brm_fiyat"]').value = sFiyat;
-        group.querySelector('[name$="-nakliye_satis_fiyat"]').value = nToplam;
-        group.querySelector('[name$="-donus_nakliye_fatura_et"]').value = donusFatura ? 1 : 0;
-        group.querySelector('[name$="-nakliye_araci_id"]').value = isDisNak ? 0 : g_ozmal_nakliye.value;
+        setField('dis_tedarik_ekipman', isDis ? 1 : 0);
+        setField('ekipman_id', isDis ? 0 : g_ekipman.value);
+        setField('harici_ekipman_tedarikci_id', val('g-harici-tedarikci'));
+        setField('harici_ekipman_seri_no', val('g-harici-seri'));
+        setField('harici_ekipman_marka', val('g-harici-marka'));
+        setField('harici_ekipman_model', val('g-harici-model'));
+        setField('harici_ekipman_tipi', val('g-harici-tip'));
+        setField('harici_ekipman_calisma_yuksekligi', val('g-harici-yukseklik'));
+        setField('harici_ekipman_kaldirma_kapasitesi', val('g-harici-kapasite'));
+        setField('harici_ekipman_uretim_tarihi', val('g-harici-yil'));
+        setField('kiralama_alis_fiyat', val('g-alis-fiyat'));
+        setField('kiralama_alis_kdv', val('g-alis-kdv'));
+        setField('dis_tedarik_nakliye', isDisNak ? 1 : 0);
+        setField('nakliye_tedarikci_id', val('g-nakliye-tedarikci'));
+        setField('nakliye_alis_fiyat', val('g-nakliye-alis'));
+        setField('nakliye_alis_kdv', val('g-nakliye-alis-kdv'));
+        setField('nakliye_satis_kdv', val('g-nakliye-kdv'));
+        setField('nakliye_alis_tevkifat_oran', nakAlisTevkifatVal);
+        setField('nakliye_satis_tevkifat_oran', nakSatisTevkifatVal);
+        setField('kiralama_baslangici', bas);
+        setField('kiralama_bitis', bit);
+        setField('kiralama_brm_fiyat', sFiyat);
+        setField('nakliye_satis_fiyat', nToplam);
+        setField('donus_nakliye_fatura_et', donusFatura ? 1 : 0);
+        setField('nakliye_araci_id', isDisNak ? 0 : g_ozmal_nakliye.value);
     } else {
         if (IS_EDIT) {
             const group = yeniGizliGrupOlustur(indexCounter);
@@ -865,6 +880,10 @@ g_btn_ekle.onclick = function() {
 
     resetEntryPanel();
     if (IS_EDIT) renderTable(); else updateSystem();
+    } catch(err) {
+        console.error('[form] Güncelle/Ekle hatası:', err);
+        alert('⚠️ Kalem kaydı sırasında JS hatası:\n' + (err && err.message ? err.message : err) + '\n\nDetay: F12 > Console');
+    }
 };
 
 // DÜZENLE / SİL
