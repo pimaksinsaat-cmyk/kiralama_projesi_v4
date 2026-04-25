@@ -335,6 +335,30 @@ class KiralamaKalemiService(BaseService):
         if not kalem:
             raise ValidationError("İlgili kiralama kalemi bulunamadı.")
 
+        # ÇAKIŞMA KORUMASI: Sonlandırma iptal edilmeden önce, bu kalemin ekipmanı
+        # başka bir aktif kiralamada kullanılıyorsa işlemi engelle. Aksi halde aynı
+        # makine iki kiralamada aynı anda 'kirada' görünür ve veri tutarsızlığı oluşur.
+        if kalem.ekipman_id:
+            cakisan = (
+                KiralamaKalemi.query
+                .join(Kiralama, KiralamaKalemi.kiralama_id == Kiralama.id)
+                .filter(
+                    KiralamaKalemi.ekipman_id == kalem.ekipman_id,
+                    KiralamaKalemi.id != kalem.id,
+                    KiralamaKalemi.is_active == True,
+                    KiralamaKalemi.sonlandirildi == False,
+                    KiralamaKalemi.is_deleted == False,
+                )
+                .first()
+            )
+            if cakisan:
+                cakisan_form_no = cakisan.kiralama.kiralama_form_no if cakisan.kiralama else f"#{cakisan.kiralama_id}"
+                makine_kod = kalem.ekipman.kod if kalem.ekipman else f"id={kalem.ekipman_id}"
+                raise ValidationError(
+                    f"Sonlandırma iptal edilemez: '{makine_kod}' makinesi şu an "
+                    f"{cakisan_form_no} numaralı kiralamada aktif kullanımda."
+                )
+
         kalem.sonlandirildi = False
         kalem.donus_nakliye_satis_fiyat = None  # Modalın bir sonraki açılışında form varsayını kullansın
         if kalem.ekipman:

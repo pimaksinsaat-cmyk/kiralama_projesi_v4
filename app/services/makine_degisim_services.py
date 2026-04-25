@@ -3,7 +3,7 @@ from app.extensions import db
 from sqlalchemy import func
 from app.kiralama.models import KiralamaKalemi
 from app.makinedegisim.models import MakineDegisim
-from app.filo.models import Ekipman
+from app.filo.models import Ekipman, BakimKaydi
 from app.nakliyeler.models import Nakliye
 from app.araclar.models import Arac
 from datetime import datetime, timedelta
@@ -65,6 +65,7 @@ class MakineDegisimService(BaseService):
             swap_nakliye = None
             swap_taseron_hizmeti = None
             swap_kira_hizmeti = None
+            swap_bakim_kaydi = None
 
             # 3. AKTİFİ PASİF YAP VE ESKİ MAKİNEYİ YÖNLENDİR
             eski_bitis = secilen_tarih - timedelta(days=1)
@@ -89,6 +90,22 @@ class MakineDegisimService(BaseService):
                         # donus_sube_val geçersiz/eksik olsa bile swap tamamlandığında
                         # eski makineyi 'neden' durumuna al (şube atanmadan)
                         eski_makine_obj.calisma_durumu = data['neden']
+
+                    # SERVİSE/BAKIMA ALINIYORSA OTOMATİK BAKIM KAYDI AÇ
+                    # neden='serviste' -> arıza, neden='bakimda' -> periyodik
+                    if data['neden'] in ('serviste', 'bakimda'):
+                        bakim_tipi = 'ariza' if data['neden'] == 'serviste' else 'periyodik'
+                        swap_bakim_kaydi = BakimKaydi(
+                            ekipman_id=eski_makine_obj.id,
+                            tarih=secilen_tarih,
+                            bakim_tipi=bakim_tipi,
+                            servis_tipi='ic_servis',
+                            durum='acik',
+                            aciklama=f"Makine değişimi (swap) ile servise alındı. Form: {eski_kalem.kiralama.kiralama_form_no}",
+                            toplam_iscilik_maliyeti=Decimal('0'),
+                        )
+                        db.session.add(swap_bakim_kaydi)
+                        db.session.flush()
 
             # 4. YENİ KALEM OLUŞTUR
             yeni_kalem = KiralamaKalemi(
@@ -259,6 +276,7 @@ class MakineDegisimService(BaseService):
                 swap_nakliye_id=swap_nakliye.id if swap_nakliye else None,
                 swap_taseron_hizmet_id=swap_taseron_hizmeti.id if swap_taseron_hizmeti else None,
                 swap_kira_hizmet_id=swap_kira_hizmeti.id if swap_kira_hizmeti else None,
+                servis_kayit_id=swap_bakim_kaydi.id if swap_bakim_kaydi else None,
                 neden=data['neden'],
                 tarih=datetime.combine(secilen_tarih, datetime.min.time())
             )
@@ -341,7 +359,20 @@ class MakineDegisimService(BaseService):
                     # İPTAL İŞLEMİNDE SAHAYA DÖNEN MAKİNENİN DE MERKEZİ SİLİNMİYOR
                     # eski_makine.sube_id = None
 
-            # 4. MAKİNE DEĞİŞİM (SWAP) LOGUNU SİL (FOREIGN KEY HATASINI ÖNLER)
+            # 4. SWAP İLE OTOMATİK AÇILAN BAKIM KAYDINI TEMİZLE
+            # Sadece henüz açık/parça-bekliyor ise sil; tamamlanmış ise koru ve uyar.
+            if degisim_log and degisim_log.servis_kayit_id:
+                bakim = db.session.get(BakimKaydi, degisim_log.servis_kayit_id)
+                if bakim and not bakim.is_deleted:
+                    if bakim.durum in ('acik', 'parca_bekliyor'):
+                        db.session.delete(bakim)
+                    else:
+                        raise ValidationError(
+                            f"Swap iptal edilemez: ilişkili bakım kaydı (ID {bakim.id}) "
+                            f"'{bakim.durum}' durumunda. Önce bakım kaydını yeniden açın."
+                        )
+
+            # 5. MAKİNE DEĞİŞİM (SWAP) LOGUNU SİL (FOREIGN KEY HATASINI ÖNLER)
             if degisim_log:
                 db.session.delete(degisim_log)
 
