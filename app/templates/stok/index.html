@@ -20,6 +20,17 @@
     .stock-card .label { font-size: 0.8rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em; }
     .stock-card .value { margin-top: 0.25rem; font-size: 1.45rem; font-weight: 800; color: #0f172a; }
     .stock-layout { display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(320px, 0.95fr); gap: 1rem; align-items: start; }
+    .kat-tree { list-style: none; padding: 0; margin: 0; }
+    .kat-tree li { margin-bottom: 2px; }
+    .kat-tree .kat-link { display: flex; align-items: center; justify-content: space-between; padding: 0.4rem 0.6rem; border-radius: 8px; font-size: 0.85rem; color: #334155; text-decoration: none; cursor: pointer; gap: 6px; }
+    .kat-tree .kat-link:hover { background: #f1f5f9; }
+    .kat-tree .kat-link.active { background: #dbeafe; color: #1d4ed8; font-weight: 700; }
+    .kat-tree .kat-actions { display: none; gap: 4px; }
+    .kat-tree li:hover .kat-actions { display: flex; }
+    .kat-sub { list-style: none; padding-left: 1rem; margin: 2px 0 0; }
+    .kat-sub .kat-link { font-size: 0.82rem; color: #64748b; }
+    .kat-add-form { display: none; margin-top: 6px; }
+    .kat-add-form.show { display: block; }
     .panel { background: #fff; border: 1px solid #e5e7eb; border-radius: 18px; box-shadow: 0 12px 30px rgba(15, 23, 42, 0.05); overflow: hidden; }
     .panel-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 1rem 1.2rem; border-bottom: 1px solid #eef2f7; }
     .panel-title { font-size: 1rem; font-weight: 800; color: #0f172a; }
@@ -84,7 +95,95 @@
         </div>
     </div>
 
-    <div class="stock-layout">
+    <div style="display:grid;grid-template-columns:200px minmax(0,1.75fr) minmax(280px,0.9fr);gap:1rem;align-items:start">
+
+        {# ---- KATEGORİ AĞACI ---- #}
+        {% macro kat_node(kat, depth) %}
+        {% set aktif_altlar = kat.alt_kategoriler | selectattr('is_active') | list %}
+        {% set acik = secili_kategori_id and (secili_kategori_id == kat.id or aktif_altlar | selectattr('id', 'equalto', secili_kategori_id) | list) %}
+        <li>
+            <div style="display:flex;align-items:center;gap:2px">
+                {% if aktif_altlar %}
+                <button onclick="toggleKatTree('{{ kat.id }}')" id="kat-chevron-{{ kat.id }}"
+                    style="background:none;border:none;padding:2px 4px;cursor:pointer;color:#94a3b8;font-size:0.65rem;flex-shrink:0;transition:transform 0.15s"
+                    title="Genislet/Daralt">
+                    <i class="fas fa-chevron-right" id="kat-chevron-icon-{{ kat.id }}" style="transition:transform 0.15s;{{ 'transform:rotate(90deg)' if acik else '' }}"></i>
+                </button>
+                {% else %}
+                <span style="display:inline-block;width:20px;text-align:center;flex-shrink:0">
+                    <i class="fas fa-circle" style="font-size:0.28rem;color:#cbd5e1"></i>
+                </span>
+                {% endif %}
+                <a class="kat-link flex-grow-1 {{ 'active' if secili_kategori_id == kat.id else '' }}"
+                   href="{{ url_for('stok.index', kategori_id=kat.id) }}"
+                   style="padding-left:0.2rem"
+                   id="kat-label-{{ kat.id }}">
+                    {{ kat.kategori_adi }}
+                </a>
+                <div class="kat-actions">
+                    <button onclick="toggleKatEdit('{{ kat.id }}')" title="Yeniden adlandır" style="padding:1px 5px;font-size:0.68rem;border:1px solid #d1d5db;border-radius:4px;background:#f9fafb;color:#374151;cursor:pointer">✎</button>
+                    <button onclick="toggleKatForm('{{ kat.id }}')" style="padding:1px 5px;font-size:0.68rem;border:1px solid #93c5fd;border-radius:4px;background:#eff6ff;color:#2563eb;cursor:pointer">+</button>
+                    <form method="POST" action="{{ url_for('stok.kategori_sil', kategori_id=kat.id) }}" class="d-inline" onsubmit="return confirm('Silinsin mi?')">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" style="padding:1px 5px;font-size:0.68rem;border:1px solid #fca5a5;border-radius:4px;background:#fff1f1;color:#dc2626;cursor:pointer">×</button>
+                    </form>
+                </div>
+            </div>
+            <div id="kat-edit-{{ kat.id }}" class="kat-add-form" style="padding-left:0;margin-top:3px">
+                <form method="POST" action="{{ url_for('stok.kategori_duzenle', kategori_id=kat.id) }}" style="display:flex;gap:4px;margin:3px 0 6px">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="parent_id" value="{{ kat.parent_id or '' }}">
+                    <input type="text" name="kategori_adi" value="{{ kat.kategori_adi }}" required style="flex:1;min-width:0;font-size:0.8rem;padding:3px 6px">
+                    <button type="submit" style="padding:3px 8px;font-size:0.78rem" class="btn btn-primary">Kaydet</button>
+                    <button type="button" onclick="toggleKatEdit('{{ kat.id }}')" style="padding:3px 8px;font-size:0.78rem" class="btn btn-outline-secondary">İptal</button>
+                </form>
+            </div>
+            <div id="kat-form-{{ kat.id }}" class="kat-add-form" style="padding-left:1.2rem">
+                <form method="POST" action="{{ url_for('stok.kategori_ekle') }}" style="display:flex;gap:4px;margin:3px 0 6px">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="parent_id" value="{{ kat.id }}">
+                    <input type="text" name="kategori_adi" placeholder="Alt kategori adı" required style="flex:1;min-width:0;font-size:0.8rem;padding:3px 6px">
+                    <button type="submit" style="padding:3px 8px;font-size:0.78rem" class="btn btn-primary">Ekle</button>
+                </form>
+            </div>
+            {% if aktif_altlar %}
+            <ul class="kat-tree" style="padding-left:0.8rem" id="kat-children-{{ kat.id }}" {{ '' if acik else 'hidden' }}>
+                {% for alt in aktif_altlar %}
+                {{ kat_node(alt, depth + 1) }}
+                {% endfor %}
+            </ul>
+            {% endif %}
+        </li>
+        {% endmacro %}
+
+        <div class="panel">
+            <div class="panel-head" style="justify-content:space-between">
+                <div class="panel-title">Kategoriler</div>
+                <button onclick="toggleKatForm('root')" style="padding:2px 8px;font-size:0.8rem;border:1px solid #93c5fd;border-radius:6px;background:#eff6ff;color:#2563eb;cursor:pointer">+ Ana</button>
+            </div>
+            <div class="panel-body" style="padding:0.75rem">
+                <div id="kat-form-root" class="kat-add-form mb-2">
+                    <form method="POST" action="{{ url_for('stok.kategori_ekle') }}" style="display:flex;gap:4px">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="parent_id" value="">
+                        <input type="text" name="kategori_adi" placeholder="Ana kategori adı" required style="flex:1;min-width:0;font-size:0.82rem;padding:4px 8px">
+                        <button type="submit" class="btn btn-sm btn-primary">Ekle</button>
+                    </form>
+                </div>
+                <ul class="kat-tree">
+                    <li>
+                        <a class="kat-link {{ 'active' if not secili_kategori_id else '' }}" href="{{ url_for('stok.index') }}">
+                            <i class="fas fa-layer-group me-1" style="font-size:0.75rem"></i> Tümü
+                        </a>
+                    </li>
+                    {% for kok in kok_kategoriler %}
+                        {{ kat_node(kok, 0) }}
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+
+        {# ---- KART LİSTESİ ---- #}
         <div class="panel">
             <div class="panel-head">
                 <div>
@@ -107,6 +206,7 @@
                             <tr>
                                 <th>Parca Kodu</th>
                                 <th>Parca Adi</th>
+                                <th>Kategori</th>
                                 <th>Tedarikci</th>
                                 <th>Mevcut Stok</th>
                                 <th>Son Birim Fiyat</th>
@@ -119,6 +219,14 @@
                             <tr>
                                 <td class="fw-semibold">{{ kart.parca_kodu }}</td>
                                 <td>{{ kart.parca_adi }}</td>
+                                <td>
+                                    {% if kart.kategori %}
+                                        {% if kart.kategori.ust_kategori %}
+                                            <span class="text-muted" style="font-size:0.78rem">{{ kart.kategori.ust_kategori.kategori_adi }} ›</span>
+                                        {% endif %}
+                                        <span style="font-size:0.82rem">{{ kart.kategori.kategori_adi }}</span>
+                                    {% else %}-{% endif %}
+                                </td>
                                 <td>{{ kisa_firma(kart.varsayilan_tedarikci.firma_adi) if kart.varsayilan_tedarikci else '-' }}</td>
                                 <td>
                                     <span class="stock-pill {{ 'ok' if (kart.mevcut_stok or 0) > 0 else 'zero' }}">{{ miktar(kart.mevcut_stok, kart.birim) }}</span>
@@ -194,6 +302,15 @@
                         <input type="text" name="parca_adi" placeholder="Yag Filtresi" required>
                     </div>
                     <div>
+                        <label>Kategori</label>
+                        <select name="kategori_id">
+                            <option value="">Kategorisiz</option>
+                            {% for kat in kategoriler %}
+                            <option value="{{ kat.id }}">{{ kat.tam_yol() }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
                         <label>Birim</label>
                         <select name="birim">
                             <option value="adet">Adet</option>
@@ -225,6 +342,33 @@
                 </form>
             </div>
         </div>
-    </div>
+
+    </div>{# /3-col grid #}
 </div>
+
+<script>
+function toggleKatForm(id) {
+    var el = document.getElementById('kat-form-' + id);
+    if (el) el.classList.toggle('show');
+}
+function toggleKatEdit(id) {
+    var edit = document.getElementById('kat-edit-' + id);
+    var label = document.getElementById('kat-label-' + id);
+    if (edit) edit.classList.toggle('show');
+    if (label) label.style.display = edit.classList.contains('show') ? 'none' : '';
+}
+function toggleKatTree(id) {
+    var children = document.getElementById('kat-children-' + id);
+    var icon = document.getElementById('kat-chevron-icon-' + id);
+    if (!children) return;
+    var acik = children.hasAttribute('hidden');
+    if (acik) {
+        children.removeAttribute('hidden');
+        if (icon) icon.style.transform = 'rotate(90deg)';
+    } else {
+        children.setAttribute('hidden', '');
+        if (icon) icon.style.transform = 'rotate(0deg)';
+    }
+}
+</script>
 {% endblock %}

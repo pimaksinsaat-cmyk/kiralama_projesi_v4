@@ -116,7 +116,7 @@ class StokKategoriService:
             raise ValidationError('Kategori bulunamadi.')
         if instance.kartlar.count() > 0:
             raise ValidationError('Bu kategoriye bagli stok kartlari var, silinemez.')
-        if instance.alt_kategoriler:
+        if any(a.is_active for a in instance.alt_kategoriler):
             raise ValidationError('Alt kategorileri olan kategori silinemez.')
         instance.is_active = False
         db.session.commit()

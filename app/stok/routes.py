@@ -7,11 +7,11 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import joinedload
 
 from app.extensions import db
-from app.filo.models import BakimKaydi, StokHareket, StokKarti
+from app.filo.models import BakimKaydi, StokHareket, StokKarti, StokKategori
 from app.firmalar.models import Firma
 from app.services.base import ValidationError
 from app.services.operation_log_service import OperationLogService
-from app.services.stok_services import StokHareketService, StokKartiService
+from app.services.stok_services import StokHareketService, StokKartiService, StokKategoriService
 from app.stok import stok_bp
 from app.utils import tr_ilike
 
@@ -43,9 +43,11 @@ def index():
         per_page = 25
 
     q = request.args.get('q', '', type=str).strip()
+    secili_kategori_id = request.args.get('kategori_id', type=int)
 
     base_query = StokKarti.query.filter(StokKarti.is_deleted == False).options(
-        joinedload(StokKarti.varsayilan_tedarikci)
+        joinedload(StokKarti.varsayilan_tedarikci),
+        joinedload(StokKarti.kategori),
     )
     query = base_query
     if q:
@@ -56,6 +58,9 @@ def index():
                 tr_ilike(Firma.firma_adi, f'%{q}%'),
             )
         )
+    if secili_kategori_id:
+        alt_idler = StokKartiService._alt_kategori_idleri(secili_kategori_id)
+        query = query.filter(StokKarti.kategori_id.in_(alt_idler))
 
     pagination = query.order_by(StokKarti.parca_adi.asc(), StokKarti.id.desc()).paginate(
         page=page,
@@ -76,6 +81,8 @@ def index():
     toplam_envanter_degeri = StokKartiService.total_inventory_value()
     arsiv_kart_sayisi = StokKarti.query.filter(StokKarti.is_deleted == True).count()
 
+    secili_kategori_id = request.args.get('kategori_id', type=int)
+
     return render_template(
         'stok/index.html',
         kartlar=kartlar,
@@ -88,7 +95,50 @@ def index():
         hareket_sayisi=hareket_sayisi,
         toplam_stok_adedi=toplam_stok_adedi,
         toplam_envanter_degeri=toplam_envanter_degeri,
+        kategoriler=StokKategoriService.hepsini_getir(),
+        kok_kategoriler=StokKategoriService.kok_kategoriler(),
+        secili_kategori_id=secili_kategori_id,
     )
+
+
+@stok_bp.route('/kategori/ekle', methods=['POST'])
+@login_required
+def kategori_ekle():
+    try:
+        StokKategoriService.olustur(
+            kategori_adi=request.form.get('kategori_adi'),
+            parent_id=request.form.get('parent_id') or None,
+        )
+        flash('Kategori eklendi.', 'success')
+    except ValidationError as exc:
+        flash(str(exc), 'danger')
+    return redirect(url_for('stok.index'))
+
+
+@stok_bp.route('/kategori/<int:kategori_id>/duzenle', methods=['POST'])
+@login_required
+def kategori_duzenle(kategori_id):
+    try:
+        StokKategoriService.guncelle(
+            kategori_id=kategori_id,
+            kategori_adi=request.form.get('kategori_adi'),
+            parent_id=request.form.get('parent_id') or None,
+        )
+        flash('Kategori guncellendi.', 'success')
+    except ValidationError as exc:
+        flash(str(exc), 'danger')
+    return redirect(url_for('stok.index'))
+
+
+@stok_bp.route('/kategori/<int:kategori_id>/sil', methods=['POST'])
+@login_required
+def kategori_sil(kategori_id):
+    try:
+        StokKategoriService.sil(kategori_id)
+        flash('Kategori silindi.', 'success')
+    except ValidationError as exc:
+        flash(str(exc), 'danger')
+    return redirect(url_for('stok.index'))
 
 
 @stok_bp.route('/arsiv')
@@ -205,6 +255,7 @@ def detay(kart_id):
         kart=kart,
         hareketler=hareketler,
         tedarikciler=_supplier_options(),
+        kategoriler=StokKategoriService.hepsini_getir(),
         bugun=date.today().strftime('%Y-%m-%d'),
         toplam_giris=toplam_giris,
         toplam_cikis=toplam_cikis,

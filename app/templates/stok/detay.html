@@ -87,6 +87,15 @@
                         <input type="text" name="parca_adi" value="{{ kart.parca_adi }}" required>
                     </div>
                     <div>
+                        <label>Kategori</label>
+                        <select name="kategori_id">
+                            <option value="">Kategorisiz</option>
+                            {% for kat in kategoriler %}
+                            <option value="{{ kat.id }}" {{ 'selected' if kart.kategori_id == kat.id else '' }}>{{ kat.tam_yol() }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
                         <label>Birim</label>
                         <select name="birim">
                             {% set birimler = [('adet','Adet'),('kg','kg'),('gr','gr'),('lt','Lt'),('ml','ml'),('mt','mt'),('cm','cm'),('mm','mm'),('koli','Koli'),('paket','Paket'),('kutu','Kutu'),('teneke','Teneke'),('varil','Varil')] %}
