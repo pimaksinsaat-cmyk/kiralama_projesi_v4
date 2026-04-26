@@ -380,12 +380,13 @@
             <form method="POST" action="{{ url_for('filo.bakima_al') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="ekipman_id" id="bakim-id">
+                <input type="hidden" name="servis_tipi" id="bakim-servis-tipi" value="ic_servis">
                 <div class="modal-header bg-warning text-dark border-0">
-                    <h5 class="modal-title fw-bold"><i class="fas fa-wrench me-2"></i>Bakıma Al: <span id="bakim-kod-label"></span></h5>
+                    <h5 class="modal-title fw-bold"><i class="fas fa-wrench me-2"></i><span id="bakim-modal-baslik">Bakıma Al</span>: <span id="bakim-kod-label"></span></h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body p-4">
-                    <div class="alert alert-warning border-0 small mb-3">
+                    <div class="alert alert-warning border-0 small mb-3" id="bakim-modal-aciklama">
                         Bu adım sadece makineyi servise almak içindir. Diğer tüm detayları bakımdakiler ekranından makinenin üstüne tıklayarak veya sağ tıklayarak yöneteceksiniz.
                     </div>
                     <div class="row g-3">
@@ -557,10 +558,20 @@
 
             const durum = (currentData.durum || '').toLowerCase().trim();
             const isBosta = durum === 'bosta' || durum === 'boşta';
-           
+            const isKirada = durum === 'kirada';
+
             document.getElementById('menu-kirala').style.display = isBosta ? 'flex' : 'none';
-            document.getElementById('menu-bakim').style.display = isBosta ? 'flex' : 'none';
             document.getElementById('menu-sube-degistir').style.display = isBosta ? 'flex' : 'none';
+
+            const menuBakim = document.getElementById('menu-bakim');
+            if (isBosta || isKirada) {
+                menuBakim.style.display = 'flex';
+                menuBakim.innerHTML = isKirada
+                    ? '<i class="fas fa-map-marker-alt me-2"></i> Yerinde Servis Planla'
+                    : '<i class="fas fa-tools me-2"></i> Bakıma/Servise Al';
+            } else {
+                menuBakim.style.display = 'none';
+            }
 
             const menuSil = document.getElementById('menu-sil');
             const silEngellendi = !isBosta;
@@ -622,9 +633,15 @@
         contextMenu.addEventListener('click', (e) => e.stopPropagation());
 
         document.getElementById('menu-bakim').addEventListener('click', function() {
+            const isKirada = (currentData.durum || '').toLowerCase().trim() === 'kirada';
             document.getElementById('bakim-id').value = currentData.ekipmanId;
             document.getElementById('bakim-kod-label').textContent = currentData.ekipmanKod;
             document.getElementById('bakim-tarihi-input').value = new Date().toISOString().split('T')[0];
+            document.getElementById('bakim-servis-tipi').value = isKirada ? 'yerinde_servis' : 'ic_servis';
+            document.getElementById('bakim-modal-baslik').textContent = isKirada ? 'Yerinde Servis Planla' : 'Bakıma Al';
+            document.getElementById('bakim-modal-aciklama').textContent = isKirada
+                ? 'Makine aktif kiralamada olduğu için sadece Yerinde Servis planlanabilir. Makine sahada çalışmaya devam edecek.'
+                : 'Bu adım sadece makineyi servise almak içindir. Diğer tüm detayları bakımdakiler ekranından yöneteceksiniz.';
             hideContextMenu();
             maintenanceModal.show();
         });

@@ -550,6 +550,7 @@ def bakima_al():
         ekipman_id = request.form.get('ekipman_id', type=int)
         tarih = request.form.get('tarih')
         calisma_saati = request.form.get('calisma_saati', type=int)
+        servis_tipi = request.form.get('servis_tipi', 'ic_servis')
 
         if ekipman_id is None or not tarih:
             flash('Eksik bilgi! Lütfen bakım başlangıç tarihini giriniz.', 'danger')
@@ -558,26 +559,28 @@ def bakima_al():
         bakim_verileri = {
             'tarih': tarih,
             'bakim_tipi': 'ariza',
-            'servis_tipi': 'ic_servis',
+            'servis_tipi': servis_tipi,
             'servis_veren_firma_id': None,
             'servis_veren_kisi': None,
             'aciklama': 'Filo listesinden bakıma alındı. Detaylar bakımdaki makine kartından yönetilecek.',
             'calisma_saati': calisma_saati,
             'sonraki_bakim_tarihi': None,
             'toplam_iscilik_maliyeti': Decimal('0'),
+            'yol_maliyeti': Decimal('0'),
             'durum': 'acik',
         }
 
-        BakimService.bakim_kaydet(ekipman_id, bakim_verileri, actor_id=get_actor_id())
+        kayit = BakimService.bakim_kaydet(ekipman_id, bakim_verileri, actor_id=get_actor_id())
         OperationLogService.log(
             module='filo', action='bakima_al',
             user_id=get_actor_id(),
             username=getattr(current_user, 'username', None),
             entity_type='Ekipman', entity_id=ekipman_id,
-            description=f"Makine #{ekipman_id} bakıma alındı.",
+            description=f"Makine #{ekipman_id} bakıma alındı ({servis_tipi}).",
             success=True
         )
-        flash("Makine başarıyla bakıma alındı ve servis kaydı oluşturuldu.", 'success')
+        flash("Servis kaydı oluşturuldu. Detayları aşağıdan düzenleyebilirsiniz.", 'success')
+        return redirect(url_for('servis.duzenle', id=kayit.id))
     except ValidationError as e:
         OperationLogService.log(
             module='filo', action='bakima_al',
@@ -599,7 +602,7 @@ def bakima_al():
         )
         flash(f"Hata: {str(e)}", 'danger')
 
-    return redirect(url_for('filo.index'))
+    return redirect(url_for('servis.bakimda'))
 
 # -------------------------------------------------------------------------
 # 8. Arşiv, Silme ve Harici Makineler
