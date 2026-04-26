@@ -201,19 +201,20 @@ class BakimService(BaseService):
         return Decimal(hareket.birim_fiyat or 0) if hareket else Decimal('0')
 
     @classmethod
-    def _sync_parts(cls, bakim_kaydi, normalized_parts):
+    def _sync_parts(cls, bakim_kaydi, normalized_parts, siliniyor=False):
+        from decimal import Decimal as D
         mevcut_parcalar = {}
         for parca in bakim_kaydi.kullanilan_parcalar:
             if parca.stok_karti_id:
-                mevcut_parcalar[parca.stok_karti_id] = mevcut_parcalar.get(parca.stok_karti_id, 0) + int(parca.kullanilan_adet or 0)
+                mevcut_parcalar[parca.stok_karti_id] = mevcut_parcalar.get(parca.stok_karti_id, D(0)) + D(str(parca.kullanilan_adet or 0))
 
         hedef_stok = normalized_parts.get('stock_totals', {})
         hedef_satirlar = normalized_parts.get('rows', [])
 
         tum_kartlar = set(mevcut_parcalar) | set(hedef_stok)
         for stok_karti_id in tum_kartlar:
-            onceki_adet = mevcut_parcalar.get(stok_karti_id, 0)
-            yeni_adet = hedef_stok.get(stok_karti_id, 0)
+            onceki_adet = mevcut_parcalar.get(stok_karti_id, D(0))
+            yeni_adet = D(str(hedef_stok.get(stok_karti_id, 0)))
             delta = yeni_adet - onceki_adet
             if delta == 0:
                 continue
@@ -225,19 +226,19 @@ class BakimService(BaseService):
             if delta > 0 and (stok_karti.mevcut_stok or 0) < delta:
                 raise ValidationError(f"'{stok_karti.parca_adi}' için yeterli stok yok. Mevcut: {stok_karti.mevcut_stok}")
 
-            stok_karti.mevcut_stok = int(stok_karti.mevcut_stok or 0) - delta
+            stok_karti.mevcut_stok = (stok_karti.mevcut_stok or D(0)) - delta
             db.session.add(stok_karti)
 
             db.session.add(
                 StokHareket(
                     stok_karti_id=stok_karti.id,
                     firma_id=bakim_kaydi.servis_veren_firma_id,
-                    bakim_kaydi_id=bakim_kaydi.id,
+                    bakim_kaydi_id=None if siliniyor else bakim_kaydi.id,
                     tarih=bakim_kaydi.tarih,
                     adet=abs(delta),
                     birim_fiyat=cls._latest_price(stok_karti.id),
                     hareket_tipi='cikis' if delta > 0 else 'giris',
-                    aciklama=f"Servis kaydi #{bakim_kaydi.id} parca senkronizasyonu",
+                    aciklama=f"Servis kaydi #{bakim_kaydi.id} {'iade' if siliniyor else 'parca senkronizasyonu'}",
                 )
             )
 
@@ -351,7 +352,7 @@ class BakimService(BaseService):
             raise ValidationError('Servis kaydı bulunamadı.')
 
         try:
-            cls._sync_parts(bakim_kaydi, {})
+            cls._sync_parts(bakim_kaydi, {}, siliniyor=True)
             ekipman = bakim_kaydi.ekipman
             db.session.delete(bakim_kaydi)
 
