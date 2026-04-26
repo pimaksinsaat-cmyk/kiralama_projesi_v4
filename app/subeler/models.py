@@ -1,5 +1,5 @@
 from app.extensions import db
-from datetime import datetime
+from datetime import datetime, timezone
 from app.models.base_model import BaseModel
 
 # 1. ŞUBE / DEPO MODELİ
@@ -19,7 +19,7 @@ class Sube(BaseModel):
 # 2. TRANSFER GEÇMİŞİ MODELİ
 class SubelerArasiTransfer(BaseModel):
     __tablename__ = 'sube_transferleri'
-    tarih = db.Column(db.DateTime, default=datetime.now)
+    tarih = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     
     ekipman_id = db.Column(db.Integer, db.ForeignKey('ekipman.id'), nullable=False)
     gonderen_sube_id = db.Column(db.Integer, db.ForeignKey('subeler.id'), nullable=False)

@@ -89,6 +89,12 @@ def _guncelle_firma_cari_cache(firma_id):
     except Exception as e:
         logging.warning(f"Firma cari cache güncelleme hatası (firma_id={firma_id}): {e}")
 
+
+def _ilk_4_kelime(metin):
+    if not metin:
+        return ""
+    return " ".join(str(metin).split()[:4])
+
 # -------------------------------------------------------------------------
 # 1. ÖDEME VE TAHSİLAT
 # -------------------------------------------------------------------------
@@ -276,7 +282,10 @@ def hizmet_ekle():
     firma_id = request.args.get('firma_id', type=int)
     form = HizmetKaydiForm()
     try:
-        form.firma_id.choices = [(f.id, f.firma_adi) for f in Firma.query.filter_by(is_active=True, is_deleted=False).all()]
+        form.firma_id.choices = [
+            (f.id, _ilk_4_kelime(f.firma_adi))
+            for f in Firma.query.filter_by(is_active=True, is_deleted=False).all()
+        ]
     except Exception as e:
         db.session.rollback()
         logging.error(f"Hizmet Ekle seçenek yükleme hatası: {str(e)}")
@@ -342,7 +351,10 @@ def hizmet_duzelt(id):
     
     form = HizmetKaydiForm(obj=hizmet)
     try:
-        form.firma_id.choices = [(f.id, f.firma_adi) for f in Firma.query.filter_by(is_active=True, is_deleted=False).all()]
+        form.firma_id.choices = [
+            (f.id, _ilk_4_kelime(f.firma_adi))
+            for f in Firma.query.filter_by(is_active=True, is_deleted=False).all()
+        ]
     except Exception as e:
         db.session.rollback()
         logging.error(f"Hizmet Düzenle seçenek yükleme hatası: {str(e)}")
@@ -456,11 +468,14 @@ def kasa_listesi():
         for k in kasalar
     ]
 
+    toplam_tl = sum(float(k.bakiye or 0) for k in kasalar)
+
     return render_template('cari/kasa_listesi.html',
                            kasalar=kasalar,
                            form=transfer_form,
                            hizli_form=hizli_form,
-                           kasalar_json=kasalar_json)
+                           kasalar_json=kasalar_json,
+                           toplam_tl=toplam_tl)
 
 @cari_bp.route('/kasa/transfer', methods=['POST'])
 def kasa_transfer():

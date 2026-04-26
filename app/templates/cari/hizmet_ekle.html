@@ -16,7 +16,7 @@
         padding: 30px;
         border-radius: 8px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        max-width: 800px;
+        max-width: 1100px;
         margin: 20px auto;
         border-top: 5px solid #0d6efd;
     }
@@ -29,7 +29,14 @@
 </style>
 <div class="container">
     <div class="form-section">
-        <h2 class="form-title"><i class="fa fa-plus"></i> Hizmet / Fatura Kaydı</h2>
+        <h2 class="form-title">
+            <i class="fa fa-plus"></i> Hizmet / Fatura Kaydı
+            {% if firma and firma.firma_adi %}
+                <div class="mt-2 fs-6 text-muted">
+                    {{ firma.firma_adi.split()[:4] | join(' ') }}
+                </div>
+            {% endif %}
+        </h2>
 
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
@@ -60,14 +67,14 @@
             </div>
 
             <div class="row mb-3">
-                <div class="col-md-4">
+                <div class="col-md-3">
                     {{ form.islem_tarihi.label(class="form-label fw-bold") }}
                     {{ form.islem_tarihi(class="form-control align-middle" + (' is-invalid' if form.islem_tarihi.errors else ''), type="date", style="height: 38px;") }}
                     {% for error in form.islem_tarihi.errors %}
                         <div class="invalid-feedback d-block">{{ error }}</div>
                     {% endfor %}
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                     {{ form.tarih.label(class="form-label fw-bold") }}
                     {{ form.tarih(class="form-control align-middle" + (' is-invalid' if form.tarih.errors else ''), type="date", style="height: 38px;") }}
                     {% for error in form.tarih.errors %}
@@ -75,8 +82,8 @@
                     {% endfor %}
                 </div>
                 <div class="col-md-2">
-                    {{ form.kdv_orani.label(class="form-label fw-bold") }}
-                    <div class="input-group align-middle">
+                    {{ form.kdv_orani.label(class="form-label fw-bold text-nowrap") }}
+                    <div class="input-group align-middle flex-nowrap">
                         {{ form.kdv_orani(class="form-control align-middle" + (' is-invalid' if form.kdv_orani.errors else ''), placeholder="KDV", min="0", max="99", maxlength="2", style="width:40px; text-align:right; height: 38px;", type="number") }}
                         <span class="input-group-text" style="height: 38px;">%</span>
                     </div>
@@ -84,11 +91,11 @@
                         <div class="invalid-feedback d-block">{{ error }}</div>
                     {% endfor %}
                 </div>
-                <div class="col-md-2">
+                <div class="col-md-4">
                     {{ form.tutar.label(class="form-label fw-bold") }}
-                    <div class="input-group align-middle">
+                    <div class="input-group align-middle flex-nowrap">
                         <span class="input-group-text" style="height: 38px;">TL</span>
-                        {{ form.tutar(class="form-control currency-input align-middle" + (' is-invalid' if form.tutar.errors else ''), placeholder="0,00", type="text", autocomplete="off", style="font-size: 1.2em; font-weight: bold; min-width: 180px; max-width: 260px; height: 38px;") }}
+                        {{ form.tutar(class="form-control currency-input align-middle" + (' is-invalid' if form.tutar.errors else ''), placeholder="0,00", type="text", autocomplete="off", style="font-size: 1.2em; font-weight: bold; min-width: 0; width: 100%; height: 38px;") }}
                     </div>
                     {% for error in form.tutar.errors %}
                         <div class="invalid-feedback d-block">{{ error }}</div>
@@ -122,7 +129,7 @@
             </div>
 
             <div class="d-flex justify-content-between align-items-center">
-                <a href="{{ url_for('firmalar.bilgi', id=firma.id if firma else '#') }}" class="btn btn-secondary">Geri Dön</a>
+                <a href="{{ url_for('firmalar.bilgi', id=firma.id) if firma else url_for('cari.finans_menu') }}" class="btn btn-secondary">Geri Dön</a>
                 <button type="submit" class="btn btn-primary">
                     {% if form.id and form.id.data %}
                         Kaydı Güncelle

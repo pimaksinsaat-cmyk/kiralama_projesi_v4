@@ -1,14 +1,72 @@
 {% extends "base.html" %}
 
-{% block title %}Giriş Yap - Pimaks{% endblock %}
+{% block title %}Giri&#351; Yap - Pimaks{% endblock %}
+
+{% block head %}
+{{ super() }}
+<style>
+    .main-content {
+        max-width: 100% !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        padding: 12px 16px 24px !important;
+        border-radius: 0 !important;
+    }
+    @media (min-width: 768px) {
+        .main-content {
+            padding-top: 24px !important;
+            padding-left: 24px !important;
+            padding-right: 24px !important;
+        }
+    }
+    .login-wrap {
+        width: 100%;
+        max-width: 420px;
+        margin: 0 auto;
+    }
+    @media (min-width: 768px) {
+        .login-wrap {
+            width: 420px !important;
+            min-width: 420px !important;
+            max-width: 420px !important;
+        }
+    }
+    .login-wrap .card {
+        width: 100%;
+        border-radius: 12px;
+        overflow: hidden;
+    }
+    .login-wrap .card-body {
+        padding: 1.5rem !important;
+    }
+    .login-wrap .form-control {
+        width: 100% !important;
+        min-width: 0 !important;
+    }
+    .login-wrap .form-check {
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+    }
+    .login-wrap .form-check-input {
+        margin-top: 0;
+    }
+    .login-wrap .btn-lg {
+        padding-top: 0.6rem;
+        padding-bottom: 0.6rem;
+        font-size: 1rem;
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center mt-5">
-    <div class="col-md-4">
+<div class="row justify-content-center mt-2 mt-md-3">
+    <div class="col-12">
+        <div class="login-wrap">
         <div class="card shadow-sm border-0">
-            <div class="card-body p-4">
+            <div class="card-body p-0">
                 
-                <div class="text-center mb-4">
+                <div class="text-center mb-3">
                     <img src="{{ url_for('static', filename='img/logo.JPG') }}" 
                          alt="Pimaks Logo" style="height: 60px;" class="mb-3"
                          onerror="this.onerror=null;">
@@ -51,9 +109,10 @@
 
             </div>
         </div>
-        <p class="text-center text-muted small mt-3">
+        <p class="text-center text-muted small mt-2 mb-0">
             &copy; 2026 Pimaks Software
         </p>
+        </div>
     </div>
 </div>
 {% endblock %}

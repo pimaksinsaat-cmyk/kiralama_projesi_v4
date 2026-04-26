@@ -1,7 +1,7 @@
 # app/db_menu/routes.py
 import os
 import subprocess
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from io import BytesIO
 
 from flask import flash, redirect, send_file, url_for
@@ -100,13 +100,13 @@ def _eski_yedekleri_temizle():
     """MAX_YEDEK_GUN günden eski .sql yedek dosyalarını siler."""
     if not os.path.exists(BACKUP_DIR):
         return
-    sinir = datetime.now() - timedelta(days=MAX_YEDEK_GUN)
+    sinir = datetime.now(timezone.utc) - timedelta(days=MAX_YEDEK_GUN)
     for dosya in os.listdir(BACKUP_DIR):
         if not dosya.endswith('.sql'):
             continue
         yol = os.path.join(BACKUP_DIR, dosya)
         try:
-            mtime = datetime.fromtimestamp(os.path.getmtime(yol))
+            mtime = datetime.fromtimestamp(os.path.getmtime(yol), tz=timezone.utc)
             if mtime < sinir:
                 os.remove(yol)
         except Exception:
@@ -124,7 +124,7 @@ def _yedek_listesi():
         yol = os.path.join(BACKUP_DIR, dosya)
         try:
             boyut = os.path.getsize(yol)
-            mtime = datetime.fromtimestamp(os.path.getmtime(yol))
+            mtime = datetime.fromtimestamp(os.path.getmtime(yol), tz=timezone.utc)
             sonuc.append({
                 'ad': dosya,
                 'boyut_kb': round(boyut / 1024, 1),
@@ -139,7 +139,7 @@ def otomatik_yedek_al(app):
     """Günlük otomatik SQL yedeği alır (APScheduler tarafından çağrılır)."""
     with app.app_context():
         os.makedirs(BACKUP_DIR, exist_ok=True)
-        bugun = datetime.now().strftime('%Y%m%d')
+        bugun = datetime.now(timezone.utc).strftime('%Y%m%d')
         hedef = os.path.join(BACKUP_DIR, f'oto_{bugun}.sql')
         if os.path.exists(hedef):
             return  # Bugün zaten alınmış
@@ -181,7 +181,7 @@ def db_yedek_sql():
         flash(f'Veritabanı yedeği alınırken hata oluştu: {exc}', 'danger')
         return redirect(url_for('main.index'))
 
-    dosya_adi = f"db_yedek_{datetime.now().strftime('%Y%m%d_%H%M%S')}.sql"
+    dosya_adi = f"db_yedek_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.sql"
     return send_file(
         BytesIO(veri),
         as_attachment=True,

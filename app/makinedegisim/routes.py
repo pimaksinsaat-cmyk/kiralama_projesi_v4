@@ -48,7 +48,6 @@ def makine_degistir(kalem_id):
     # --- SEÇENEKLERİ DOLDURMA (HTML ile tam uyumlu) ---
     form.neden.choices = [
         ('serviste', 'Serviste (Makine Arızalı/Bakıma Alınacak)'),
-        ('bakimda', 'Serviste (Makine Bakıma Alınacak)'),
         ('bosta', 'Müşteri Talebi / İade (Makine Boşa Çıkacak)'),
         ('periyodik', 'Periyodik Değişim (Makine Boşa Çıkacak)')
     ]

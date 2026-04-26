@@ -29,7 +29,7 @@
 
             <div class="alert alert-light border shadow-sm mb-4">
                 <i class="fas fa-history me-2 text-primary"></i>
-                <strong>Mevcut Durum:</strong> {{ eski_kalem.kiralama.firma_musteri.firma_adi }} firmasında, 
+                <strong>Mevcut Durum:</strong> {{ eski_kalem.kiralama.firma_musteri.firma_adi.split()[:4]|join(' ') }}{% if eski_kalem.kiralama.firma_musteri.firma_adi.split()|length > 4 %}...{% endif %} firmasında, 
                 {% if eski_makine %}
                     <strong class="text-primary">{{ eski_makine.kod }}</strong> ({{ eski_makine.marka }} {{ eski_makine.model }}) 
                     <span class="badge bg-success ms-1">ÖZ MAL</span> makine çalışmaktadır.
@@ -51,12 +51,12 @@
                             <label class="form-label fw-bold text-danger small"><i class="fas fa-warehouse me-1"></i>İADE ALINAN ŞUBE / DEPO</label>
                             <select name="donus_sube_id" id="donus_sube_id" class="form-select border-danger fw-bold" required>
                                 <option value="" disabled selected>Eski makine nereye indirildi?</option>
-                                <option value="tedarikci" class="text-danger fw-bold">🏭 Tedarikçiye İade Edildi</option>
                                 <optgroup label="Pimaks Depoları">
                                     {% for s in subeler %}
                                         <option value="{{ s.id }}" {% if secili_donus_sube == s.id|string %}selected{% endif %}>{{ s.isim }}</option>
                                     {% endfor %}
                                 </optgroup>
+                                <option value="tedarikci" class="text-danger fw-bold">Tedarikçiye İade Edildi</option>
                             </select>
                         </div>
                         

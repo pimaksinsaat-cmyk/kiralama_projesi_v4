@@ -52,6 +52,9 @@ class Config:
     SESSION_USE_SIGNER = True    # Cookie imzalansın
     SESSION_KEY_PREFIX = 'pimaks_'
 
+    # Türkçe karakterlerin JSON yanıtlarında kaçış karakteri olmadan gönderilmesi
+    JSON_AS_ASCII = False
+
     # Template ve statik dosya yenileme davranışı
     TEMPLATES_AUTO_RELOAD = _env_to_bool('TEMPLATES_AUTO_RELOAD', False)
     SEND_FILE_MAX_AGE_DEFAULT = 0 if _env_to_bool('DISABLE_STATIC_CACHE', False) else None

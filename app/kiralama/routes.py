@@ -724,7 +724,7 @@ def duzenle(kiralama_id):
         subeler = []
         markalar = []
     tipler = [tip for tip, _ in EKIPMAN_TIPI_SECENEKLERI]
-    return render_template('kiralama/form.html', form=form, kiralama=kiralama, markalar=markalar, subeler=subeler, tipler=tipler, is_edit=True, ekipman_sube_map=ekipman_sube_map, ekipman_map_json=json.dumps(ekipman_map))
+    return render_template('kiralama/form.html', form=form, kiralama=kiralama, markalar=markalar, subeler=subeler, tipler=tipler, is_edit=True, ekipman_sube_map=ekipman_sube_map, ekipman_map_json=json.dumps(ekipman_map, ensure_ascii=False))
 
 @kiralama_bp.route('/sil/<int:kiralama_id>', methods=['POST'])
 @login_required

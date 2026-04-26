@@ -2,7 +2,7 @@
 {% block title %}Kasa ve Banka Hesapları{% endblock %}
 {% block content %}
 <style>
-    .content-box { max-width: 1200px; margin: 20px auto; padding: 20px; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .content-box { max-width: 1400px; margin: 20px auto; padding: 20px; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
     table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 0.95em; }
     th, td { padding: 15px; border-bottom: 1px solid #dee2e6; text-align: left; vertical-align: middle; }
     th { background-color: #f8f9fa; color: #495057; font-weight: 600; border-top: 1px solid #dee2e6; }
@@ -11,6 +11,9 @@
     .bakiye-pozitif { color: #28a745; font-weight: bold; }
     .bakiye-negatif { color: #dc3545; font-weight: bold; }
     .bakiye-notr { color: #6c757d; font-weight: bold; }
+    tfoot tr { background-color: #f8f9fa; }
+    .toplam-label { color: #000; font-weight: 700; text-align: left; }
+    .toplam-value { font-weight: 700; font-size: 1.1em; }
 
     /* Context Menu */
     .context-menu { display: none; position: absolute; background-color: white; border: 1px solid #ccc; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border-radius: 6px; z-index: 1000; min-width: 220px; padding: 5px 0; overflow: hidden; }
@@ -91,7 +94,7 @@
                     data-csrf="{{ csrf_token() }}">
                     
                     <td>
-                        <strong>{{ kasa.kasa_adi }}</strong>
+                        <strong>{{ (kasa.kasa_adi or '') | upper }}</strong>
                         <br>
                         <small class="text-muted d-md-none">(Seçenekler için basılı tut)</small>
                     </td>
@@ -102,12 +105,12 @@
                             <span class="badge bg-secondary"><i class="fa fa-wallet"></i> Nakit</span>
                         {% endif %}
                     </td>
-                    <td>{{ kasa.banka_sube_adi if kasa.banka_sube_adi else '-' }}</td>
-                    <td>{{ kasa.para_birimi }}</td>
+                    <td>{{ (kasa.banka_sube_adi | upper) if kasa.banka_sube_adi else '-' }}</td>
+                    <td>TL</td>
                     <td class="text-end">
                         {% set bakiye_val = kasa.bakiye | float %}
                         <span class="{% if bakiye_val > 0 %}bakiye-pozitif{% elif bakiye_val < 0 %}bakiye-negatif{% else %}bakiye-notr{% endif %}" style="font-size: 1.1em;">
-                            {{ "{:,.2f}".format(bakiye_val).replace(',', 'X').replace('.', ',').replace('X', '.') }} {{ kasa.para_birimi }}
+                            {{ "{:,.2f}".format(bakiye_val).replace(',', 'X').replace('.', ',').replace('X', '.') }} TL
                         </span>
                     </td>
                 </tr>
@@ -120,6 +123,20 @@
                 </tr>
                 {% endfor %}
             </tbody>
+            {% if kasalar %}
+            <tfoot>
+                <tr>
+                    <td colspan="3"></td>
+                    <td class="toplam-label">TOPLAM</td>
+                    <td class="text-end toplam-value">
+                        {% set toplam_val = toplam_tl | float %}
+                        <span class="{% if toplam_val > 0 %}bakiye-pozitif{% elif toplam_val < 0 %}bakiye-negatif{% else %}bakiye-notr{% endif %}">
+                            {{ "{:,.2f}".format(toplam_val).replace(',', 'X').replace('.', ',').replace('X', '.') }} TL
+                        </span>
+                    </td>
+                </tr>
+            </tfoot>
+            {% endif %}
         </table>
     </div>
     

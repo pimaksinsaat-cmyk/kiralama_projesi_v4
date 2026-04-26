@@ -11,19 +11,24 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# 3. Çalışma dizinini ayarla
+# 3. Python ve sistem encoding ayarları
+ENV PYTHONIOENCODING=utf-8 \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8
+
+# 4. Çalışma dizinini ayarla
 WORKDIR /app
 
-# 4. Gerekli dosyaları kopyala
+# 5. Gerekli dosyaları kopyala
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 5. Tüm proje dosyalarını kopyala
+# 6. Tüm proje dosyalarını kopyala
 COPY . .
 
 
-# 6. Uygulamanın dinleyeceği portu ayarla (Varsayılan 5000)
+# 7. Uygulamanın dinleyeceği portu ayarla (Varsayılan 5000)
 EXPOSE 5000
 
-# 7. Uygulamayı Gunicorn ile başlat
+# 8. Uygulamayı Gunicorn ile başlat
 CMD gunicorn --worker-class gthread --workers 1 --threads 4 --timeout 90 --graceful-timeout 30 --keep-alive 5 --bind 0.0.0.0:${PORT:-5000} run:app
