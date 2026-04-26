@@ -639,7 +639,7 @@ def arsiv():
 def geri_yukle(id):
     try:
         ekipman = EkipmanService.get_by_id(id)
-        EkipmanService.update(id, {'is_active': True}, actor_id=get_actor_id())
+        EkipmanService.update(id, {'is_active': True, 'is_deleted': False, 'deleted_at': None}, actor_id=get_actor_id())
         OperationLogService.log(
             module='filo', action='restore',
             user_id=get_actor_id(),

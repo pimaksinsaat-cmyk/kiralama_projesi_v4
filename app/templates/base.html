@@ -128,16 +128,16 @@
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
-        /* Tüm sayfalarda tutarlı genişlik:
-           Şablon içindeki Bootstrap .container sınıfı .main-content genişliğini (~1320px)
-           kırar. Bu kural tüm doğrudan alt .container'ları 1600px'e hizalar. */
         .main-content > .container,
         .main-content > .container-fluid {
-            max-width: 100%;
-            width: 100%;
-            padding-left: 0;
-            padding-right: 0;
+            max-width: 100% !important;
+            width: 100% !important;
+            padding-left: 0 !important;
+            padding-right: 0 !important;
         }
+
+        /* Tum formlar icin standart genislik */
+        .form-page { max-width: 1100px; margin: 0 auto; }
         footer {
             background-color: transparent;
             color: #868e96;
@@ -190,14 +190,14 @@
                     </li>
 
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('araclar.index') }}">
-                            <i class="fas fa-truck-moving"></i> Araçlar
+                        <a class="nav-link" href="{{ url_for('filo.index') }}">
+                            <i class="fas fa-tractor"></i> Makine Parkı
                         </a>
                     </li>
 
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('filo.index') }}">
-                            <i class="fas fa-tractor"></i> Makine Parkı
+                        <a class="nav-link" href="{{ url_for('araclar.index') }}">
+                            <i class="fas fa-truck-moving"></i> Araçlar
                         </a>
                     </li>
 

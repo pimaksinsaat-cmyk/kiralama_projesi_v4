@@ -495,7 +495,8 @@ def ekle():
         subeler = []
         markalar = []
     tipler = [tip for tip, _ in EKIPMAN_TIPI_SECENEKLERI]
-    return render_template('kiralama/form.html', form=form, subeler=subeler, markalar=markalar, tipler=tipler, is_edit=False, ekipman_sube_map=ekipman_sube_map, ekipman_map_json='{}')
+    preselect_ekipman_id = request.args.get('ekipman_id', 0, type=int)
+    return render_template('kiralama/form.html', form=form, subeler=subeler, markalar=markalar, tipler=tipler, is_edit=False, ekipman_sube_map=ekipman_sube_map, ekipman_map_json='{}', preselect_ekipman_id=preselect_ekipman_id)
 
 @kiralama_bp.route('/duzenle/<int:kiralama_id>', methods=['GET', 'POST'])
 @login_required

@@ -5,10 +5,6 @@
 {% block content %}
 <style>
     /* Kiralama ekranına benzer sade görünüm */
-    .container {
-        max-width: 1500px;
-    }
-
     .filo-card {
         border-radius: 6px;
         border: 1px solid #dee2e6;
@@ -565,6 +561,12 @@
             document.getElementById('menu-kirala').style.display = isBosta ? 'flex' : 'none';
             document.getElementById('menu-bakim').style.display = isBosta ? 'flex' : 'none';
             document.getElementById('menu-sube-degistir').style.display = isBosta ? 'flex' : 'none';
+
+            const menuSil = document.getElementById('menu-sil');
+            const silEngellendi = !isBosta;
+            menuSil.style.opacity = silEngellendi ? '0.4' : '1';
+            menuSil.style.pointerEvents = silEngellendi ? 'none' : 'auto';
+            menuSil.title = silEngellendi ? `Makine ${durum} durumunda, silinemez` : '';
 
             document.getElementById('menu-bilgi').href = currentData.bilgiUrl || '#';
             document.getElementById('menu-duzenle').href = currentData.duzenleUrl || '#';

@@ -116,7 +116,7 @@
                                 <option value="0">--- Makine Seçiniz ---</option>
                                 {% for val, text in form.kalemler[0].ekipman_id.choices %}
                                     {% if val > 0 %}
-                                    <option value="{{ val }}">{{ text }}</option>
+                                    <option value="{{ val }}" {{ 'selected' if val == preselect_ekipman_id else '' }}>{{ text }}</option>
                                     {% endif %}
                                 {% endfor %}
                             </select>

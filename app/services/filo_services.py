@@ -38,6 +38,13 @@ class EkipmanService(BaseService):
                 raise ValidationError(f"'{instance.seri_no}' seri numaralı bir öz mal makine zaten mevcut.")
 
     @classmethod
+    def before_delete(cls, instance):
+        if instance.calisma_durumu == 'kirada':
+            raise ValidationError(f"'{instance.kod}' şu an kirada. Kiralama sonlandırılmadan makine silinemez.")
+        if instance.calisma_durumu == 'serviste':
+            raise ValidationError(f"'{instance.kod}' şu an serviste. Servis kaydı kapatılmadan makine silinemez.")
+
+    @classmethod
     def before_save(cls, instance, is_new=True):
         """Veritabanına yazılmadan milisaniyeler önce veriyi standartlaştırır."""
         if instance.kod:

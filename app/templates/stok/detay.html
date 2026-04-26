@@ -10,7 +10,7 @@
 {{ (ad or '').split()[:4] | join(' ') }}
 {%- endmacro %}
 <style>
-    .stock-detail-shell { max-width: 1480px; margin: 0 auto; }
+    .stock-detail-shell { max-width:1600px; margin: 0 auto; }
     .stock-header { display: flex; justify-content: space-between; align-items: start; gap: 1rem; background: linear-gradient(135deg, #f8fbff 0%, #ffffff 55%, #fff8ef 100%); border: 1px solid #dbe7f3; border-radius: 18px; padding: 1.4rem; box-shadow: 0 14px 36px rgba(15, 23, 42, 0.06); }
     .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 1rem; margin-top: 1rem; }
     .summary-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; padding: 1rem 1.1rem; }

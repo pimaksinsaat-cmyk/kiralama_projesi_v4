@@ -6,7 +6,7 @@
     {{ super() }}
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 20px; background-color: #f8f9fa; }
-        .container { max-width: 650px; margin: auto; padding: 25px; background-color: #fff; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        
         h2 { color: #343a40; text-align: center; margin-bottom: 20px;} 
         .form-group { margin-bottom: 0.7rem; }
         label { display: block; margin-bottom: .4rem; font-weight: 500; color: #495057; }
@@ -27,7 +27,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="container">
+<div class="container form-page">
     <h2>{% if is_edit %}Makine Bilgilerini Düzenle{% else %}Yeni Makine Ekle (Pimaks Filosu){% endif %}</h2>
     
     <form action="" method="POST" novalidate>
