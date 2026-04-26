@@ -7,7 +7,7 @@
 {{ '{:,.2f}'.format(value or 0).replace(',', '_').replace('.', ',').replace('_', '.') }} TL
 {%- endmacro %}
 <style>
-    .service-shell { max-width: 1480px; margin: 0 auto; }
+    .service-shell { max-width: 100%; }
     .service-hero { background: linear-gradient(135deg, #fff8e8 0%, #fff 55%, #eef7ff 100%); border: 1px solid #f1e2b8; border-radius: 18px; padding: 1.5rem; box-shadow: 0 14px 36px rgba(15, 23, 42, 0.06); }
     .service-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
     .service-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; padding: 1rem 1.1rem; }
@@ -158,6 +158,9 @@
                         <td>
                             <div class="money-value total">{{ money(kayit.toplam_servis_maliyeti) }}</div>
                             <div class="muted-note money-value detail">İşçilik: {{ money(kayit.toplam_iscilik_maliyeti) }}</div>
+                            {% if kayit.yol_maliyeti %}
+                            <div class="muted-note money-value detail">Yol: {{ money(kayit.yol_maliyeti) }}</div>
+                            {% endif %}
                             <div class="muted-note money-value detail">Malzeme: {{ money(kayit.malzeme_maliyeti) }}</div>
                         </td>
                         <td>{{ kayit.sonraki_bakim_tarihi.strftime('%d.%m.%Y') if kayit.sonraki_bakim_tarihi else '-' }}</td>

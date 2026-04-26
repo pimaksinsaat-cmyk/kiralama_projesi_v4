@@ -110,7 +110,7 @@ def _attach_cost_totals(kayitlar):
             malzeme_maliyeti += Decimal(parca.kullanilan_adet or 0) * _resolve_part_unit_price(parca)
 
         kayit.malzeme_maliyeti = malzeme_maliyeti
-        kayit.toplam_servis_maliyeti = Decimal(kayit.toplam_iscilik_maliyeti or 0) + malzeme_maliyeti
+        kayit.toplam_servis_maliyeti = Decimal(kayit.toplam_iscilik_maliyeti or 0) + Decimal(kayit.yol_maliyeti or 0) + malzeme_maliyeti
 
 
 @servis_bp.route('/')
@@ -412,7 +412,12 @@ def duzenle(id):
             'servis_veren_kisi': (request.form.get('servis_veren_kisi') or '').strip() or None,
             'aciklama': (request.form.get('aciklama') or '').strip() or None,
             'sonraki_bakim_tarihi': request.form.get('sonraki_bakim_tarihi') or None,
+            'iscilik_saat': request.form.get('iscilik_saat') or None,
+            'iscilik_saat_ucreti': request.form.get('iscilik_saat_ucreti') or None,
             'toplam_iscilik_maliyeti': request.form.get('toplam_iscilik_maliyeti') or 0,
+            'yol_km': request.form.get('yol_km') or None,
+            'yol_km_ucreti': request.form.get('yol_km_ucreti') or None,
+            'yol_maliyeti': request.form.get('yol_maliyeti') or 0,
         }
         parts_data = _collect_parts_from_form(request.form)
 
@@ -552,6 +557,7 @@ def hizli_servis_ac():
             'calisma_saati': None,
             'sonraki_bakim_tarihi': None,
             'toplam_iscilik_maliyeti': Decimal('0'),
+            'yol_maliyeti': Decimal('0'),
             'durum': 'acik',
         }
 

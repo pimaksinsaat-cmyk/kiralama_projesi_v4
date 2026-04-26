@@ -9,6 +9,11 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='vendor/font-awesome/css/all.min.css') }}">
     
     <style>
+        html {
+            /* Sayfalar arası scrollbar oluşsa da içerik genişliği sabit kalsın */
+            overflow-y: scroll;
+            scrollbar-gutter: stable;
+        }
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background-color: #f8f9fa;
@@ -115,8 +120,23 @@
         }
         .main-content {
             flex: 1;
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 20px;
             padding-bottom: 40px;
-            padding-top: 10px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        /* Tüm sayfalarda tutarlı genişlik:
+           Şablon içindeki Bootstrap .container sınıfı .main-content genişliğini (~1320px)
+           kırar. Bu kural tüm doğrudan alt .container'ları 1600px'e hizalar. */
+        .main-content > .container,
+        .main-content > .container-fluid {
+            max-width: 100%;
+            width: 100%;
+            padding-left: 0;
+            padding-right: 0;
         }
         footer {
             background-color: transparent;
@@ -301,7 +321,7 @@
         {% endif %}
     {% endwith %}
 
-    <div class="container main-content">
+    <div class="main-content">
         {% block content %}{% endblock %}
     </div>
 

@@ -4,13 +4,12 @@
         margin: 20px; 
         background-color: #f8f9fa; 
     }
-    .container { 
-        max-width: 700px; 
-        margin: auto; 
-        padding: 25px; 
-        background-color: #fff; 
-        border-radius: 8px; 
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1); 
+    .container {
+        margin: auto;
+        padding: 25px;
+        background-color: #fff;
+        border-radius: 8px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
     }
     .container2 { 
         max-width: 1500px;
@@ -51,17 +50,14 @@
         color: #2384e4; 
     }
     input, select, textarea {
-    width: 100%; 
-    max-width: 700px;
-    padding: 1rem; 
-    border: 1px solid #ced4da; 
-    border-radius: .25rem; 
-    box-sizing: border-box; 
-    font-size: 1rem; 
-    
-    /* YENİ EKLENEN SATIRLAR: */
-    font-family: inherit; /* Fontu 'body' etiketinden miras almayı zorunlu kılar */
-    resize: vertical;     /* Sadece dikeyde boyutlandırmaya izin verir */
+    width: 100%;
+    padding: 1rem;
+    border: 1px solid #ced4da;
+    border-radius: .25rem;
+    box-sizing: border-box;
+    font-size: 1rem;
+    font-family: inherit;
+    resize: vertical;
     }
     
     .btn-container { 

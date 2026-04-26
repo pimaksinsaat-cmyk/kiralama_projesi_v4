@@ -71,9 +71,9 @@
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-4" id="dis_servis_firma_div">
                     <label class="form-label fw-semibold">Dış Servis Firması</label>
-                    <select name="servis_veren_firma_id" class="form-select">
+                    <select name="servis_veren_firma_id" id="servis_veren_firma_id" class="form-select">
                         <option value="">Seçiniz...</option>
                         {% for firma in servis_firmalari %}
                         <option value="{{ firma.id }}" {{ 'selected' if kayit.servis_veren_firma_id == firma.id else '' }}>{{ firma.firma_adi }}</option>
@@ -91,13 +91,34 @@
                         {% endfor %}
                     </datalist>
                 </div>
-                <div class="col-md-6">
+                <div class="col-md-4">
                     <label class="form-label fw-semibold">Sonraki Bakım Tarihi</label>
                     <input type="date" name="sonraki_bakim_tarihi" class="form-control" value="{{ kayit.sonraki_bakim_tarihi.strftime('%Y-%m-%d') if kayit.sonraki_bakim_tarihi else '' }}">
                 </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-semibold">İşçilik Maliyeti (TL)</label>
-                    <input type="number" name="toplam_iscilik_maliyeti" step="0.01" min="0" class="form-control" value="{{ kayit.toplam_iscilik_maliyeti or 0 }}">
+                <div class="col-md-4"></div>
+                <div class="col-md-2">
+                    <label class="form-label fw-semibold">İşçilik Saati</label>
+                    <input type="number" name="iscilik_saat" id="iscilik_saat" step="0.5" min="0" class="form-control" placeholder="0" value="{{ kayit.iscilik_saat or '' }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-semibold">Saat Ücreti (TL)</label>
+                    <input type="number" name="iscilik_saat_ucreti" id="iscilik_birim" step="0.01" min="0" class="form-control" placeholder="0.00" value="{{ kayit.iscilik_saat_ucreti or '' }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-semibold">İşçilik Toplam (TL)</label>
+                    <input type="number" name="toplam_iscilik_maliyeti" id="toplam_iscilik_maliyeti" step="0.01" min="0" class="form-control" value="{{ kayit.toplam_iscilik_maliyeti or 0 }}">
+                </div>
+                <div class="col-md-2" id="yol_km_div">
+                    <label class="form-label fw-semibold">Yol (km)</label>
+                    <input type="number" name="yol_km" id="yol_km" step="1" min="0" class="form-control" placeholder="0" value="{{ kayit.yol_km or '' }}">
+                </div>
+                <div class="col-md-2" id="yol_birim_div">
+                    <label class="form-label fw-semibold">Km Ücreti (TL)</label>
+                    <input type="number" name="yol_km_ucreti" id="yol_birim" step="0.01" min="0" class="form-control" placeholder="0.00" value="{{ kayit.yol_km_ucreti or '' }}">
+                </div>
+                <div class="col-md-2" id="yol_toplam_div">
+                    <label class="form-label fw-semibold">Yol Toplam (TL)</label>
+                    <input type="number" name="yol_maliyeti" id="yol_maliyeti" step="0.01" min="0" class="form-control" value="{{ kayit.yol_maliyeti or 0 }}">
                 </div>
                 <div class="col-12">
                     <label class="form-label fw-semibold">Açıklama</label>
@@ -225,16 +246,71 @@ document.addEventListener('DOMContentLoaded', function () {
     const kisiInput = document.getElementById('servis_veren_kisi');
     const personelDatalist = document.getElementById('personel-datalist');
 
-    function togglePersonelDatalist() {
-        if (servisTipiSelect.value === 'dis_servis') {
+    const disServisDiv = document.getElementById('dis_servis_firma_div');
+    const disServisFirmaSelect = document.getElementById('servis_veren_firma_id');
+
+    function toggleServisAlanlari() {
+        const isDis = servisTipiSelect.value === 'dis_servis';
+        // Dış servis firması alanı
+        disServisFirmaSelect.disabled = !isDis;
+        if (!isDis) {
+            disServisFirmaSelect.value = '';
+        }
+        // Teknisyen datalist
+        if (isDis) {
             kisiInput.removeAttribute('list');
         } else {
             kisiInput.setAttribute('list', 'personel-datalist');
         }
     }
 
-    servisTipiSelect.addEventListener('change', togglePersonelDatalist);
-    togglePersonelDatalist(); // sayfa açılışında kontrol et
+    servisTipiSelect.addEventListener('change', toggleServisAlanlari);
+    toggleServisAlanlari(); // sayfa açılışında kontrol et
+
+    // İşçilik: saat x birim fiyat → toplam
+    const iscilikiSaatInput  = document.getElementById('iscilik_saat');
+    const iscilikBirimInput  = document.getElementById('iscilik_birim');
+    const iscilikToplamInput = document.getElementById('toplam_iscilik_maliyeti');
+
+    function hesaplaIscilik() {
+        const saat  = parseFloat(iscilikiSaatInput.value)  || 0;
+        const birim = parseFloat(iscilikBirimInput.value) || 0;
+        if (saat > 0 && birim > 0) {
+            iscilikToplamInput.value = (saat * birim).toFixed(2);
+        }
+    }
+
+    iscilikiSaatInput.addEventListener('input', hesaplaIscilik);
+    iscilikBirimInput.addEventListener('input', hesaplaIscilik);
+
+    // Yol maliyeti: km x birim fiyat → toplam (sadece yerinde servis)
+    const yolKmInput     = document.getElementById('yol_km');
+    const yolBirimInput  = document.getElementById('yol_birim');
+    const yolToplamInput = document.getElementById('yol_maliyeti');
+
+    function hesaplaYol() {
+        const km    = parseFloat(yolKmInput.value)    || 0;
+        const birim = parseFloat(yolBirimInput.value) || 0;
+        if (km > 0 && birim > 0) {
+            yolToplamInput.value = (km * birim).toFixed(2);
+        }
+    }
+
+    yolKmInput.addEventListener('input', hesaplaYol);
+    yolBirimInput.addEventListener('input', hesaplaYol);
+
+    function toggleYolAlanlari() {
+        const isYerinde = servisTipiSelect.value === 'yerinde_servis';
+        [yolKmInput, yolBirimInput, yolToplamInput].forEach(el => {
+            el.readOnly = !isYerinde;
+            el.classList.toggle('bg-light', !isYerinde);
+            el.classList.toggle('text-muted', !isYerinde);
+            if (!isYerinde) el.value = '';
+        });
+    }
+
+    servisTipiSelect.addEventListener('change', toggleYolAlanlari);
+    toggleYolAlanlari();
 });
 </script>
 {% endblock %}

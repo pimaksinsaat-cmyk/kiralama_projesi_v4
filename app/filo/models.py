@@ -1,6 +1,6 @@
 from app.extensions import db
 from app.models.base_model import BaseModel
-from datetime import date
+from datetime import datetime, date, timezone
 from sqlalchemy.orm import validates
 
 # 3. EKIPMAN (Filo)
@@ -66,7 +66,7 @@ class BakimKaydi(BaseModel):
     __tablename__ = 'bakim_kaydi'
     
     ekipman_id = db.Column(db.Integer, db.ForeignKey('ekipman.id'), nullable=False)
-    tarih = db.Column(db.Date, nullable=False, default=date.today)
+    tarih = db.Column(db.Date, nullable=False, default=lambda: datetime.now(timezone.utc).date())
     bakim_tipi = db.Column(db.String(30), nullable=False, default='ariza')
     servis_tipi = db.Column(db.String(30), nullable=False, default='ic_servis')
     durum = db.Column(db.String(30), nullable=False, default='acik')
@@ -75,7 +75,12 @@ class BakimKaydi(BaseModel):
     aciklama = db.Column(db.String(500), nullable=True) 
     calisma_saati = db.Column(db.Integer, nullable=True) 
     sonraki_bakim_tarihi = db.Column(db.Date, nullable=True)
+    iscilik_saat = db.Column(db.Numeric(10, 2), nullable=True)
+    iscilik_saat_ucreti = db.Column(db.Numeric(15, 2), nullable=True)
     toplam_iscilik_maliyeti = db.Column(db.Numeric(15, 2), nullable=False, default=0.0)
+    yol_km = db.Column(db.Numeric(10, 2), nullable=True)
+    yol_km_ucreti = db.Column(db.Numeric(15, 2), nullable=True)
+    yol_maliyeti = db.Column(db.Numeric(15, 2), nullable=False, default=0.0)
     
     ekipman = db.relationship('Ekipman', back_populates='bakim_kayitlari')
     servis_veren_firma = db.relationship('Firma', back_populates='servis_kayitlari', foreign_keys=[servis_veren_firma_id])
@@ -143,7 +148,7 @@ class StokHareket(BaseModel):
     stok_karti_id = db.Column(db.Integer, db.ForeignKey('stok_karti.id'), nullable=False)
     firma_id = db.Column(db.Integer, db.ForeignKey('firma.id'), nullable=True)
     bakim_kaydi_id = db.Column(db.Integer, db.ForeignKey('bakim_kaydi.id'), nullable=True)
-    tarih = db.Column(db.Date, nullable=False, default=date.today)
+    tarih = db.Column(db.Date, nullable=False, default=lambda: datetime.now(timezone.utc).date())
     adet = db.Column(db.Integer, nullable=False)
     birim_fiyat = db.Column(db.Numeric(15, 2), nullable=False, default=0.0)
     kdv_orani = db.Column(db.Integer, nullable=True, default=None)
