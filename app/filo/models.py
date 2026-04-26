@@ -119,7 +119,8 @@ class StokKarti(BaseModel):
 
     parca_kodu = db.Column(db.String(100), unique=True, nullable=False, index=True)
     parca_adi = db.Column(db.String(250), nullable=False)
-    mevcut_stok = db.Column(db.Integer, nullable=False, default=0)
+    birim = db.Column(db.String(20), nullable=True, default='adet')
+    mevcut_stok = db.Column(db.Numeric(15, 3), nullable=False, default=0)
     varsayilan_tedarikci_id = db.Column(db.Integer, db.ForeignKey('firma.id'), nullable=True)
     
     varsayilan_tedarikci = db.relationship('Firma', back_populates='tedarik_edilen_parcalar', foreign_keys=[varsayilan_tedarikci_id])
@@ -132,7 +133,11 @@ class StokKarti(BaseModel):
         """Validate mevcut_stok: non-negative"""
         if value is None:
             return 0
-        quantity = int(value)
+        from decimal import Decimal, InvalidOperation
+        try:
+            quantity = Decimal(str(value))
+        except (InvalidOperation, TypeError):
+            quantity = Decimal(0)
         if quantity < 0:
             raise ValueError("Stok miktarı negatif olamaz")
         return quantity
@@ -149,7 +154,7 @@ class StokHareket(BaseModel):
     firma_id = db.Column(db.Integer, db.ForeignKey('firma.id'), nullable=True)
     bakim_kaydi_id = db.Column(db.Integer, db.ForeignKey('bakim_kaydi.id'), nullable=True)
     tarih = db.Column(db.Date, nullable=False, default=lambda: datetime.now(timezone.utc).date())
-    adet = db.Column(db.Integer, nullable=False)
+    adet = db.Column(db.Numeric(15, 3), nullable=False)
     birim_fiyat = db.Column(db.Numeric(15, 2), nullable=False, default=0.0)
     kdv_orani = db.Column(db.Integer, nullable=True, default=None)
     hareket_tipi = db.Column(db.String(20), nullable=False, default='giris')

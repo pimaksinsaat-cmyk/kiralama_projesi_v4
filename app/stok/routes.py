@@ -258,6 +258,12 @@ def guncelle(kart_id):
 @login_required
 def hareket_ekle(kart_id):
     try:
+        birim_hareket = request.form.get('birim_hareket', '').strip()
+        if birim_hareket and birim_hareket in StokKartiService.GECERLI_BIRIMLER:
+            kart = StokKarti.query.get(kart_id)
+            if kart and kart.birim != birim_hareket:
+                kart.birim = birim_hareket
+                db.session.add(kart)
         hareket = StokHareketService.create_movement(kart_id, request.form, actor_id=get_actor_id())
         OperationLogService.log(
             module='stok',

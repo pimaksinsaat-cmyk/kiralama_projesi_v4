@@ -6,6 +6,9 @@
 {% macro money(value) -%}
 {{ '{:,.2f}'.format(value or 0).replace(',', '_').replace('.', ',').replace('_', '.') }} TL
 {%- endmacro %}
+{% macro miktar(value, birim) -%}
+{{ '{:,.3f}'.format((value or 0)|float).rstrip('0').rstrip('.').replace(',', '_').replace('.', ',').replace('_', '.') }} {{ birim or 'adet' }}
+{%- endmacro %}
 {% macro kisa_firma(ad) -%}
 {{ (ad or '').split()[:4] | join(' ') }}
 {%- endmacro %}
@@ -68,7 +71,7 @@
             </div>
             <div class="stock-card">
                 <div class="label">Toplam Stok</div>
-                <div class="value">{{ toplam_stok_adedi }}</div>
+                <div class="value" style="font-size:1.2rem;">{{ '{:,.3f}'.format((toplam_stok_adedi or 0)|float).rstrip('0').rstrip('.').replace(',', '_').replace('.', ',').replace('_', '.') }}</div>
             </div>
             <div class="stock-card">
                 <div class="label">Hareket Sayisi</div>
@@ -118,7 +121,7 @@
                                 <td>{{ kart.parca_adi }}</td>
                                 <td>{{ kisa_firma(kart.varsayilan_tedarikci.firma_adi) if kart.varsayilan_tedarikci else '-' }}</td>
                                 <td>
-                                    <span class="stock-pill {{ 'ok' if (kart.mevcut_stok or 0) > 0 else 'zero' }}">{{ kart.mevcut_stok or 0 }}</span>
+                                    <span class="stock-pill {{ 'ok' if (kart.mevcut_stok or 0) > 0 else 'zero' }}">{{ miktar(kart.mevcut_stok, kart.birim) }}</span>
                                 </td>
                                 <td class="money-value">{{ money(kart.son_birim_fiyat) }}</td>
                                 <td class="money-value fw-semibold">{{ money(kart.stok_degeri) }}</td>
@@ -189,6 +192,24 @@
                     <div>
                         <label>Parca Adi</label>
                         <input type="text" name="parca_adi" placeholder="Yag Filtresi" required>
+                    </div>
+                    <div>
+                        <label>Birim</label>
+                        <select name="birim">
+                            <option value="adet">Adet</option>
+                            <option value="kg">kg</option>
+                            <option value="gr">gr</option>
+                            <option value="lt">Lt</option>
+                            <option value="ml">ml</option>
+                            <option value="mt">mt</option>
+                            <option value="cm">cm</option>
+                            <option value="mm">mm</option>
+                            <option value="koli">Koli</option>
+                            <option value="paket">Paket</option>
+                            <option value="kutu">Kutu</option>
+                            <option value="teneke">Teneke</option>
+                            <option value="varil">Varil</option>
+                        </select>
                     </div>
                     <div>
                         <label>Varsayilan Tedarikci</label>

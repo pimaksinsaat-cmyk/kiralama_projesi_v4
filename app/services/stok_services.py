@@ -75,7 +75,8 @@ def _parse_date(value):
 class StokKartiService(BaseService):
     model = StokKarti
     use_soft_delete = True
-    updatable_fields = {'parca_kodu', 'parca_adi', 'varsayilan_tedarikci_id'}
+    updatable_fields = {'parca_kodu', 'parca_adi', 'birim', 'varsayilan_tedarikci_id'}
+    GECERLI_BIRIMLER = {'adet', 'kg', 'gr', 'lt', 'ml', 'mt', 'cm', 'mm', 'koli', 'paket', 'kutu', 'teneke', 'varil'}
 
     @classmethod
     def validate(cls, instance, is_new=True):
@@ -86,6 +87,8 @@ class StokKartiService(BaseService):
             raise ValidationError('Parca kodu zorunludur.')
         if not instance.parca_adi:
             raise ValidationError('Parca adi zorunludur.')
+        if instance.birim and instance.birim not in cls.GECERLI_BIRIMLER:
+            raise ValidationError(f"Gecersiz birim. Gecerli birimler: {', '.join(sorted(cls.GECERLI_BIRIMLER))}")
 
         mevcut_kart = cls.model.query.filter(cls.model.parca_kodu == instance.parca_kodu).first()
         if mevcut_kart and mevcut_kart.id != instance.id:
@@ -103,17 +106,12 @@ class StokKartiService(BaseService):
         if instance.mevcut_stok is None:
             instance.mevcut_stok = 0
 
-        try:
-            instance.mevcut_stok = int(instance.mevcut_stok)
-        except (TypeError, ValueError) as exc:
-            raise ValidationError('Mevcut stok tam sayi olmalidir.') from exc
-
         if instance.mevcut_stok < 0:
             raise ValidationError('Mevcut stok eksi olamaz.')
 
     @classmethod
     def before_delete(cls, instance):
-        if int(instance.mevcut_stok or 0) > 0:
+        if (instance.mevcut_stok or 0) > 0:
             raise ValidationError('Mevcut stogu sifir olmayan kart arsivlenemez.')
 
     @classmethod
@@ -121,6 +119,7 @@ class StokKartiService(BaseService):
         instance = cls.model(
             parca_kodu=_clean_text(payload.get('parca_kodu')),
             parca_adi=_clean_text(payload.get('parca_adi')),
+            birim=_clean_text(payload.get('birim')) or 'adet',
             varsayilan_tedarikci_id=payload.get('varsayilan_tedarikci_id') or None,
             mevcut_stok=0,
         )
@@ -131,6 +130,7 @@ class StokKartiService(BaseService):
         data = {
             'parca_kodu': _clean_text(payload.get('parca_kodu')),
             'parca_adi': _clean_text(payload.get('parca_adi')),
+            'birim': _clean_text(payload.get('birim')) or 'adet',
             'varsayilan_tedarikci_id': payload.get('varsayilan_tedarikci_id') or None,
         }
         return cls.update(card_id, data, actor_id=actor_id)
@@ -205,9 +205,9 @@ class StokHareketService(BaseService):
         if hareket_tipi not in {'giris', 'cikis'}:
             raise ValidationError('Hareket tipi gecersiz.')
 
-        adet = _parse_int(payload.get('adet'), required=True)
+        adet = _parse_decimal(payload.get('adet'), required=True)
         if adet <= 0:
-            raise ValidationError('Adet sifirdan buyuk olmalidir.')
+            raise ValidationError('Miktar sifirdan buyuk olmalidir.')
 
         birim_fiyat = _parse_decimal(payload.get('birim_fiyat'), required=(hareket_tipi == 'giris'))
         if birim_fiyat is None:
@@ -223,7 +223,7 @@ class StokHareketService(BaseService):
             if not firma:
                 raise ValidationError('Secilen firma bulunamadi.')
 
-        if hareket_tipi == 'cikis' and int(stok_karti.mevcut_stok or 0) < adet:
+        if hareket_tipi == 'cikis' and (stok_karti.mevcut_stok or 0) < adet:
             raise ValidationError(
                 f"'{stok_karti.parca_adi}' icin yeterli stok yok. Mevcut: {stok_karti.mevcut_stok or 0}"
             )
@@ -242,7 +242,7 @@ class StokHareketService(BaseService):
             )
 
             stok_delta = adet if hareket_tipi == 'giris' else -adet
-            stok_karti.mevcut_stok = int(stok_karti.mevcut_stok or 0) + stok_delta
+            stok_karti.mevcut_stok = (stok_karti.mevcut_stok or 0) + stok_delta
 
             db.session.add(stok_karti)
             cls.save(hareket, actor_id=actor_id, auto_commit=False)
@@ -265,8 +265,8 @@ class StokHareketService(BaseService):
         if not stok_karti:
             raise ValidationError('Bagli stok karti bulunamadi.')
 
-        ters_stok_delta = -int(hareket.adet or 0) if hareket.hareket_tipi == 'giris' else int(hareket.adet or 0)
-        yeni_stok = int(stok_karti.mevcut_stok or 0) + ters_stok_delta
+        ters_stok_delta = -(hareket.adet or 0) if hareket.hareket_tipi == 'giris' else (hareket.adet or 0)
+        yeni_stok = (stok_karti.mevcut_stok or 0) + ters_stok_delta
 
         if yeni_stok < 0:
             raise ValidationError(

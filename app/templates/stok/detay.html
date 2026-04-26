@@ -6,6 +6,9 @@
 {% macro money(value) -%}
 {{ '{:,.2f}'.format(value or 0).replace(',', '_').replace('.', ',').replace('_', '.') }} TL
 {%- endmacro %}
+{% macro miktar(value, birim) -%}
+{{ '{:,.3f}'.format((value or 0)|float).rstrip('0').rstrip('.').replace(',', '_').replace('.', ',').replace('_', '.') }} {{ birim or 'adet' }}
+{%- endmacro %}
 {% macro kisa_firma(ad) -%}
 {{ (ad or '').split()[:4] | join(' ') }}
 {%- endmacro %}
@@ -49,7 +52,7 @@
             <div class="summary-grid">
                 <div class="summary-card">
                     <div class="label">Mevcut Stok</div>
-                    <div class="value">{{ kart.mevcut_stok or 0 }}</div>
+                    <div class="value">{{ miktar(kart.mevcut_stok, kart.birim) }}</div>
                 </div>
                 <div class="summary-card">
                     <div class="label">Son Birim Fiyat</div>
@@ -61,7 +64,7 @@
                 </div>
                 <div class="summary-card">
                     <div class="label">Toplam Giris / Cikis</div>
-                    <div class="value" style="font-size:1.1rem;">{{ toplam_giris }} / {{ toplam_cikis }}</div>
+                    <div class="value" style="font-size:1.1rem;">{{ miktar(toplam_giris, kart.birim) }} / {{ miktar(toplam_cikis, kart.birim) }}</div>
                 </div>
             </div>
         </div>
@@ -82,6 +85,15 @@
                     <div>
                         <label>Parca Adi</label>
                         <input type="text" name="parca_adi" value="{{ kart.parca_adi }}" required>
+                    </div>
+                    <div>
+                        <label>Birim</label>
+                        <select name="birim">
+                            {% set birimler = [('adet','Adet'),('kg','kg'),('gr','gr'),('lt','Lt'),('ml','ml'),('mt','mt'),('cm','cm'),('mm','mm'),('koli','Koli'),('paket','Paket'),('kutu','Kutu'),('teneke','Teneke'),('varil','Varil')] %}
+                            {% for deger, etiket in birimler %}
+                            <option value="{{ deger }}" {{ 'selected' if (kart.birim or 'adet') == deger else '' }}>{{ etiket }}</option>
+                            {% endfor %}
+                        </select>
                     </div>
                     <div>
                         <label>Varsayilan Tedarikci</label>
@@ -118,8 +130,16 @@
                             <input type="date" name="tarih" value="{{ bugun }}">
                         </div>
                         <div class="col-md-4">
-                            <label>Adet</label>
-                            <input type="number" name="adet" min="1" step="1" required>
+                            <label>Miktar</label>
+                            <div style="display:flex;gap:6px">
+                                <input type="number" name="adet" min="0.01" step="0.01" required style="flex:1;min-width:0">
+                                <select name="birim_hareket" style="width:80px;flex-shrink:0">
+                                    {% set birimler = [('adet','Adet'),('kg','kg'),('gr','gr'),('lt','Lt'),('ml','ml'),('mt','mt'),('cm','cm'),('mm','mm'),('koli','Koli'),('paket','Paket'),('kutu','Kutu'),('teneke','Teneke'),('varil','Varil')] %}
+                                    {% for deger, etiket in birimler %}
+                                    <option value="{{ deger }}" {{ 'selected' if (kart.birim or 'adet') == deger else '' }}>{{ etiket }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
                         </div>
                         <div class="col-md-6">
                             <label>Birim Fiyat</label>
@@ -157,7 +177,7 @@
                             <tr>
                                 <th>Tarih</th>
                                 <th>Tip</th>
-                                <th>Adet</th>
+                                <th>Miktar</th>
                                 <th>Birim Fiyat</th>
                                 <th>KDV</th>
                                 <th>Toplam</th>
@@ -172,7 +192,7 @@
                             <tr>
                                 <td>{{ hareket.tarih.strftime('%d.%m.%Y') if hareket.tarih else '-' }}</td>
                                 <td><span class="movement-pill {{ hareket.hareket_tipi }}">{{ 'Giris' if hareket.hareket_tipi == 'giris' else 'Cikis' }}</span></td>
-                                <td>{{ hareket.adet }}</td>
+                                <td>{{ miktar(hareket.adet, kart.birim) }}</td>
                                 <td class="money-value">{{ money(hareket.birim_fiyat) }}</td>
                                 <td>{% if hareket.kdv_orani is not none %}%{{ hareket.kdv_orani }}{% else %}-{% endif %}</td>
                                 <td class="money-value fw-semibold">{{ money((hareket.adet or 0) * (hareket.birim_fiyat or 0)) }}</td>
