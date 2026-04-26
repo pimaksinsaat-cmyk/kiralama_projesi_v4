@@ -2,7 +2,7 @@ from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
 from app.extensions import db
-from app.filo.models import KullanilanParca, StokHareket, StokKarti
+from app.filo.models import KullanilanParca, StokHareket, StokKarti, StokKategori
 from app.firmalar.models import Firma
 from app.services.base import BaseService, ValidationError
 
@@ -72,10 +72,60 @@ def _parse_date(value):
         raise ValidationError('Tarih formati gecersiz.') from exc
 
 
+class StokKategoriService:
+
+    @classmethod
+    def hepsini_getir(cls, sadece_aktif=True):
+        q = StokKategori.query
+        if sadece_aktif:
+            q = q.filter_by(is_active=True)
+        return q.order_by(StokKategori.parent_id.nullsfirst(), StokKategori.kategori_adi).all()
+
+    @classmethod
+    def kok_kategoriler(cls):
+        return StokKategori.query.filter_by(parent_id=None, is_active=True).order_by(StokKategori.kategori_adi).all()
+
+    @classmethod
+    def olustur(cls, kategori_adi, parent_id=None):
+        kategori_adi = (kategori_adi or '').strip()
+        if not kategori_adi:
+            raise ValidationError('Kategori adi zorunludur.')
+        if parent_id:
+            parent = StokKategori.query.get(parent_id)
+            if not parent or not parent.is_active:
+                raise ValidationError('Ust kategori bulunamadi.')
+        instance = StokKategori(kategori_adi=kategori_adi, parent_id=parent_id or None)
+        db.session.add(instance)
+        db.session.commit()
+        return instance
+
+    @classmethod
+    def guncelle(cls, kategori_id, kategori_adi, parent_id=None):
+        instance = StokKategori.query.get(kategori_id)
+        if not instance:
+            raise ValidationError('Kategori bulunamadi.')
+        instance.kategori_adi = (kategori_adi or '').strip()
+        instance.parent_id = parent_id or None
+        db.session.commit()
+        return instance
+
+    @classmethod
+    def sil(cls, kategori_id):
+        instance = StokKategori.query.get(kategori_id)
+        if not instance:
+            raise ValidationError('Kategori bulunamadi.')
+        if instance.kartlar.count() > 0:
+            raise ValidationError('Bu kategoriye bagli stok kartlari var, silinemez.')
+        if instance.alt_kategoriler:
+            raise ValidationError('Alt kategorileri olan kategori silinemez.')
+        instance.is_active = False
+        db.session.commit()
+
+
 class StokKartiService(BaseService):
     model = StokKarti
     use_soft_delete = True
-    updatable_fields = {'parca_kodu', 'parca_adi', 'birim', 'varsayilan_tedarikci_id'}
+    updatable_fields = {'parca_kodu', 'parca_adi', 'birim', 'kategori_id', 'ozellikler', 'varsayilan_tedarikci_id'}
     GECERLI_BIRIMLER = {'adet', 'kg', 'gr', 'lt', 'ml', 'mt', 'cm', 'mm', 'koli', 'paket', 'kutu', 'teneke', 'varil'}
 
     @classmethod
@@ -115,11 +165,26 @@ class StokKartiService(BaseService):
             raise ValidationError('Mevcut stogu sifir olmayan kart arsivlenemez.')
 
     @classmethod
+    def _parse_ozellikler(cls, payload):
+        import json
+        raw = payload.get('ozellikler')
+        if not raw:
+            return {}
+        if isinstance(raw, dict):
+            return raw
+        try:
+            return json.loads(raw)
+        except (ValueError, TypeError):
+            return {}
+
+    @classmethod
     def create_card(cls, payload, actor_id=None):
         instance = cls.model(
             parca_kodu=_clean_text(payload.get('parca_kodu')),
             parca_adi=_clean_text(payload.get('parca_adi')),
             birim=_clean_text(payload.get('birim')) or 'adet',
+            kategori_id=payload.get('kategori_id') or None,
+            ozellikler=cls._parse_ozellikler(payload),
             varsayilan_tedarikci_id=payload.get('varsayilan_tedarikci_id') or None,
             mevcut_stok=0,
         )
@@ -131,9 +196,41 @@ class StokKartiService(BaseService):
             'parca_kodu': _clean_text(payload.get('parca_kodu')),
             'parca_adi': _clean_text(payload.get('parca_adi')),
             'birim': _clean_text(payload.get('birim')) or 'adet',
+            'kategori_id': payload.get('kategori_id') or None,
+            'ozellikler': cls._parse_ozellikler(payload),
             'varsayilan_tedarikci_id': payload.get('varsayilan_tedarikci_id') or None,
         }
         return cls.update(card_id, data, actor_id=actor_id)
+
+    @classmethod
+    def ozellige_gore_ara(cls, anahtar, deger):
+        # Örnek: StokKartiService.ozellige_gore_ara('renk', 'kirmizi')
+        # GIN index sayesinde büyük tablolarda da hızlı çalışır
+        return (
+            cls.model.query
+            .filter(cls.model.is_deleted == False)
+            .filter(cls.model.ozellikler[anahtar].astext == str(deger))
+            .all()
+        )
+
+    @classmethod
+    def kategoriye_gore_getir(cls, kategori_id, alt_kategoriler_dahil=False):
+        if not alt_kategoriler_dahil:
+            return cls.model.query.filter_by(kategori_id=kategori_id, is_deleted=False).all()
+        # Alt kategorileri recursive olarak topla
+        tum_idler = cls._alt_kategori_idleri(kategori_id)
+        return cls.model.query.filter(
+            cls.model.kategori_id.in_(tum_idler),
+            cls.model.is_deleted == False,
+        ).all()
+
+    @classmethod
+    def _alt_kategori_idleri(cls, kategori_id):
+        idler = {kategori_id}
+        alt = StokKategori.query.filter_by(parent_id=kategori_id, is_active=True).all()
+        for a in alt:
+            idler |= cls._alt_kategori_idleri(a.id)
+        return idler
 
     @classmethod
     def restore_card(cls, card_id, actor_id=None):

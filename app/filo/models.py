@@ -2,6 +2,7 @@ from app.extensions import db
 from app.models.base_model import BaseModel
 from datetime import datetime, date, timezone
 from sqlalchemy.orm import validates
+from sqlalchemy.dialects.postgresql import JSONB
 
 # 3. EKIPMAN (Filo)
 class Ekipman(BaseModel):
@@ -108,6 +109,26 @@ class KullanilanParca(BaseModel):
 
 
 # 8. STOK KARTI
+class StokKategori(db.Model):
+    __tablename__ = 'stok_kategori'
+
+    id = db.Column(db.Integer, primary_key=True)
+    kategori_adi = db.Column(db.String(150), nullable=False)
+    parent_id = db.Column(db.Integer, db.ForeignKey('stok_kategori.id'), nullable=True)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+
+    alt_kategoriler = db.relationship('StokKategori', backref=db.backref('ust_kategori', remote_side='StokKategori.id'), lazy='select')
+    kartlar = db.relationship('StokKarti', back_populates='kategori', lazy='dynamic')
+
+    def tam_yol(self):
+        if self.ust_kategori:
+            return f"{self.ust_kategori.tam_yol()} > {self.kategori_adi}"
+        return self.kategori_adi
+
+    def __repr__(self):
+        return f'<StokKategori {self.kategori_adi}>'
+
+
 class StokKarti(BaseModel):
     """
     Parça envanteri ve stok takibi.
@@ -121,8 +142,11 @@ class StokKarti(BaseModel):
     parca_adi = db.Column(db.String(250), nullable=False)
     birim = db.Column(db.String(20), nullable=True, default='adet')
     mevcut_stok = db.Column(db.Numeric(15, 3), nullable=False, default=0)
+    kategori_id = db.Column(db.Integer, db.ForeignKey('stok_kategori.id'), nullable=True)
+    ozellikler = db.Column(JSONB, nullable=True, default=dict)
     varsayilan_tedarikci_id = db.Column(db.Integer, db.ForeignKey('firma.id'), nullable=True)
-    
+
+    kategori = db.relationship('StokKategori', back_populates='kartlar')
     varsayilan_tedarikci = db.relationship('Firma', back_populates='tedarik_edilen_parcalar', foreign_keys=[varsayilan_tedarikci_id])
     hareketler = db.relationship('StokHareket', back_populates='stok_karti', cascade="all, delete-orphan")
     kullanim_kayitlari = db.relationship('KullanilanParca', back_populates='stok_karti')
