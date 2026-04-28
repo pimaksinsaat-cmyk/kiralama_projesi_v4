@@ -173,7 +173,10 @@ def ekle():
             current_app.logger.error(f"Firma ekleme hatası: {str(e)}")
             flash("Kayıt sırasında sistemsel bir hata oluştu.", "danger")
             
-    return render_template('firmalar/ekle.html', form=form, today_date=date.today().strftime('%d.%m.%Y'))
+    referrer = request.referrer or url_for('firmalar.index')
+    next_ps_no = FirmaService.get_next_sozlesme_no()
+    return render_template('firmalar/ekle.html', form=form, today_date=date.today().strftime('%d.%m.%Y'),
+                           referrer=referrer, next_ps_no=next_ps_no)
 
 # -------------------------------------------------------------------------
 # 4. Sözleşme Hazırla
