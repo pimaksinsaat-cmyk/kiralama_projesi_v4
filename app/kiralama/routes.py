@@ -169,6 +169,9 @@ def index():
             'aktif_sozlesme_adedi': 0,
             'aktif_sozlesme_hacmi': 0,
         }
+        harici_aktif_kalemler = []
+        geciken_kalemler = []
+        yaklasan_kalemler = []
 
         today = date.today()
         for kiralama in stats_kiralamalar.values():
@@ -194,11 +197,60 @@ def index():
                     kalan = (kalem.kiralama_bitis - today).days
                     if kalan < 0:
                         dashboard_stats['geciken'] += 1
+                        geciken_kalemler.append({
+                            'kiralama_form_no': kiralama.kiralama_form_no,
+                            'musteri_adi': kiralama.firma_musteri.firma_adi if kiralama.firma_musteri else 'Müşteri Tanımsız',
+                            'ekipman_adi': (
+                                kalem.ekipman.kod if kalem.ekipman
+                                else " ".join(
+                                    p for p in [kalem.harici_ekipman_marka, kalem.harici_ekipman_model] if p
+                                ) or 'Ekipman Tanımsız'
+                            ),
+                            'baslangic': kalem.kiralama_baslangici.strftime('%d.%m.%Y') if kalem.kiralama_baslangici else '-',
+                            'bitis': kalem.kiralama_bitis.strftime('%d.%m.%Y') if kalem.kiralama_bitis else '-',
+                            'kalan_gun': kalan,
+                        })
                     elif kalan <= 3:
                         dashboard_stats['yaklasan'] += 1
+                        yaklasan_kalemler.append({
+                            'kiralama_form_no': kiralama.kiralama_form_no,
+                            'musteri_adi': kiralama.firma_musteri.firma_adi if kiralama.firma_musteri else 'Müşteri Tanımsız',
+                            'ekipman_adi': (
+                                kalem.ekipman.kod if kalem.ekipman
+                                else " ".join(
+                                    p for p in [kalem.harici_ekipman_marka, kalem.harici_ekipman_model] if p
+                                ) or 'Ekipman Tanımsız'
+                            ),
+                            'baslangic': kalem.kiralama_baslangici.strftime('%d.%m.%Y') if kalem.kiralama_baslangici else '-',
+                            'bitis': kalem.kiralama_bitis.strftime('%d.%m.%Y') if kalem.kiralama_bitis else '-',
+                            'kalan_gun': kalan,
+                        })
 
                     if kalem.is_dis_tedarik_ekipman:
                         dashboard_stats['harici'] += 1
+                        harici_aktif_kalemler.append({
+                            'kiralama_form_no': kiralama.kiralama_form_no,
+                            'musteri_adi': kiralama.firma_musteri.firma_adi if kiralama.firma_musteri else 'Müşteri Tanımsız',
+                            'tedarikci_adi': (
+                                kalem.harici_tedarikci.firma_adi
+                                if getattr(kalem, 'harici_tedarikci', None)
+                                else 'Tedarikçi Tanımsız'
+                            ),
+                            'ekipman_adi': " ".join(
+                                p for p in [
+                                    kalem.harici_ekipman_tipi,
+                                    kalem.harici_ekipman_marka,
+                                    kalem.harici_ekipman_model,
+                                ] if p
+                            ) or 'Harici Ekipman',
+                            'ekipman_ozellik': " | ".join(
+                                p for p in [
+                                    f"Seri: {kalem.harici_ekipman_seri_no}" if kalem.harici_ekipman_seri_no else None,
+                                    f"Yükseklik: {kalem.harici_ekipman_yukseklik}m" if kalem.harici_ekipman_yukseklik else None,
+                                    f"Kapasite: {kalem.harici_ekipman_kapasite}kg" if kalem.harici_ekipman_kapasite else None,
+                                ] if p
+                            ) or '-',
+                        })
 
             dashboard_stats['toplam_hacim'] += kiralama_toplam_hacim
             dashboard_stats['aktif_sozlesme_hacmi'] += kiralama_aktif_hacim
@@ -293,7 +345,10 @@ def index():
             nakliye_araclari=nakliye_araclari,
             nakliye_tedarikci_listesi=nakliye_tedarikci_listesi,
             recently_returned_kalem_ids=recently_returned_kalem_ids,
-            dashboard_stats=dashboard_stats
+            dashboard_stats=dashboard_stats,
+            harici_aktif_kalemler=harici_aktif_kalemler,
+            geciken_kalemler=geciken_kalemler,
+            yaklasan_kalemler=yaklasan_kalemler,
         )
     except Exception as e:
         db.session.rollback()
@@ -319,7 +374,10 @@ def index():
                 'toplam_hacim': 0,
                 'aktif_sozlesme_adedi': 0,
                 'aktif_sozlesme_hacmi': 0,
-            }
+            },
+            harici_aktif_kalemler=[],
+            geciken_kalemler=[],
+            yaklasan_kalemler=[],
         )
 
 @kiralama_bp.route('/detay/<int:kiralama_id>')

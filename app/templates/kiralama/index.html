@@ -131,9 +131,30 @@
             <div class="stats-card-mini border-start border-warning border-4 shadow-sm">
                 <div class="stats-label">Operasyon Özeti</div>
                 <div class="stats-inline-row">
-                    <span class="text-warning">Yaklaşan: {{ dashboard_stats.yaklasan }}</span>
-                    <span class="text-danger">Geciken: {{ dashboard_stats.geciken }}</span>
-                    <span class="text-info">Dış Tedarik: {{ dashboard_stats.harici }}</span>
+                    <span
+                        class="text-warning"
+                        id="yaklasan-open"
+                        role="button"
+                        data-bs-toggle="modal"
+                        data-bs-target="#yaklasanModal"
+                        title="Yaklaşan kiralamaları listele"
+                    >Yaklaşan: {{ dashboard_stats.yaklasan }}</span>
+                    <span
+                        class="text-danger"
+                        id="geciken-open"
+                        role="button"
+                        data-bs-toggle="modal"
+                        data-bs-target="#gecikenModal"
+                        title="Geciken kiralamaları listele"
+                    >Geciken: {{ dashboard_stats.geciken }}</span>
+                    <span
+                        class="text-info"
+                        id="harici-aktif-open"
+                        role="button"
+                        data-bs-toggle="modal"
+                        data-bs-target="#hariciAktifModal"
+                        title="Aktif dış tedarik kalemlerini listele"
+                    >Dış Tedarik: {{ dashboard_stats.harici }}</span>
                 </div>
             </div>
 
@@ -623,6 +644,149 @@
     </div>
 </div>
 
+<div class="modal fade" id="yaklasanModal" tabindex="-1" aria-labelledby="yaklasanModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark py-2">
+                <h6 class="modal-title mb-0" id="yaklasanModalLabel">
+                    <i class="fas fa-hourglass-half me-2"></i>Yaklaşan Kiralamalar
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
+            </div>
+            <div class="modal-body p-2">
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Form No</th>
+                                <th>Makine</th>
+                                <th>Çalıştığı Firma</th>
+                                <th>Başlangıç</th>
+                                <th>Bitiş</th>
+                                <th>Kalan Gün</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for satir in yaklasan_kalemler %}
+                            <tr>
+                                <td class="fw-bold">{{ satir.kiralama_form_no }}</td>
+                                <td>{{ satir.ekipman_adi }}</td>
+                                <td>{{ satir.musteri_adi }}</td>
+                                <td>{{ satir.baslangic }}</td>
+                                <td>{{ satir.bitis }}</td>
+                                <td><span class="badge bg-warning text-dark">{{ satir.kalan_gun }}</span></td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="6" class="text-center text-muted py-3">Yaklaşan kiralama bulunamadı.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer py-1">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Kapat</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="gecikenModal" tabindex="-1" aria-labelledby="gecikenModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white py-2">
+                <h6 class="modal-title mb-0" id="gecikenModalLabel">
+                    <i class="fas fa-exclamation-triangle me-2"></i>Geciken Kiralamalar
+                </h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Kapat"></button>
+            </div>
+            <div class="modal-body p-2">
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Form No</th>
+                                <th>Makine</th>
+                                <th>Çalıştığı Firma</th>
+                                <th>Başlangıç</th>
+                                <th>Bitiş</th>
+                                <th>Gecikme (Gün)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for satir in geciken_kalemler %}
+                            <tr>
+                                <td class="fw-bold">{{ satir.kiralama_form_no }}</td>
+                                <td>{{ satir.ekipman_adi }}</td>
+                                <td>{{ satir.musteri_adi }}</td>
+                                <td>{{ satir.baslangic }}</td>
+                                <td>{{ satir.bitis }}</td>
+                                <td><span class="badge bg-danger">{{ satir.kalan_gun|abs }}</span></td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="6" class="text-center text-muted py-3">Geciken kiralama bulunamadı.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer py-1">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Kapat</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="hariciAktifModal" tabindex="-1" aria-labelledby="hariciAktifModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white py-2">
+                <h6 class="modal-title mb-0" id="hariciAktifModalLabel">
+                    <i class="fas fa-truck-loading me-2"></i>Aktif Dış Tedarik Kalemleri
+                </h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Kapat"></button>
+            </div>
+            <div class="modal-body p-2">
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Form No</th>
+                                <th>Dış Tedarik Firması</th>
+                                <th>Ekipman Adı/Özellik</th>
+                                <th>Çalıştığı Firma</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for satir in harici_aktif_kalemler %}
+                            <tr>
+                                <td class="fw-bold">{{ satir.kiralama_form_no }}</td>
+                                <td>{{ satir.tedarikci_adi }}</td>
+                                <td>
+                                    <div class="fw-semibold">{{ satir.ekipman_adi }}</div>
+                                    <small class="text-muted">{{ satir.ekipman_ozellik }}</small>
+                                </td>
+                                <td>{{ satir.musteri_adi }}</td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="4" class="text-center text-muted py-3">Aktif dış tedarik kalemi bulunamadı.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer py-1">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Kapat</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 // GLOBAL FONKSIYONLAR (DOMContentLoaded dışında tanımlı)
 function closeTarihGuncelleModal() {
@@ -1088,6 +1252,19 @@ document.addEventListener('DOMContentLoaded', function() {
     if (kurRefreshBadge) {
         kurRefreshBadge.addEventListener('click', manuelKurGuncelle);
     }
+
+    const hariciAktifOpen = document.getElementById('harici-aktif-open');
+    if (hariciAktifOpen) {
+        hariciAktifOpen.style.cursor = 'pointer';
+        hariciAktifOpen.style.textDecoration = 'underline';
+    }
+    const yaklasanOpen = document.getElementById('yaklasan-open');
+    const gecikenOpen = document.getElementById('geciken-open');
+    [yaklasanOpen, gecikenOpen].forEach((el) => {
+        if (!el) return;
+        el.style.cursor = 'pointer';
+        el.style.textDecoration = 'underline';
+    });
 
     // ==================== KALEM LİSTESİ EXPAND/COLLAPSE ====================
     const expandBtns = document.querySelectorAll('.kalem-expand-btn');
