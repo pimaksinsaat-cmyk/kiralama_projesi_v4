@@ -2,10 +2,10 @@
 {% block title %}Yeni Firma{% endblock %}
 
 {% block content %}
-<div class="container-fluid mt-4 px-4 px-xl-5">
+<div class="container-fluid mt-4 px-4 px-xl-5" style="background-color: #f1f3f5;">
     <div class="row">
         <div class="col-12">
-            <h2 class="mb-4">Yeni Firma Ekle</h2>
+            <h2 class="mb-4" style="font-size: calc(2rem - 4pt);">Yeni Firma Ekle</h2>
             <!-- FLASH MESAJLARI (Mükerrer Vergi No vb. Uyarılar Burada Görünür) -->
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
@@ -18,7 +18,7 @@
             {% endif %}
         {% endwith %}
 
-        <form action="" method="POST" novalidate class="card card-body shadow-sm border-0">
+        <form action="" method="POST" novalidate class="card card-body shadow border-0">
             {% include "firmalar/_form_fields.html" %}
         </form>
     </div>

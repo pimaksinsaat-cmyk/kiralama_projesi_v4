@@ -132,8 +132,8 @@
                         <small class="text-muted" style="font-weight: normal;">(İşlemler için sağ tık, basılı tut veya satıra tıkla)</small>
                     </th>
                     <th>Marka / Model</th>
-                    <th>Seri No</th>
-                    <th>Servise Giriş / Sayaç</th>
+                    <th style="min-width: 180px;">Seri No</th>
+                    <th style="min-width: 240px;">Servise Giriş / Sayaç</th>
                     <th>Durum</th>
                 </tr>
             </thead>
@@ -148,11 +148,11 @@
                     >
                     <td><strong>{{ ekipman.kod }}</strong></td>
                     <td>{{ ekipman.marka }} / {{ ekipman.model }}</td>
-                    <td>{{ ekipman.seri_no }}</td>
-                    <td>
+                    <td style="min-width: 180px;">{{ ekipman.seri_no }}</td>
+                    <td style="min-width: 240px; white-space: nowrap;">
                         {% if ekipman.aktif_bakim_kaydi %}
-                            <div>{{ ekipman.aktif_bakim_kaydi.tarih.strftime('%d.%m.%Y') if ekipman.aktif_bakim_kaydi.tarih else '-' }}</div>
-                            <small class="text-muted">{{ ekipman.aktif_bakim_kaydi.calisma_saati if ekipman.aktif_bakim_kaydi.calisma_saati is not none else '-' }} saat/km</small>
+                            <span>{{ ekipman.aktif_bakim_kaydi.tarih.strftime('%d.%m.%Y') if ekipman.aktif_bakim_kaydi.tarih else '-' }}</span>
+                            <small class="text-muted ms-2">{{ ekipman.aktif_bakim_kaydi.calisma_saati if ekipman.aktif_bakim_kaydi.calisma_saati is not none else '-' }} saat/km</small>
                         {% else %}
                             -
                         {% endif %}

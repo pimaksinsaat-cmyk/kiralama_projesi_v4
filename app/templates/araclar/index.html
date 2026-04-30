@@ -26,13 +26,13 @@
                     <thead class="table-dark">
                         <tr>
                             <th>#</th>
-                            <th>Plaka</th>
-                            <th>Araç Tipi</th>
-                            <th>Marka / Model</th>
+                            <th class="pe-4">Plaka</th>
+                            <th class="ps-4" style="min-width: 150px;">Araç Tipi</th>
+                            <th style="min-width: 190px;">Marka / Model</th>
                             <th>Kullanım</th>
-                            <th class="text-center">Muayene / Sigorta</th>
-                            <th class="text-center">Durum</th>
-                            <th class="text-center">İşlem</th>
+                            <th class="text-center" style="min-width: 260px;">Muayene / Sigorta</th>
+                            <th class="text-center pe-4">Durum</th>
+                            <th class="text-center ps-4">İşlem</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -40,13 +40,13 @@
                         {% for arac in araclar %}
                         <tr>
                             <td class="align-middle text-muted small">{{ start + loop.index }}</td>
-                            <td class="align-middle fw-bold">
+                            <td class="align-middle fw-bold pe-4">
                                 <span class="badge bg-light text-dark border p-2" style="font-size: 1rem;">
                                     {{ arac.plaka }}
                                 </span>
                             </td>
-                            <td class="align-middle">{{ arac.arac_tipi or '-' }}</td>
-                            <td class="align-middle">{{ arac.marka_model or '-' }}</td>
+                            <td class="align-middle ps-4" style="min-width: 150px;">{{ arac.arac_tipi or '-' }}</td>
+                            <td class="align-middle" style="min-width: 190px;">{{ arac.marka_model or '-' }}</td>
                             <td class="align-middle">
                                 {% if arac.kullanim_alanlari %}
                                     <div class="d-flex flex-wrap gap-1">
@@ -58,7 +58,7 @@
                                     <span class="badge bg-secondary">Tanımsız</span>
                                 {% endif %}
                             </td>
-                            <td class="align-middle text-center small">
+                            <td class="align-middle text-center small" style="min-width: 260px;">
                                 <div class="d-flex flex-column gap-1 align-items-center">
                                     {% if arac.muayene_durum == 'gecmis' %}
                                         <span class="badge bg-danger">Muayene geçti ({{ arac.muayene_kalan_gun|abs }} gün)</span>
@@ -81,14 +81,14 @@
                                     {% endif %}
                                 </div>
                             </td>
-                            <td class="align-middle text-center">
+                            <td class="align-middle text-center pe-4">
                                 {% if arac.is_active %}
                                     <span class="badge bg-success-subtle text-success border border-success">Aktif</span>
                                 {% else %}
                                     <span class="badge bg-secondary">Pasif</span>
                                 {% endif %}
                             </td>
-                            <td class="align-middle text-center">
+                            <td class="align-middle text-center ps-4">
                                 <a href="{{ url_for('araclar.yakit_giderleri', arac_id=arac.id) }}" class="btn btn-sm btn-outline-secondary" title="Mazot Giderleri">
                                     <i class="fas fa-gas-pump"></i>
                                 </a>

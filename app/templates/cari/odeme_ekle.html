@@ -15,9 +15,9 @@
 {% block title %}{{ title_text }}{% endblock %}
 
 {% block content %}
-<div class="container mt-4">
-    <div class="row justify-content-center">
-        <div class="col-12 col-lg-10 col-xl-10">
+<div class="container-fluid mt-4 px-0">
+    <div class="row">
+        <div class="col-12">
             
             <div class="card shadow-sm border-{{ header_color }}">
                 <div class="card-header text-white bg-{{ header_color }}">
@@ -47,7 +47,7 @@
                         </div>
 
                         <div class="row mb-3">
-                            <div class="col-md-6">
+                            <div class="col-lg-6">
                                 {{ form.firma_musteri_id.label(class="form-label fw-bold") }}
                                 {% if form.firma_musteri_id.errors %}
                                     {{ form.firma_musteri_id(class="form-select is-invalid", id="firma_musteri_id") }}
@@ -56,7 +56,7 @@
                                     {{ form.firma_musteri_id(class="form-select", id="firma_musteri_id") }}
                                 {% endif %}
                             </div>
-                            <div class="col-md-6">
+                            <div class="col-lg-6">
                                 <div class="d-flex justify-content-between">
                                     {{ form.kasa_id.label(class="form-label fw-bold") }}
                                     <a href="{{ url_for('cari.kasa_ekle') }}" class="text-decoration-none small" style="color: #007bff;">
@@ -73,12 +73,12 @@
                         </div>
 
                         <div class="row mb-3">
-                            <div class="col-md-6">
+                            <div class="col-lg-6">
                                 {{ form.islem_tarihi.label(class="form-label fw-bold") }}
                                 {{ form.islem_tarihi(class="form-control", type="date") }}
                                 {% for error in form.islem_tarihi.errors %}<span class="text-danger small">{{ error }}</span>{% endfor %}
                             </div>
-                            <div class="col-md-6">
+                            <div class="col-lg-6">
                                 {{ form.tarih.label(class="form-label fw-bold") }}
                                 {{ form.tarih(class="form-control", type="date") }}
                                 {% for error in form.tarih.errors %}<span class="text-danger small">{{ error }}</span>{% endfor %}
@@ -86,7 +86,7 @@
                         </div>
 
                         <div class="row mb-3">
-                            <div class="col-md-6">
+                            <div class="col-lg-6">
                                 {{ form.tutar.label(class="form-label fw-bold") }}
                                 <div class="input-group">
                                     <span class="input-group-text">TL</span>
@@ -101,11 +101,11 @@
                         </div>
 
                         <div class="row mb-3">
-                            <div class="col-md-6">
+                            <div class="col-lg-6">
                                 {{ form.fatura_no.label(class="form-label fw-bold") }}
                                 {{ form.fatura_no(class="form-control", placeholder="Makbuz/Dekont No") }}
                             </div>
-                            <div class="col-md-6">
+                            <div class="col-lg-6">
                                 {{ form.vade_tarihi.label(class="form-label fw-bold") }}
                                 {{ form.vade_tarihi(class="form-control", type="date") }}
                                 <small class="text-muted">Çek/Senet ise giriniz.</small>

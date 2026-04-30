@@ -110,11 +110,13 @@
             </div>
             <div class="col-12">
                 <div class="d-flex flex-wrap gap-2 pt-1">
-                    <button type="button" class="btn btn-outline-primary btn-sm hizli-tarih-btn" data-aralik="bugun">Bugün</button>
+                    <button type="button" class="btn btn-outline-success btn-sm hizli-tarih-btn" data-aralik="bugun">Bugün</button>
+                    <button type="button" class="btn btn-outline-primary btn-sm hizli-tarih-btn" data-aralik="buay">Bu Ay</button>
+                    <button type="button" class="btn btn-outline-primary btn-sm hizli-tarih-btn" data-aralik="gecenay">Geçen Ay</button>
                     <button type="button" class="btn btn-outline-secondary btn-sm hizli-tarih-btn" data-gun="30">30 gün</button>
                     <button type="button" class="btn btn-outline-secondary btn-sm hizli-tarih-btn" data-gun="60">60 gün</button>
                     <button type="button" class="btn btn-outline-secondary btn-sm hizli-tarih-btn" data-gun="90">90 gün</button>
-                    <button type="button" class="btn btn-outline-secondary btn-sm hizli-tarih-btn" data-aralik="yilbasi">Yılbaşından beri</button>
+                    <button type="button" class="btn btn-outline-info btn-sm hizli-tarih-btn" data-aralik="yilbasi">Yılbaşından beri</button>
                 </div>
             </div>
         </form>
@@ -518,6 +520,15 @@
                 if (this.dataset.aralik === 'bugun') {
                     baslangicInput.value = formatDate(bugun);
                     bitisInput.value = formatDate(bugun);
+                } else if (this.dataset.aralik === 'buay') {
+                    baslangicTarihi = new Date(bitisTarihi.getFullYear(), bitisTarihi.getMonth(), 1);
+                    baslangicInput.value = formatDate(baslangicTarihi);
+                    bitisInput.value = formatDate(bitisTarihi);
+                } else if (this.dataset.aralik === 'gecenay') {
+                    const oncekiAyIlkGun = new Date(bitisTarihi.getFullYear(), bitisTarihi.getMonth() - 1, 1);
+                    const oncekiAySonGun = new Date(bitisTarihi.getFullYear(), bitisTarihi.getMonth(), 0);
+                    baslangicInput.value = formatDate(oncekiAyIlkGun);
+                    bitisInput.value = formatDate(oncekiAySonGun);
                 } else if (this.dataset.aralik === 'yilbasi') {
                     baslangicTarihi = new Date(bitisTarihi.getFullYear(), 0, 1);
                     baslangicInput.value = formatDate(baslangicTarihi);

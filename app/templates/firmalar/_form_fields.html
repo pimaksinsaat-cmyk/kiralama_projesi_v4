@@ -18,20 +18,18 @@
 </div>
 
 <!-- 1. FİRMA ÜNVANI -->
-
 <div class="mb-3">
 {{ form.firma_adi.label(class="form-label fw-bold small") }}
-{{ form.firma_adi(class="form-control form-control-sm" + (" is-invalid" if form.firma_adi.errors else ""), placeholder="Örn: Pimaks İnşaat A.Ş.") }}
+{{ form.firma_adi(class="form-control" + (" is-invalid" if form.firma_adi.errors else ""), placeholder="Örn: Pimaks İnşaat A.Ş.") }}
 {% if form.firma_adi.errors %}
 <div class="invalid-feedback">{% for error in form.firma_adi.errors %}{{ error }}{% endfor %}</div>
 {% endif %}
 </div>
 
 <!-- 2. YETKİLİ KİŞİ -->
-
 <div class="mb-3">
 {{ form.yetkili_adi.label(class="form-label fw-bold small") }}
-{{ form.yetkili_adi(class="form-control form-control-sm" + (" is-invalid" if form.yetkili_adi.errors else "")) }}
+{{ form.yetkili_adi(class="form-control" + (" is-invalid" if form.yetkili_adi.errors else "")) }}
 {% if form.yetkili_adi.errors %}
 <div class="invalid-feedback">{% for error in form.yetkili_adi.errors %}{{ error }}{% endfor %}</div>
 {% endif %}
@@ -40,11 +38,11 @@
 <!-- 3. TELEFON VE E-POSTA -->
 
 <div class="row">
-<div class="col-md-6 mb-3">
+<div class="col-6 mb-3">
 {{ form.telefon.label(class="form-label fw-bold small") }}
 {{ form.telefon(class="form-control form-control-sm", placeholder="05xx xxx xx xx") }}
 </div>
-<div class="col-md-6 mb-3">
+<div class="col-6 mb-3">
 {{ form.eposta.label(class="form-label fw-bold small") }}
 {{ form.eposta(class="form-control form-control-sm" + (" is-invalid" if form.eposta.errors else ""), placeholder="ornek@firma.com") }}
 {% if form.eposta.errors %}
@@ -66,14 +64,14 @@
 <!-- 5. VERGİ BİLGİLERİ -->
 
 <div class="row">
-<div class="col-md-6 mb-3">
+<div class="col-6 mb-3">
 {{ form.vergi_dairesi.label(class="form-label fw-bold small") }}
 {{ form.vergi_dairesi(class="form-control form-control-sm" + (" is-invalid" if form.vergi_dairesi.errors else "")) }}
 {% if form.vergi_dairesi.errors %}
 <div class="invalid-feedback">{% for error in form.vergi_dairesi.errors %}{{ error }}{% endfor %}</div>
 {% endif %}
 </div>
-<div class="col-md-6 mb-3">
+<div class="col-6 mb-3">
 {{ form.vergi_no.label(class="form-label fw-bold small") }}
 {{ form.vergi_no(class="form-control form-control-sm" + (" is-invalid" if form.vergi_no.errors else "")) }}
 {% if form.vergi_no.errors %}
@@ -84,7 +82,7 @@
 
 <!-- 6. ROL TANIMLARI -->
 
-<div class="p-3 bg-light rounded-3 mb-4 shadow-sm border">
+<div class="p-3 rounded-3 mb-4 shadow-sm border" style="background-color: #dee2e6; border-color: #cfd4da !important;">
 <div class="row align-items-center">
 <div class="col-6">
 <div class="form-check form-switch">
