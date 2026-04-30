@@ -30,6 +30,22 @@ class MakineDegisimService(BaseService):
     model = MakineDegisim
     use_soft_delete = False
 
+    @staticmethod
+    def _resolve_swap_reason(neden):
+        """
+        UI'dan gelen swap nedenini normalize eder.
+        - 'serviste' ve 'periyodik' nedenleri servis kaydı açılmasını gerektirir.
+        - Ekipman calisma_durumu alanına yalnızca geçerli durumlar yazılır.
+        """
+        n = (neden or '').strip().lower()
+        if n == 'serviste':
+            return {'makine_durum': 'serviste', 'bakim_tipi': 'ariza'}
+        if n in ('periyodik', 'bakimda'):
+            return {'makine_durum': 'serviste', 'bakim_tipi': 'periyodik'}
+        if n == 'bosta':
+            return {'makine_durum': 'bosta', 'bakim_tipi': None}
+        return {'makine_durum': n or 'bosta', 'bakim_tipi': None}
+
     @classmethod
     def degisim_uygula(cls, eski_kalem_id, data, actor_id=None):
         """Aktif makineyi sahadan çeker, yeni makineyi sahaya sürer ve finansal kayıtları oluşturur."""
@@ -56,7 +72,10 @@ class MakineDegisimService(BaseService):
         if secilen_tarih < aktif_kalem.kiralama_baslangici:
             raise ValidationError(f"Değişim tarihi, başlangıç/değişim tarihinden ({aktif_kalem.kiralama_baslangici.strftime('%d.%m.%Y')}) önce olamaz!")
 
-        guncel_bitis_tarihi = eski_kalem.kiralama_bitis
+        # Yeni kalem bitişini, swap yapılan "gerçek aktif" kalemin bitişinden devral.
+        # Aksi halde kullanıcı aktif zincirin eski bir halkasından swap başlatırsa
+        # yeni kalem hatalı şekilde çok kısa (ör. 1 gün) oluşabilir.
+        guncel_bitis_tarihi = aktif_kalem.kiralama_bitis
         if secilen_tarih > guncel_bitis_tarihi:
             guncel_bitis_tarihi = secilen_tarih
 
@@ -66,6 +85,7 @@ class MakineDegisimService(BaseService):
             swap_taseron_hizmeti = None
             swap_kira_hizmeti = None
             swap_bakim_kaydi = None
+            reason_meta = cls._resolve_swap_reason(data.get('neden'))
 
             # 3. AKTİFİ PASİF YAP VE ESKİ MAKİNEYİ YÖNLENDİR
             eski_bitis = secilen_tarih - timedelta(days=1)
@@ -84,21 +104,20 @@ class MakineDegisimService(BaseService):
                         eski_makine_obj.sube_id = None
                     elif donus_sube and str(donus_sube).isdigit():
                         # ŞUBE ATAMA ÇÖZÜMÜ
-                        eski_makine_obj.calisma_durumu = data['neden']
+                        eski_makine_obj.calisma_durumu = reason_meta['makine_durum']
                         eski_makine_obj.sube_id = int(donus_sube)
                     else:
                         # donus_sube_val geçersiz/eksik olsa bile swap tamamlandığında
                         # eski makineyi 'neden' durumuna al (şube atanmadan)
-                        eski_makine_obj.calisma_durumu = data['neden']
+                        eski_makine_obj.calisma_durumu = reason_meta['makine_durum']
 
                     # SERVİSE/BAKIMA ALINIYORSA OTOMATİK BAKIM KAYDI AÇ
-                    # neden='serviste' -> arıza, neden='bakimda' -> periyodik
-                    if data['neden'] in ('serviste', 'bakimda'):
-                        bakim_tipi = 'ariza' if data['neden'] == 'serviste' else 'periyodik'
+                    # neden='serviste' -> arıza, neden='periyodik/bakimda' -> periyodik
+                    if reason_meta['bakim_tipi']:
                         swap_bakim_kaydi = BakimKaydi(
                             ekipman_id=eski_makine_obj.id,
                             tarih=secilen_tarih,
-                            bakim_tipi=bakim_tipi,
+                            bakim_tipi=reason_meta['bakim_tipi'],
                             servis_tipi='ic_servis',
                             durum='acik',
                             aciklama=f"Makine değişimi (swap) ile servise alındı. Form: {eski_kalem.kiralama.kiralama_form_no}",

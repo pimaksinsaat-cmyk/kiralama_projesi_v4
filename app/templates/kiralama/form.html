@@ -650,6 +650,10 @@ function yeniGizliGrupOlustur(idx) {
         <input type="hidden" name="kalemler-${idx}-nakliye_tedarikci_id" value="0">
         <input type="hidden" name="kalemler-${idx}-nakliye_alis_tevkifat_oran" value="">
         <input type="hidden" name="kalemler-${idx}-nakliye_satis_tevkifat_oran" value="">
+        <input type="hidden" name="kalemler-${idx}-sonlandirildi" value="0">
+        <input type="hidden" name="kalemler-${idx}-is_active" value="1">
+        <input type="hidden" name="kalemler-${idx}-parent_id" value="0">
+        <input type="hidden" name="kalemler-${idx}-versiyon_no" value="1">
     `;
     return div;
 }
@@ -684,7 +688,8 @@ function renderTable() {
         if (editingIdx === idx) tr.className = 'table-warning';
         tr.dataset.toplam = satirToplam;
 
-        const isSonlandirildi = group.querySelector('[name$="-sonlandirildi"]').value === '1';
+        const sonlandirildiInput = group.querySelector('[name$="-sonlandirildi"]');
+        const isSonlandirildi = sonlandirildiInput ? sonlandirildiInput.value === '1' : false;
         const duzenleBtn = isSonlandirildi
             ? `<button type="button" class="btn btn-sm btn-outline-secondary" disabled title="Tamamlanmış kalemler düzenlenemez"><i class="fas fa-edit opacity-50"></i></button>`
             : `<button type="button" class="btn btn-sm btn-outline-info duzenle-btn" data-idx="${idx}"><i class="fas fa-edit"></i></button>`;
