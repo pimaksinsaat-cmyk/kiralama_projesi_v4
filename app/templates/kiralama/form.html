@@ -25,6 +25,9 @@
 <div class="container">
     <form method="POST" id="kiralama-form">
         {{ form.hidden_tag() }}
+        {% if is_edit and return_url %}
+        <input type="hidden" name="return_url" value="{{ return_url }}">
+        {% endif %}
 
         <!-- BAŞLIK -->
         <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">

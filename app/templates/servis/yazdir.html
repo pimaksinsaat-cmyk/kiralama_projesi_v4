@@ -114,7 +114,7 @@
 
         .makine-kod   { font-weight: 700; }
         .marka-model  { font-size: 10px; color: #555; }
-        .aciklama-alt { font-size: 9.5px; color: #6c757d; display: block; margin-top: 2px; }
+        .aciklama-alt { font-size: 9.5px; color: #6c757d; display: block; margin-top: 2px; white-space: pre-line; }
         .parcalar-list { font-size: 9.5px; line-height: 1.5; }
 
         .durum-badge {
@@ -301,7 +301,11 @@
                 <td class="makine-kod">{{ kayit.ekipman.kod if kayit.ekipman else '-' }}</td>
                 <td class="marka-model">
                     {% if kayit.ekipman %}{{ kayit.ekipman.marka or '' }} {{ kayit.ekipman.model or '' }}{% else %}-{% endif %}
-                    {% if kayit.aciklama %}
+                    {% if kayit.yapilan_islemler %}
+                        {% for islem in kayit.yapilan_islemler %}
+                            <span class="aciklama-alt">- {{ islem.islem_aciklama }}</span>
+                        {% endfor %}
+                    {% elif kayit.aciklama %}
                         <span class="aciklama-alt">{{ kayit.aciklama }}</span>
                     {% endif %}
                 </td>

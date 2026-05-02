@@ -121,8 +121,37 @@
                     <input type="number" name="yol_maliyeti" id="yol_maliyeti" step="0.01" min="0" class="form-control" value="{{ kayit.yol_maliyeti or 0 }}">
                 </div>
                 <div class="col-12">
-                    <label class="form-label fw-semibold">Açıklama</label>
-                    <textarea name="aciklama" class="form-control" rows="4">{{ kayit.aciklama or '' }}</textarea>
+                    <div class="parts-actions mb-2">
+                        <label class="form-label fw-semibold mb-0">Yapılan İşler</label>
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                            <span class="muted-note">Her satıra bir işlem yazın. Boş satırlar kaydedilmez.</span>
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="add-work-row">+ İşlem Ekle</button>
+                        </div>
+                    </div>
+                    <div class="table-responsive border rounded">
+                        <table class="table table-sm align-middle mb-0 parts-table">
+                            <thead>
+                                <tr>
+                                    <th>Yapılan İşlem</th>
+                                    <th style="width: 80px;"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="work-table-body">
+                                {% set mevcut_islemler = kayit.yapilan_islemler|list %}
+                                {% for idx in range((mevcut_islemler|length) if (mevcut_islemler|length) > 0 else 1) %}
+                                {% set islem = mevcut_islemler[idx] if idx < (mevcut_islemler|length) else None %}
+                                <tr class="work-row">
+                                    <td>
+                                        <input type="text" name="islem_aciklama" class="form-control form-control-sm" value="{{ islem.islem_aciklama if islem else '' }}" placeholder="Örn: Yağ değişimi yapıldı">
+                                    </td>
+                                    <td class="text-center">
+                                        <button type="button" class="btn btn-sm btn-outline-danger remove-work-row">Sil</button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 
@@ -211,11 +240,25 @@
     </tr>
 </template>
 
+<template id="work-row-template">
+    <tr class="work-row">
+        <td>
+            <input type="text" name="islem_aciklama" class="form-control form-control-sm" value="" placeholder="Örn: Yağ değişimi yapıldı">
+        </td>
+        <td class="text-center">
+            <button type="button" class="btn btn-sm btn-outline-danger remove-work-row">Sil</button>
+        </td>
+    </tr>
+</template>
+
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const addButton = document.getElementById('add-part-row');
     const tableBody = document.getElementById('parts-table-body');
     const rowTemplate = document.getElementById('part-row-template');
+    const addWorkButton = document.getElementById('add-work-row');
+    const workTableBody = document.getElementById('work-table-body');
+    const workRowTemplate = document.getElementById('work-row-template');
 
     function attachRemoveHandler(button) {
         button.addEventListener('click', function () {
@@ -239,6 +282,25 @@ document.addEventListener('DOMContentLoaded', function () {
         const newRow = rowTemplate.content.firstElementChild.cloneNode(true);
         attachRemoveHandler(newRow.querySelector('.remove-part-row'));
         tableBody.appendChild(newRow);
+    });
+
+    function attachWorkRemoveHandler(button) {
+        button.addEventListener('click', function () {
+            const rows = workTableBody.querySelectorAll('.work-row');
+            if (rows.length === 1) {
+                rows[0].querySelector('input[name="islem_aciklama"]').value = '';
+                return;
+            }
+            button.closest('.work-row').remove();
+        });
+    }
+
+    workTableBody.querySelectorAll('.remove-work-row').forEach(attachWorkRemoveHandler);
+
+    addWorkButton.addEventListener('click', function () {
+        const newRow = workRowTemplate.content.firstElementChild.cloneNode(true);
+        attachWorkRemoveHandler(newRow.querySelector('.remove-work-row'));
+        workTableBody.appendChild(newRow);
     });
 
     // Servis tipi değişince datalist'i güncelle

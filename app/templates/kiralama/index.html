@@ -268,6 +268,7 @@
                                     data-sonlandirilmis="{{ 1 if kalem.sonlandirildi else 0 }}"
                                     data-swap="{{ 1 if not kalem.is_active else 0 }}"
                                     data-baslangic="{{ kalem.kiralama_baslangici.strftime('%Y-%m-%d') if kalem.kiralama_baslangici else '' }}"
+                                    data-bitis="{{ kalem.kiralama_bitis.strftime('%Y-%m-%d') if kalem.kiralama_bitis else '' }}"
                                     data-nakliye-satis="{{ kalem.nakliye_satis_fiyat or 0 }}"
                                     data-donus-nakliye-satis="{{ kalem.donus_nakliye_satis_fiyat if kalem.donus_nakliye_satis_fiyat is not none else '' }}"
                                     data-donus-fatura-et="{{ 1 if kalem.donus_nakliye_fatura_et else 0 }}">
@@ -312,6 +313,7 @@
                                     data-sonlandirilmis="{{ 1 if kalem.sonlandirildi else 0 }}"
                                     data-swap="{{ 1 if not kalem.is_active else 0 }}"
                                     data-baslangic="{{ kalem.kiralama_baslangici.strftime('%Y-%m-%d') if kalem.kiralama_baslangici else '' }}"
+                                    data-bitis="{{ kalem.kiralama_bitis.strftime('%Y-%m-%d') if kalem.kiralama_bitis else '' }}"
                                     data-nakliye-satis="{{ kalem.nakliye_satis_fiyat or 0 }}"
                                     data-donus-nakliye-satis="{{ kalem.donus_nakliye_satis_fiyat if kalem.donus_nakliye_satis_fiyat is not none else '' }}"
                                     data-donus-fatura-et="{{ 1 if kalem.donus_nakliye_fatura_et else 0 }}">
@@ -519,6 +521,7 @@
         <form id="sonlandir-kalem-form" method="POST" action="{{ url_for('kiralama.sonlandir_kalem') }}">
             <input type="hidden" name="csrf_token" id="modal-csrf-token">
             <input type="hidden" name="kalem_id" id="modal-kalem-id">
+            <input type="hidden" name="return_url" class="js-return-url">
             
             <div class="mb-3">
                 <label class="form-label small fw-bold text-secondary"><i class="far fa-calendar-alt me-1"></i>Fiili Bitiş Tarihi:</label>
@@ -602,15 +605,25 @@
             <h5 class="mb-0 fw-bold text-dark"><i class="fas fa-calendar-alt text-info me-2"></i>Planlanan Bitiş Tarihini Güncelle</h5>
             <button type="button" class="btn-close" onclick="closeTarihGuncelleModal()"></button>
         </div>
-        <p class="small text-muted mb-3">Makine <span id="modal-tarih-guncelle-kod" class="fw-bold text-primary"></span> için yeni planlanan bitiş tarihini girin.</p>
+        <p class="small text-muted mb-3">
+            <span id="modal-tarih-guncelle-kod" class="fw-bold text-info"></span>
+            <span id="modal-tarih-guncelle-bilgi">Yeni planlanan bitiş tarihini girin.</span>
+        </p>
 
         <form id="tarih-guncelle-form" method="POST" action="{{ url_for('kiralama.tarih_guncelle_kalem') }}">
             <input type="hidden" name="csrf_token" id="modal-tarih-guncelle-csrf">
             <input type="hidden" name="kalem_id" id="modal-tarih-guncelle-kalem-id">
+            <input type="hidden" name="return_url" class="js-return-url">
 
             <div class="mb-4">
                 <label class="form-label small fw-bold text-secondary"><i class="far fa-calendar-alt me-1"></i>Yeni Bitiş Tarihi:</label>
                 <input type="date" name="yeni_bitis_tarihi" id="modal-yeni-bitis-tarihi" class="form-control shadow-sm border-info" required>
+                <div class="d-flex flex-wrap gap-2 mt-2">
+                    <button type="button" class="btn btn-sm btn-outline-info js-hizli-tarih" data-days="1">+1 Gün</button>
+                    <button type="button" class="btn btn-sm btn-outline-info js-hizli-tarih" data-days="7">+7 Gün</button>
+                    <button type="button" class="btn btn-sm btn-outline-info js-hizli-tarih" data-days="15">+15 Gün</button>
+                    <button type="button" class="btn btn-sm btn-outline-info js-hizli-tarih" data-days="30">+30 Gün</button>
+                </div>
             </div>
 
             <div class="d-grid gap-2">
@@ -625,6 +638,7 @@
 <form id="iptal-kalem-form" method="POST" action="{{ url_for('kiralama.iptal_et_kalem') }}" style="display: none;">
     <input type="hidden" name="csrf_token" id="iptal-csrf-token">
     <input type="hidden" name="kalem_id" id="iptal-kalem-id">
+    <input type="hidden" name="return_url" class="js-return-url">
 </form>
 
 <div class="modal fade" id="detayModal" tabindex="-1" aria-labelledby="detayModalLabel" aria-hidden="true">
@@ -794,6 +808,34 @@ function closeTarihGuncelleModal() {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.querySelector('input[type="text"][name="q"]');
+    const searchForm = searchInput ? searchInput.closest('form') : null;
+    let searchTimer;
+
+    if (searchForm && searchInput) {
+        const searchFocusKey = 'kiralama.index.searchFocus';
+        const savedSearchFocus = sessionStorage.getItem(searchFocusKey);
+        if (savedSearchFocus) {
+            sessionStorage.removeItem(searchFocusKey);
+            requestAnimationFrame(() => {
+                searchInput.focus();
+                const pos = searchInput.value.length;
+                searchInput.setSelectionRange(pos, pos);
+            });
+        }
+
+        searchInput.setAttribute('autocomplete', 'off');
+        searchInput.addEventListener('input', function() {
+            clearTimeout(searchTimer);
+            searchTimer = setTimeout(() => {
+                const currentQuery = new URLSearchParams(window.location.search).get('q') || '';
+                if (searchInput.value.trim() === currentQuery.trim()) return;
+                sessionStorage.setItem(searchFocusKey, '1');
+                searchForm.submit();
+            }, 700);
+        });
+    }
+
     // Mobilde native menüyü engellemek için
     const preventNativeContextMenu = (e) => {
         e.preventDefault();
@@ -809,7 +851,63 @@ document.addEventListener('DOMContentLoaded', function() {
     const contextMenuKalem = document.getElementById('context-menu-kalem');
     const backdrop = document.getElementById('modal-backdrop-sonlandir');
 
-    let state = { kUrl: null, sUrl: null, fNo: null, csrf: null, kId: null, eKod: null, kCsrf: null, rentalId: null, baslangic: null, nakliyeSatis: 0, donusNakliyeSatis: null, donusFaturaEt: false };
+    let state = { kUrl: null, sUrl: null, fNo: null, csrf: null, kId: null, eKod: null, kCsrf: null, rentalId: null, baslangic: null, bitis: null, nakliyeSatis: 0, donusNakliyeSatis: null, donusFaturaEt: false };
+    const listStateKey = 'kiralama.index.returnState';
+
+    function refreshReturnUrls() {
+        document.querySelectorAll('.js-return-url').forEach(input => {
+            input.value = window.location.href;
+        });
+    }
+
+    function saveListState(overrides = {}) {
+        const payload = {
+            url: window.location.href,
+            scrollY: window.scrollY,
+            rentalId: state.rentalId,
+            kalemId: state.kId,
+            ...overrides
+        };
+        sessionStorage.setItem(listStateKey, JSON.stringify(payload));
+    }
+
+    function restoreListState() {
+        const raw = sessionStorage.getItem(listStateKey);
+        if (!raw) return;
+
+        let payload;
+        try {
+            payload = JSON.parse(raw);
+        } catch (err) {
+            sessionStorage.removeItem(listStateKey);
+            return;
+        }
+
+        const saved = new URL(payload.url, window.location.origin);
+        if (saved.pathname !== window.location.pathname || saved.search !== window.location.search) return;
+
+        sessionStorage.removeItem(listStateKey);
+        requestAnimationFrame(() => {
+            const kalemTarget = payload.kalemId
+                ? document.querySelector(`[data-kalem-id="${payload.kalemId}"]`)
+                : null;
+            const rowTarget = payload.rentalId
+                ? document.querySelector(`tr.kiralama-satiri[data-kiralama-id="${payload.rentalId}"]`)
+                : null;
+            const target = (kalemTarget && kalemTarget.getBoundingClientRect().height > 0)
+                ? kalemTarget
+                : rowTarget;
+
+            if (target) {
+                target.scrollIntoView({ block: 'center' });
+                return;
+            }
+            window.scrollTo({ top: payload.scrollY || 0 });
+        });
+    }
+
+    refreshReturnUrls();
+    restoreListState();
 
     function closeModals() {
         backdrop.style.display = 'none';
@@ -855,18 +953,45 @@ document.addEventListener('DOMContentLoaded', function() {
         };
     }
 
+    function formatDateForDisplay(dateStr) {
+        if (!dateStr) return '';
+        const d = new Date(dateStr);
+        if (Number.isNaN(d.getTime())) return '';
+        const gun = String(d.getDate()).padStart(2, '0');
+        const ay = String(d.getMonth() + 1).padStart(2, '0');
+        const yil = d.getFullYear();
+        return `${gun}.${ay}.${yil}`;
+    }
+
+    function addDaysToIsoDate(baseIsoDate, daysToAdd) {
+        if (!baseIsoDate) return '';
+        const [y, m, d] = baseIsoDate.split('-').map(Number);
+        if (!y || !m || !d) return '';
+        const dt = new Date(Date.UTC(y, m - 1, d));
+        dt.setUTCDate(dt.getUTCDate() + daysToAdd);
+        const yy = dt.getUTCFullYear();
+        const mm = String(dt.getUTCMonth() + 1).padStart(2, '0');
+        const dd = String(dt.getUTCDate()).padStart(2, '0');
+        return `${yy}-${mm}-${dd}`;
+    }
+
     function openTarihGuncelleModal() {
         document.getElementById('modal-tarih-guncelle-kalem-id').value = state.kId;
-        document.getElementById('modal-tarih-guncelle-kod').innerText = state.eKod;
         document.getElementById('modal-tarih-guncelle-csrf').value = state.kCsrf;
+        const bitisGosterim = formatDateForDisplay(state.bitis);
+        document.getElementById('modal-tarih-guncelle-kod').innerText = state.eKod || '';
+        const bilgiText = bitisGosterim
+            ? ` ${bitisGosterim} tarihinde kiralaması bitecektir. Yeni planlanan bitiş tarihini girin.`
+            : ' için yeni planlanan bitiş tarihini girin.';
+        document.getElementById('modal-tarih-guncelle-bilgi').innerText = bilgiText;
         // Yeni bitiş tarihinin en az başlangıç tarihi kadar olması gerektiğini belirt
         document.getElementById('modal-yeni-bitis-tarihi').min = state.baslangic || '';
 
-        // DEFAULT DEĞER: Yarını set et
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const tomorrowStr = tomorrow.toISOString().split('T')[0];
-        document.getElementById('modal-yeni-bitis-tarihi').value = tomorrowStr;
+        const input = document.getElementById('modal-yeni-bitis-tarihi');
+        input.value = state.bitis || '';
+        if (input.min && input.value && input.value < input.min) {
+            input.value = input.min;
+        }
 
         document.getElementById('modal-backdrop-tarih-guncelle').style.display = 'flex';
     }
@@ -939,6 +1064,7 @@ document.addEventListener('DOMContentLoaded', function() {
             state.eKod = this.dataset.ekipmanKod;
             state.kCsrf = this.dataset.csrfToken;
             state.baslangic = this.dataset.baslangic || '';
+            state.bitis = this.dataset.bitis || '';
             state.nakliyeSatis = this.dataset.nakliyeSatis || '0';
             state.donusNakliyeSatis = this.dataset.donusNakliyeSatis || '';
             state.donusFaturaEt = this.dataset.donusFaturaEt === '1';
@@ -994,7 +1120,12 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(html => { body.innerHTML = html; })
             .catch(() => { body.innerHTML = '<div class="alert alert-danger m-3">Detay bilgileri yüklenemedi.</div>'; });
     };
-    document.getElementById('menu-duzenle').onclick = () => { if(state.kUrl) window.location.href = state.kUrl + '?next=' + encodeURIComponent(window.location.href); };
+    document.getElementById('menu-duzenle').onclick = () => {
+        if (state.kUrl) {
+            saveListState({ rentalId: state.rentalId, kalemId: null });
+            window.location.href = state.kUrl + '?next=' + encodeURIComponent(window.location.href);
+        }
+    };
     // --- MENÜ AÇILIŞ (FİRMALAR AYARI - iPHONE DOSTU) ---
     const openFormMenu = (e, row) => {
         closeModals();
@@ -1013,6 +1144,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const openItemMenu = (e, item) => {
         closeModals();
+        const parentRow = item.closest('tr.kiralama-satiri');
+        state.rentalId = parentRow ? parentRow.dataset.kiralamaId : null;
         state.kId = item.dataset.kalemId;
         state.eKod = item.dataset.ekipmanKod;
         state.kCsrf = item.dataset.csrfToken;
@@ -1069,6 +1202,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if(confirm(state.fNo + ' nolu tüm kiralama silinecek. Emin misiniz?')) {
             const form = document.getElementById('delete-form');
             form.action = state.sUrl; form.querySelector('input[name="csrf_token"]').value = state.csrf;
+            saveListState({ rentalId: state.rentalId, kalemId: null });
             form.submit();
         }
     };
@@ -1081,7 +1215,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // YENİ EKLENEN: Makine Değişim (Revizyon) Click İşlemi
         document.getElementById('menu-degistir').onclick = () => {
              if(state.kId) {
-                 window.location.href = `/makinedegisim/degistir/${state.kId}`;
+                 saveListState({ kalemId: state.kId });
+                 window.location.href = `/makinedegisim/degistir/${state.kId}?next=${encodeURIComponent(window.location.href)}`;
              }
         };
 
@@ -1099,6 +1234,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if(confirm(state.eKod + ' tekrar AKTİF edilsin mi?')) {
             document.getElementById('iptal-kalem-id').value = state.kId;
             document.getElementById('iptal-csrf-token').value = state.kCsrf;
+            refreshReturnUrls();
+            saveListState({ kalemId: state.kId });
             document.getElementById('iptal-kalem-form').submit();
         }
     };
@@ -1115,6 +1252,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Form gönderim validasyonu
     document.getElementById('sonlandir-kalem-form').addEventListener('submit', function(e) {
+        refreshReturnUrls();
+        saveListState({ kalemId: state.kId });
         const subeVal = this.querySelector('[name="donus_sube_id"]').value;
         const donusSatis = parseFloat(document.getElementById('donusNakliyeSatisInput').value || '0');
         if (!subeVal) {
@@ -1151,6 +1290,11 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
+    document.getElementById('tarih-guncelle-form').addEventListener('submit', function() {
+        refreshReturnUrls();
+        saveListState({ kalemId: state.kId });
+    });
+
     document.querySelectorAll('.js-iade-iptal-btn').forEach((button) => {
         button.addEventListener('click', (event) => {
             event.preventDefault();
@@ -1163,13 +1307,29 @@ document.addEventListener('DOMContentLoaded', function() {
             if(confirm(ekipmanKod + ' için iade işlemi geri alınsın mı?')) {
                 document.getElementById('iptal-kalem-id').value = kalemId;
                 document.getElementById('iptal-csrf-token').value = csrfToken;
+                refreshReturnUrls();
+                saveListState({ kalemId: kalemId });
                 document.getElementById('iptal-kalem-form').submit();
             }
         });
     });
 
+    document.querySelectorAll('.js-hizli-tarih').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const days = parseInt(this.dataset.days || '0', 10);
+            if (!days) return;
+            const tarihInput = document.getElementById('modal-yeni-bitis-tarihi');
+            const baseStr = state.bitis || tarihInput.value;
+            const targetStr = addDaysToIsoDate(baseStr, days);
+            if (!targetStr) return;
+            const minDate = tarihInput.min;
+            tarihInput.value = (minDate && targetStr < minDate) ? minDate : targetStr;
+        });
+    });
+
     document.getElementById('menu-degisim-iptal').onclick = () => {
     if(confirm(state.eKod + ' için yapılan makine değişimi geri alınacak. Emin misiniz?')) {
+        saveListState({ kalemId: state.kId });
         fetch(`/makinedegisim/degisim_iptal/${state.kId}`, {
             method: "POST",
             headers: {

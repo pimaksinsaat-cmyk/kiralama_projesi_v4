@@ -1,5 +1,5 @@
 from app.services.base import BaseService, ValidationError
-from app.filo.models import Ekipman, BakimKaydi, KullanilanParca, StokKarti, StokHareket
+from app.filo.models import Ekipman, BakimKaydi, KullanilanParca, YapilanIslem, StokKarti, StokHareket
 from app.kiralama.models import KiralamaKalemi
 from app.extensions import db
 from datetime import datetime, date
@@ -196,6 +196,16 @@ class BakimService(BaseService):
         }
 
     @staticmethod
+    def _normalize_work_items(work_items_data):
+        normalized_rows = []
+        for item in work_items_data or []:
+            aciklama = (item.get('islem_aciklama') or '').strip()
+            if not aciklama:
+                continue
+            normalized_rows.append({'islem_aciklama': aciklama})
+        return normalized_rows
+
+    @staticmethod
     def _latest_price(stok_karti_id):
         hareket = StokHareket.query.filter_by(stok_karti_id=stok_karti_id).order_by(StokHareket.id.desc()).first()
         return Decimal(hareket.birim_fiyat or 0) if hareket else Decimal('0')
@@ -259,6 +269,15 @@ class BakimService(BaseService):
                 )
             )
 
+    @staticmethod
+    def _sync_work_items(bakim_kaydi, normalized_work_items):
+        bakim_kaydi.yapilan_islemler.clear()
+        db.session.flush()
+        for satir in normalized_work_items:
+            bakim_kaydi.yapilan_islemler.append(
+                YapilanIslem(islem_aciklama=satir.get('islem_aciklama'))
+            )
+
     @classmethod
     def _sync_ekipman_status(cls, bakim_kaydi):
         ekipman = bakim_kaydi.ekipman
@@ -288,7 +307,7 @@ class BakimService(BaseService):
         db.session.add(ekipman)
     
     @classmethod
-    def bakim_kaydet(cls, ekipman_id, bakim_verileri, parts_data=None, actor_id=None):
+    def bakim_kaydet(cls, ekipman_id, bakim_verileri, parts_data=None, work_items_data=None, actor_id=None):
         """Yeni bir bakım kaydı açar."""
         bakim_verileri['tarih'] = cls._normalize_date(bakim_verileri.get('tarih'))
         bakim_verileri['sonraki_bakim_tarihi'] = cls._normalize_date(bakim_verileri.get('sonraki_bakim_tarihi'))
@@ -311,6 +330,7 @@ class BakimService(BaseService):
             yeni_bakim = cls.model(ekipman_id=ekipman_id, **bakim_verileri)
             cls.save(yeni_bakim, is_new=True, auto_commit=False, actor_id=actor_id)
             cls._sync_parts(yeni_bakim, cls._normalize_parts(parts_data))
+            cls._sync_work_items(yeni_bakim, cls._normalize_work_items(work_items_data))
             cls._sync_ekipman_status(yeni_bakim)
             db.session.commit()
             return yeni_bakim
@@ -319,7 +339,7 @@ class BakimService(BaseService):
             raise
 
     @classmethod
-    def bakim_guncelle(cls, bakim_id, bakim_verileri, parts_data=None, actor_id=None):
+    def bakim_guncelle(cls, bakim_id, bakim_verileri, parts_data=None, work_items_data=None, actor_id=None):
         bakim_kaydi = cls.get_by_id(bakim_id)
         if not bakim_kaydi:
             raise ValidationError('Servis kaydı bulunamadı.')
@@ -338,6 +358,7 @@ class BakimService(BaseService):
 
             cls.save(bakim_kaydi, is_new=False, auto_commit=False, actor_id=actor_id)
             cls._sync_parts(bakim_kaydi, cls._normalize_parts(parts_data))
+            cls._sync_work_items(bakim_kaydi, cls._normalize_work_items(work_items_data))
             cls._sync_ekipman_status(bakim_kaydi)
             db.session.commit()
             return bakim_kaydi

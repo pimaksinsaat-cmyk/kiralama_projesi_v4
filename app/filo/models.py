@@ -86,6 +86,7 @@ class BakimKaydi(BaseModel):
     ekipman = db.relationship('Ekipman', back_populates='bakim_kayitlari')
     servis_veren_firma = db.relationship('Firma', back_populates='servis_kayitlari', foreign_keys=[servis_veren_firma_id])
     kullanilan_parcalar = db.relationship('KullanilanParca', back_populates='bakim_kaydi', cascade="all, delete-orphan")
+    yapilan_islemler = db.relationship('YapilanIslem', back_populates='bakim_kaydi', cascade="all, delete-orphan")
     
     def __repr__(self): 
         return f'<Bakim {self.ekipman_id}>'
@@ -106,6 +107,18 @@ class KullanilanParca(BaseModel):
     
     def __repr__(self): 
         return f'<Kullanim {self.kullanilan_adet}>'
+
+
+class YapilanIslem(BaseModel):
+    __tablename__ = 'yapilan_islem'
+
+    bakim_kaydi_id = db.Column(db.Integer, db.ForeignKey('bakim_kaydi.id'), nullable=False, index=True)
+    islem_aciklama = db.Column(db.String(500), nullable=False)
+
+    bakim_kaydi = db.relationship('BakimKaydi', back_populates='yapilan_islemler')
+
+    def __repr__(self):
+        return f'<YapilanIslem {self.bakim_kaydi_id}>'
 
 
 # 8. STOK KARTI

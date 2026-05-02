@@ -25,6 +25,7 @@
     .parts-list { margin: 0; padding-left: 1rem; }
     .parts-list li { margin-bottom: 0.2rem; }
     .muted-note { color: #64748b; font-size: 0.85rem; }
+    .work-notes { white-space: pre-line; }
     .actions-cell { white-space: nowrap; }
     .money-value { font-variant-numeric: tabular-nums; white-space: nowrap; }
     .money-value.total { font-weight: 700; color: #0f172a; }
@@ -119,7 +120,17 @@
                         <td>
                             <div>{{ bakim_tipi_labels.get(kayit.bakim_tipi, kayit.bakim_tipi or '-') }}</div>
                             <div class="muted-note">{{ servis_tipi_labels.get(kayit.servis_tipi, kayit.servis_tipi or '-') }}</div>
-                            <div class="muted-note mt-1">{{ kayit.aciklama or '-' }}</div>
+                            {% if kayit.yapilan_islemler %}
+                            <ul class="parts-list muted-note mt-1">
+                                {% for islem in kayit.yapilan_islemler %}
+                                <li>{{ islem.islem_aciklama }}</li>
+                                {% endfor %}
+                            </ul>
+                            {% elif kayit.aciklama %}
+                            <div class="muted-note mt-1 work-notes">{{ kayit.aciklama }}</div>
+                            {% else %}
+                            <div class="muted-note mt-1">-</div>
+                            {% endif %}
                         </td>
                         <td>{{ kayit.calisma_saati if kayit.calisma_saati is not none else '-' }}</td>
                         <td>

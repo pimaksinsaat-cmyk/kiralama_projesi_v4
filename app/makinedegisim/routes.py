@@ -1,5 +1,6 @@
 from flask import render_template, request, redirect, url_for, flash, current_app
 from datetime import date
+from urllib.parse import urlsplit
 from flask_login import current_user
 
 from app.makinedegisim import makinedegisim_bp
@@ -29,6 +30,31 @@ def get_actor_id():
             pass
     return None
 
+def _kiralama_return_url():
+    default_url = url_for('kiralama.index')
+    target = (
+        request.form.get('return_url')
+        or request.args.get('next')
+        or request.referrer
+        or default_url
+    )
+    target = target.strip()
+    if not target:
+        return default_url
+
+    parsed = urlsplit(target)
+    if parsed.netloc and parsed.netloc != request.host:
+        return default_url
+    if not parsed.netloc and not target.startswith('/'):
+        return default_url
+    if not (parsed.path or '').startswith('/kiralama'):
+        return default_url
+    return target
+
+
+def _redirect_to_kiralama_return():
+    return redirect(_kiralama_return_url())
+
 @makinedegisim_bp.route('/degistir/<int:kalem_id>', methods=['GET', 'POST'])
 def makine_degistir(kalem_id):
     guard_response = ensure_active_sube_exists(
@@ -41,7 +67,7 @@ def makine_degistir(kalem_id):
 
     if not eski_kalem.is_active:
         flash("Sadece aktif makine üzerinden değişim yapılabilir.", "warning")
-        return redirect(url_for('kiralama.index'))
+        return _redirect_to_kiralama_return()
 
     form = MakineDegisimForm()
 
@@ -108,7 +134,7 @@ def makine_degistir(kalem_id):
             MakineDegisimService.degisim_uygula(kalem_id, islem_verileri, actor_id=get_actor_id())
             
             flash("Makine değişimi ve şube transferi başarıyla tamamlandı.", "success")
-            return redirect(url_for('kiralama.index'))
+            return _redirect_to_kiralama_return()
 
         except ValidationError as e:
             flash(str(e), "danger")
@@ -176,4 +202,4 @@ def degisim_iptal(kalem_id):
     except Exception as e:
         flash(f"Sistem Hatası: {str(e)}", "danger")
 
-    return redirect(url_for('kiralama.index'))
+    return _redirect_to_kiralama_return()

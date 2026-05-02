@@ -11,7 +11,7 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
 from app.extensions import db
 from app.servis import servis_bp
-from app.filo.models import BakimKaydi, KullanilanParca, Ekipman, StokKarti, StokHareket
+from app.filo.models import BakimKaydi, KullanilanParca, YapilanIslem, Ekipman, StokKarti, StokHareket
 from app.firmalar.models import Firma
 from app.personel.models import Personel
 from app.services.base import ValidationError
@@ -75,6 +75,17 @@ def _collect_parts_from_form(form):
     return parts
 
 
+def _collect_work_items_from_form(form):
+    islem_aciklamalari = form.getlist('islem_aciklama')
+    work_items = []
+    for islem_aciklama in islem_aciklamalari:
+        islem_aciklama = (islem_aciklama or '').strip()
+        if not islem_aciklama:
+            continue
+        work_items.append({'islem_aciklama': islem_aciklama})
+    return work_items
+
+
 def _common_form_context():
     return {
         'bakim_tipi_labels': BAKIM_TIPI_LABELS,
@@ -128,15 +139,17 @@ def index():
         joinedload(BakimKaydi.ekipman).joinedload(Ekipman.sube),
         joinedload(BakimKaydi.servis_veren_firma),
         joinedload(BakimKaydi.kullanilan_parcalar).joinedload(KullanilanParca.stok_karti),
+        joinedload(BakimKaydi.yapilan_islemler),
     )
 
     if q:
-        query = query.join(BakimKaydi.ekipman).outerjoin(BakimKaydi.servis_veren_firma).filter(
+        query = query.join(BakimKaydi.ekipman).outerjoin(BakimKaydi.servis_veren_firma).outerjoin(BakimKaydi.yapilan_islemler).filter(
             or_(
                 tr_ilike(Ekipman.kod, f'%{q}%'),
                 tr_ilike(Ekipman.marka, f'%{q}%'),
                 tr_ilike(Ekipman.model, f'%{q}%'),
                 tr_ilike(BakimKaydi.aciklama, f'%{q}%'),
+                tr_ilike(YapilanIslem.islem_aciklama, f'%{q}%'),
                 tr_ilike(BakimKaydi.servis_veren_kisi, f'%{q}%'),
                 tr_ilike(Firma.firma_adi, f'%{q}%'),
             )
@@ -183,17 +196,19 @@ def _servis_filtered_query(q, durum, eager=True):
             joinedload(BakimKaydi.ekipman).joinedload(Ekipman.sube),
             joinedload(BakimKaydi.servis_veren_firma),
             joinedload(BakimKaydi.kullanilan_parcalar).joinedload(KullanilanParca.stok_karti),
+            joinedload(BakimKaydi.yapilan_islemler),
         ]
     query = BakimKaydi.query.filter(BakimKaydi.is_deleted == False)
     if opts:
         query = query.options(*opts)
     if q:
-        query = query.join(BakimKaydi.ekipman).outerjoin(BakimKaydi.servis_veren_firma).filter(
+        query = query.join(BakimKaydi.ekipman).outerjoin(BakimKaydi.servis_veren_firma).outerjoin(BakimKaydi.yapilan_islemler).filter(
             or_(
                 tr_ilike(Ekipman.kod, f'%{q}%'),
                 tr_ilike(Ekipman.marka, f'%{q}%'),
                 tr_ilike(Ekipman.model, f'%{q}%'),
                 tr_ilike(BakimKaydi.aciklama, f'%{q}%'),
+                tr_ilike(YapilanIslem.islem_aciklama, f'%{q}%'),
                 tr_ilike(BakimKaydi.servis_veren_kisi, f'%{q}%'),
                 tr_ilike(Firma.firma_adi, f'%{q}%'),
             )
@@ -398,6 +413,7 @@ def duzenle(id):
     kayit = BakimKaydi.query.filter(BakimKaydi.id == id, BakimKaydi.is_deleted == False).options(
         joinedload(BakimKaydi.ekipman).joinedload(Ekipman.sube),
         joinedload(BakimKaydi.kullanilan_parcalar).joinedload(KullanilanParca.stok_karti),
+        joinedload(BakimKaydi.yapilan_islemler),
         joinedload(BakimKaydi.servis_veren_firma),
     ).first_or_404()
 
@@ -410,7 +426,7 @@ def duzenle(id):
             'durum': request.form.get('durum') or 'acik',
             'servis_veren_firma_id': request.form.get('servis_veren_firma_id', type=int) or None,
             'servis_veren_kisi': (request.form.get('servis_veren_kisi') or '').strip() or None,
-            'aciklama': (request.form.get('aciklama') or '').strip() or None,
+            'aciklama': kayit.aciklama,
             'sonraki_bakim_tarihi': request.form.get('sonraki_bakim_tarihi') or None,
             'iscilik_saat': request.form.get('iscilik_saat') or None,
             'iscilik_saat_ucreti': request.form.get('iscilik_saat_ucreti') or None,
@@ -420,9 +436,16 @@ def duzenle(id):
             'yol_maliyeti': request.form.get('yol_maliyeti') or 0,
         }
         parts_data = _collect_parts_from_form(request.form)
+        work_items_data = _collect_work_items_from_form(request.form)
 
         try:
-            BakimService.bakim_guncelle(id, bakim_verileri, parts_data=parts_data, actor_id=_get_actor_id())
+            BakimService.bakim_guncelle(
+                id,
+                bakim_verileri,
+                parts_data=parts_data,
+                work_items_data=work_items_data,
+                actor_id=_get_actor_id(),
+            )
             flash('Servis kaydı güncellendi.', 'success')
             return redirect(url_for('servis.index', q=kayit.ekipman.kod if kayit.ekipman else ''))
         except ValidationError as exc:

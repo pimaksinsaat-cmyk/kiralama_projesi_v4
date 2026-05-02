@@ -2,6 +2,7 @@ import traceback
 import threading
 import json
 from datetime import datetime, date, timedelta, timezone
+from urllib.parse import urlsplit
 from flask import render_template, redirect, url_for, flash, request, current_app, jsonify
 from flask_login import current_user, login_required
 from sqlalchemy import or_
@@ -37,6 +38,31 @@ _SUBE_CACHE_LOCK = threading.Lock()
 _ARAC_CACHE_LOCK = threading.Lock()
 
 _CACHE_TIMEOUT_MINUTES = 60 
+
+def _kiralama_return_url(default_endpoint='kiralama.index'):
+    default_url = url_for(default_endpoint)
+    target = (
+        request.form.get('return_url')
+        or request.args.get('next')
+        or request.referrer
+        or default_url
+    )
+    target = target.strip()
+    if not target:
+        return default_url
+
+    parsed = urlsplit(target)
+    if parsed.netloc and parsed.netloc != request.host:
+        return default_url
+    if not parsed.netloc and not target.startswith('/'):
+        return default_url
+    if not (parsed.path or '').startswith('/kiralama'):
+        return default_url
+    return target
+
+
+def _redirect_to_kiralama_return():
+    return redirect(_kiralama_return_url())
 
 def get_cached_subeler():
     """Şubeleri thread-safe ve bağımsız bir kilitle bellekten getirir.
@@ -144,7 +170,7 @@ def index():
         per_page = request.args.get('per_page', 25, type=int)
         if per_page not in {10, 25, 50, 100}:
             per_page = 25
-        q = request.args.get('q', '', type=str)
+        q = (request.args.get('q', '', type=str) or '').strip()
 
         query = Kiralama.query.options(
             joinedload(Kiralama.firma_musteri),
@@ -152,8 +178,15 @@ def index():
         )
 
         if q:
-            query = query.join(Firma, Kiralama.firma_musteri_id == Firma.id)\
-                         .filter(or_(Kiralama.kiralama_form_no.ilike(f"%{q}%"), tr_ilike(Firma.firma_adi, f"%{q}%")))
+            search = f"%{q}%"
+            query = query.filter(or_(
+                Kiralama.kiralama_form_no.ilike(search),
+                Kiralama.firma_musteri.has(tr_ilike(Firma.firma_adi, search)),
+                Kiralama.kalemler.any(KiralamaKalemi.ekipman.has(Ekipman.kod.ilike(search))),
+                Kiralama.kalemler.any(tr_ilike(KiralamaKalemi.harici_ekipman_marka, search)),
+                Kiralama.kalemler.any(tr_ilike(KiralamaKalemi.harici_ekipman_model, search)),
+                Kiralama.kalemler.any(KiralamaKalemi.harici_ekipman_seri_no.ilike(search)),
+            ))
 
         # Dashboard kartları sayfalamadan bağımsız olarak, filtreye uyan tüm kayıtlar üzerinden hesaplanır.
         stats_raw = query.all()
@@ -710,7 +743,7 @@ def duzenle(kiralama_id):
                 flash('Kiralama başarıyla güncellendi. ⚠️ Bir veya daha fazla kalemin başlangıç tarihi ileridedir — cari tahakkuk başlangıç tarihine geldiğinde otomatik yansıyacaktır.', 'info')
             else:
                 flash('Kiralama başarıyla güncellendi.', 'success')
-            return redirect(url_for('kiralama.index'))
+            return _redirect_to_kiralama_return()
         except ValidationError as e:
             db.session.rollback()
             OperationLogService.log(
@@ -783,7 +816,7 @@ def duzenle(kiralama_id):
         subeler = []
         markalar = []
     tipler = [tip for tip, _ in EKIPMAN_TIPI_SECENEKLERI]
-    return render_template('kiralama/form.html', form=form, kiralama=kiralama, markalar=markalar, subeler=subeler, tipler=tipler, is_edit=True, ekipman_sube_map=ekipman_sube_map, ekipman_map_json=json.dumps(ekipman_map, ensure_ascii=False))
+    return render_template('kiralama/form.html', form=form, kiralama=kiralama, markalar=markalar, subeler=subeler, tipler=tipler, is_edit=True, ekipman_sube_map=ekipman_sube_map, ekipman_map_json=json.dumps(ekipman_map, ensure_ascii=False), return_url=_kiralama_return_url())
 
 @kiralama_bp.route('/sil/<int:kiralama_id>', methods=['POST'])
 @login_required
@@ -828,7 +861,7 @@ def sil(kiralama_id):
             success=False,
         )
         flash(f'Silme işlemi başarısız oldu.', 'danger')
-    return redirect(url_for('kiralama.index'))
+    return _redirect_to_kiralama_return()
 
 @kiralama_bp.route('/kalem/sonlandir', methods=['POST'])
 @login_required
@@ -838,7 +871,7 @@ def sonlandir_kalem():
         kalem_id = request.form.get('kalem_id', type=int)
         if not kalem_id:
             flash("İşlem yapılacak kiralama kalemi seçilmedi.", "warning")
-            return redirect(url_for('kiralama.index'))
+            return _redirect_to_kiralama_return()
 
         actor_id = getattr(current_user, 'id', None)
         bitis_str = request.form.get('bitis_tarihi')
@@ -896,7 +929,7 @@ def sonlandir_kalem():
             success=False,
         )
         flash(f"İşlem sırasında bir hata oluştu.", "danger")
-    return redirect(url_for('kiralama.index'))
+    return _redirect_to_kiralama_return()
 
 @kiralama_bp.route('/kalem/tarih_guncelle', methods=['POST'])
 @login_required
@@ -908,31 +941,31 @@ def tarih_guncelle_kalem():
 
         if not kalem_id or not yeni_bitis_str:
             flash("Kalem ID veya tarih eksik.", "warning")
-            return redirect(url_for('kiralama.index'))
+            return _redirect_to_kiralama_return()
 
         # Kalem'i bul
         kalem = db.session.get(KiralamaKalemi, kalem_id)
         if not kalem:
             flash("Kalem bulunamadı.", "danger")
-            return redirect(url_for('kiralama.index'))
+            return _redirect_to_kiralama_return()
 
         # Aktif ve sonlandırılmamış olmalı
         if kalem.sonlandirildi or not kalem.is_active:
             flash("Sadece aktif ve sonlandırılmamış kalemler güncellenebilir.", "warning")
-            return redirect(url_for('kiralama.index'))
+            return _redirect_to_kiralama_return()
 
         # Tarih validasyonu
         from app.services.kiralama_services import to_date
         yeni_bitis_date = to_date(yeni_bitis_str)
         if not yeni_bitis_date:
             flash("Geçersiz tarih formatı.", "warning")
-            return redirect(url_for('kiralama.index'))
+            return _redirect_to_kiralama_return()
 
         # Yeni bitiş tarihi başlangıçtan sonra olmalı
         bas_date = to_date(kalem.kiralama_baslangici)
         if yeni_bitis_date < bas_date:
             flash("Bitiş tarihi başlangıç tarihinden sonra olmalıdır.", "warning")
-            return redirect(url_for('kiralama.index'))
+            return _redirect_to_kiralama_return()
 
         # Eski tarihi kaydet
         eski_bitis = kalem.kiralama_bitis
@@ -975,7 +1008,7 @@ def tarih_guncelle_kalem():
         )
         flash(f"İşlem sırasında bir hata oluştu: {str(e)}", "danger")
 
-    return redirect(url_for('kiralama.index'))
+    return _redirect_to_kiralama_return()
 
 @kiralama_bp.route('/kalem/iptal_et', methods=['POST'])
 @login_required
@@ -985,7 +1018,7 @@ def iptal_et_kalem():
         kalem_id = request.form.get('kalem_id', type=int)
         if not kalem_id:
             flash("Hatalı kalem seçimi.", "warning")
-            return redirect(url_for('kiralama.index'))
+            return _redirect_to_kiralama_return()
 
         actor_id = getattr(current_user, 'id', None)
         KiralamaKalemiService.iptal_et_sonlandirma(kalem_id, actor_id=actor_id)
@@ -1025,7 +1058,7 @@ def iptal_et_kalem():
             success=False,
         )
         flash(f"İşlem geri alınamadı.", "danger")
-    return redirect(url_for('kiralama.index'))
+    return _redirect_to_kiralama_return()
 @kiralama_bp.route('/api/ekipman-filtrele')
 def api_ekipman_filtrele():
     try:
