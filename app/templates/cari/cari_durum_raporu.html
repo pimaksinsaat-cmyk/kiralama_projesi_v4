@@ -24,6 +24,17 @@
         .bakiye-negatif { color: #28a745; font-weight: bold; } 
         .bakiye-sifir { color: #6c757d; }
         
+        /* Yazdır sayfası (cari_durum_raporu_yazdir) ile aynı sütun oranları — arama sonrası az satırda sütunların daralmaması için */
+        .cari-durum-table { table-layout: fixed; width: 100%; }
+        .cari-durum-table col.col-no     { width: 4%; }
+        .cari-durum-table col.col-firma  { width: 35%; }
+        .cari-durum-table col.col-tipi   { width: 12%; }
+        .cari-durum-table col.col-borc   { width: 16%; }
+        .cari-durum-table col.col-alacak { width: 16%; }
+        .cari-durum-table col.col-bakiye { width: 12%; }
+        .cari-durum-table col.col-durum  { width: 10%; }
+        .cari-durum-table .col-firma-cell { overflow-wrap: break-word; word-break: break-word; }
+
         .table th { background-color: #343a40; color: white; border: none; }
         .table td { vertical-align: middle; }
         
@@ -75,7 +86,7 @@
         </div>
         
         <div class="no-print">
-            <a href="{{ url_for('cari.cari_durum_raporu_yazdir', q=q, sort_by=sort_by, sort_dir=sort_dir) }}" class="btn btn-dark mr-2" target="_blank">
+            <a href="{{ url_for('cari.cari_durum_raporu_yazdir', q=q, sort_by=sort_by, sort_dir=sort_dir) }}" class="btn btn-dark mr-2">
                 <i class="fa fa-print"></i> Yazdır / PDF
             </a>
             <a href="{{ url_for('cari.finans_menu') }}" class="btn btn-outline-secondary">
@@ -125,10 +136,19 @@
     </form>
 
     <div class="table-responsive">
-        <table class="table table-hover table-striped table-bordered">
+        <table class="table table-hover table-striped table-bordered cari-durum-table">
+            <colgroup>
+                <col class="col-no">
+                <col class="col-firma">
+                <col class="col-tipi">
+                <col class="col-borc">
+                <col class="col-alacak">
+                <col class="col-bakiye">
+                <col class="col-durum">
+            </colgroup>
             <thead>
                 <tr>
-                    <th style="width: 5%;">#</th>
+                    <th>#</th>
                     <th>
                         Firma Adı
                         <span class="sort-links no-print">
@@ -160,8 +180,8 @@
                 {% for satir in rapor %}
                 <tr>
                     <td>{{ start + loop.index }}</td>
-                    <td>
-                        <a href="{{ url_for('firmalar.bilgi', id=satir.id) }}" class="firma-link" target="_blank" title="{{ satir.firma_adi }}">
+                    <td class="col-firma-cell">
+                        <a href="{{ url_for('firmalar.bilgi', id=satir.id) }}" class="firma-link" title="{{ satir.firma_adi }}">
                             {{ satir.firma_adi | truncate_name }}
                         </a>
                         {% if satir.yetkili %}

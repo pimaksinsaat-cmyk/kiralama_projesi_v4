@@ -11,12 +11,15 @@ from datetime import date
 from flask_login import current_user, login_required
 from decimal import Decimal
 from sqlalchemy import asc, desc
+from sqlalchemy.orm import joinedload, subqueryload
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 from app.firmalar import firmalar_bp
 from app.firmalar.forms import FirmaForm
 from app.firmalar.models import Firma
+from app.filo.models import Ekipman
+from app.kiralama.models import Kiralama, KiralamaKalemi
 from app.extensions import db
 from app.services.firma_services import FirmaService
 from app.services.base import ValidationError
@@ -30,6 +33,31 @@ def get_actor_id():
 def _build_cari_rows(firma, today_date):
     """FirmaService.build_cari_rows için ince sarmalayıcı — geriye dönük uyumluluk."""
     return FirmaService.build_cari_rows(firma, today_date)
+
+
+def _get_firma_bilgi_context(firma_id):
+    """Firma bilgi ekrani icin cari satir kaynagini onden yukler."""
+    firma = Firma.query.options(
+        subqueryload(Firma.kiralamalar).options(
+            joinedload(Kiralama.firma_musteri),
+            subqueryload(Kiralama.kalemler).options(
+                joinedload(KiralamaKalemi.ekipman).joinedload(Ekipman.sube)
+            ),
+            subqueryload(Kiralama.nakliyeler),
+        ),
+        subqueryload(Firma.hizmet_kayitlari),
+    ).filter_by(id=firma_id).first()
+    if not firma:
+        raise ValidationError("Firma bulunamadi.")
+    return {
+        'firma': firma,
+        'bakiye': Decimal('0'),
+        'toplam_borc': Decimal('0'),
+        'toplam_alacak': Decimal('0'),
+        'guncel_bakiye': Decimal('0'),
+        'durum_metni': '',
+        'durum_rengi': '',
+    }
 
 
 class ListPagination:
@@ -272,7 +300,7 @@ def bilgi(id):
         else:
             end_date = today_date
 
-        finans_verileri = FirmaService.get_financial_summary(id)
+        finans_verileri = _get_firma_bilgi_context(id)
         firma_pre = finans_verileri.get('firma')
 
         if start_date_str:
@@ -389,16 +417,8 @@ def bilgi(id):
             finans_verileri['guncel_bakiye'] = cari_guncel_bakiye
             finans_verileri['bakiye'] = cari_guncel_bakiye
 
-            # Cari cache güncelle (rapor sayfası bu cache'i okur)
-            try:
-                from datetime import timezone as _tz
-                firma.cari_borc_kdvli = cari_toplam_borc
-                firma.cari_alacak_kdvli = abs(cari_toplam_alacak)
-                firma.cari_bakiye_kdvli = cari_guncel_bakiye
-                firma.cari_son_guncelleme = datetime.now(_tz.utc)
-                db.session.commit()
-            except Exception:
-                db.session.rollback()
+            # Not: GET ekraninda cache yazma/commit yapmayiz.
+            # Cache, veri degistiren akislar (POST/PUT/DELETE) tarafinda guncellenir.
         except Exception as cari_ex:
             current_app.logger.error(f"[CARI] _build_cari_rows hatası: {cari_ex}", exc_info=True)
             cari_rows_all = []
