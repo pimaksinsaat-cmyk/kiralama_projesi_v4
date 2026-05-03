@@ -108,7 +108,9 @@ def index():
         query = query.filter(or_(
             Teklif.teklif_no.ilike(search),
             tr_ilike(Teklif.aday_firma_adi, search),
+            tr_ilike(Teklif.aday_yetkili_adi, search),
             Teklif.firma_musteri.has(tr_ilike(Firma.firma_adi, search)),
+            Teklif.firma_musteri.has(tr_ilike(Firma.yetkili_adi, search)),
             Teklif.kalemler.any(tr_ilike(TeklifKalemi.makine_tipi, search)),
             Teklif.kalemler.any(tr_ilike(TeklifKalemi.marka_model, search)),
         ))

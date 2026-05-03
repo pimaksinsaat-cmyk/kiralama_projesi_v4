@@ -121,6 +121,28 @@ def test_aday_musteri_minimum_bilgiyle_teklif_olusturur_ve_operasyon_kaydi_uretm
         assert Nakliye.query.count() == nakliye_count
         assert HizmetKaydi.query.count() == hizmet_count
 
+def test_teklif_arama_aday_yetkili_adini_kapsar(app, client):
+    with app.app_context():
+        admin = _make_admin()
+        db.session.commit()
+        admin_id = admin.id
+
+    _login_user(client, admin_id)
+
+    response = client.post(
+        "/teklifler/ekle",
+        data=_teklif_post_data(
+            teklif_no="TEK-2026-YETKILI",
+            aday_yetkili_adi="YetkiliArama",
+        ),
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+
+    search_response = client.get("/teklifler/?q=YetkiliArama")
+    assert search_response.status_code == 200
+    assert b"TEK-2026-YETKILI" in search_response.data
+
 
 def test_aylik_fiyat_30_gun_uzerinden_oransal_hesaplanir(app, client):
     with app.app_context():
