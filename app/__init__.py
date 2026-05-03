@@ -56,6 +56,7 @@ def create_app(config_class=Config):
     # Import MakineDegisim before Ekipman to avoid relationship resolution issues
     from app.makinedegisim.models import MakineDegisim
     from app.filo.models import Ekipman
+    from app.teklifler.models import Teklif, TeklifKalemi
 
     # Sadece ana uygulama çalışırken migrate başlatılsın, scriptlerde gerek yok
     if os.environ.get("FLASK_RUN_FROM_CLI") == "true":
@@ -122,6 +123,10 @@ def create_app(config_class=Config):
     # 4. Kiralama (Sözleşmeler)
     from app.kiralama import kiralama_bp
     app.register_blueprint(kiralama_bp, url_prefix='/kiralama')
+
+    # 4.1 Teklifler
+    from app.teklifler import teklifler_bp
+    app.register_blueprint(teklifler_bp, url_prefix='/teklifler')
 
     # 5. Cari (Finansal İşlemler)
     from app.cari import cari_bp

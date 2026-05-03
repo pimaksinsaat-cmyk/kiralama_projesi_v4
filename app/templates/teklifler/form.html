@@ -1,0 +1,328 @@
+{% extends "base.html" %}
+
+{% block title %}{{ 'Teklif Düzenle' if is_edit else 'Yeni Teklif' }}{% endblock %}
+
+{% block content %}
+<div class="container form-page">
+    <style>
+        .teklif-switch-label {
+            gap: 0.85rem;
+        }
+    </style>
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0">{{ 'Teklif Düzenle' if is_edit else 'Yeni Teklif' }}</h4>
+        <a href="{{ url_for('teklifler.index') }}" class="btn btn-outline-secondary btn-sm">Listeye Dön</a>
+    </div>
+
+    <form method="POST" id="teklif-form">
+        {{ form.hidden_tag() }}
+        <div class="row g-3 mb-3">
+            <div class="col-md-3">
+                {{ form.teklif_no.label(class="form-label fw-semibold") }}
+                {{ form.teklif_no(class="form-control", readonly=is_edit) }}
+                {% for error in form.teklif_no.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+            </div>
+            <div class="col-md-3">
+                {{ form.teklif_tarihi.label(class="form-label fw-semibold") }}
+                {{ form.teklif_tarihi(class="form-control") }}
+            </div>
+            <div class="col-md-3">
+                {{ form.gecerlilik_tarihi.label(class="form-label fw-semibold") }}
+                {{ form.gecerlilik_tarihi(class="form-control") }}
+            </div>
+            <div class="col-md-3">
+                {{ form.durum.label(class="form-label fw-semibold") }}
+                {{ form.durum(class="form-select") }}
+            </div>
+        </div>
+
+        <div class="border rounded p-3 mb-3">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    {{ form.musteri_tipi.label(class="form-label fw-semibold") }}
+                    {{ form.musteri_tipi(class="form-select", id="musteri_tipi") }}
+                </div>
+                <div class="col-md-9 customer-section" id="kayitli-section">
+                    {{ form.firma_musteri_id.label(class="form-label fw-semibold") }}
+                    {{ form.firma_musteri_id(class="form-select") }}
+                    {% for error in form.firma_musteri_id.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                </div>
+            </div>
+
+            <div class="customer-section mt-3" id="aday-section">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        {{ form.aday_firma_adi.label(class="form-label fw-semibold") }}
+                        {{ form.aday_firma_adi(class="form-control") }}
+                        {% for error in form.aday_firma_adi.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                    </div>
+                    <div class="col-md-6">
+                        {{ form.aday_yetkili_adi.label(class="form-label fw-semibold") }}
+                        {{ form.aday_yetkili_adi(class="form-control") }}
+                    </div>
+                    <div class="col-md-4">{{ form.aday_telefon.label(class="form-label") }}{{ form.aday_telefon(class="form-control") }}</div>
+                    <div class="col-md-4">{{ form.aday_eposta.label(class="form-label") }}{{ form.aday_eposta(class="form-control") }}</div>
+                    <div class="col-md-4">{{ form.kdv_orani.label(class="form-label") }}{{ form.kdv_orani(class="form-control") }}</div>
+                    <div class="col-md-6">{{ form.aday_adres.label(class="form-label") }}{{ form.aday_adres(class="form-control", rows="2") }}</div>
+                    <div class="col-md-6">{{ form.aday_not.label(class="form-label") }}{{ form.aday_not(class="form-control", rows="2") }}</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h5 class="mb-0">Teklif Kalemleri</h5>
+            <button type="button" class="btn btn-outline-primary btn-sm" id="add-row">Kalem Ekle</button>
+        </div>
+
+        <div id="kalemler">
+            {% for entry in form.kalemler %}
+            <div class="border rounded p-3 mb-3 kalem-row">
+                {{ entry.form.id() }}
+                <div class="row g-2">
+                    <div class="col-md-4">{{ entry.form.ekipman_id.label(class="form-label") }}{{ entry.form.ekipman_id(class="form-select") }}</div>
+                    <div class="col-md-4">{{ entry.form.makine_tipi.label(class="form-label") }}{{ entry.form.makine_tipi(class="form-control js-makine-tipi", list="makine-tipi-listesi") }}</div>
+                    <div class="col-md-4">{{ entry.form.marka_model.label(class="form-label") }}{{ entry.form.marka_model(class="form-control js-marka-model", list="marka-model-listesi") }}</div>
+                    <div class="col-md-2">{{ entry.form.calisma_yuksekligi.label(class="form-label") }}{{ entry.form.calisma_yuksekligi(class="form-control") }}</div>
+                    <div class="col-md-2">{{ entry.form.kaldirma_kapasitesi.label(class="form-label") }}{{ entry.form.kaldirma_kapasitesi(class="form-control") }}</div>
+                    <div class="col-md-2">{{ entry.form.adet.label(class="form-label") }}{{ entry.form.adet(class="form-control") }}</div>
+                    <div class="col-md-3">{{ entry.form.baslangic_tarihi.label(class="form-label") }}{{ entry.form.baslangic_tarihi(class="form-control") }}</div>
+                    <div class="col-md-3">{{ entry.form.bitis_tarihi.label(class="form-label") }}{{ entry.form.bitis_tarihi(class="form-control") }}</div>
+                    <div class="col-md-3 price-cell">
+                        {{ entry.form.fiyat_tipi(class="js-fiyat-tipi") }}
+                        <div class="d-flex align-items-center teklif-switch-label mb-1">
+                            {{ entry.form.gunluk_fiyat.label(class="form-label js-fiyat-label mb-0") }}
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input js-aylik-switch" type="checkbox" role="switch" {% if entry.form.fiyat_tipi.data == 'aylik' %}checked{% endif %}>
+                                <label class="form-check-label small">Aylık</label>
+                            </div>
+                        </div>
+                        {{ entry.form.gunluk_fiyat(class="form-control js-money-cursor-left", type="text", inputmode="decimal") }}
+                    </div>
+                    <div class="col-md-3">
+                        <div class="d-flex align-items-center teklif-switch-label mb-1">
+                            {{ entry.form.nakliye_fiyati.label(class="form-label mb-0") }}
+                            {{ entry.form.nakliye_yon(class="js-nakliye-yon") }}
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input js-cift-nakliye-switch" type="checkbox" role="switch" {% if entry.form.nakliye_yon.data == 'cift_yon' %}checked{% endif %}>
+                                <label class="form-check-label small js-nakliye-yon-label">Tek Yön</label>
+                            </div>
+                        </div>
+                        {{ entry.form.nakliye_fiyati(class="form-control js-money-cursor-left", type="text", inputmode="decimal") }}
+                    </div>
+                    <div class="col-md-6">{{ entry.form.calisacagi_konum.label(class="form-label") }}{{ entry.form.calisacagi_konum(class="form-control", rows="2") }}</div>
+                    <div class="col-md-6">{{ entry.form.satir_notu.label(class="form-label") }}{{ entry.form.satir_notu(class="form-control", rows="2") }}</div>
+                </div>
+                {% for field_name, errors in entry.form.errors.items() %}
+                    {% for error in errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
+                {% endfor %}
+                <button type="button" class="btn btn-outline-danger btn-sm mt-2 remove-row">Kalemi Sil</button>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="mb-3">
+            {{ form.notlar.label(class="form-label fw-semibold") }}
+            {{ form.notlar(class="form-control", rows="3") }}
+        </div>
+
+        <div class="d-flex justify-content-end gap-2">
+            <a href="{{ url_for('teklifler.index') }}" class="btn btn-secondary">Vazgeç</a>
+            {{ form.submit(class="btn btn-primary") }}
+        </div>
+    </form>
+</div>
+
+<template id="kalem-template">
+    <div class="border rounded p-3 mb-3 kalem-row">
+        <input id="kalemler-__prefix__-id" name="kalemler-__prefix__-id" type="hidden" value="">
+        <div class="row g-2">
+            <div class="col-md-4">
+                <label class="form-label" for="kalemler-__prefix__-ekipman_id">Kayıtlı Makine</label>
+                <select class="form-select" id="kalemler-__prefix__-ekipman_id" name="kalemler-__prefix__-ekipman_id">
+                    {% for value, label in form.kalemler[0].form.ekipman_id.choices %}
+                        <option value="{{ value }}">{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4"><label class="form-label" for="kalemler-__prefix__-makine_tipi">Makine Tipi</label><input class="form-control js-makine-tipi" id="kalemler-__prefix__-makine_tipi" name="kalemler-__prefix__-makine_tipi" list="makine-tipi-listesi" type="text"></div>
+            <div class="col-md-4"><label class="form-label" for="kalemler-__prefix__-marka_model">Marka / Model</label><input class="form-control js-marka-model" id="kalemler-__prefix__-marka_model" name="kalemler-__prefix__-marka_model" list="marka-model-listesi" type="text"></div>
+            <div class="col-md-2"><label class="form-label" for="kalemler-__prefix__-calisma_yuksekligi">Çalışma Yüksekliği</label><input class="form-control" id="kalemler-__prefix__-calisma_yuksekligi" name="kalemler-__prefix__-calisma_yuksekligi" type="text"></div>
+            <div class="col-md-2"><label class="form-label" for="kalemler-__prefix__-kaldirma_kapasitesi">Kaldırma Kapasitesi</label><input class="form-control" id="kalemler-__prefix__-kaldirma_kapasitesi" name="kalemler-__prefix__-kaldirma_kapasitesi" type="number"></div>
+            <div class="col-md-2"><label class="form-label" for="kalemler-__prefix__-adet">Adet</label><input class="form-control" id="kalemler-__prefix__-adet" name="kalemler-__prefix__-adet" type="number" value="1"></div>
+            <div class="col-md-3"><label class="form-label" for="kalemler-__prefix__-baslangic_tarihi">Başlangıç Tarihi</label><input class="form-control" id="kalemler-__prefix__-baslangic_tarihi" name="kalemler-__prefix__-baslangic_tarihi" type="date"></div>
+            <div class="col-md-3"><label class="form-label" for="kalemler-__prefix__-bitis_tarihi">Bitiş Tarihi</label><input class="form-control" id="kalemler-__prefix__-bitis_tarihi" name="kalemler-__prefix__-bitis_tarihi" type="date"></div>
+            <div class="col-md-3 price-cell">
+                <input class="js-fiyat-tipi" id="kalemler-__prefix__-fiyat_tipi" name="kalemler-__prefix__-fiyat_tipi" type="hidden" value="gunluk">
+                <div class="d-flex align-items-center teklif-switch-label mb-1">
+                    <label class="form-label js-fiyat-label mb-0" for="kalemler-__prefix__-gunluk_fiyat">Günlük Fiyat</label>
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input js-aylik-switch" type="checkbox" role="switch">
+                        <label class="form-check-label small">Aylık</label>
+                    </div>
+                </div>
+                <input class="form-control js-money-cursor-left" id="kalemler-__prefix__-gunluk_fiyat" name="kalemler-__prefix__-gunluk_fiyat" type="text" value="0,00">
+            </div>
+            <div class="col-md-3">
+                <div class="d-flex align-items-center teklif-switch-label mb-1">
+                    <label class="form-label mb-0" for="kalemler-__prefix__-nakliye_fiyati">Nakliye Fiyatı</label>
+                    <input class="js-nakliye-yon" id="kalemler-__prefix__-nakliye_yon" name="kalemler-__prefix__-nakliye_yon" type="hidden" value="tek_yon">
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input js-cift-nakliye-switch" type="checkbox" role="switch">
+                        <label class="form-check-label small js-nakliye-yon-label">Tek Yön</label>
+                    </div>
+                </div>
+                <input class="form-control js-money-cursor-left" id="kalemler-__prefix__-nakliye_fiyati" name="kalemler-__prefix__-nakliye_fiyati" type="text" value="0,00">
+            </div>
+            <div class="col-md-6"><label class="form-label" for="kalemler-__prefix__-calisacagi_konum">Çalışacağı Konum</label><textarea class="form-control" id="kalemler-__prefix__-calisacagi_konum" name="kalemler-__prefix__-calisacagi_konum" rows="2"></textarea></div>
+            <div class="col-md-6"><label class="form-label" for="kalemler-__prefix__-satir_notu">Satır Notu</label><textarea class="form-control" id="kalemler-__prefix__-satir_notu" name="kalemler-__prefix__-satir_notu" rows="2"></textarea></div>
+        </div>
+        <button type="button" class="btn btn-outline-danger btn-sm mt-2 remove-row">Kalemi Sil</button>
+    </div>
+</template>
+
+<datalist id="makine-tipi-listesi"></datalist>
+<datalist id="marka-model-listesi"></datalist>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const filoSpecs = {{ filo_specs|default([])|tojson }};
+
+function uniqueSorted(values) {
+    return [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b, 'tr'));
+}
+
+function fillDatalist(id, values) {
+    const list = document.getElementById(id);
+    if (!list) return;
+    list.innerHTML = '';
+    values.forEach(value => {
+        const option = document.createElement('option');
+        option.value = value;
+        list.appendChild(option);
+    });
+}
+
+function specsForType(typeValue) {
+    const selectedType = (typeValue || '').trim().toLocaleLowerCase('tr-TR');
+    if (!selectedType) return filoSpecs;
+    return filoSpecs.filter(item => (item.tip || '').trim().toLocaleLowerCase('tr-TR') === selectedType);
+}
+
+function refreshModelList(row) {
+    const typeInput = row.querySelector('.js-makine-tipi');
+    const relevantSpecs = specsForType(typeInput ? typeInput.value : '');
+    fillDatalist('marka-model-listesi', uniqueSorted(relevantSpecs.map(item => item.marka_model)));
+}
+
+function applySelectedSpec(row) {
+    const typeInput = row.querySelector('.js-makine-tipi');
+    const modelInput = row.querySelector('.js-marka-model');
+    const heightInput = row.querySelector('[name$="-calisma_yuksekligi"]');
+    const capacityInput = row.querySelector('[name$="-kaldirma_kapasitesi"]');
+    const modelValue = (modelInput && modelInput.value || '').trim().toLocaleLowerCase('tr-TR');
+    if (!modelValue) return;
+
+    const match = specsForType(typeInput ? typeInput.value : '').find(item =>
+        (item.marka_model || '').trim().toLocaleLowerCase('tr-TR') === modelValue
+    );
+    if (!match) return;
+    if (heightInput && !heightInput.value && match.calisma_yuksekligi) {
+        heightInput.value = String(match.calisma_yuksekligi).replace('.', ',');
+    }
+    if (capacityInput && !capacityInput.value && match.kaldirma_kapasitesi) {
+        capacityInput.value = match.kaldirma_kapasitesi;
+    }
+}
+
+fillDatalist('makine-tipi-listesi', uniqueSorted(filoSpecs.map(item => item.tip)));
+fillDatalist('marka-model-listesi', uniqueSorted(filoSpecs.map(item => item.marka_model)));
+
+function syncPriceMode(row) {
+    const hidden = row.querySelector('.js-fiyat-tipi');
+    const toggle = row.querySelector('.js-aylik-switch');
+    const label = row.querySelector('.js-fiyat-label');
+    if (!hidden || !toggle || !label) return;
+    const isMonthly = hidden.value === 'aylik' || toggle.checked;
+    hidden.value = isMonthly ? 'aylik' : 'gunluk';
+    toggle.checked = isMonthly;
+    label.textContent = isMonthly ? 'Aylık Fiyat' : 'Günlük Fiyat';
+}
+
+function syncShippingMode(row) {
+    const hidden = row.querySelector('.js-nakliye-yon');
+    const toggle = row.querySelector('.js-cift-nakliye-switch');
+    const label = row.querySelector('.js-nakliye-yon-label');
+    if (!hidden || !toggle || !label) return;
+    const isRoundTrip = hidden.value === 'cift_yon' || toggle.checked;
+    hidden.value = isRoundTrip ? 'cift_yon' : 'tek_yon';
+    toggle.checked = isRoundTrip;
+    label.textContent = isRoundTrip ? 'Çift Yön' : 'Tek Yön';
+}
+
+document.querySelectorAll('.kalem-row').forEach(syncPriceMode);
+document.querySelectorAll('.kalem-row').forEach(syncShippingMode);
+
+function toggleCustomerSections() {
+    const type = document.getElementById('musteri_tipi').value;
+    document.getElementById('kayitli-section').style.display = type === 'kayitli' ? '' : 'none';
+    document.getElementById('aday-section').style.display = type === 'aday' ? '' : 'none';
+}
+document.getElementById('musteri_tipi').addEventListener('change', toggleCustomerSections);
+toggleCustomerSections();
+
+document.getElementById('add-row').addEventListener('click', function () {
+    const container = document.getElementById('kalemler');
+    const index = container.querySelectorAll('.kalem-row').length;
+    const html = document.getElementById('kalem-template').innerHTML.replaceAll('__prefix__', index);
+    container.insertAdjacentHTML('beforeend', html);
+    syncPriceMode(container.querySelector('.kalem-row:last-child'));
+    syncShippingMode(container.querySelector('.kalem-row:last-child'));
+});
+document.getElementById('kalemler').addEventListener('click', function (event) {
+    if (!event.target.classList.contains('remove-row')) return;
+    const rows = document.querySelectorAll('.kalem-row');
+    if (rows.length <= 1) return;
+    event.target.closest('.kalem-row').remove();
+});
+document.getElementById('kalemler').addEventListener('input', function (event) {
+    const row = event.target.closest('.kalem-row');
+    if (!row) return;
+    if (event.target.classList.contains('js-makine-tipi')) {
+        refreshModelList(row);
+    }
+    if (event.target.classList.contains('js-marka-model')) {
+        applySelectedSpec(row);
+    }
+});
+document.getElementById('kalemler').addEventListener('change', function (event) {
+    const row = event.target.closest('.kalem-row');
+    if (!row) return;
+    if (event.target.classList.contains('js-aylik-switch')) {
+        const hidden = row.querySelector('.js-fiyat-tipi');
+        if (hidden) hidden.value = event.target.checked ? 'aylik' : 'gunluk';
+        syncPriceMode(row);
+    }
+    if (event.target.classList.contains('js-cift-nakliye-switch')) {
+        const hidden = row.querySelector('.js-nakliye-yon');
+        if (hidden) hidden.value = event.target.checked ? 'cift_yon' : 'tek_yon';
+        syncShippingMode(row);
+    }
+});
+document.getElementById('kalemler').addEventListener('focusin', function (event) {
+    if (!event.target.classList.contains('js-money-cursor-left')) return;
+    setTimeout(() => {
+        if (typeof event.target.setSelectionRange === 'function' && event.target.selectionStart !== null) {
+            event.target.setSelectionRange(0, 0);
+        }
+    }, 0);
+});
+document.getElementById('kalemler').addEventListener('mouseup', function (event) {
+    if (!event.target.classList.contains('js-money-cursor-left')) return;
+    event.preventDefault();
+    if (typeof event.target.setSelectionRange === 'function' && event.target.selectionStart !== null) {
+        event.target.setSelectionRange(0, 0);
+    }
+});
+</script>
+{% endblock %}

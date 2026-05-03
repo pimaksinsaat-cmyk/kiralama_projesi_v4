@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block title %}Teklif Detay{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h4 class="mb-0">{{ teklif.teklif_no }}</h4>
+            <small class="text-muted">{{ teklif.musteri_adi }}</small>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('teklifler.duzelt', teklif_id=teklif.id) }}" class="btn btn-outline-secondary btn-sm">Düzenle</a>
+            <a href="{{ url_for('teklifler.index') }}" class="btn btn-outline-secondary btn-sm">Listeye Dön</a>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-md-8">
+            <div class="border rounded p-3 h-100">
+                <div><strong>Müşteri:</strong> {{ teklif.musteri_adi }}</div>
+                {% if not teklif.firma_musteri_id %}
+                    <div class="text-muted small">Aday müşteri: teklif olumlu olursa firmaya aktarılabilir.</div>
+                {% endif %}
+                <div><strong>Teklif Tarihi:</strong> {{ teklif.teklif_tarihi.strftime('%d.%m.%Y') if teklif.teklif_tarihi else '-' }}</div>
+                <div><strong>Geçerlilik:</strong> {{ teklif.gecerlilik_tarihi.strftime('%d.%m.%Y') if teklif.gecerlilik_tarihi else '-' }}</div>
+                <div><strong>Durum:</strong> {{ teklif.durum.replace('_', ' ')|title }}</div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="border rounded p-3 h-100">
+                <div class="d-flex justify-content-between"><span>Ara Toplam</span><strong>{{ "{:,.2f}".format(teklif.ara_toplam).replace(",", "X").replace(".", ",").replace("X", ".") }} TL</strong></div>
+                <div class="d-flex justify-content-between"><span>KDV %{{ teklif.kdv_orani }}</span><strong>{{ "{:,.2f}".format(teklif.kdv_tutari).replace(",", "X").replace(".", ",").replace("X", ".") }} TL</strong></div>
+                <hr>
+                <div class="d-flex justify-content-between fs-5"><span>Genel Toplam</span><strong>{{ "{:,.2f}".format(teklif.genel_toplam).replace(",", "X").replace(".", ",").replace("X", ".") }} TL</strong></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-responsive mb-3">
+        <table class="table table-sm table-bordered align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>Makine</th>
+                    <th>Özellik</th>
+                    <th>Konum</th>
+                    <th>Gün</th>
+                    <th>Adet</th>
+                    <th class="text-end">Birim Fiyat</th>
+                    <th class="text-end">Nakliye</th>
+                    <th class="text-end">Toplam</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for kalem in teklif.kalemler %}
+                <tr>
+                    <td>{{ kalem.ekipman.kod if kalem.ekipman else kalem.makine_tipi or '-' }}<br><small>{{ kalem.marka_model or '' }}</small></td>
+                    <td>{{ kalem.calisma_yuksekligi or '-' }} m / {{ kalem.kaldirma_kapasitesi or '-' }} kg</td>
+                    <td>{{ kalem.calisacagi_konum or '-' }}</td>
+                    <td>{{ kalem.gun_sayisi }}</td>
+                    <td>{{ kalem.adet }}</td>
+                    <td class="text-end">
+                        {{ "{:,.2f}".format(kalem.gunluk_fiyat or 0).replace(",", "X").replace(".", ",").replace("X", ".") }}
+                        <small class="text-muted d-block">{{ 'Aylık' if kalem.fiyat_tipi == 'aylik' else 'Günlük' }}</small>
+                    </td>
+                    <td class="text-end">
+                        {{ "{:,.2f}".format(kalem.nakliye_fiyati or 0).replace(",", "X").replace(".", ",").replace("X", ".") }}
+                        <small class="text-muted d-block">{{ 'Çift Yön' if kalem.nakliye_yon == 'cift_yon' else 'Tek Yön' }}</small>
+                    </td>
+                    <td class="text-end fw-bold">{{ "{:,.2f}".format(kalem.satir_toplami).replace(",", "X").replace(".", ",").replace("X", ".") }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="d-flex gap-2">
+        <form method="POST" action="{{ url_for('teklifler.durum_guncelle', teklif_id=teklif.id) }}" class="d-flex gap-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <select name="durum" class="form-select form-select-sm">
+                <option value="taslak" {{ 'selected' if teklif.durum == 'taslak' else '' }}>Taslak</option>
+                <option value="gonderildi" {{ 'selected' if teklif.durum == 'gonderildi' else '' }}>Gönderildi</option>
+                <option value="kabul_edildi" {{ 'selected' if teklif.durum == 'kabul_edildi' else '' }}>Kabul Edildi</option>
+                <option value="reddedildi" {{ 'selected' if teklif.durum == 'reddedildi' else '' }}>Reddedildi</option>
+                <option value="iptal" {{ 'selected' if teklif.durum == 'iptal' else '' }}>İptal</option>
+            </select>
+            <button type="submit" class="btn btn-primary btn-sm">Durumu Kaydet</button>
+        </form>
+        {% if not teklif.firma_musteri_id %}
+            <a href="{{ url_for('teklifler.firmaya_aktar', teklif_id=teklif.id) }}" class="btn btn-success btn-sm">Firmaya Aktar</a>
+        {% endif %}
+        <form method="POST" action="{{ url_for('teklifler.sil', teklif_id=teklif.id) }}" onsubmit="return confirm('Teklif silinsin mi?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-outline-danger btn-sm">Sil</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

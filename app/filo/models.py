@@ -2,6 +2,7 @@ from app.extensions import db
 from app.models.base_model import BaseModel
 from datetime import datetime, date, timezone
 from sqlalchemy.orm import validates
+from sqlalchemy import JSON
 from sqlalchemy.dialects.postgresql import JSONB
 
 # 3. EKIPMAN (Filo)
@@ -48,6 +49,11 @@ class Ekipman(BaseModel):
         back_populates='ekipman', 
         foreign_keys='KiralamaKalemi.ekipman_id',
         cascade="all, delete-orphan"
+    )
+    teklif_kalemleri = db.relationship(
+        'TeklifKalemi',
+        back_populates='ekipman',
+        foreign_keys='TeklifKalemi.ekipman_id',
     )
     
     bakim_kayitlari = db.relationship('BakimKaydi', back_populates='ekipman', cascade="all, delete-orphan")
@@ -156,7 +162,7 @@ class StokKarti(BaseModel):
     birim = db.Column(db.String(20), nullable=True, default='adet')
     mevcut_stok = db.Column(db.Numeric(15, 3), nullable=False, default=0)
     kategori_id = db.Column(db.Integer, db.ForeignKey('stok_kategori.id'), nullable=True)
-    ozellikler = db.Column(JSONB, nullable=True, default=dict)
+    ozellikler = db.Column(JSONB().with_variant(JSON(), 'sqlite'), nullable=True, default=dict)
     varsayilan_tedarikci_id = db.Column(db.Integer, db.ForeignKey('firma.id'), nullable=True)
 
     kategori = db.relationship('StokKategori', back_populates='kartlar')

@@ -28,6 +28,7 @@ def _import_all_models():
     import app.subeler.models  # noqa: F401
     import app.filo.models  # noqa: F401
     import app.kiralama.models  # noqa: F401
+    import app.teklifler.models  # noqa: F401
     import app.cari.models  # noqa: F401
     import app.fatura.models  # noqa: F401
     import app.nakliyeler.models  # noqa: F401

@@ -198,6 +198,7 @@ class Firma(BaseModel):
 
     # --- Modüller Arası İlişkiler (Relationships) ---
     kiralamalar = db.relationship('Kiralama', back_populates='firma_musteri', foreign_keys='Kiralama.firma_musteri_id', cascade="all, delete-orphan", order_by="desc(Kiralama.id)")
+    teklifler = db.relationship('Teklif', back_populates='firma_musteri', foreign_keys='Teklif.firma_musteri_id')
     tedarik_edilen_ekipmanlar = db.relationship('Ekipman', back_populates='firma_tedarikci', foreign_keys='Ekipman.firma_tedarikci_id')
     odemeler = db.relationship('Odeme', back_populates='firma_musteri', foreign_keys='Odeme.firma_musteri_id', cascade="all, delete-orphan")
     saglanan_nakliye_hizmetleri = db.relationship('KiralamaKalemi', back_populates='nakliye_tedarikci', foreign_keys='KiralamaKalemi.nakliye_tedarikci_id')
