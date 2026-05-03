@@ -58,13 +58,13 @@ echo "=== [5/6] Bağımlılıklar güncelleniyor ==="
 venv/bin/pip install -r requirements.txt -q
 echo "  pip install tamamlandı."
 
-# 6. Migration uygula (h6c2d3e4f5g6 = son head)
+# 6. Migration uygula
 echo ""
 echo "=== [6/6] Migration uygulanıyor ==="
-echo "  Hedef revision: h6c2d3e4f5g6 (son migration)"
+echo "  Hedef revision: head"
 FLASK_APP=run.py DATABASE_URL="postgresql://$DB_USER:$DB_PASS@$DB_HOST:5432/$DB_NAME" \
   SECRET_KEY="kiralama-projesi-icin-cok-gizli-anahtar-123" \
-  venv/bin/flask db upgrade h6c2d3e4f5g6
+  venv/bin/flask db upgrade
 
 echo ""
 echo "  Migration sonrası durum:"
