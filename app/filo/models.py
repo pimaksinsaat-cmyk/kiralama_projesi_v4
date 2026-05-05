@@ -29,6 +29,7 @@ class Ekipman(BaseModel):
     
     uretim_yili = db.Column(db.Integer, nullable=False)
     calisma_durumu = db.Column(db.String(50), nullable=False, default='bosta') 
+    filoya_giris_tarihi = db.Column(db.Date, nullable=True)
     giris_maliyeti = db.Column(db.Numeric(15, 2), nullable=True, default=0.0)
     para_birimi = db.Column(db.String(3), nullable=False, default='TRY')
     

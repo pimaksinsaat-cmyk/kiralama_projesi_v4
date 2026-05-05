@@ -18,7 +18,7 @@ class EkipmanService(BaseService):
     updatable_fields = [
         'kod', 'yakit', 'tipi', 'marka', 'model', 'seri_no',
         'calisma_yuksekligi', 'kaldirma_kapasitesi', 'uretim_yili',
-        'giris_maliyeti', 'para_birimi', 'sube_id', 'calisma_durumu',
+        'filoya_giris_tarihi', 'giris_maliyeti', 'para_birimi', 'sube_id', 'calisma_durumu',
         'agirlik', 'ic_mekan_uygun', 'arazi_tipi_uygun', 'genislik', 'uzunluk', 'kapali_yukseklik'
     ]
 

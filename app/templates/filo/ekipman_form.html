@@ -121,6 +121,14 @@
             </div>
         </div>
 
+        <div class="row">
+            <div class="col-md-4 form-group">
+                {{ form.filoya_giris_tarihi.label(text="Filoya Giriş Tarihi:") }}
+                {{ form.filoya_giris_tarihi(id="filoya_giris_tarihi", class="form-control", type="date") }}
+                {% for error in form.filoya_giris_tarihi.errors %}<span style="color: red;">[{{ error }}]</span>{% endfor %}
+            </div>
+        </div>
+
         <!-- TEKNİK ÖLÇÜLER VE ÖZELLİKLER -->
         <fieldset class="form-group" style="border: 1px solid #17a2b8; padding: 1.5rem; margin-top: 20px; border-radius: 5px; background-color: #fdfdfe;">
             <legend style="font-size: 1.1em; font-weight: 600; color: #17a2b8; width: auto; padding: 0 10px; margin-left: 5px;">Teknik Ölçüler ve Ağırlık</legend>

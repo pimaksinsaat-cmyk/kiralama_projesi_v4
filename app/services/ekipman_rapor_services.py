@@ -60,7 +60,7 @@ class EkipmanRaporuService:
             usd_rate,
             eur_rate
         )
-        temin_tarihi = ekipman.created_at.date() if ekipman.created_at else None
+        temin_tarihi = ekipman.filoya_giris_tarihi
 
         # Kur yoksa USD/EUR etiketinde hatalı değer göstermemek için TRY'ye düş
         rapor_para_birimi = ekipman.para_birimi

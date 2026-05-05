@@ -584,11 +584,27 @@ class RaporlamaService:
         return sum(cls._days_between(item[0], item[1]) for item in merged)
 
     @staticmethod
-    def _machine_availability_days(ekipman, start_date, end_date):
+    def _machine_availability_start(ekipman, start_date):
+        return max(start_date, ekipman.filoya_giris_tarihi)
+
+    @classmethod
+    def _machine_availability_range(cls, ekipman, start_date, end_date):
         if start_date > end_date:
+            return None
+
+        availability_start = cls._machine_availability_start(ekipman, start_date)
+        if availability_start > end_date:
+            return None
+
+        return availability_start, end_date
+
+    @classmethod
+    def _machine_availability_days(cls, ekipman, start_date, end_date):
+        availability = cls._machine_availability_range(ekipman, start_date, end_date)
+        if not availability:
             return 0
 
-        return (end_date - start_date).days + 1
+        return cls._days_between(availability[0], availability[1])
 
     @classmethod
     def _calculate_machine_metrics(cls, ekipmanlar, start_date, end_date):
@@ -616,12 +632,22 @@ class RaporlamaService:
         intervals_by_machine = defaultdict(list)
         revenue_by_machine = defaultdict(float)
 
+        ekipman_by_id = {item.id: item for item in ekipmanlar}
+
         for kalem in kalemler:
+            ekipman = ekipman_by_id.get(kalem.ekipman_id)
+            if not ekipman:
+                continue
+
+            availability = cls._machine_availability_range(ekipman, start_date, end_date)
+            if not availability:
+                continue
+
             overlap = cls._overlap_range(
                 kalem.kiralama_baslangici,
                 kalem.kiralama_bitis,
-                start_date,
-                end_date,
+                availability[0],
+                availability[1],
             )
             if not overlap:
                 continue

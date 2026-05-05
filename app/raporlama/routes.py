@@ -6,6 +6,20 @@ from flask_login import current_user
 from app.raporlama import raporlama_bp
 from app.services.raporlama_services import RaporlamaService
 from app.extensions import db
+from app.filo.models import Ekipman
+
+
+def _missing_filoya_giris_query(sube_id=None, calisma_yuksekligi=None):
+    query = Ekipman.query.filter(
+        Ekipman.is_active.is_(True),
+        Ekipman.firma_tedarikci_id.is_(None),
+        Ekipman.filoya_giris_tarihi.is_(None),
+    )
+    if sube_id:
+        query = query.filter(Ekipman.sube_id == sube_id)
+    if calisma_yuksekligi:
+        query = query.filter(Ekipman.calisma_yuksekligi == calisma_yuksekligi)
+    return query
 
 
 def _parse_date(value, fallback):
@@ -44,6 +58,17 @@ def index():
         machine_sube_id = request.args.get("machine_sube_id", type=int)
         machine_limit = request.args.get("machine_limit", default=50, type=int)
         active_tab = request.args.get("active_tab", default="genel", type=str)
+
+        missing_filoya_giris_count = _missing_filoya_giris_query(
+            sube_id=sube_id,
+            calisma_yuksekligi=calisma_yuksekligi,
+        ).count()
+        if missing_filoya_giris_count:
+            flash(
+                f"Raporlama icin {missing_filoya_giris_count} aktif makinede Filoya Giris Tarihi doldurulmalidir.",
+                "warning",
+            )
+            return redirect(url_for("filo.index"))
 
         dashboard = RaporlamaService.build_dashboard(
             start_date=start_date,
@@ -93,6 +118,16 @@ def rapor_api():
     machine_sube_id = request.args.get("machine_sube_id", type=int)
     machine_limit = request.args.get("machine_limit", default=50, type=int)
     active_tab = request.args.get("active_tab", default="genel", type=str)
+
+    missing_filoya_giris_count = _missing_filoya_giris_query(
+        sube_id=sube_id,
+        calisma_yuksekligi=calisma_yuksekligi,
+    ).count()
+    if missing_filoya_giris_count:
+        return jsonify({
+            "error": "Raporlama icin aktif makinelerde Filoya Giris Tarihi doldurulmalidir.",
+            "missing_filoya_giris_count": missing_filoya_giris_count,
+        }), 400
 
     dashboard = RaporlamaService.build_dashboard(
         start_date=start_date,

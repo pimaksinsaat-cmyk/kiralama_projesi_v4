@@ -1,4 +1,4 @@
-from wtforms import FloatField, StringField, SelectField, IntegerField, BooleanField, SubmitField
+from wtforms import DateField, FloatField, StringField, SelectField, IntegerField, BooleanField, SubmitField
 from wtforms.validators import DataRequired, Length, Optional
 from app.forms.base_form import BaseForm, MoneyField
 
@@ -31,6 +31,9 @@ class EkipmanForm(BaseForm):
     uretim_yili = IntegerField('Üretim Yılı', validators=[Optional()])
     calisma_yuksekligi = StringField('Çalışma Yüksekliği (m)', validators=[Optional(), Length(max=50)])
     kaldirma_kapasitesi = StringField('Kaldırma Kapasitesi (kg)', validators=[Optional(), Length(max=50)])
+    filoya_giris_tarihi = DateField('Filoya Giriş Tarihi', validators=[
+        DataRequired(message="Filoya giriş tarihi zorunludur.")
+    ], format='%Y-%m-%d')
     
     yakit = SelectField('Yakıt Tipi', choices=[
         ('Dizel', 'Dizel'),
