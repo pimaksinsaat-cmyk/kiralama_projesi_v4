@@ -46,6 +46,11 @@ def _sync_firma_bakiye(firma_id):
     if firma:
         ozet = firma.bakiye_ozeti
         firma.bakiye = ozet['net_bakiye']
+        try:
+            from app.services.firma_services import FirmaService
+            FirmaService.guncelle_firma_cari_cache(firma_id, auto_commit=False)
+        except Exception:
+            pass
         db.session.commit()
 
 def _sync_kasa_bakiye(kasa_id):
@@ -311,6 +316,8 @@ class CariRaporService:
         Cache, firma bilgi sayfası açılırken ve finansal işlemlerde güncellenir.
         Kaynak: build_cari_rows (firma bilgi sayfasıyla birebir aynı)."""
         from app.firmalar.models import Firma
+        from app.services.firma_services import FirmaService
+        from app.utils import bugun
         from decimal import Decimal
 
         firmalar = Firma.query.filter(
@@ -322,9 +329,15 @@ class CariRaporService:
         g_borc_kdvli, g_alacak_kdvli = Decimal('0'), Decimal('0')
 
         for f in firmalar:
-            borc = Decimal(str(f.cari_borc_kdvli or 0))
-            alacak = Decimal(str(f.cari_alacak_kdvli or 0))
-            bakiye = Decimal(str(f.cari_bakiye_kdvli or 0))
+            borc = Decimal('0')
+            alacak = Decimal('0')
+            for row in FirmaService.build_cari_rows(f, bugun()):
+                tutar = Decimal(str(row.get('toplam') or 0))
+                if tutar > 0:
+                    borc += tutar
+                elif tutar < 0:
+                    alacak += abs(tutar)
+            bakiye = borc - alacak
 
             rapor.append({
                 'id': f.id,

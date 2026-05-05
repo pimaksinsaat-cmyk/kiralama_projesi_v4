@@ -143,10 +143,17 @@
             </div>
             <div class="info-item">
                 <div class="info-label">Kayıtlı Kiralama Sayısı</div>
-                <div class="info-value">{{ kiralama_detaylari|length }} Kiralama</div>
+                <div class="info-value">{{ total_kiralama_sayisi }} Kiralama</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Çalışma Yüzdesi</div>
+                <div class="info-value">%{{ '%.1f'|format(calisma_yuzdesi) }}</div>
+                <div style="font-size: 0.78rem; opacity: 0.85; margin-top: 4px;">
+                    {{ total_gun }} / {{ secilen_aralik_gun }} gün
+                </div>
             </div>
         </div>
-    </d
+    </div>
 
     <!-- Tarih Filtresi -->
     <div class="date-filter">

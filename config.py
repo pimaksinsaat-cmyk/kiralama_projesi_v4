@@ -59,6 +59,9 @@ class Config:
     TEMPLATES_AUTO_RELOAD = _env_to_bool('TEMPLATES_AUTO_RELOAD', False)
     SEND_FILE_MAX_AGE_DEFAULT = 0 if _env_to_bool('DISABLE_STATIC_CACHE', False) else None
 
+    # firmalar/bilgi cari dönem tarih filtresi (calculate_window_amounts). Kapalı: eski tam-liste davranışı.
+    CARI_DONEM_FILTRESI_ENABLED = _env_to_bool('CARI_DONEM_FILTRESI_ENABLED', True)
+
 
 class TestingConfig(Config):
     """Pytest ve yerel otomatik testler için."""

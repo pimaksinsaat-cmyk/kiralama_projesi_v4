@@ -23,6 +23,7 @@ from app.kiralama.models import Kiralama, KiralamaKalemi
 from app.extensions import db
 from app.services.firma_services import FirmaService
 from app.services.base import ValidationError
+from app.services.cari_window import build_period_filtered_cari
 
 # --- GÜVENLİK YARDIMCISI ---
 def get_actor_id():
@@ -33,6 +34,177 @@ def get_actor_id():
 def _build_cari_rows(firma, today_date):
     """FirmaService.build_cari_rows için ince sarmalayıcı — geriye dönük uyumluluk."""
     return FirmaService.build_cari_rows(firma, today_date)
+
+
+def _durum_metni_ve_rengi_bakiye(bakiye_val):
+    b = Decimal(str(bakiye_val or 0))
+    if b > 0:
+        return 'Borçlu', 'text-danger'
+    if b < 0:
+        return 'Alacaklı', 'text-success'
+    return 'Hesap Kapalı', 'text-muted'
+
+
+def _resolve_bilgi_start_end_dates(request_args, firma_pre, today_d):
+    """bilgi/yazdır/excel tarih parametreleri (bilgi görünümü ile aynı kurallar)."""
+    from datetime import datetime as _dt_mod
+    end_date_str = request_args.get('end_date')
+    start_date_str = request_args.get('start_date')
+    if end_date_str:
+        try:
+            end_date = _dt_mod.strptime(end_date_str, '%Y-%m-%d').date()
+        except Exception:
+            end_date = today_d
+    else:
+        end_date = today_d
+
+    if start_date_str:
+        try:
+            start_date = _dt_mod.strptime(start_date_str, '%Y-%m-%d').date()
+        except Exception:
+            start_date = today_d
+    else:
+        start_date = FirmaService.firma_en_erken_islem_gunu(firma_pre.id)
+        if start_date is None and firma_pre and getattr(firma_pre, 'created_at', None):
+            ca = firma_pre.created_at
+            start_date = ca.date() if hasattr(ca, 'date') else None
+        if start_date is None:
+            start_date = today_d
+
+    return start_date, end_date
+
+
+def _cari_period_mode_active(start_date_str, end_date_str):
+    """URL'de iki tarih + config ile dönem modu."""
+    if not current_app.config.get('CARI_DONEM_FILTRESI_ENABLED', True):
+        return False
+    s = (start_date_str or '').strip()
+    e = (end_date_str or '').strip()
+    return bool(s and e)
+
+
+def _parse_kiralama_tab_iso_dates(start_date_str, end_date_str):
+    """Kiralama sekmesi tarih süzgeci — cariden bağımsız: iki parametre dolu ve geçerliyse (start, end), değilse None."""
+    from datetime import datetime as _dt
+    if not start_date_str or not end_date_str:
+        return None
+    sa = str(start_date_str).strip()
+    eb = str(end_date_str).strip()
+    if not sa or not eb:
+        return None
+    try:
+        start_date = _dt.strptime(sa, '%Y-%m-%d').date()
+        end_date = _dt.strptime(eb, '%Y-%m-%d').date()
+    except ValueError:
+        return None
+    if start_date > end_date:
+        return None
+    return start_date, end_date
+
+
+def _sum_cari_rows_net(rows):
+    net = Decimal('0')
+    for row in rows:
+        net += Decimal(str(row.get('toplam') or 0))
+    return net
+
+
+def _build_kiralama_bilgi_tab(firma, start_date_str, end_date_str, kiralama_page, kiralama_per_page):
+    """Firma bilgi > Kiralamalar sekmesi: liste + sayfalama (oluşturma tarihi yaklaşımı A)."""
+    allowed_pp = {10, 25, 50, 100}
+    if kiralama_per_page not in allowed_pp:
+        kiralama_per_page = 25
+    kiralamalar_filtered, filt_aktif, k_f_bas, k_f_bit = _filter_kiralamalar_bilgi(
+        firma,
+        start_date_str,
+        end_date_str,
+        key_fn=lambda k: k.kiralama_form_no or '',
+    )
+
+    k_pag = ListPagination(total=len(kiralamalar_filtered), page=kiralama_page, per_page=kiralama_per_page)
+    kb = (k_pag.page - 1) * k_pag.per_page
+    kiralamalar_sayfa = kiralamalar_filtered[kb : kb + k_pag.per_page]
+    return {
+        'kiralama_tarih_filtre_aktif': filt_aktif,
+        'kiralama_filt_baslangic': k_f_bas,
+        'kiralama_filt_bitis': k_f_bit,
+        'kiralama_pagination': k_pag,
+        'kiralamalar_sayfa': kiralamalar_sayfa,
+        'kiralama_per_page': kiralama_per_page,
+    }
+
+
+def _filter_kiralamalar_bilgi(firma, start_date_str, end_date_str, key_fn=None):
+    key_fn = key_fn or (lambda k: k.id or 0)
+    kiralamalar_all = sorted(firma.kiralamalar, key=key_fn, reverse=True)
+    rng = _parse_kiralama_tab_iso_dates(start_date_str, end_date_str)
+    if rng:
+        kiralamalar_filtered = _kiralamalar_filtered_by_olusturma_tarihi(kiralamalar_all, rng[0], rng[1])
+        filt_aktif = True
+        k_f_bas, k_f_bit = rng
+    else:
+        kiralamalar_filtered = list(kiralamalar_all)
+        filt_aktif = False
+        k_f_bas = k_f_bit = None
+    return kiralamalar_filtered, filt_aktif, k_f_bas, k_f_bit
+
+
+def _effective_kiralama_bilgi_tarih(k):
+    """
+    Kiralamalar bilgi tarih süzgecinde kullanılacak tek bir karşılık günü.
+    Öncelik: form oluşturma tarihi → kalemlerdeki en erken kiralama başlangıcı → kayıt created_at.
+    """
+    from datetime import datetime as _dt
+
+    olu = getattr(k, 'kiralama_olusturma_tarihi', None)
+    if olu is not None:
+        if isinstance(olu, date):
+            return olu
+        try:
+            return _dt.strptime(str(olu), '%Y-%m-%d').date()
+        except ValueError:
+            pass
+
+    kalemler = getattr(k, 'kalemler', None) or []
+    starts = []
+    for km in kalemler:
+        b = getattr(km, 'kiralama_baslangici', None)
+        if b is None:
+            continue
+        if isinstance(b, date):
+            starts.append(b)
+        else:
+            try:
+                starts.append(_dt.strptime(str(b), '%Y-%m-%d').date())
+            except ValueError:
+                pass
+    if starts:
+        return min(starts)
+
+    ca = getattr(k, 'created_at', None)
+    if ca is not None:
+        try:
+            if hasattr(ca, 'date'):
+                d = ca.date()
+                return d if isinstance(d, date) else None
+        except Exception:
+            return None
+    return None
+
+
+def _kiralamalar_filtered_by_olusturma_tarihi(kiralamalar_all, start_date, end_date):
+    """
+    Tarih aralığı süzümü — _effective_kiralama_bilgi_tarih ile karşılık günü [start_date, end_date].
+    Çıkarılamayan tarihli kayıt filtreliyken gösterilmez.
+    """
+    out = []
+    for k in kiralamalar_all:
+        t = _effective_kiralama_bilgi_tarih(k)
+        if t is None:
+            continue
+        if start_date <= t <= end_date:
+            out.append(k)
+    return out
 
 
 def _get_firma_bilgi_context(firma_id):
@@ -289,32 +461,19 @@ def bilgi(id):
 
         # --- Tarih filtresi ---
         from datetime import datetime
+        today_date = bugun()
         start_date_str = request.args.get('start_date')
         end_date_str = request.args.get('end_date')
-        today_date = bugun()
-        if end_date_str:
-            try:
-                end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
-            except Exception:
-                end_date = today_date
-        else:
-            end_date = today_date
 
         finans_verileri = _get_firma_bilgi_context(id)
         firma_pre = finans_verileri.get('firma')
 
-        if start_date_str:
-            try:
-                start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
-            except Exception:
-                start_date = today_date
-        else:
-            start_date = FirmaService.firma_en_erken_islem_gunu(firma_pre.id)
-            if start_date is None and firma_pre and getattr(firma_pre, 'created_at', None):
-                ca = firma_pre.created_at
-                start_date = ca.date() if hasattr(ca, 'date') else None
-            if start_date is None:
-                start_date = today_date
+        start_date, end_date = _resolve_bilgi_start_end_dates(request.args, firma_pre, today_date)
+
+        bilgi_sd_input = start_date_str or (start_date.strftime('%Y-%m-%d') if start_date else '')
+        bilgi_ed_input = end_date_str or (end_date.strftime('%Y-%m-%d') if end_date else '')
+
+        cari_period_active = _cari_period_mode_active(start_date_str, end_date_str)
 
         # Form Bazlı Cari sekmesi kaldırıldı: yalnızca mevcut cari/kiralama akışları kullanılıyor.
         finans_verileri.pop('hareketler', None)
@@ -334,84 +493,77 @@ def bilgi(id):
         except Exception as log_ex:
             current_app.logger.warning(f"[NAKLIYE] LOG sırasında hata: {log_ex}")
 
-        # --- Kiralamalar sayfalama ---
+        # --- Kiralamalar (cariden bağımsız süzüm; yalnızca URL'de iki ISO tarih geçilirse süzülür) ---
         firma = finans_verileri['firma']
-        kiralamalar_all = sorted(firma.kiralamalar, key=lambda k: k.kiralama_form_no or '', reverse=True)
-        # Kiralamalar filtreleme (örnek: kiralama.kiralama_olusturma_tarihi)
-        kiralamalar_filtered = []
-        for k in kiralamalar_all:
-            tarih = getattr(k, 'kiralama_olusturma_tarihi', None)
-            if tarih is None:
-                kiralamalar_filtered.append(k)
-            else:
-                try:
-                    t = tarih if isinstance(tarih, date) else datetime.strptime(tarih, '%Y-%m-%d').date()
-                    if start_date <= t <= end_date:
-                        kiralamalar_filtered.append(k)
-                except Exception:
-                    kiralamalar_filtered.append(k)
-        k_pag = ListPagination(total=len(kiralamalar_filtered), page=kiralama_page, per_page=kiralama_per_page)
-        kb = (k_pag.page - 1) * k_pag.per_page
-        kiralamalar_sayfa = kiralamalar_filtered[kb: kb + k_pag.per_page]
+        kiralama_tab_ctx = _build_kiralama_bilgi_tab(
+            firma, start_date_str, end_date_str, kiralama_page, kiralama_per_page
+        )
+        k_pag = kiralama_tab_ctx['kiralama_pagination']
+        kiralamalar_sayfa = kiralama_tab_ctx['kiralamalar_sayfa']
+        kiralama_per_page = kiralama_tab_ctx['kiralama_per_page']
 
         # --- Cari Tab ---
-        opening_balance = Decimal('0')
+        cari_donem_modu = False
+        cari_devreden_bakiye = None
+        firma_genel_bakiye = Decimal(str(firma.cari_bakiye_kdvli or 0))
         try:
-            cari_rows_all = _build_cari_rows(firma, end_date)
-            # Tarih aralığına göre filtrele (tek anahtar: sort_date -> baslangic -> form_tarihi)
+            cari_rows_raw = _build_cari_rows(firma, end_date)
+            if cari_period_active and end_date != today_date:
+                firma_genel_bakiye = _sum_cari_rows_net(_build_cari_rows(firma, today_date))
+            else:
+                firma_genel_bakiye = _sum_cari_rows_net(cari_rows_raw)
+
             def _row_date(row):
                 return row.get('sort_date') or row.get('baslangic') or row.get('form_tarihi')
 
-            def _row_in_range(row):
-                row_type = row.get('islem_turu')
-                baslangic = row.get('baslangic')
-                bitis = row.get('bitis')
-
-                # Kiralama satırlarında aralık kesişimi esas alınır.
-                # Böylece başlangıcı filtre başından eski olup filtre döneminde devam eden
-                # kiralamalar listede görünür.
-                if row_type in ('kiralama', 'harici_kiralama') and baslangic:
-                    etkin_bitis = bitis or end_date
-                    return baslangic <= end_date and etkin_bitis >= start_date
-
-                d = _row_date(row)
-                return bool(d and start_date <= d <= end_date)
-
             def _row_sort_key_asc(row):
                 d = _row_date(row)
-                # Cari ekranda muhasebe mantigi: eski -> yeni (artan tarih)
-                return (
-                    d or date.min,
-                    int(row.get('id') or 0),
-                )
+                dd = d or date.min
+                try:
+                    if hasattr(dd, 'date') and callable(getattr(dd, 'date')):
+                        dd = dd.date()
+                except Exception:
+                    pass
+                rid = row.get('id')
+                try:
+                    ri = int(rid) if rid is not None else 0
+                except (TypeError, ValueError):
+                    ri = 0
+                return (dd, ri)
 
-            # Gecici is kurali: Cari sekmesinde tarih filtresi pasif.
-            # Tum cari kayitlari listelenir.
-            opening_balance = Decimal('0')
-            # Filtreli listede kümülatif bakiyeyi yeniden hesapla.
-            # Aksi halde görünmeyen eski kayıtların etkisi bakiye sütununda kalır.
-            filtered_running = Decimal(str(opening_balance or 0))
-            rows_old_to_new = sorted(cari_rows_all, key=_row_sort_key_asc)
-            for row in rows_old_to_new:
-                filtered_running += Decimal(str(row.get('toplam') or 0))
-                row['bakiye'] = filtered_running
+            if cari_period_active:
+                (
+                    cari_rows_all,
+                    _opening_snap,
+                    cari_toplam_borc,
+                    cari_toplam_alacak,
+                    cari_guncel_bakiye,
+                ) = build_period_filtered_cari(cari_rows_raw, start_date, end_date)
+                cari_donem_modu = True
+                cari_devreden_bakiye = _opening_snap
+            else:
+                opening_balance = Decimal('0')
+                filtered_running = opening_balance
+                rows_old_to_new = sorted(cari_rows_raw, key=_row_sort_key_asc)
+                for row in rows_old_to_new:
+                    filtered_running += Decimal(str(row.get('toplam') or 0))
+                    row['bakiye'] = float(filtered_running)
 
-            # Not: Cari tabloda satir bakiyeleri ham muhasebe yuruyusunu yansitmali.
-            # Karttaki guncel bakiye ile zorla esitleme (drift) uygulanmaz.
+                cari_rows_all = list(reversed(rows_old_to_new))
 
-            # Hesaplama eski->yeni yapılır; görüntüleme yeni->eski olacak.
-            cari_rows_all = list(reversed(rows_old_to_new))
+                cari_toplam_borc = Decimal('0')
+                cari_toplam_alacak = Decimal('0')
+                for row in cari_rows_all:
+                    t = Decimal(str(row.get('toplam') or 0))
+                    if t > 0:
+                        cari_toplam_borc += t
+                    elif t < 0:
+                        cari_toplam_alacak += t
+                cari_guncel_bakiye = cari_toplam_borc + cari_toplam_alacak
 
-            # Kutu değerleri: cari satırlardan türetilir (tek kaynak prensibi).
-            cari_toplam_borc = Decimal('0')
-            cari_toplam_alacak = Decimal('0')
-            for row in cari_rows_all:
-                t = Decimal(str(row.get('toplam') or 0))
-                if t > 0:
-                    cari_toplam_borc += t
-                elif t < 0:
-                    cari_toplam_alacak += t
-            cari_guncel_bakiye = cari_toplam_borc + cari_toplam_alacak
+            dm, dr = _durum_metni_ve_rengi_bakiye(cari_guncel_bakiye)
+            finans_verileri['durum_metni'] = dm
+            finans_verileri['durum_rengi'] = dr
             finans_verileri['toplam_borc'] = cari_toplam_borc
             finans_verileri['toplam_alacak'] = cari_toplam_alacak
             finans_verileri['guncel_bakiye'] = cari_guncel_bakiye
@@ -422,15 +574,27 @@ def bilgi(id):
         except Exception as cari_ex:
             current_app.logger.error(f"[CARI] _build_cari_rows hatası: {cari_ex}", exc_info=True)
             cari_rows_all = []
+            cari_donem_modu = False
+            cari_devreden_bakiye = None
+            firma_genel_bakiye = Decimal(str(firma.cari_bakiye_kdvli or 0))
         c_pag = ListPagination(total=len(cari_rows_all), page=cari_page, per_page=cari_per_page)
         cb = (c_pag.page - 1) * c_pag.per_page
         ce = cb + c_pag.per_page
         cari_rows_sayfa = cari_rows_all[cb: ce]
+        cari_goster_devreden_satiri = (
+            cari_donem_modu
+            and cari_devreden_bakiye is not None
+            and (c_pag.pages == 0 or c_pag.page == c_pag.pages)
+        )
 
         return render_template(
             'firmalar/bilgi.html',
             start_date=start_date,
             end_date=end_date,
+            cari_donem_modu=cari_donem_modu,
+            cari_devreden_bakiye=cari_devreden_bakiye,
+            cari_goster_devreden_satiri=cari_goster_devreden_satiri,
+            firma_genel_bakiye=firma_genel_bakiye,
             **finans_verileri,
             hareketler=hareketler_sayfa,
             hareket_pagination=h_pag,
@@ -443,6 +607,16 @@ def bilgi(id):
             cari_per_page=cari_per_page,
             tab=tab,
             today=today_date,
+            kiralama_tarih_filtre_aktif=kiralama_tab_ctx['kiralama_tarih_filtre_aktif'],
+            kiralama_filt_baslangic=kiralama_tab_ctx['kiralama_filt_baslangic'],
+            kiralama_filt_bitis=kiralama_tab_ctx['kiralama_filt_bitis'],
+            bilgi_sd_input=bilgi_sd_input,
+            bilgi_ed_input=bilgi_ed_input,
+            kiralama_duzenle_next=request.url,
+            hareket_ph_page=h_pag.page,
+            hareket_ph_per_page=hareket_per_page,
+            cari_ph_page=cari_page,
+            cari_ph_per_page=cari_per_page,
         )
     except ValidationError as e:
         flash(str(e), "danger")
@@ -451,6 +625,78 @@ def bilgi(id):
         current_app.logger.error(f"Cari özet yükleme hatası (Firma ID: {id}): {str(e)}", exc_info=True)
         flash("Finansal veriler şu an hesaplanamıyor.", "danger")
         return redirect(url_for('firmalar.index'))
+
+
+@firmalar_bp.route('/bilgi/<int:id>/kiralama-listesi', methods=['GET'])
+@login_required
+def bilgi_kiralama_listesi(id):
+    """Firma bilgi — Kiralamalar sekmesi HTML parçası (cari/dönem mantığından bağımsız süzüm)."""
+    try:
+        kiralama_page = request.args.get('kiralama_page', 1, type=int)
+        kiralama_per_page = request.args.get('kiralama_per_page', 25, type=int)
+        start_date_str = request.args.get('start_date')
+        end_date_str = request.args.get('end_date')
+
+        hp = max(1, request.args.get('hareket_page', 1, type=int) or 1)
+        hpp = request.args.get('hareket_per_page', 25, type=int)
+        if hpp not in {10, 25, 50, 100}:
+            hpp = 25
+        cp = max(1, request.args.get('cari_page', 1, type=int) or 1)
+        cpp = request.args.get('cari_per_page', 25, type=int)
+        if cpp not in {10, 25, 50, 100}:
+            cpp = 25
+
+        fin_ctx = _get_firma_bilgi_context(id)
+        firma = fin_ctx['firma']
+
+        kt = _build_kiralama_bilgi_tab(
+            firma, start_date_str, end_date_str, kiralama_page, kiralama_per_page
+        )
+
+        today_date = bugun()
+        sd_r, ed_r = _resolve_bilgi_start_end_dates(request.args, firma, today_date)
+        bilgi_sd_input = start_date_str or (sd_r.strftime('%Y-%m-%d') if sd_r else '')
+        bilgi_ed_input = end_date_str or (ed_r.strftime('%Y-%m-%d') if ed_r else '')
+
+        next_kwargs = {
+            'id': id,
+            'tab': 'kiralama',
+            'kiralama_page': kt['kiralama_pagination'].page,
+            'kiralama_per_page': kt['kiralama_per_page'],
+            'hareket_page': hp,
+            'hareket_per_page': hpp,
+            'cari_page': cp,
+            'cari_per_page': cpp,
+        }
+        if (start_date_str or '').strip():
+            next_kwargs['start_date'] = (start_date_str or '').strip()
+        if (end_date_str or '').strip():
+            next_kwargs['end_date'] = (end_date_str or '').strip()
+        kiralama_duzenle_next = url_for('firmalar.bilgi', **next_kwargs)
+
+        return render_template(
+            'firmalar/_bilgi_kiralama_fragment.html',
+            firma=firma,
+            kiralama_tarih_filtre_aktif=kt['kiralama_tarih_filtre_aktif'],
+            kiralama_filt_baslangic=kt['kiralama_filt_baslangic'],
+            kiralama_filt_bitis=kt['kiralama_filt_bitis'],
+            kiralama_pagination=kt['kiralama_pagination'],
+            kiralamalar_sayfa=kt['kiralamalar_sayfa'],
+            kiralama_per_page=kt['kiralama_per_page'],
+            bilgi_sd_input=bilgi_sd_input,
+            bilgi_ed_input=bilgi_ed_input,
+            hareket_ph_page=hp,
+            hareket_ph_per_page=hpp,
+            cari_ph_page=cp,
+            cari_ph_per_page=cpp,
+            kiralama_duzenle_next=kiralama_duzenle_next,
+        )
+    except ValidationError:
+        return '', 404
+    except Exception as ex:
+        current_app.logger.error(f"Kiralama listesi parçası hatası (Firma ID: {id}): {ex}", exc_info=True)
+        return '', 500
+
 
 # -------------------------------------------------------------------------
 # YAZDIR: Firma Cari Hareketleri (Tüm Kayıtlar, Sayfalama Yok)
@@ -463,18 +709,54 @@ def bilgi_yazdir(id):
         finans_verileri = FirmaService.get_financial_summary(id)
         hareketler = finans_verileri.pop('hareketler')
         firma = finans_verileri['firma']
-        kiralamalar_all = sorted(firma.kiralamalar, key=lambda k: k.id, reverse=True)
-
-        # Cari tab için tüm satırlar hesaplanır
         today_date = bugun()
-        cari_rows = _build_cari_rows(firma, today_date)
-        cari_rows = sorted(
-            cari_rows,
-            key=lambda x: (
-                x.get('sort_date') or x.get('baslangic') or x.get('form_tarihi') or date.min,
-                int(x.get('id') or 0),
+        start_date_str = request.args.get('start_date')
+        end_date_str = request.args.get('end_date')
+        sd_r, ed_r = _resolve_bilgi_start_end_dates(request.args, firma, today_date)
+        cari_export_period = tab == 'cari' and _cari_period_mode_active(start_date_str, end_date_str)
+        if tab == 'kiralama':
+            kiralamalar_all, filt_aktif, filt_bas, filt_bit = _filter_kiralamalar_bilgi(
+                firma,
+                start_date_str,
+                end_date_str,
+                key_fn=lambda k: k.id or 0,
             )
-        )
+            if filt_aktif:
+                rapor_tarihi = f"{filt_bas.strftime('%d.%m.%Y')} – {filt_bit.strftime('%d.%m.%Y')}"
+            else:
+                rapor_tarihi = today_date.strftime('%d.%m.%Y')
+        else:
+            kiralamalar_all = sorted(firma.kiralamalar, key=lambda k: k.id, reverse=True)
+
+        cari_rows: list = []
+        cari_devreden_print = None
+        filt_start_print = None
+        if tab == 'cari':
+            build_end = ed_r if cari_export_period else today_date
+            raw_rows = _build_cari_rows(firma, build_end)
+            if cari_export_period:
+                cari_rows, cari_devreden_print, tb, ta, gb = build_period_filtered_cari(raw_rows, sd_r, ed_r)
+                filt_start_print = sd_r
+                finans_verileri['toplam_borc'] = tb
+                finans_verileri['toplam_alacak'] = ta
+                finans_verileri['guncel_bakiye'] = gb
+                rapor_tarihi = f"{sd_r.strftime('%d.%m.%Y')} – {ed_r.strftime('%d.%m.%Y')}"
+            else:
+
+                def _yz_sort(row):
+                    d = row.get('sort_date') or row.get('baslangic') or row.get('form_tarihi')
+                    dd = d or date.min
+                    try:
+                        if hasattr(dd, 'date') and callable(getattr(dd, 'date')):
+                            dd = dd.date()
+                    except Exception:
+                        pass
+                    return (dd, int(row.get('id') or 0))
+
+                cari_rows = sorted(raw_rows, key=_yz_sort)
+                rapor_tarihi = today_date.strftime('%d.%m.%Y')
+        elif tab != 'kiralama':
+            rapor_tarihi = today_date.strftime('%d.%m.%Y')
 
         return render_template(
             'firmalar/yazdir.html',
@@ -483,7 +765,10 @@ def bilgi_yazdir(id):
             kiralamalar=kiralamalar_all,
             cari_rows=cari_rows,
             tab=tab,
-            rapor_tarihi=today_date.strftime('%d.%m.%Y'),
+            rapor_tarihi=rapor_tarihi,
+            cari_export_period=bool(tab == 'cari' and cari_export_period),
+            cari_devreden_bakiye=cari_devreden_print,
+            filt_start_print=filt_start_print,
         )
     except Exception as e:
         flash("Yazdırma verisi yüklenemedi.", "danger")
@@ -500,8 +785,47 @@ def bilgi_excel(id):
         firma = finans_verileri['firma']
         kiralamalar = sorted(firma.kiralamalar, key=lambda k: k.id, reverse=True)
         today_date = bugun()
-        cari_rows = _build_cari_rows(firma, today_date)
-        rapor_tarihi = date.today().strftime('%d.%m.%Y')
+        sd_s_x = request.args.get('start_date')
+        ed_s_x = request.args.get('end_date')
+        sd_x, ed_x = _resolve_bilgi_start_end_dates(request.args, firma, today_date)
+        cari_ex_period = tab == 'cari' and _cari_period_mode_active(sd_s_x, ed_s_x)
+
+        cari_rows: list = []
+        if tab == 'cari':
+            build_end_x = ed_x if cari_ex_period else today_date
+            raw_x = _build_cari_rows(firma, build_end_x)
+            if cari_ex_period:
+                cari_rows, _, tb_x, ta_x, gb_x = build_period_filtered_cari(raw_x, sd_x, ed_x)
+                finans_verileri['toplam_borc'] = tb_x
+                finans_verileri['toplam_alacak'] = ta_x
+                finans_verileri['guncel_bakiye'] = gb_x
+                rapor_tarihi = f"{sd_x.strftime('%d.%m.%Y')} – {ed_x.strftime('%d.%m.%Y')}"
+            else:
+                def _x_sort(row):
+                    d = row.get('sort_date') or row.get('baslangic') or row.get('form_tarihi')
+                    dd = d or date.min
+                    try:
+                        if hasattr(dd, 'date') and callable(getattr(dd, 'date')):
+                            dd = dd.date()
+                    except Exception:
+                        pass
+                    return (dd, int(row.get('id') or 0))
+
+                cari_rows = sorted(raw_x, key=_x_sort)
+                rapor_tarihi = date.today().strftime('%d.%m.%Y')
+        elif tab == 'kiralama':
+            kiralamalar, filt_aktif_x, filt_bas_x, filt_bit_x = _filter_kiralamalar_bilgi(
+                firma,
+                sd_s_x,
+                ed_s_x,
+                key_fn=lambda k: k.id or 0,
+            )
+            if filt_aktif_x:
+                rapor_tarihi = f"{filt_bas_x.strftime('%d.%m.%Y')} – {filt_bit_x.strftime('%d.%m.%Y')}"
+            else:
+                rapor_tarihi = date.today().strftime('%d.%m.%Y')
+        else:
+            rapor_tarihi = date.today().strftime('%d.%m.%Y')
 
         workbook = Workbook()
         sheet = workbook.active

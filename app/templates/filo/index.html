@@ -103,6 +103,8 @@
     .durum-aksiyon { display: inline-flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
     .inline-action-btn { display: inline-flex; align-items: center; gap: 3px; padding: 3px 7px; border: 1px solid #f0ad4e; border-radius: 4px; background: #fff8e8; color: #9a6700; font-size: 0.68rem; font-weight: 700; cursor: pointer; white-space: nowrap; transition: background 0.15s, border-color 0.15s; }
     .inline-action-btn:hover { background: #fff1cc; border-color: #d39e00; }
+    .col-marka-tip { width: 240px; min-width: 240px; }
+    .col-musteri-durum { width: 300px; min-width: 300px; }
 
     /* Özel Modal */
     .custom-backdrop { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); z-index: 1040; justify-content: center; align-items: center; }
@@ -164,11 +166,11 @@
                     <tr>
                         <th style="width:4%;">#</th>
                         <th style="width: 120px;">Kod</th>
-                        <th>Marka / Tip</th>
+                        <th class="col-marka-tip">Marka / Tip</th>
                         <th>Seri No</th>
                         <th>Teknik Özellikler</th>
                         <th>Bulunduğu Şube</th>
-                        <th style="width: 200px;">Müşteri / Durum</th>
+                        <th class="col-musteri-durum">Müşteri / Durum</th>
                         <th style="width: 180px;">Durumu</th>
                     </tr>
                 </thead>
@@ -189,7 +191,7 @@
                             <td>{{ (pagination.page - 1) * pagination.per_page + loop.index }}</td>
                         
                         <td class="fw-bold text-primary">{{ ekipman.kod }}</td>
-                            <td>
+                            <td class="col-marka-tip">
                             <div class="fw-bold">{{ ekipman.marka }}</div>
                             <div class="text-muted small">{{ ekipman.tipi }}</div>
                         </td>
@@ -206,7 +208,7 @@
                                 <span class="badge badge-status bg-light text-secondary border"><i class="fas fa-question-circle"></i> Merkez (Atanmamış)</span>
                             {% endif %}
                         </td>
-                        <td>
+                        <td class="col-musteri-durum">
                             {% if ekipman.calisma_durumu == 'kirada' and ekipman.aktif_kiralama_bilgisi %}
                                 <small class="d-flex align-items-center gap-2">
                                     <i class="fas fa-handshake text-primary"></i>
@@ -827,15 +829,6 @@
                 }
             });
         });
-
-        const filterApplyBtn = document.getElementById('f-apply');
-        if (filterApplyBtn) {
-            const originalOnClick = filterApplyBtn.onclick;
-            filterApplyBtn.onclick = async (e) => {
-                await originalOnClick(e);
-                const params = new URLSearchParams();
-            };
-        }
 
         const searchInput = document.querySelector('input[name="q"]');
         const searchClearBtn = document.getElementById('search-clear-btn');

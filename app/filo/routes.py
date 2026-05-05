@@ -849,6 +849,8 @@ def kiralama_gecmisi(ekipman_id):
     total_try = sum(d['gelir_try'] for d in kiralama_detaylari_tumu)
     total_usd = sum(d['gelir_usd'] for d in kiralama_detaylari_tumu)
     total_eur = sum(d['gelir_eur'] for d in kiralama_detaylari_tumu)
+    secilen_aralik_gun = max(0, (end_date - start_date).days + 1) if start_date and end_date else 0
+    calisma_yuzdesi = min(100, (total_gun / secilen_aralik_gun * 100)) if secilen_aralik_gun else 0
     
     # Sayfalama
     _ALLOWED_PER_PAGE = {10, 20, 25, 50, 100}
@@ -883,6 +885,9 @@ def kiralama_gecmisi(ekipman_id):
         total_try=total_try,
         total_usd=total_usd,
         total_eur=total_eur,
+        total_kiralama_sayisi=len(kiralama_detaylari_tumu),
+        secilen_aralik_gun=secilen_aralik_gun,
+        calisma_yuzdesi=calisma_yuzdesi,
         start_date=start_date,
         end_date=end_date,
         referrer=referrer,

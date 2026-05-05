@@ -197,6 +197,31 @@ class EkipmanRaporuService:
             return (amount, True)
 
     @staticmethod
+    def _kiralama_donem_filtresi(query, start_date: date = None, end_date: date = None):
+        """Rapor donemiyle cakisan kiralamalari filtreler; aktif kiralari sahada sayar."""
+        if start_date:
+            query = query.filter(or_(
+                KiralamaKalemi.kiralama_bitis >= start_date,
+                and_(
+                    KiralamaKalemi.sonlandirildi == False,
+                    KiralamaKalemi.is_active == True
+                )
+            ))
+        if end_date:
+            query = query.filter(KiralamaKalemi.kiralama_baslangici <= end_date)
+        return query
+
+    @staticmethod
+    def _etkin_kiralama_bitis(kalem: KiralamaKalemi, end_date: date = None) -> date:
+        """Aktif kiralarda planlanan bitis gecmiste kalsa da rapor bitisine kadar say."""
+        kalem_bit = kalem.kiralama_bitis or _bugun()
+        if not kalem.sonlandirildi and kalem.is_active:
+            aktif_rapor_bitis = end_date or _bugun()
+            if kalem_bit < aktif_rapor_bitis:
+                kalem_bit = aktif_rapor_bitis
+        return kalem_bit
+
+    @staticmethod
     def _get_kiralama_kuru(ekipman_id: int, currency: str, start_date: date = None, end_date: date = None) -> float:
         """Ekipmana ait kiralamalardan pozitif kur ortalamasını döner."""
         if currency == 'USD':
@@ -215,10 +240,7 @@ class EkipmanRaporuService:
             kur_kolonu > 0
         )
 
-        if start_date:
-            query = query.filter(KiralamaKalemi.kiralama_bitis >= start_date)
-        if end_date:
-            query = query.filter(KiralamaKalemi.kiralama_baslangici <= end_date)
+        query = EkipmanRaporuService._kiralama_donem_filtresi(query, start_date, end_date)
 
         ortalama_kur = query.scalar()
         return float(ortalama_kur or 0.0)
@@ -245,7 +267,13 @@ class EkipmanRaporuService:
         # Tarih aralığı filtresi: kirlama ile aranan dönem çakışıyor mu?
         if start_date:
             # Kiralama bitiş tarihi arama başlangıcından sonra olmalı
-            query = query.filter(KiralamaKalemi.kiralama_bitis >= start_date)
+            query = query.filter(or_(
+                KiralamaKalemi.kiralama_bitis >= start_date,
+                and_(
+                    KiralamaKalemi.sonlandirildi == False,
+                    KiralamaKalemi.is_active == True
+                )
+            ))
         if end_date:
             # Kiralama başlangıç tarihi arama bitiş tarihinden önce olmalı
             query = query.filter(KiralamaKalemi.kiralama_baslangici <= end_date)
@@ -256,7 +284,7 @@ class EkipmanRaporuService:
         
         for kalem in kiralamalar:
             kalem_bas = kalem.kiralama_baslangici
-            kalem_bit = kalem.kiralama_bitis
+            kalem_bit = EkipmanRaporuService._etkin_kiralama_bitis(kalem, end_date)
 
             # Filtre ile kiralama aralığının kesişimini gün bazında (inclusive) hesapla
             etkin_bas = max(kalem_bas, start_date) if start_date else kalem_bas
@@ -333,7 +361,13 @@ class EkipmanRaporuService:
         # Tarih aralığı filtresi: nakliye ile aranan dönem çakışıyor mu?
         if start_date:
             # Kiralama bitiş tarihi arama başlangıcından sonra olmalı
-            query = query.filter(KiralamaKalemi.kiralama_bitis >= start_date)
+            query = query.filter(or_(
+                KiralamaKalemi.kiralama_bitis >= start_date,
+                and_(
+                    KiralamaKalemi.sonlandirildi == False,
+                    KiralamaKalemi.is_active == True
+                )
+            ))
         if end_date:
             # Kiralama başlangıç tarihi arama bitiş tarihinden önce olmalı
             query = query.filter(KiralamaKalemi.kiralama_baslangici <= end_date)
@@ -419,6 +453,11 @@ class EkipmanRaporuService:
         elif end_date:
             query = query.filter(KiralamaKalemi.kiralama_baslangici <= end_date)
         
+        query = KiralamaKalemi.query.filter(
+            KiralamaKalemi.ekipman_id == ekipman_id,
+            KiralamaKalemi.is_deleted == False
+        )
+        query = EkipmanRaporuService._kiralama_donem_filtresi(query, start_date, end_date)
         kiralamalar = query.all()
         
         toplam_gu = 0
@@ -428,7 +467,8 @@ class EkipmanRaporuService:
         for kalem in kiralamalar:
             # Başlangıç ve bitiş tarihini sınırlandır (aralığa göre kırp)
             baslangic = max(kalem.kiralama_baslangici, start_date) if start_date else kalem.kiralama_baslangici
-            bitis = min(kalem.kiralama_bitis, end_date) if end_date else kalem.kiralama_bitis
+            etkin_bitis = EkipmanRaporuService._etkin_kiralama_bitis(kalem, end_date)
+            bitis = min(etkin_bitis, end_date) if end_date else etkin_bitis
             
             # Gün sayısını hesapla (inclusive + negatif koruma)
             gu = max(0, (bitis - baslangic).days + 1)
@@ -457,7 +497,13 @@ class EkipmanRaporuService:
         # Tarih aralığı filtresi: kiralama ile aranan dönem çakışıyor mu?
         if start_date:
             # Kiralama bitiş tarihi arama başlangıcından sonra olmalı
-            query = query.filter(KiralamaKalemi.kiralama_bitis >= start_date)
+            query = query.filter(or_(
+                KiralamaKalemi.kiralama_bitis >= start_date,
+                and_(
+                    KiralamaKalemi.sonlandirildi == False,
+                    KiralamaKalemi.is_active == True
+                )
+            ))
         if end_date:
             # Kiralama başlangıç tarihi arama bitiş tarihinden önce olmalı
             query = query.filter(KiralamaKalemi.kiralama_baslangici <= end_date)
@@ -468,7 +514,11 @@ class EkipmanRaporuService:
         for kalem in kiralamalar:
             # Kiralama tarihleri
             kalem_bas = kalem.kiralama_baslangici
-            kalem_bit = kalem.kiralama_bitis or date.today()
+            kalem_bit = kalem.kiralama_bitis or _bugun()
+            if not kalem.sonlandirildi and kalem.is_active:
+                aktif_rapor_bitis = end_date or _bugun()
+                if kalem_bit < aktif_rapor_bitis:
+                    kalem_bit = aktif_rapor_bitis
 
             # Filtre aralığı ile kesişim (gün sayısı ve gelir hesabı için tutarlı)
             etkin_bas = max(kalem_bas, start_date) if start_date else kalem_bas

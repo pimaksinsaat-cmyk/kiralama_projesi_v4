@@ -84,7 +84,7 @@
                     <i class="fa fa-chart-bar"></i> Cari Durum
                 </a>
             </div>
-            <a id="yazdir-btn" href="{{ url_for('firmalar.bilgi_yazdir', id=firma.id, tab=tab) }}" class="btn btn-dark" target="_blank">
+            <a id="yazdir-btn" href="{{ url_for('firmalar.bilgi_yazdir', id=firma.id, tab=tab, start_date=request.args.get('start_date') or (start_date.strftime('%Y-%m-%d') if start_date else ''), end_date=request.args.get('end_date') or (end_date.strftime('%Y-%m-%d') if end_date else '')) }}" class="btn btn-dark" target="_blank">
                 <i class="fa fa-print"></i>
 
             </a>
@@ -95,7 +95,7 @@
     <div class="row mb-4">
         <div class="col-md-4">
             <div class="card border-primary mb-3 shadow-sm">
-                <div class="card-header bg-transparent border-primary text-primary fw-bold">Toplam Borç (Satışlar)</div>
+                <div class="card-header bg-transparent border-primary text-primary fw-bold">{% if cari_donem_modu %}Dönem Borç{% else %}Toplam Borç (Satışlar){% endif %}</div>
                 <div class="card-body text-primary">
                     <h3 class="card-title">
                         {% if toplam_borc is defined and toplam_borc is not none %}
@@ -109,7 +109,7 @@
         </div>
         <div class="col-md-4">
             <div class="card border-success mb-3 shadow-sm">
-                <div class="card-header bg-transparent border-success text-success fw-bold">Toplam Alacak (Ödemeler)</div>
+                <div class="card-header bg-transparent border-success text-success fw-bold">{% if cari_donem_modu %}Dönem Alacak{% else %}Toplam Alacak (Ödemeler){% endif %}</div>
                 <div class="card-body text-success">
                     <h3 class="card-title">
                         {% if toplam_alacak is defined and toplam_alacak is not none %}
@@ -123,7 +123,7 @@
         </div>
         <div class="col-md-4">
             <div class="card border-secondary mb-3 shadow-sm bg-light">
-                <div class="card-header bg-transparent border-secondary fw-bold">GÜNCEL BAKİYE</div>
+                <div class="card-header bg-transparent border-secondary fw-bold">{% if cari_donem_modu %}Dönem Bakiyesi{% else %}GÜNCEL BAKİYE{% endif %}</div>
                 <div class="card-body">
                     <h3 class="card-title {{ durum_rengi }}">
                         {% if guncel_bakiye is defined and guncel_bakiye is not none %}
@@ -137,6 +137,19 @@
             </div>
         </div>
     </div>
+    {% if cari_donem_modu %}
+    <div class="row mb-3">
+        <div class="col-12">
+            <small class="text-muted">
+                Firmanın toplam bakiyesi:
+                {% if firma_genel_bakiye is defined and firma_genel_bakiye is not none %}
+                    {{ "{:,.2f}".format(firma_genel_bakiye).replace(',', 'X').replace('.', ',').replace('X', '.') }} TL
+                {% else %}0,00 TL{% endif %}
+                <span class="badge bg-secondary bg-opacity-25 text-dark ms-1">Filtre dışı</span>
+            </small>
+        </div>
+    </div>
+    {% endif %}
 
     <!-- Tarih Filtresi Başlangıç -->
     <div class="row mb-3">
@@ -157,13 +170,21 @@
                     <label class="form-label">Bitiş</label>
                     <input id="endDateInput" class="form-control" type="date" name="end_date" value="{{ request.args.get('end_date') or (end_date.strftime('%Y-%m-%d') if end_date else '') }}">
                 </div>
-                <div class="col-md-2 d-grid">
+                <div class="col-md-4 col-lg-3 d-flex flex-wrap gap-2 align-items-end">
                     <button class="btn btn-primary" type="submit">Uygula</button>
+                    <a id="filtreIptalLink" class="btn btn-outline-secondary text-nowrap"
+                       title="Tarih süzgecini kaldırır; seçili sekmede tam liste ve özet kartları görüntülenir."
+                       data-bilgi-base="{{ url_for('firmalar.bilgi', id=firma.id) }}"
+                       data-default-tab="{{ request.args.get('tab') or tab }}"
+                       href="{{ url_for('firmalar.bilgi', id=firma.id, tab=(request.args.get('tab') or tab), cari_page=1, cari_per_page=cari_per_page, hareket_page=hareket_pagination.page, hareket_per_page=hareket_per_page, kiralama_page=kiralama_pagination.page, kiralama_per_page=kiralama_per_page) }}">
+                        Filtreyi iptal et
+                    </a>
                 </div>
                 <div class="col-12">
                     <div class="d-flex flex-wrap gap-2 mt-1">
                         <button type="button" class="btn btn-outline-success btn-sm" id="todayRangeBtn">Bugün</button>
                         <button type="button" class="btn btn-outline-primary btn-sm" id="thisMonthRangeBtn">Bu Ay</button>
+                        <button type="button" class="btn btn-outline-primary btn-sm" id="lastMonthRangeBtn">Geçen Ay</button>
                         <button type="button" class="btn btn-outline-secondary btn-sm js-quick-range" data-days="30">Son 30 Gün</button>
                         <button type="button" class="btn btn-outline-secondary btn-sm js-quick-range" data-days="60">Son 60 Gün</button>
                         <button type="button" class="btn btn-outline-secondary btn-sm js-quick-range" data-days="90">Son 90 Gün</button>
@@ -174,13 +195,159 @@
         </div>
     </div>
     <script>
+    /** Tarih formu gönderilirken görünür sekmeyi koru: URL (setTab/replaceState) ile gizli tab eşlenir */
+    function syncDateFilterTabFromUrl() {
+        var df = document.getElementById('dateFilterForm');
+        if (!df) return;
+        var tabIn = df.querySelector('input[name=\"tab\"]');
+        if (!tabIn) return;
+        var raw = new URL(window.location.href).searchParams.get('tab');
+        if (raw === 'kiralama' || raw === 'cari') {
+            tabIn.value = raw;
+        }
+    }
+
+    /** Filtreyi iptal: href, görünür sekme (URL / setTab) ile uyumlu — sadece tarih parametrelerini siler */
+    function syncFiltreIptalHref() {
+        var a = document.getElementById('filtreIptalLink');
+        if (!a || !a.dataset.bilgiBase) return;
+        var u = new URL(a.dataset.bilgiBase, window.location.origin);
+        var curQs = new URL(window.location.href).searchParams;
+        var urlTab = curQs.get('tab');
+        var tab = (urlTab === 'kiralama' || urlTab === 'cari') ? urlTab : (a.dataset.defaultTab || 'cari');
+        if (tab !== 'kiralama' && tab !== 'cari') {
+            tab = 'cari';
+        }
+        u.searchParams.set('tab', tab);
+        u.searchParams.set('cari_page', '1');
+        var form = document.getElementById('dateFilterForm');
+        var keys = ['cari_per_page', 'hareket_page', 'hareket_per_page', 'kiralama_page', 'kiralama_per_page'];
+        keys.forEach(function(k) {
+            var v = curQs.get(k);
+            if (v === null || v === '') {
+                if (form) {
+                    var inp = form.querySelector('input[name=\"' + k + '\"]');
+                    if (inp && inp.value !== '') v = inp.value;
+                }
+            }
+            if (v !== null && v !== '') u.searchParams.set(k, v);
+        });
+        u.searchParams.delete('start_date');
+        u.searchParams.delete('end_date');
+        a.href = u.pathname + (u.searchParams.toString() ? '?' + u.searchParams.toString() : '');
+    }
+
+    function __reflectBilgiUrlFromKiralamaFetchUrl(fetchUrlStr) {
+        var root = document.getElementById('kiralamaListeRoot');
+        if (!root || !root.dataset.bilgiBaseUrl) return;
+        var src = new URL(fetchUrlStr, window.location.origin);
+        var dst = new URL(root.dataset.bilgiBaseUrl, window.location.origin);
+        src.searchParams.forEach(function(v, k) { dst.searchParams.set(k, v); });
+        dst.searchParams.set('tab', 'kiralama');
+        history.replaceState(null, '', dst.toString());
+    }
+
+    function __bilgiUrlFromKiralamaFailure(linkOrFetchUrl) {
+        var root = document.getElementById('kiralamaListeRoot');
+        if (!root || !root.dataset.bilgiBaseUrl) return window.location.href;
+        var src = new URL(linkOrFetchUrl, window.location.origin);
+        var dst = new URL(root.dataset.bilgiBaseUrl, window.location.origin);
+        src.searchParams.forEach(function(v, k) { dst.searchParams.set(k, v); });
+        dst.searchParams.set('tab', 'kiralama');
+        return dst.toString();
+    }
+
+    function __fetchReplaceKiralamaPanel(fetchUrlStr) {
+        var root = document.getElementById('kiralamaListeRoot');
+        if (!root) return Promise.reject();
+        return fetch(fetchUrlStr, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(function(r) { if (!r.ok) throw r; return r.text(); })
+            .then(function(html) {
+                root.innerHTML = html;
+                __reflectBilgiUrlFromKiralamaFetchUrl(fetchUrlStr);
+                syncFiltreIptalHref();
+            });
+    }
+
+    function submitDateFilterFormViaEvent() {
+        var f = document.getElementById('dateFilterForm');
+        if (!f) return;
+        if (typeof f.requestSubmit === 'function') {
+            f.requestSubmit();
+        } else {
+            try {
+                var ev = document.createEvent('Event');
+                ev.initEvent('submit', true, true);
+                if (!f.dispatchEvent(ev)) return;
+            } catch (err) {}
+            f.submit();
+        }
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
+        syncDateFilterTabFromUrl();
+        syncFiltreIptalHref();
+
         var todayBtn = document.getElementById('todayRangeBtn');
         var thisMonthBtn = document.getElementById('thisMonthRangeBtn');
+        var lastMonthBtn = document.getElementById('lastMonthRangeBtn');
         var quickRangeBtns = document.querySelectorAll('.js-quick-range');
         var startDateInput = document.getElementById('startDateInput');
         var endDateInput = document.getElementById('endDateInput');
         var form = document.getElementById('dateFilterForm');
+        if (form) {
+            form.addEventListener('submit', function(ev) {
+                syncDateFilterTabFromUrl();
+                var tabIn = form.querySelector('input[name=\"tab\"]');
+                var activeTab = tabIn ? tabIn.value : '';
+                var root = document.getElementById('kiralamaListeRoot');
+                var fetchBase = root && root.dataset.fetchUrl;
+                if (activeTab === 'kiralama' && fetchBase) {
+                    ev.preventDefault();
+                    var cp = form.querySelector('input[name=\"cari_page\"]');
+                    if (cp) { cp.value = '1'; }
+                    var fu = new URL(fetchBase, window.location.origin);
+                    new FormData(form).forEach(function(v, k) {
+                        if (v === '' || v === null || typeof v === 'undefined') return;
+                        fu.searchParams.set(k, v);
+                    });
+                    fu.searchParams.set('tab', 'kiralama');
+                    fu.searchParams.set('kiralama_page', '1');
+                    var fallbackBilgi = __bilgiUrlFromKiralamaFailure(fu.toString());
+                    __fetchReplaceKiralamaPanel(fu.toString()).catch(function() {
+                        window.location.href = fallbackBilgi;
+                    });
+                    return;
+                }
+                var cp2 = form.querySelector('input[name=\"cari_page\"]');
+                if (cp2) { cp2.value = '1'; }
+            });
+        }
+
+        document.addEventListener('click', function(ev) {
+            var link = ev.target.closest('#kiralamaListeRoot a.js-kiralama-panel-page');
+            if (!link || !link.getAttribute('href')) return;
+            var li = link.closest('.page-item');
+            if (li && li.classList.contains('disabled')) return;
+            ev.preventDefault();
+            var failUrl = __bilgiUrlFromKiralamaFailure(link.href);
+            __fetchReplaceKiralamaPanel(link.href).catch(function() {
+                window.location.href = failUrl;
+            });
+        });
+
+        document.addEventListener('change', function(ev) {
+            var sel = ev.target.closest('#kiralamaListeRoot select[name=kiralama_per_page]');
+            if (!sel) return;
+            var frm = sel.closest('form.js-kiralama-bilgi-fragment-form');
+            if (!frm || !frm.action) return;
+            var q = new URLSearchParams(new FormData(frm)).toString();
+            var u = frm.action + (frm.action.indexOf('?') >= 0 ? '&' : '?') + q;
+            var failUrl = __bilgiUrlFromKiralamaFailure(u);
+            __fetchReplaceKiralamaPanel(u).catch(function() {
+                window.location.href = failUrl;
+            });
+        });
 
         if (todayBtn) {
             todayBtn.addEventListener('click', function() {
@@ -191,7 +358,8 @@
                 var todayStr = yyyy + '-' + mm + '-' + dd;
                 startDateInput.value = todayStr;
                 endDateInput.value = todayStr;
-                form.submit();
+                syncDateFilterTabFromUrl();
+                submitDateFilterFormViaEvent();
             });
         }
         if (thisMonthBtn) {
@@ -204,7 +372,27 @@
                 var todayStr = yyyy + '-' + mm + '-' + dd;
                 startDateInput.value = firstDay;
                 endDateInput.value = todayStr;
-                form.submit();
+                syncDateFilterTabFromUrl();
+                submitDateFilterFormViaEvent();
+            });
+        }
+        if (lastMonthBtn && startDateInput && endDateInput && form) {
+            lastMonthBtn.addEventListener('click', function() {
+                var today = new Date();
+                var y = today.getFullYear();
+                var m = today.getMonth();
+                var firstPrev = new Date(y, m - 1, 1);
+                var lastPrev = new Date(y, m, 0);
+                function toYMD(d) {
+                    var yy = d.getFullYear();
+                    var mm = String(d.getMonth() + 1).padStart(2, '0');
+                    var dd = String(d.getDate()).padStart(2, '0');
+                    return yy + '-' + mm + '-' + dd;
+                }
+                startDateInput.value = toYMD(firstPrev);
+                endDateInput.value = toYMD(lastPrev);
+                syncDateFilterTabFromUrl();
+                submitDateFilterFormViaEvent();
             });
         }
         quickRangeBtns.forEach(function(btn) {
@@ -228,7 +416,8 @@
                     startDateInput.value = sStr;
                     endDateInput.value = todayStr;
                 }
-                form.submit();
+                syncDateFilterTabFromUrl();
+                submitDateFilterFormViaEvent();
             });
         });
     });
@@ -399,129 +588,11 @@
         </div>
 
         <div class="tab-pane fade {{ 'show active' if tab == 'kiralama' else '' }}" id="kiralama">
-            <div class="card card-body shadow-sm">
-                 <div class="table-responsive">
-                     <table class="table table-hover align-middle">
-                        <thead class="table-light">
-                            <tr>
-                                <th style="width: 5%;">#</th>
-                                <th style="width: 15%;">Form No</th>
-                                <th style="width: 35%;">Ekipmanlar</th>
-                                <th style="width: 25%;">Durumları</th>
-                                <th style="width: 20%;">Genel Durum</th>
-                                <th class="text-end" style="width: 10%;">İşlem</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% set start = (kiralama_pagination.page - 1) * kiralama_pagination.per_page %}
-                            {% for kiralama in kiralamalar_sayfa %}
-                            <tr>
-                                <td>{{ start + loop.index }}</td>
-                                <td>
-                                    <a href="{{ url_for('kiralama.duzenle', kiralama_id=kiralama.id, next=request.url) }}">
-                                        <strong>{{ kiralama.kiralama_form_no or 'No Belirtilmemiş' }}</strong>
-                                    </a>
-                                </td>
-                                <td>
-                                    <ul class="list-unstyled mb-0 small">
-                                        {% for kalem in kiralama.kalemler %}
-                                        {% set ekipman_adi = (((kalem.ekipman.marka or '') ~ ' - ' ~ (kalem.ekipman.model or '')) | trim(' -')) if kalem.ekipman else (((kalem.harici_ekipman_marka or '') ~ ' - ' ~ (kalem.harici_ekipman_model or '')) | trim(' -')) %}
-                                        <li class="mb-3">
-                                            {% if kalem.ekipman and kalem.ekipman.kod %}
-                                                <small class="text-muted fw-bold">({{ kalem.ekipman.kod }})</small>
-                                            {% elif kalem.is_dis_tedarik_ekipman %}
-                                                <small class="text-muted">(Dış Tedarik)</small>
-                                            {% endif %}
-                                            <span class="fw-bold text-dark">{{ ekipman_adi or (kalem.ekipman.tipi if kalem.ekipman else 'Ekipman bilgisi yok') }}</span>
-                                            {% if kalem.is_dis_tedarik_ekipman and kalem.harici_tedarikci %}
-                                                <br><small class="text-muted">Tedarikçi: {{ kalem.harici_tedarikci.firma_adi | truncate_name }}</small>
-                                            {% endif %}
-                                        </li>
-                                        {% endfor %}
-                                    </ul>
-                                </td>
-                                <td>
-                                    <ul class="list-unstyled mb-0 small">
-                                        {% for kalem in kiralama.kalemler %}
-                                        <li class="mb-3">
-                                            {% if kalem.sonlandirildi %}
-                                                <span class="badge bg-secondary" style="min-width: 65px; opacity: 0.85;">Bitti</span>
-                                                <br><small class="text-muted">
-                                                    {{ kalem.kiralama_baslangici.strftime('%d.%m.%Y') }} - {{ kalem.kiralama_bitis.strftime('%d.%m.%Y') }}
-                                                </small>
-                                            {% else %}
-                                                <span class="badge bg-success" style="min-width: 65px;">Aktif</span>
-                                                <br><small class="text-primary fw-bold">
-                                                    {{ kalem.kiralama_baslangici.strftime('%d.%m.%Y') }} tarihinden beri sahada
-                                                </small>
-                                            {% endif %}
-                                        </li>
-                                        {% endfor %}
-                                    </ul>
-                                </td>
-                                <td>
-                                    {% set toplam = kiralama.kalemler | length %}
-                                    {% set biten = kiralama.kalemler | selectattr('sonlandirildi', 'equalto', true) | list | length %}
-                                   
-                                    {% if biten == 0 %}
-                                        <span class="text-success fw-bold"><i class="fa fa-play-circle"></i> Tamamı Sahada</span>
-                                    {% elif biten == toplam %}
-                                        <span class="text-secondary"><i class="fa fa-check-double"></i> Sözleşme Kapandı</span>
-                                    {% else %}
-                                        <span class="text-warning fw-bold">
-                                            <i class="fa fa-exclamation-circle"></i> Parçalı Teslimat
-                                            <br><small class="text-muted">({{ biten }}/{{ toplam }} makine döndü)</small>
-                                        </span>
-                                    {% endif %}
-                                </td>
-                                
-                                <td class="text-end">
-                                    <a href="{{ url_for('kiralama.duzenle', kiralama_id=kiralama.id, next=request.url) }}" class="btn btn-sm btn-outline-primary">
-                                        <i class="fa fa-search"></i>
-                                    </a>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-
-                <div class="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
-                    <form method="GET" action="{{ url_for('firmalar.bilgi', id=firma.id) }}" class="d-flex align-items-center gap-2 mb-0">
-                        <input type="hidden" name="tab" value="kiralama">
-                        <input type="hidden" name="hareket_page" value="{{ hareket_pagination.page }}">
-                        <input type="hidden" name="hareket_per_page" value="{{ hareket_per_page }}">
-                        <input type="hidden" name="start_date" value="{{ request.args.get('start_date') or (start_date.strftime('%Y-%m-%d') if start_date else '') }}">
-                        <input type="hidden" name="end_date" value="{{ request.args.get('end_date') or (end_date.strftime('%Y-%m-%d') if end_date else '') }}">
-                        <label class="small text-muted mb-0">Sayfa başına</label>
-                        <select name="kiralama_per_page" class="form-select form-select-sm" style="max-width:130px;" onchange="this.form.submit()">
-                            <option value="10"  {{ 'selected' if kiralama_per_page == 10 else '' }}>10</option>
-                            <option value="25"  {{ 'selected' if kiralama_per_page == 25 or not kiralama_per_page else '' }}>25</option>
-                            <option value="50"  {{ 'selected' if kiralama_per_page == 50 else '' }}>50</option>
-                            <option value="100" {{ 'selected' if kiralama_per_page == 100 else '' }}>100</option>
-                        </select>
-                    </form>
-
-                    {% if kiralama_pagination %}
-                    <ul class="pagination mb-0">
-                        <li class="page-item {% if not kiralama_pagination.has_prev %}disabled{% endif %}">
-                            <a class="page-link" href="{{ url_for('firmalar.bilgi', id=firma.id, tab='kiralama', kiralama_page=kiralama_pagination.prev_num, kiralama_per_page=kiralama_per_page, hareket_page=hareket_pagination.page, hareket_per_page=hareket_per_page, start_date=request.args.get('start_date') or (start_date.strftime('%Y-%m-%d') if start_date else ''), end_date=request.args.get('end_date') or (end_date.strftime('%Y-%m-%d') if end_date else '')) }}">&laquo;</a>
-                        </li>
-                        {% for pn in kiralama_pagination.iter_pages() %}
-                            {% if pn %}
-                            <li class="page-item {% if pn == kiralama_pagination.page %}active{% endif %}">
-                                <a class="page-link" href="{{ url_for('firmalar.bilgi', id=firma.id, tab='kiralama', kiralama_page=pn, kiralama_per_page=kiralama_per_page, hareket_page=hareket_pagination.page, hareket_per_page=hareket_per_page, start_date=request.args.get('start_date') or (start_date.strftime('%Y-%m-%d') if start_date else ''), end_date=request.args.get('end_date') or (end_date.strftime('%Y-%m-%d') if end_date else '')) }}">{{ pn }}</a>
-                            </li>
-                            {% else %}
-                            <li class="page-item disabled"><span class="page-link">&hellip;</span></li>
-                            {% endif %}
-                        {% endfor %}
-                        <li class="page-item {% if not kiralama_pagination.has_next %}disabled{% endif %}">
-                            <a class="page-link" href="{{ url_for('firmalar.bilgi', id=firma.id, tab='kiralama', kiralama_page=kiralama_pagination.next_num, kiralama_per_page=kiralama_per_page, hareket_page=hareket_pagination.page, hareket_per_page=hareket_per_page, start_date=request.args.get('start_date') or (start_date.strftime('%Y-%m-%d') if start_date else ''), end_date=request.args.get('end_date') or (end_date.strftime('%Y-%m-%d') if end_date else '')) }}">&raquo;</a>
-                        </li>
-                    </ul>
-                    {% endif %}
-                </div>
+            <div class="card card-body shadow-sm"
+                 id="kiralamaListeRoot"
+                 data-fetch-url="{{ url_for('firmalar.bilgi_kiralama_listesi', id=firma.id) }}"
+                 data-bilgi-base-url="{{ url_for('firmalar.bilgi', id=firma.id) }}">
+                {% include 'firmalar/_bilgi_kiralama_fragment.html' %}
             </div>
         </div>
 
@@ -629,8 +700,35 @@
                                 <td class="text-end fw-bold">{{ "{:,.2f}".format(row.bakiye).replace(',','X').replace('.',',').replace('X','.') }}</td>
                             </tr>
                             {% else %}
-                            <tr><td colspan="13" class="text-center text-muted py-4">Kayıt bulunamadı.</td></tr>
+                            {% if not cari_goster_devreden_satiri %}
+                            <tr>
+                                <td colspan="13" class="text-center text-muted py-4">
+                                    {% if cari_donem_modu %}Dönem içinde hareket bulunamadı.{% else %}Kayıt bulunamadı.{% endif %}
+                                </td>
+                            </tr>
+                            {% endif %}
                             {% endfor %}
+                            {% if cari_goster_devreden_satiri and cari_devreden_bakiye is not none %}
+                            <tr class="table-secondary">
+                                <td colspan="10" class="text-end fw-bold text-muted small align-middle">
+                                    Devreden bakiye
+                                    {% if start_date %}
+                                        <span class="fw-normal">({{ start_date.strftime('%d.%m.%Y') }} öncesi)</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end text-danger fw-bold align-middle">
+                                    {% if cari_devreden_bakiye > 0 %}
+                                        {{ "{:,.2f}".format(cari_devreden_bakiye).replace(',','X').replace('.',',').replace('X','.') }}
+                                    {% else %}-{% endif %}
+                                </td>
+                                <td class="text-end text-success fw-bold align-middle">
+                                    {% if cari_devreden_bakiye < 0 %}
+                                        {{ "{:,.2f}".format(cari_devreden_bakiye | abs).replace(',','X').replace('.',',').replace('X','.') }}
+                                    {% else %}-{% endif %}
+                                </td>
+                                <td class="text-end fw-bold bg-light align-middle">{{ "{:,.2f}".format(cari_devreden_bakiye).replace(',','X').replace('.',',').replace('X','.') }}</td>
+                            </tr>
+                            {% endif %}
                         </tbody>
                     </table>
                 </div>
@@ -748,6 +846,12 @@
         if (name === 'kiralama') url.searchParams.set('kiralama_page', '1');
         if (name === 'cari') url.searchParams.set('cari_page', '1');
         history.replaceState(null, '', url.toString());
+        if (typeof syncDateFilterTabFromUrl === 'function') {
+            syncDateFilterTabFromUrl();
+        }
+        if (typeof syncFiltreIptalHref === 'function') {
+            syncFiltreIptalHref();
+        }
 
         // Yazdır butonunun tab parametresini güncelle
         const yazdirBtn = document.getElementById('yazdir-btn');

@@ -988,6 +988,9 @@ class KiralamaService(BaseService):
                 # ÖNEMLI: Tamamlanmış kalemler için sonlandirildi bayrağını koru
                 is_yeni = not aktif.id
                 orijinal_sonlandirildi = aktif.sonlandirildi if not is_yeni else False
+                is_kapatilmis_mevcut = (not is_yeni) and (bool(orijinal_sonlandirildi) or not bool(aktif.is_active))
+                if is_kapatilmis_mevcut:
+                    bas, bit = aktif.kiralama_baslangici, aktif.kiralama_bitis
 
                 aktif.kiralama_baslangici, aktif.kiralama_bitis = bas, bit
                 aktif.kiralama_brm_fiyat = to_decimal(k_data.get('kiralama_brm_fiyat'))
@@ -1012,6 +1015,21 @@ class KiralamaService(BaseService):
                 hesaplanan_tutar = cls._hesapla_kalem_satis_tutari(bas, bit, aktif.kiralama_brm_fiyat, aktif.nakliye_satis_fiyat)
                 logger.info(f"[UPDATE-TUTAR-DOGRULAMA] Kalem ID={aktif.id}, Gün={gun}, Günlük Fiyat={aktif.kiralama_brm_fiyat}, Nakliye={aktif.nakliye_satis_fiyat}, Hesaplanan Toplam={hesaplanan_tutar}")
                 
+                if is_kapatilmis_mevcut:
+                    k_data['dis_tedarik_ekipman'] = 1 if aktif.is_dis_tedarik_ekipman else 0
+                    k_data['ekipman_id'] = aktif.ekipman_id or 0
+                    k_data['harici_ekipman_tedarikci_id'] = aktif.harici_ekipman_tedarikci_id or 0
+                    k_data['harici_ekipman_tipi'] = aktif.harici_ekipman_tipi
+                    k_data['harici_ekipman_marka'] = aktif.harici_ekipman_marka
+                    k_data['harici_ekipman_model'] = aktif.harici_ekipman_model
+                    k_data['harici_ekipman_seri_no'] = aktif.harici_ekipman_seri_no
+                    k_data['harici_ekipman_kaldirma_kapasitesi'] = aktif.harici_ekipman_kapasite
+                    k_data['harici_ekipman_calisma_yuksekligi'] = aktif.harici_ekipman_yukseklik
+                    k_data['harici_ekipman_uretim_tarihi'] = aktif.harici_ekipman_uretim_yili
+                    k_data['dis_tedarik_nakliye'] = 1 if aktif.is_harici_nakliye else 0
+                    k_data['nakliye_tedarikci_id'] = aktif.nakliye_tedarikci_id or 0
+                    k_data['nakliye_araci_id'] = aktif.nakliye_araci_id or 0
+
                 # Ekipman Durumu
                 is_dis = int(k_data.get('dis_tedarik_ekipman') or 0) == 1
                 makine_adi = "Makine"
@@ -1024,8 +1042,10 @@ class KiralamaService(BaseService):
                             if eski: eski.calisma_durumu = 'bosta'
                         aktif.ekipman_id, aktif.is_dis_tedarik_ekipman = y_eid, False
                         ekip = db.session.get(Ekipman, y_eid)
-                        if ekip: 
-                            ekip.calisma_durumu, makine_adi = 'kirada', ekip.kod
+                        if ekip:
+                            makine_adi = ekip.kod
+                            if not is_kapatilmis_mevcut:
+                                ekip.calisma_durumu = 'kirada'
                 else:
                     if aktif.ekipman_id:
                         eski = db.session.get(Ekipman, aktif.ekipman_id)

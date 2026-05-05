@@ -1,11 +1,12 @@
 import traceback
 import threading
 import json
+from decimal import Decimal, InvalidOperation
 from datetime import datetime, date, timedelta, timezone
 from urllib.parse import urlsplit
 from flask import render_template, redirect, url_for, flash, request, current_app, jsonify
 from flask_login import current_user, login_required
-from sqlalchemy import or_
+from sqlalchemy import or_, func
 from sqlalchemy.orm import joinedload
 
 from app import db
@@ -660,6 +661,8 @@ def duzenle(kiralama_id):
             k_form.kiralama_alis_kdv.data = kalem.kiralama_alis_kdv
             k_form.nakliye_alis_kdv.data = kalem.nakliye_alis_kdv
             k_form.nakliye_satis_kdv.data = kalem.nakliye_satis_kdv
+            k_form.nakliye_alis_tevkifat_oran.data = kalem.nakliye_alis_tevkifat_oran
+            k_form.nakliye_satis_tevkifat_oran.data = kalem.nakliye_satis_tevkifat_oran
             k_form.dis_tedarik_nakliye.data = 1 if getattr(kalem, 'is_harici_nakliye', False) else 0
             k_form.nakliye_satis_fiyat.data = kalem.nakliye_satis_fiyat
             k_form.donus_nakliye_fatura_et.data = 1 if getattr(kalem, 'donus_nakliye_fatura_et', False) else 0
@@ -721,8 +724,65 @@ def duzenle(kiralama_id):
                 'doviz_kuru_eur': getattr(form, 'doviz_kuru_eur', form.doviz_kuru_usd).data
             }
             kalemler_data = [k_form.data for k_form in form.kalemler]
+            finansal_duzeltme_sayisi = 0
+
+            def _money_equal(a, b):
+                try:
+                    left = Decimal(str(a or 0)).quantize(Decimal('0.01'))
+                    right = Decimal(str(b or 0)).quantize(Decimal('0.01'))
+                    return left == right
+                except (InvalidOperation, ValueError, TypeError):
+                    return str(a or '') == str(b or '')
+
+            def _int_equal(a, b):
+                try:
+                    left = None if a in (None, '') else int(a)
+                    right = None if b in (None, '') else int(b)
+                    return left == right
+                except (TypeError, ValueError):
+                    return str(a or '') == str(b or '')
+
+            def _bool_from_form(value):
+                try:
+                    return bool(int(value or 0))
+                except (TypeError, ValueError):
+                    return str(value).lower() in ('true', 'on', 'yes')
+
+            for k_data in kalemler_data:
+                try:
+                    kalem_id = int(k_data.get('id') or 0)
+                except (TypeError, ValueError):
+                    continue
+                if kalem_id <= 0:
+                    continue
+                mevcut_kalem = db.session.get(KiralamaKalemi, kalem_id)
+                if not mevcut_kalem or (not mevcut_kalem.sonlandirildi and mevcut_kalem.is_active):
+                    continue
+
+                finansal_degisti = (
+                    not _money_equal(k_data.get('kiralama_brm_fiyat'), mevcut_kalem.kiralama_brm_fiyat)
+                    or not _money_equal(k_data.get('kiralama_alis_fiyat'), mevcut_kalem.kiralama_alis_fiyat)
+                    or not _money_equal(k_data.get('nakliye_satis_fiyat'), mevcut_kalem.nakliye_satis_fiyat)
+                    or not _money_equal(k_data.get('nakliye_alis_fiyat'), mevcut_kalem.nakliye_alis_fiyat)
+                    or not _int_equal(k_data.get('kiralama_alis_kdv'), mevcut_kalem.kiralama_alis_kdv)
+                    or not _int_equal(k_data.get('nakliye_alis_kdv'), mevcut_kalem.nakliye_alis_kdv)
+                    or not _int_equal(k_data.get('nakliye_satis_kdv'), mevcut_kalem.nakliye_satis_kdv)
+                    or _bool_from_form(k_data.get('donus_nakliye_fatura_et')) != bool(mevcut_kalem.donus_nakliye_fatura_et)
+                    or (k_data.get('nakliye_alis_tevkifat_oran') or None) != mevcut_kalem.nakliye_alis_tevkifat_oran
+                    or (k_data.get('nakliye_satis_tevkifat_oran') or None) != mevcut_kalem.nakliye_satis_tevkifat_oran
+                )
+                if finansal_degisti:
+                    finansal_duzeltme_sayisi += 1
+
+            if finansal_duzeltme_sayisi:
+                financial_password = request.form.get('financial_edit_password') or ''
+                if not financial_password or not current_user.check_password(financial_password):
+                    raise ValidationError("Kapatılmış kalemde finansal düzeltme için kullanıcı şifresi doğrulanmalıdır.")
 
             KiralamaService.update_kiralama_with_relations(kiralama.id, kiralama_data, kalemler_data, actor_id=actor_id)
+            log_description = f"Kiralama güncellendi: {kiralama.kiralama_form_no}"
+            if finansal_duzeltme_sayisi:
+                log_description += f" | Şifre doğrulamalı finansal düzeltme: {finansal_duzeltme_sayisi} kapatılmış kalem"
             OperationLogService.log(
                 module='kiralama',
                 action='update',
@@ -730,7 +790,7 @@ def duzenle(kiralama_id):
                 username=getattr(current_user, 'username', None),
                 entity_type='Kiralama',
                 entity_id=kiralama.id,
-                description=f"Kiralama güncellendi: {kiralama.kiralama_form_no}",
+                description=log_description,
                 success=True,
             )
             # İleri tarihli kalem uyarısı
@@ -1062,15 +1122,16 @@ def iptal_et_kalem():
 @kiralama_bp.route('/api/ekipman-filtrele')
 def api_ekipman_filtrele():
     try:
-        # Sadece bizim olan (Tedarikçi olmayan), aktif ve boşta olan makineler
-        query = Ekipman.query.filter_by(is_active=True, firma_tedarikci_id=None, calisma_durumu='bosta')
+        # Ortak temel: sadece bizim olan (tedarikçi olmayan) aktif makineler
+        query = Ekipman.query.filter_by(is_active=True, firma_tedarikci_id=None)
         
         # Filtreleri yakala
         sube_id = request.args.get('sube_id', type=int)
-        tip = request.args.get('tip')
-        marka = request.args.get('marka')
-        enerji = request.args.get('enerji')
+        tip = (request.args.get('tip') or '').strip()
+        marka = (request.args.get('marka') or '').strip()
+        enerji = (request.args.get('enerji') or '').strip()
         ortam = request.args.get('ortam')
+        sadece_bosta = str(request.args.get('sadece_bosta', '1')).lower() in ('1', 'true', 'yes', 'on')
         
         y_min = request.args.get('y_min', type=float)
         y_max = request.args.get('y_max', type=float)
@@ -1083,11 +1144,22 @@ def api_ekipman_filtrele():
         
         # Sorguları uygula
         if sube_id: query = query.filter(Ekipman.sube_id == sube_id)
-        if tip: query = query.filter(Ekipman.tipi == tip)
-        if marka: query = query.filter(Ekipman.marka == marka)
-        if enerji: query = query.filter(Ekipman.yakit == enerji)
-        if ortam == 'ic': query = query.filter(Ekipman.ic_mekan_uygun == True)
+        if tip:
+            query = query.filter(tr_ilike(Ekipman.tipi, tip))
+        if marka:
+            # Marka verileri eski kayıtlarda farklı büyük/küçük harf veya baş/son boşlukla gelebiliyor.
+            marka_normalized = " ".join(marka.split())
+            query = query.filter(tr_ilike(func.trim(Ekipman.marka), f"%{marka_normalized}%"))
+        if enerji:
+            query = query.filter(tr_ilike(Ekipman.yakit, enerji))
+        if ortam == 'ic':
+            query = query.filter(Ekipman.ic_mekan_uygun == True)
+        elif ortam == 'dis':
+            query = query.filter(Ekipman.ic_mekan_uygun == False)
         
+        if sadece_bosta:
+            query = query.filter(Ekipman.calisma_durumu == 'bosta')
+
         if y_min: query = query.filter(Ekipman.calisma_yuksekligi >= y_min)
         if y_max: query = query.filter(Ekipman.calisma_yuksekligi <= y_max)
         if k_min: query = query.filter(Ekipman.kaldirma_kapasitesi >= k_min)
@@ -1146,5 +1218,3 @@ def api_kurlari_guncelle():
             },
             'son_guncelleme': son.strftime('%d.%m.%Y %H:%M:%S') if son else 'Henüz güncellenmedi',
         }), 500
-
-

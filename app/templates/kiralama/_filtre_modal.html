@@ -135,13 +135,15 @@
 (function() {
     const filterModalEl = document.getElementById('filterModal');
     const applyBtn = document.getElementById('f-apply');
-    const countBadge = document.getElementById('f-count');
     const targetSelectId = "{{ g_ekipman_id|default('g-ekipman') }}";
     const mainSelect = document.getElementById(targetSelectId);
     const redirectUrl = "{{ filtre_redirect_url|default('') }}";
+    const getCountBadge = () => document.getElementById('f-count');
+    const sadeceBosta = !!mainSelect;
 
     function collectParams() {
         const params = new URLSearchParams();
+        params.append('sadece_bosta', sadeceBosta ? '1' : '0');
         const fields = {
             'sube_id': 'f-sube', 
             'tip': 'f-tip', 
@@ -165,6 +167,8 @@
     const API_URL = "{{ url_for('kiralama.api_ekipman_filtrele') }}";
 
     async function updateLiveCount() {
+        const countBadge = getCountBadge();
+        if (!countBadge || !applyBtn) return;
         countBadge.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
         try {
             const res = await fetch(`${API_URL}?${collectParams()}`);
@@ -172,7 +176,9 @@
             const json = await res.json();
             if(json.success) {
                 countBadge.innerText = json.count;
-                applyBtn.disabled = (json.count === 0 && collectParams().toString() !== "");
+                // Seçim kutusu olan ekranlarda (kiralama/değişim) 0 sonuçta buton pasif olabilir.
+                // Redirect tabanlı ekranlarda (örn: filo.index) buton her zaman aktif kalmalı.
+                applyBtn.disabled = !!mainSelect && (json.count === 0 && collectParams().toString() !== "");
             } else {
                 countBadge.innerText = "!";
                 console.error("Filtreleme Backend Hatası:", json.error || json.message);

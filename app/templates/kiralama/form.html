@@ -25,6 +25,7 @@
 <div class="container">
     <form method="POST" id="kiralama-form">
         {{ form.hidden_tag() }}
+        <input type="hidden" name="financial_edit_password" id="financial-edit-password" value="">
         {% if is_edit and return_url %}
         <input type="hidden" name="return_url" value="{{ return_url }}">
         {% endif %}
@@ -387,6 +388,27 @@
     </form>
 </div>
 
+<div class="modal fade" id="financialEditPasswordModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-warning-subtle">
+                <h5 class="modal-title fw-bold">Finansal Düzenleme Onayı</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small mb-3">Kapatılmış kalemde sadece fiyat ve KDV alanları değiştirilebilir.</p>
+                <label for="financial-edit-password-input">Kullanıcı şifreniz</label>
+                <input type="password" id="financial-edit-password-input" class="form-control" autocomplete="current-password">
+                <div class="invalid-feedback d-block hidden" id="financial-edit-password-error">Şifre girilmelidir.</div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Vazgeç</button>
+                <button type="button" class="btn btn-warning fw-bold" id="financial-edit-password-confirm">Onayla</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% include 'kiralama/_filtre_modal.html' %}
 <script id="ekipman-sube-map" type="application/json">{{ ekipman_sube_map|default({}, true)|tojson|safe }}</script>
 <script id="ekipman-map" type="application/json">{{ ekipman_map_json|default('{}', true)|safe }}</script>
@@ -449,6 +471,8 @@ document.querySelectorAll('.hizli-sure-btn').forEach(function(btn) {
 
 let indexCounter = IS_EDIT ? parseInt(document.getElementById('hidden-kalemler')?.dataset.initialCount || '0', 10) : 0;
 let editingIdx = null;
+let editingClosedFinancial = false;
+let pendingFinancialEditIdx = null;
 
 const tbody = document.querySelector('#kalem-tablosu tbody');
 const hiddenContainer = document.getElementById('hidden-kalemler');
@@ -461,10 +485,42 @@ const g_btn_ekle = document.getElementById('satir-ekle');
 const g_btn_vazgec = document.getElementById('duzenle-vazgec');
 const genelToplamEl = document.getElementById('genel-toplam');
 const infoDiv = document.getElementById('live-calc-info');
+const financialPasswordInput = document.getElementById('financial-edit-password');
+const financialPasswordModalEl = document.getElementById('financialEditPasswordModal');
+let financialPasswordModal = null;
+const financialPasswordField = document.getElementById('financial-edit-password-input');
+const financialPasswordError = document.getElementById('financial-edit-password-error');
+const financialPasswordConfirm = document.getElementById('financial-edit-password-confirm');
 const ekipmanSubeMap = JSON.parse(document.getElementById('ekipman-sube-map')?.textContent || '{}');
 
 const val = id => document.getElementById(id) ? document.getElementById(id).value : "";
 const setVal = (id, v) => { if (document.getElementById(id)) document.getElementById(id).value = v; };
+
+const CLOSED_OPERATIONAL_FIELD_IDS = [
+    'g-baslangic', 'g-bitis', 'g-ekipman', 'g-filter-btn', 'g-dis-ekipman',
+    'g-harici-tedarikci', 'g-harici-marka', 'g-harici-model', 'g-harici-seri',
+    'g-harici-tip', 'g-harici-yukseklik', 'g-harici-kapasite', 'g-harici-yil',
+    'g-dis-nakliye', 'g-nakliye-tedarikci', 'g-ozmal-nakliye-araci'
+];
+
+function getFinancialPasswordModal() {
+    if (!financialPasswordModal && financialPasswordModalEl && window.bootstrap) {
+        financialPasswordModal = new bootstrap.Modal(financialPasswordModalEl);
+    }
+    return financialPasswordModal;
+}
+
+function setClosedFinancialMode(enabled) {
+    editingClosedFinancial = enabled;
+    CLOSED_OPERATIONAL_FIELD_IDS.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.disabled = enabled;
+    });
+    document.querySelectorAll('.hizli-sure-btn').forEach(btn => btn.disabled = enabled);
+    if (enabled && infoDiv) {
+        infoDiv.innerHTML = '<i class="fas fa-lock me-2"></i>Kapatılmış kalemde sadece fiyat ve KDV alanları düzenlenebilir.';
+    }
+}
 
 function hesaplaGun(bas, bit) {
     if (!bas || !bit) return 1;
@@ -579,6 +635,7 @@ document.getElementById('nakliye-alis-tevkifat-toggle').addEventListener('change
 // PANEL TEMİZLE
 function resetEntryPanel() {
     editingIdx = null;
+    setClosedFinancialMode(false);
     g_btn_ekle.innerHTML = '<i class="fas fa-plus-circle me-2"></i>' + (IS_EDIT ? 'Kalem Güncelle / Ekle' : 'Listeye Ekle');
     g_btn_ekle.className = "btn btn-success btn-lg px-5 shadow-sm";
     g_btn_vazgec.classList.add('hidden');
@@ -693,10 +750,12 @@ function renderTable() {
 
         const sonlandirildiInput = group.querySelector('[name$="-sonlandirildi"]');
         const isSonlandirildi = sonlandirildiInput ? sonlandirildiInput.value === '1' : false;
-        const duzenleBtn = isSonlandirildi
-            ? `<button type="button" class="btn btn-sm btn-outline-secondary" disabled title="Tamamlanmış kalemler düzenlenemez"><i class="fas fa-edit opacity-50"></i></button>`
+        const isActive = isTruthyFlag(group.querySelector('[name$="-is_active"]')?.value || '1');
+        const finansalDuzeltilebilir = isSonlandirildi || !isActive;
+        const duzenleBtn = finansalDuzeltilebilir
+            ? `<button type="button" class="btn btn-sm btn-warning fw-bold duzenle-btn" data-idx="${idx}" title="Finansal düzenleme"><i class="fas fa-edit me-1"></i>Finansal Düzenle</button>`
             : `<button type="button" class="btn btn-sm btn-outline-info duzenle-btn" data-idx="${idx}"><i class="fas fa-edit"></i></button>`;
-        const silBtn = isSonlandirildi
+        const silBtn = finansalDuzeltilebilir
             ? `<button type="button" class="btn btn-sm btn-outline-secondary" disabled title="Tamamlanmış kalemler silinemez"><i class="fas fa-trash opacity-50"></i></button>`
             : `<button type="button" class="btn btn-sm btn-outline-danger sil-btn" data-idx="${idx}"><i class="fas fa-trash"></i></button>`;
 
@@ -761,11 +820,12 @@ g_btn_ekle.onclick = function() {
     let isSonlandirildiExisting = false;
     if (IS_EDIT && editingIdx !== null) {
         const existingGroup = hiddenContainer.querySelectorAll('.kalem-group')[editingIdx];
-        isSonlandirildiExisting = existingGroup?.querySelector('[name$="-sonlandirildi"]')?.value === '1';
+        isSonlandirildiExisting = existingGroup?.querySelector('[name$="-sonlandirildi"]')?.value === '1'
+            || !isTruthyFlag(existingGroup?.querySelector('[name$="-is_active"]')?.value || '1');
     }
 
     const duzenleBtn = isSonlandirildiExisting
-        ? `<button type="button" class="btn btn-sm btn-outline-secondary" disabled title="Tamamlanmış kalemler düzenlenemez"><i class="fas fa-edit opacity-50"></i></button>`
+        ? `<button type="button" class="btn btn-sm btn-warning fw-bold duzenle-btn" title="Finansal düzenleme"><i class="fas fa-edit me-1"></i>Finansal Düzenle</button>`
         : `<button type="button" class="btn btn-sm btn-outline-info duzenle-btn"><i class="fas fa-edit"></i></button>`;
     const silBtn = isSonlandirildiExisting
         ? `<button type="button" class="btn btn-sm btn-outline-secondary" disabled title="Tamamlanmış kalemler silinemez"><i class="fas fa-trash opacity-50"></i></button>`
@@ -792,31 +852,39 @@ g_btn_ekle.onclick = function() {
         };
         tr.dataset.toplam = toplam;
         tr.innerHTML = satirHTML;
-        setField('dis_tedarik_ekipman', isDis ? 1 : 0);
-        setField('ekipman_id', isDis ? 0 : g_ekipman.value);
-        setField('harici_ekipman_tedarikci_id', val('g-harici-tedarikci'));
-        setField('harici_ekipman_seri_no', val('g-harici-seri'));
-        setField('harici_ekipman_marka', val('g-harici-marka'));
-        setField('harici_ekipman_model', val('g-harici-model'));
-        setField('harici_ekipman_tipi', val('g-harici-tip'));
-        setField('harici_ekipman_calisma_yuksekligi', val('g-harici-yukseklik'));
-        setField('harici_ekipman_kaldirma_kapasitesi', val('g-harici-kapasite'));
-        setField('harici_ekipman_uretim_tarihi', val('g-harici-yil'));
+        if (!editingClosedFinancial) {
+            setField('dis_tedarik_ekipman', isDis ? 1 : 0);
+            setField('ekipman_id', isDis ? 0 : g_ekipman.value);
+            setField('harici_ekipman_tedarikci_id', val('g-harici-tedarikci'));
+            setField('harici_ekipman_seri_no', val('g-harici-seri'));
+            setField('harici_ekipman_marka', val('g-harici-marka'));
+            setField('harici_ekipman_model', val('g-harici-model'));
+            setField('harici_ekipman_tipi', val('g-harici-tip'));
+            setField('harici_ekipman_calisma_yuksekligi', val('g-harici-yukseklik'));
+            setField('harici_ekipman_kaldirma_kapasitesi', val('g-harici-kapasite'));
+            setField('harici_ekipman_uretim_tarihi', val('g-harici-yil'));
+        }
         setField('kiralama_alis_fiyat', val('g-alis-fiyat'));
         setField('kiralama_alis_kdv', val('g-alis-kdv'));
-        setField('dis_tedarik_nakliye', isDisNak ? 1 : 0);
-        setField('nakliye_tedarikci_id', val('g-nakliye-tedarikci'));
+        if (!editingClosedFinancial) {
+            setField('dis_tedarik_nakliye', isDisNak ? 1 : 0);
+            setField('nakliye_tedarikci_id', val('g-nakliye-tedarikci'));
+        }
         setField('nakliye_alis_fiyat', val('g-nakliye-alis'));
         setField('nakliye_alis_kdv', val('g-nakliye-alis-kdv'));
         setField('nakliye_satis_kdv', val('g-nakliye-kdv'));
         setField('nakliye_alis_tevkifat_oran', nakAlisTevkifatVal);
         setField('nakliye_satis_tevkifat_oran', nakSatisTevkifatVal);
-        setField('kiralama_baslangici', bas);
-        setField('kiralama_bitis', bit);
+        if (!editingClosedFinancial) {
+            setField('kiralama_baslangici', bas);
+            setField('kiralama_bitis', bit);
+        }
         setField('kiralama_brm_fiyat', sFiyat);
         setField('nakliye_satis_fiyat', nToplam);
         setField('donus_nakliye_fatura_et', donusFatura ? 1 : 0);
-        setField('nakliye_araci_id', isDisNak ? 0 : g_ozmal_nakliye.value);
+        if (!editingClosedFinancial) {
+            setField('nakliye_araci_id', isDisNak ? 0 : g_ozmal_nakliye.value);
+        }
     } else {
         if (IS_EDIT) {
             const group = yeniGizliGrupOlustur(indexCounter);
@@ -903,6 +971,17 @@ tbody.onclick = function(e) {
     if (btn.classList.contains('duzenle-btn')) {
         editingIdx = idx;
         const group = hiddenContainer.querySelectorAll('.kalem-group')[idx];
+        const isClosedFinancial = isTruthyFlag(group?.querySelector('[name$="-sonlandirildi"]')?.value || '0')
+            || !isTruthyFlag(group?.querySelector('[name$="-is_active"]')?.value || '1');
+        if (IS_EDIT && isClosedFinancial && !financialPasswordInput.value) {
+            pendingFinancialEditIdx = idx;
+            editingIdx = null;
+            if (financialPasswordField) financialPasswordField.value = '';
+            if (financialPasswordError) financialPasswordError.classList.add('hidden');
+            const modal = getFinancialPasswordModal();
+            if (modal) modal.show();
+            return;
+        }
         refreshMakineListesi();
 
         setVal('g-baslangic', group.querySelector('[name$="-kiralama_baslangici"]').value);
@@ -965,6 +1044,7 @@ tbody.onclick = function(e) {
             g_btn_ekle.className = "btn btn-info btn-lg px-5 shadow-sm text-white";
             g_btn_vazgec.classList.remove('hidden');
             if (document.getElementById('submit-btn')) document.getElementById('submit-btn').disabled = true;
+            setClosedFinancialMode(isClosedFinancial);
         } else {
             tbody.querySelectorAll('tr').forEach(tr => tr.classList.remove('table-warning', 'passive-area'));
             tbody.querySelectorAll('tr')[idx].classList.add('table-warning', 'passive-area');
@@ -981,6 +1061,25 @@ tbody.onclick = function(e) {
         if (IS_EDIT) renderTable(); else { tbody.querySelectorAll('tr')[idx]?.remove(); updateSystem(); }
     }
 };
+
+if (financialPasswordConfirm) {
+    financialPasswordConfirm.onclick = function() {
+        const password = financialPasswordField ? financialPasswordField.value : '';
+        if (!password) {
+            if (financialPasswordError) financialPasswordError.classList.remove('hidden');
+            return;
+        }
+        financialPasswordInput.value = password;
+        const modal = getFinancialPasswordModal();
+        if (modal) modal.hide();
+        const idx = pendingFinancialEditIdx;
+        pendingFinancialEditIdx = null;
+        if (idx !== null) {
+            const btn = tbody.querySelector(`.duzenle-btn[data-idx="${idx}"]`);
+            if (btn) btn.click();
+        }
+    };
+}
 
 // FORM GÖNDERİMİ
 document.getElementById('kiralama-form').onsubmit = function(e) {

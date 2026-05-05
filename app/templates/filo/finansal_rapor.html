@@ -93,11 +93,10 @@
 
 {% block content %}
 <div class="rapor-container">
-    {% set yilin_ilk_gunu = end_date.replace(month=1, day=1) if end_date else None %}
-    {% set ytd_toplam_gun = ((end_date - yilin_ilk_gunu).days + 1) if (end_date and yilin_ilk_gunu) else 0 %}
-    {% set ytd_calisilan_gun = ozet.kiralama_istatistikleri.toplam_gun_sayisi if (ytd_toplam_gun > 0 and ozet.kiralama_istatistikleri.toplam_gun_sayisi < ytd_toplam_gun) else ytd_toplam_gun %}
-    {% set ytd_bos_gun = (ytd_toplam_gun - ytd_calisilan_gun) if ytd_toplam_gun > 0 else 0 %}
-    {% set ytd_calisma_orani = ((ytd_calisilan_gun / ytd_toplam_gun) * 100) if ytd_toplam_gun > 0 else 0 %}
+    {% set donem_toplam_gun = ((end_date - start_date).days + 1) if (start_date and end_date and end_date >= start_date) else 0 %}
+    {% set donem_calisilan_gun = ozet.kiralama_istatistikleri.toplam_gun_sayisi if (donem_toplam_gun > 0 and ozet.kiralama_istatistikleri.toplam_gun_sayisi < donem_toplam_gun) else donem_toplam_gun %}
+    {% set donem_bos_gun = (donem_toplam_gun - donem_calisilan_gun) if donem_toplam_gun > 0 else 0 %}
+    {% set donem_calisma_orani = ((donem_calisilan_gun / donem_toplam_gun) * 100) if donem_toplam_gun > 0 else 0 %}
     {% set roi_orijinal_yuzde = ((ozet.net_gelir_orijinal / ozet.giris_maliyeti_orijinal) * 100) if ozet.giris_maliyeti_orijinal > 0 else 0 %}
 
     <!-- BAŞLIK -->
@@ -127,7 +126,8 @@
             <button id="submitRaporBtn" type="submit"><i class="fas fa-sync me-2"></i>Raporu Güncelle</button>
         </form>
         <div class="hizli-araliklar" aria-label="Hızlı tarih aralığı">
-            <button type="button" class="hizli-aralik-btn" data-days="30">Son 30 Gün</button>
+            <button type="button" class="hizli-aralik-btn" data-range="gecen-ay">Geçen Ay</button>
+            <button type="button" class="hizli-aralik-btn" data-range="bu-ay">Bu Ay</button>
             <button type="button" class="hizli-aralik-btn" data-days="90">Son 90 Gün</button>
             <button type="button" class="hizli-aralik-btn" data-days="365">Son 1 Yıl</button>
             <button type="button" class="hizli-aralik-btn" data-ytd="1">Yılbaşından Bugüne</button>
@@ -240,18 +240,18 @@
 
         <!-- Çalışma Oranı -->
         <div class="kart durum">
-            <div class="kart-etiket"><i class="fas fa-calendar-check me-2"></i>Yılbaşından Bu Yana Çalışma</div>
+            <div class="kart-etiket"><i class="fas fa-calendar-check me-2"></i>Seçili Dönem Çalışma</div>
             <div class="kart-deger">
-                <span class="durum-badge {% if ytd_calisma_orani >= 70 %}durum-oldu{% elif ytd_calisma_orani >= 40 %}durum-calisma{% else %}durum-engel{% endif %}">
-                    {{ "%.1f"|format(ytd_calisma_orani) }}% Çalışma
+                <span class="durum-badge {% if donem_calisma_orani >= 70 %}durum-oldu{% elif donem_calisma_orani >= 40 %}durum-calisma{% else %}durum-engel{% endif %}">
+                    {{ "%.1f"|format(donem_calisma_orani) }}% Çalışma
                 </span>
             </div>
             <div class="kart-detay">
-                <strong>Çalışılan Gün:</strong> {{ ytd_calisilan_gun }}<br>
-                <strong>Toplam Gün:</strong> {{ ytd_toplam_gun }}<br>
-                {% if ytd_calisma_orani >= 70 %}
+                <strong>Çalışılan Gün:</strong> {{ donem_calisilan_gun }}<br>
+                <strong>Toplam Takvim Günü:</strong> {{ donem_toplam_gun }}<br>
+                {% if donem_calisma_orani >= 70 %}
                     🟢 Makine kullanım oranı güçlü seviyede.
-                {% elif ytd_calisma_orani >= 40 %}
+                {% elif donem_calisma_orani >= 40 %}
                     🟡 Kullanım oranı orta seviyede, artırılabilir.
                 {% else %}
                     🔴 Kullanım oranı düşük, planlama gözden geçirilmeli.
@@ -348,17 +348,28 @@
             btn.addEventListener('click', () => {
                 const today = new Date();
                 let startDate = new Date(today);
+                let endDate = new Date(today);
 
-                if (btn.dataset.ytd === '1') {
+                if (btn.dataset.range === 'gecen-ay') {
+                    startDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+                    endDate = new Date(today.getFullYear(), today.getMonth(), 0);
+                } else if (btn.dataset.range === 'bu-ay') {
+                    startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+                } else if (btn.dataset.ytd === '1') {
                     startDate = new Date(today.getFullYear(), 0, 1);
                 } else {
-                    const days = Number(btn.dataset.days || 30);
+                    const days = Number(btn.dataset.days || 90);
                     startDate.setDate(startDate.getDate() - days);
                 }
 
                 startInput.value = toISODate(startDate);
-                endInput.value = toISODate(today);
+                endInput.value = toISODate(endDate);
                 syncDateLimits();
+                if (form.requestSubmit) {
+                    form.requestSubmit();
+                } else {
+                    form.submit();
+                }
             });
         });
 

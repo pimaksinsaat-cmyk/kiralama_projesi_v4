@@ -1,0 +1,139 @@
+{# Kiralamalar sekmesi içeriği — tam sayfa ile parça endpoint ortak kullanım.
+   kiralama_duzenle_next: düzenle sayfası "geri" bağlantısı (tam bilgi URL’si kullanın)
+   bilgi_sd_input / bilgi_ed_input: gizli alanlar + sayfa linkleri
+   hareket_ph_page, hareket_ph_per_page, cari_ph_page, cari_ph_per_page: diğer sekmelerin sayfasını korumak için
+#}
+                {% if kiralama_tarih_filtre_aktif %}
+                <div class="alert alert-light border small py-2 mb-3 mb-md-2" role="status">
+                    <i class="fa fa-filter text-secondary me-1"></i>
+                    Liste <strong>tarih filtresine</strong> göre süzülüyor (form tarihi veya ilk kalem başlangıcı / kayıt tarihi: {{ kiralama_filt_baslangic.strftime('%d.%m.%Y') if kiralama_filt_baslangic else '—' }} – {{ kiralama_filt_bitis.strftime('%d.%m.%Y') if kiralama_filt_bitis else '—' }}).
+                </div>
+                {% endif %}
+                 <div class="table-responsive">
+                     <table class="table table-hover align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 5%;">#</th>
+                                <th style="width: 15%;">Form No</th>
+                                <th style="width: 35%;">Ekipmanlar</th>
+                                <th style="width: 25%;">Durumları</th>
+                                <th style="width: 20%;">Genel Durum</th>
+                                <th class="text-end" style="width: 10%;">İşlem</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% set start = (kiralama_pagination.page - 1) * kiralama_pagination.per_page %}
+                            {% for kiralama in kiralamalar_sayfa %}
+                            <tr>
+                                <td>{{ start + loop.index }}</td>
+                                <td>
+                                    <a href="{{ url_for('kiralama.duzenle', kiralama_id=kiralama.id, next=kiralama_duzenle_next or request.url) }}">
+                                        <strong>{{ kiralama.kiralama_form_no or 'No Belirtilmemiş' }}</strong>
+                                    </a>
+                                </td>
+                                <td>
+                                    <ul class="list-unstyled mb-0 small">
+                                        {% for kalem in kiralama.kalemler %}
+                                        {% set ekipman_adi = (((kalem.ekipman.marka or '') ~ ' - ' ~ (kalem.ekipman.model or '')) | trim(' -')) if kalem.ekipman else (((kalem.harici_ekipman_marka or '') ~ ' - ' ~ (kalem.harici_ekipman_model or '')) | trim(' -')) %}
+                                        <li class="mb-3">
+                                            {% if kalem.ekipman and kalem.ekipman.kod %}
+                                                <small class="text-muted fw-bold">({{ kalem.ekipman.kod }})</small>
+                                            {% elif kalem.is_dis_tedarik_ekipman %}
+                                                <small class="text-muted">(Dış Tedarik)</small>
+                                            {% endif %}
+                                            <span class="fw-bold text-dark">{{ ekipman_adi or (kalem.ekipman.tipi if kalem.ekipman else 'Ekipman bilgisi yok') }}</span>
+                                            {% if kalem.is_dis_tedarik_ekipman and kalem.harici_tedarikci %}
+                                                <br><small class="text-muted">Tedarikçi: {{ kalem.harici_tedarikci.firma_adi | truncate_name }}</small>
+                                            {% endif %}
+                                        </li>
+                                        {% endfor %}
+                                    </ul>
+                                </td>
+                                <td>
+                                    <ul class="list-unstyled mb-0 small">
+                                        {% for kalem in kiralama.kalemler %}
+                                        <li class="mb-3">
+                                            {% if kalem.sonlandirildi %}
+                                                <span class="badge bg-secondary" style="min-width: 65px; opacity: 0.85;">Bitti</span>
+                                                <br><small class="text-muted">
+                                                    {{ kalem.kiralama_baslangici.strftime('%d.%m.%Y') }} - {{ kalem.kiralama_bitis.strftime('%d.%m.%Y') }}
+                                                </small>
+                                            {% else %}
+                                                <span class="badge bg-success" style="min-width: 65px;">Aktif</span>
+                                                <br><small class="text-primary fw-bold">
+                                                    {{ kalem.kiralama_baslangici.strftime('%d.%m.%Y') }} tarihinden beri sahada
+                                                </small>
+                                            {% endif %}
+                                        </li>
+                                        {% endfor %}
+                                    </ul>
+                                </td>
+                                <td>
+                                    {% set toplam = kiralama.kalemler | length %}
+                                    {% set biten = kiralama.kalemler | selectattr('sonlandirildi', 'equalto', true) | list | length %}
+                                   
+                                    {% if biten == 0 %}
+                                        <span class="text-success fw-bold"><i class="fa fa-play-circle"></i> Tamamı Sahada</span>
+                                    {% elif biten == toplam %}
+                                        <span class="text-secondary"><i class="fa fa-check-double"></i> Sözleşme Kapandı</span>
+                                    {% else %}
+                                        <span class="text-warning fw-bold">
+                                            <i class="fa fa-exclamation-circle"></i> Parçalı Teslimat
+                                            <br><small class="text-muted">({{ biten }}/{{ toplam }} makine döndü)</small>
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                
+                                <td class="text-end">
+                                    <a href="{{ url_for('kiralama.duzenle', kiralama_id=kiralama.id, next=kiralama_duzenle_next or request.url) }}" class="btn btn-sm btn-outline-primary">
+                                        <i class="fa fa-search"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                            {% if not kiralamalar_sayfa %}
+                            <tr><td colspan="6" class="text-center text-muted py-4">Kayıt bulunamadı.</td></tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
+                    <form method="GET" action="{{ url_for('firmalar.bilgi_kiralama_listesi', id=firma.id) }}" class="d-flex align-items-center gap-2 mb-0 js-kiralama-bilgi-fragment-form" role="presentation">
+                        <input type="hidden" name="tab" value="kiralama">
+                        <input type="hidden" name="hareket_page" value="{{ hareket_ph_page }}">
+                        <input type="hidden" name="hareket_per_page" value="{{ hareket_ph_per_page }}">
+                        <input type="hidden" name="cari_page" value="{{ cari_ph_page }}">
+                        <input type="hidden" name="cari_per_page" value="{{ cari_ph_per_page }}">
+                        <input type="hidden" name="start_date" value="{{ bilgi_sd_input or '' }}">
+                        <input type="hidden" name="end_date" value="{{ bilgi_ed_input or '' }}">
+                        <label class="small text-muted mb-0">Sayfa başına</label>
+                        <select name="kiralama_per_page" class="form-select form-select-sm" style="max-width:130px;">
+                            <option value="10"  {{ 'selected' if kiralama_per_page == 10 else '' }}>10</option>
+                            <option value="25"  {{ 'selected' if kiralama_per_page == 25 or not kiralama_per_page else '' }}>25</option>
+                            <option value="50"  {{ 'selected' if kiralama_per_page == 50 else '' }}>50</option>
+                            <option value="100" {{ 'selected' if kiralama_per_page == 100 else '' }}>100</option>
+                        </select>
+                        <input type="hidden" name="kiralama_page" value="1">
+                    </form>
+
+                    {% if kiralama_pagination %}
+                    <ul class="pagination mb-0">
+                        <li class="page-item {% if not kiralama_pagination.has_prev %}disabled{% endif %}">
+                            <a class="page-link {% if kiralama_pagination.has_prev %}js-kiralama-panel-page{% endif %}" {% if kiralama_pagination.has_prev %}href="{{ url_for('firmalar.bilgi_kiralama_listesi', id=firma.id, kiralama_page=kiralama_pagination.prev_num, kiralama_per_page=kiralama_per_page, hareket_page=hareket_ph_page, hareket_per_page=hareket_ph_per_page, cari_page=cari_ph_page, cari_per_page=cari_ph_per_page, start_date=bilgi_sd_input, end_date=bilgi_ed_input) }}"{% else %}href="#" tabindex="-1"{% endif %}>&laquo;</a>
+                        </li>
+                        {% for pn in kiralama_pagination.iter_pages() %}
+                            {% if pn %}
+                            <li class="page-item {% if pn == kiralama_pagination.page %}active{% endif %}">
+                                <a class="page-link js-kiralama-panel-page" href="{{ url_for('firmalar.bilgi_kiralama_listesi', id=firma.id, kiralama_page=pn, kiralama_per_page=kiralama_per_page, hareket_page=hareket_ph_page, hareket_per_page=hareket_ph_per_page, cari_page=cari_ph_page, cari_per_page=cari_ph_per_page, start_date=bilgi_sd_input, end_date=bilgi_ed_input) }}">{{ pn }}</a>
+                            </li>
+                            {% else %}
+                            <li class="page-item disabled"><span class="page-link">&hellip;</span></li>
+                            {% endif %}
+                        {% endfor %}
+                        <li class="page-item {% if not kiralama_pagination.has_next %}disabled{% endif %}">
+                            <a class="page-link {% if kiralama_pagination.has_next %}js-kiralama-panel-page{% endif %}" {% if kiralama_pagination.has_next %}href="{{ url_for('firmalar.bilgi_kiralama_listesi', id=firma.id, kiralama_page=kiralama_pagination.next_num, kiralama_per_page=kiralama_per_page, hareket_page=hareket_ph_page, hareket_per_page=hareket_ph_per_page, cari_page=cari_ph_page, cari_per_page=cari_ph_per_page, start_date=bilgi_sd_input, end_date=bilgi_ed_input) }}"{% else %}href="#" tabindex="-1"{% endif %}>&raquo;</a>
+                        </li>
+                    </ul>
+                    {% endif %}
+                </div>
