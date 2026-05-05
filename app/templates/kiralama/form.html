@@ -473,6 +473,7 @@ let indexCounter = IS_EDIT ? parseInt(document.getElementById('hidden-kalemler')
 let editingIdx = null;
 let editingClosedFinancial = false;
 let pendingFinancialEditIdx = null;
+const FINANCIAL_PASSWORD_VERIFY_URL = "{{ url_for('kiralama.api_financial_edit_password_verify') }}";
 
 const tbody = document.querySelector('#kalem-tablosu tbody');
 const hiddenContainer = document.getElementById('hidden-kalemler');
@@ -1063,20 +1064,62 @@ tbody.onclick = function(e) {
 };
 
 if (financialPasswordConfirm) {
-    financialPasswordConfirm.onclick = function() {
+    financialPasswordConfirm.onclick = async function() {
         const password = financialPasswordField ? financialPasswordField.value : '';
         if (!password) {
-            if (financialPasswordError) financialPasswordError.classList.remove('hidden');
+            if (financialPasswordError) {
+                financialPasswordError.textContent = 'Şifre girilmelidir.';
+                financialPasswordError.classList.remove('hidden');
+            }
             return;
         }
-        financialPasswordInput.value = password;
-        const modal = getFinancialPasswordModal();
-        if (modal) modal.hide();
-        const idx = pendingFinancialEditIdx;
-        pendingFinancialEditIdx = null;
-        if (idx !== null) {
-            const btn = tbody.querySelector(`.duzenle-btn[data-idx="${idx}"]`);
-            if (btn) btn.click();
+        const originalText = financialPasswordConfirm.textContent;
+        financialPasswordConfirm.disabled = true;
+        financialPasswordConfirm.textContent = 'Kontrol ediliyor...';
+        if (financialPasswordError) financialPasswordError.classList.add('hidden');
+        try {
+            const formData = new FormData();
+            formData.append('password', password);
+            const csrfToken = document.querySelector('#kiralama-form [name="csrf_token"]')?.value;
+            if (csrfToken) formData.append('csrf_token', csrfToken);
+
+            const response = await fetch(FINANCIAL_PASSWORD_VERIFY_URL, {
+                method: 'POST',
+                body: formData,
+                headers: csrfToken ? { 'X-CSRFToken': csrfToken } : {}
+            });
+            const payload = await response.json();
+            if (!response.ok || !payload.success) {
+                financialPasswordInput.value = '';
+                if (financialPasswordError) {
+                    financialPasswordError.textContent = payload.message || 'Şifre doğrulanamadı.';
+                    financialPasswordError.classList.remove('hidden');
+                }
+                if (financialPasswordField) {
+                    financialPasswordField.focus();
+                    financialPasswordField.select();
+                }
+                return;
+            }
+
+            financialPasswordInput.value = password;
+            const modal = getFinancialPasswordModal();
+            if (modal) modal.hide();
+            const idx = pendingFinancialEditIdx;
+            pendingFinancialEditIdx = null;
+            if (idx !== null) {
+                const btn = tbody.querySelector(`.duzenle-btn[data-idx="${idx}"]`);
+                if (btn) btn.click();
+            }
+        } catch (err) {
+            financialPasswordInput.value = '';
+            if (financialPasswordError) {
+                financialPasswordError.textContent = 'Şifre kontrolü yapılamadı. Lütfen tekrar deneyin.';
+                financialPasswordError.classList.remove('hidden');
+            }
+        } finally {
+            financialPasswordConfirm.disabled = false;
+            financialPasswordConfirm.textContent = originalText;
         }
     };
 }

@@ -134,3 +134,26 @@ def test_e2e_kiralama_liste_filtre_ve_tarih_guncelle(app, client):
         updated_kalem = db.session.get(KiralamaKalemi, kalem_id)
         assert updated_kalem is not None
         assert updated_kalem.kiralama_bitis == date(2026, 5, 10)
+
+
+def test_financial_edit_password_verify_endpoint(app, client):
+    with app.app_context():
+        user = User(username=f"financial_verify_{uuid.uuid4().hex[:6]}", rol="user")
+        user.set_password("pass123")
+        db.session.add(user)
+        db.session.commit()
+        user_id = user.id
+
+    _login_user(client, user_id)
+
+    missing_response = client.post("/kiralama/api/financial-edit-password/verify", data={"password": ""})
+    assert missing_response.status_code == 200
+    assert missing_response.get_json()["success"] is False
+
+    wrong_response = client.post("/kiralama/api/financial-edit-password/verify", data={"password": "wrong"})
+    assert wrong_response.status_code == 200
+    assert wrong_response.get_json()["success"] is False
+
+    correct_response = client.post("/kiralama/api/financial-edit-password/verify", data={"password": "pass123"})
+    assert correct_response.status_code == 200
+    assert correct_response.get_json()["success"] is True

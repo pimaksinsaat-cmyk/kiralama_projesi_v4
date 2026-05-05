@@ -1190,6 +1190,29 @@ def api_ekipman_filtrele():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@kiralama_bp.route('/api/financial-edit-password/verify', methods=['POST'])
+@login_required
+def api_financial_edit_password_verify():
+    """Kapalı kiralama kalemi finansal düzenleme şifresini doğrular."""
+    password = request.form.get('password') or ''
+    if not password:
+        return jsonify({
+            'success': False,
+            'message': 'Şifre girilmelidir.',
+        })
+
+    if not current_user.check_password(password):
+        return jsonify({
+            'success': False,
+            'message': 'Şifre hatalı.',
+        })
+
+    return jsonify({
+        'success': True,
+        'message': 'Şifre doğrulandı.',
+    })
+
+
 @kiralama_bp.route('/api/kurlar/guncelle', methods=['POST'])
 @login_required
 def api_kurlari_guncelle():
