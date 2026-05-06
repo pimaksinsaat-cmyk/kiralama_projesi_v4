@@ -853,10 +853,27 @@ class FirmaService(BaseService):
                 HizmetKaydi.aciklama.like('Dönüş Nakliye:%')
             )
         ).order_by(HizmetKaydi.tarih).all()
+        taseron_kalem_ids = {
+            hizmet.ozel_id
+            for hizmet in taseron_nakliye_kayitlari
+            if getattr(hizmet, 'ozel_id', None)
+        }
+        missing_taseron_kalem_ids = [
+            kalem_id for kalem_id in taseron_kalem_ids
+            if kalem_id not in kiralama_kalemi_by_id
+        ]
+        if missing_taseron_kalem_ids:
+            ekstra_taseron_kalemler = KiralamaKalemi.query.filter(
+                KiralamaKalemi.id.in_(missing_taseron_kalem_ids)
+            ).all()
+            for kalem in ekstra_taseron_kalemler:
+                kiralama_kalemi_by_id[kalem.id] = kalem
         for hizmet in taseron_nakliye_kayitlari:
             if hizmet.id in included_hizmet_kaydi_ids:
                 # harici_kalemler adımında zaten harici_kiralama satırı olarak eklendi
                 continue
+            kalem_obj = kiralama_kalemi_by_id.get(hizmet.ozel_id)
+            kiralama_link_id = kalem_obj.kiralama_id if kalem_obj else None
             islem_tarih = getattr(hizmet, 'islem_tarihi', None) or hizmet.tarih
             matrah = float(hizmet.tutar or 0)
             kdv_pct = (
@@ -869,7 +886,7 @@ class FirmaService(BaseService):
             rows.append({
                 'id': hizmet.id, 'sort_date': islem_tarih,
                 'form_no': hizmet.fatura_no or '-', 'form_tarihi': islem_tarih,
-                'kiralama_id': None, 'islem_turu': 'nakliye_tedarik', 'nakliye_sira': 2,
+                'kiralama_id': kiralama_link_id, 'islem_turu': 'nakliye_tedarik', 'nakliye_sira': 2,
                 'aciklama': hizmet.aciklama or 'Taşeron Nakliye',
                 'seri_no': '',
                 'baslangic': islem_tarih, 'bitis': None,

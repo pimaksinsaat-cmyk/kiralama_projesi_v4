@@ -1128,7 +1128,7 @@ class KiralamaService(BaseService):
 
     @staticmethod
     def _create_nakliye_ve_cari(kiralama, kalem, makine_adi, bas_tarihi):
-        """Nakliye seferi ve varsa taşeron cari gider kaydını oluşturur."""
+        """Nakliye seferi ve varsa taşeron cari gider kaydını senkronize eder."""
         firma_adi = kiralama.firma_musteri.firma_adi if kiralama.firma_musteri else "Müşteri"
         is_yeri = (kiralama.makine_calisma_adresi or '').strip() or firma_adi
         gidis_sube_adi = kalem.ekipman.sube.isim if (kalem.ekipman and kalem.ekipman.sube) else None
@@ -1137,17 +1137,32 @@ class KiralamaService(BaseService):
         else:
             guzergah_gidis = f"{makine_adi} {firma_adi} firmasına götürüldü ({is_yeri})"
 
-        yeni_sefer = Nakliye(
-            kiralama_id=kiralama.id,
-            firma_id=kiralama.firma_musteri_id,
-            tarih=bas_tarihi,
-            islem_tarihi=bas_tarihi,
-            guzergah=guzergah_gidis,
-            tutar=KiralamaService._get_gidis_nakliye_satis(kalem),
-            kdv_orani=kalem.nakliye_satis_kdv if kalem.nakliye_satis_kdv is not None else (kiralama.kdv_orani if kiralama.kdv_orani is not None else 20),
-            tevkifat_orani=kalem.nakliye_satis_tevkifat_oran or None,
-            aciklama=f"Gidiş: {kiralama.kiralama_form_no}"
-        )
+        form_no = kiralama.kiralama_form_no or ''
+        gidis_aciklama = f"Gidiş: {form_no} #{kalem.id}" if kalem.id else f"Gidiş: {form_no}"
+        legacy_gidis_aciklama = f"Gidiş: {form_no}"
+        yeni_sefer = Nakliye.query.filter(
+            Nakliye.kiralama_id == kiralama.id,
+            Nakliye.aciklama == gidis_aciklama,
+        ).first()
+        if not yeni_sefer and kalem.id:
+            legacy_adaylar = Nakliye.query.filter(
+                Nakliye.kiralama_id == kiralama.id,
+                Nakliye.aciklama == legacy_gidis_aciklama,
+            ).order_by(Nakliye.id.asc()).all()
+            if len(legacy_adaylar) == 1:
+                yeni_sefer = legacy_adaylar[0]
+        if not yeni_sefer:
+            yeni_sefer = Nakliye(kiralama_id=kiralama.id)
+
+        yeni_sefer.firma_id = kiralama.firma_musteri_id
+        yeni_sefer.tarih = bas_tarihi
+        yeni_sefer.islem_tarihi = bas_tarihi
+        yeni_sefer.guzergah = guzergah_gidis
+        yeni_sefer.tutar = KiralamaService._get_gidis_nakliye_satis(kalem)
+        yeni_sefer.kdv_orani = kalem.nakliye_satis_kdv if kalem.nakliye_satis_kdv is not None else (kiralama.kdv_orani if kiralama.kdv_orani is not None else 20)
+        yeni_sefer.tevkifat_orani = kalem.nakliye_satis_tevkifat_oran or None
+        yeni_sefer.aciklama = gidis_aciklama
+        yeni_sefer.is_active = True
 
         if kalem.is_harici_nakliye and kalem.nakliye_tedarikci_id:
             # TAŞERON NAKLİYE
@@ -1155,33 +1170,44 @@ class KiralamaService(BaseService):
             yeni_sefer.taseron_firma_id = kalem.nakliye_tedarikci_id
             yeni_sefer.taseron_maliyet = to_decimal(kalem.nakliye_alis_fiyat)
             yeni_sefer.plaka = "Dış Nakliye"
+            yeni_sefer.arac_id = None
 
             if yeni_sefer.taseron_maliyet > 0:
                 nakliye_kdv = kalem.nakliye_alis_kdv
-                # Yeniden oluşturma/güncelleme senaryolarında mükerrer taşeron satırını engelle.
-                HizmetKaydi.query.filter(
+                taseron_kayitlari = HizmetKaydi.query.filter(
+                    HizmetKaydi.firma_id == yeni_sefer.taseron_firma_id,
                     HizmetKaydi.ozel_id == kalem.id,
                     HizmetKaydi.yon == 'gelen',
+                    HizmetKaydi.fatura_no == kiralama.kiralama_form_no,
                     HizmetKaydi.aciklama.like('Taşeron Nakliye Bedeli%')
-                ).delete(synchronize_session=False)
+                ).order_by(HizmetKaydi.id.asc()).all()
+                taseron_cari = taseron_kayitlari[0] if taseron_kayitlari else HizmetKaydi(yon='gelen')
+                for fazla_kayit in taseron_kayitlari[1:]:
+                    fazla_kayit.is_deleted = True
+                    fazla_kayit.is_active = False
+                    fazla_kayit.deleted_at = datetime.now(timezone.utc)
+                    db.session.add(fazla_kayit)
 
-                # HİZMETKAYDI: taşeron nakliye giderini kalem bazında açıkça işaretle.
-                db.session.add(HizmetKaydi(
-                    firma_id=yeni_sefer.taseron_firma_id,
-                    tarih=bas_tarihi or date.today(),
-                    islem_tarihi=bas_tarihi or date.today(),
-                    tutar=yeni_sefer.taseron_maliyet,
-                    yon='gelen',
-                    fatura_no=kiralama.kiralama_form_no,
-                    ozel_id=kalem.id,
-                    aciklama=f"Taşeron Nakliye Bedeli ({makine_adi}) - {kiralama.kiralama_form_no}",
-                    nakliye_alis_kdv=nakliye_kdv,
-                    kdv_orani=None
-                ))
+                taseron_cari.firma_id = yeni_sefer.taseron_firma_id
+                taseron_cari.tarih = bas_tarihi or date.today()
+                taseron_cari.islem_tarihi = bas_tarihi or date.today()
+                taseron_cari.tutar = yeni_sefer.taseron_maliyet
+                taseron_cari.yon = 'gelen'
+                taseron_cari.fatura_no = kiralama.kiralama_form_no
+                taseron_cari.ozel_id = kalem.id
+                taseron_cari.aciklama = f"Taşeron Nakliye Bedeli ({makine_adi}) - {kiralama.kiralama_form_no}"
+                taseron_cari.nakliye_alis_kdv = nakliye_kdv
+                taseron_cari.kdv_orani = None
+                taseron_cari.is_deleted = False
+                taseron_cari.is_active = True
+                db.session.add(taseron_cari)
         else:
             # ÖZ MAL NAKLİYE
             yeni_sefer.nakliye_tipi = 'oz_mal'
+            yeni_sefer.taseron_firma_id = None
+            yeni_sefer.taseron_maliyet = Decimal('0.00')
             yeni_sefer.arac_id = kalem.nakliye_araci_id
+            yeni_sefer.plaka = None
             if yeni_sefer.arac_id:
                 secilen_arac = db.session.get(NakliyeAraci, yeni_sefer.arac_id)
                 if secilen_arac:
