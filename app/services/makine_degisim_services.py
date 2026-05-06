@@ -25,6 +25,15 @@ except ImportError:
     CariServis = None
 
 
+def _to_int_or_none(value):
+    if value in (None, ''):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 class MakineDegisimService(BaseService):
     """Makine değişim/swap operasyonları ve cari entegrasyonlarının yönetildiği servis."""
     model = MakineDegisim
@@ -232,6 +241,7 @@ class MakineDegisimService(BaseService):
                     tutar=satis_fiyat,
                     kdv_orani=guncel_kdv,
                     taseron_maliyet=alis_fiyat,
+                    taseron_kdv_orani=_to_int_or_none(data.get('nakliye_alis_kdv')) if is_harici else None,
                     aciklama=detayli_aciklama,
                     cari_islendi_mi=True
                 )

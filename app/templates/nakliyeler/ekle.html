@@ -7,7 +7,7 @@
 {% block content %}
 <div class="container mt-4">
     <div class="row">
-        <div class="col-md-10 offset-md-1">
+        <div class="col-md-12">
             <div class="card shadow border-0">
                 <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
                     <h4 class="mb-0"><i class="fas fa-truck"></i> Yeni Nakliye Girişi</h4>
@@ -31,7 +31,7 @@
                         </div>
 
                         <div class="row mb-3">
-                            <div class="col-md-6">
+                            <div class="col-md-10">
                                 <label class="form-label fw-bold">Müşteri / Firma</label>
                                 {{ form.firma_id(class="form-select", id="firma_id") }}
                             </div>
@@ -54,31 +54,35 @@
                         </div>
 
                         <div class="row mb-3">
-                            <div class="col-md-8">
+                            <div class="col-md-6">
                                 <label class="form-label fw-bold">Güzergah</label>
                                 {{ form.guzergah(class="form-control", placeholder="Örn: İkitelli - Gebze Şantiye") }}
                             </div>
                             
-                            <div class="col-md-4" id="ozmal_alani">
+                            <div class="col-md-6" id="ozmal_alani">
                                 <label class="form-label fw-bold">Araç Plakası</label>
                                 {{ form.arac_id(class="form-select") }}
                                 <div class="form-text">Sadece nakliye aracı olarak işaretli aktif araçlar listelenir.</div>
                             </div>
 
-                            <div class="col-md-4 d-none" id="taseron_alani_plaka">
+                            <div class="col-md-6 d-none" id="taseron_alani_plaka">
                                 <label class="form-label fw-bold">Dış Araç Plaka</label>
                                 {{ form.plaka(class="form-control", placeholder="Taşeron Plakası") }}
                             </div>
                         </div>
 
                         <div class="row mb-3 d-none" id="taseron_detay_alani">
-                            <div class="col-md-6">
+                            <div class="col-md-4">
                                 <label class="form-label fw-bold text-danger">Taşeron Nakliyeci Firma</label>
-                                {{ form.taseron_firma_id(class="form-select border-danger") }}
+                                {{ form.taseron_firma_id(class="form-select border-danger", id="taseron_firma_id") }}
                             </div>
-                            <div class="col-md-6">
+                            <div class="col-md-4">
                                 <label class="form-label fw-bold text-danger">Taşeron Alış Maliyeti (TL)</label>
                                 {{ form.taseron_maliyet(class="form-control border-danger", placeholder="Bize gelişi") }}
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold text-danger">Taşeron KDV Oranı (%)</label>
+                                {{ form.taseron_kdv_orani(class="form-control border-danger", placeholder="20") }}
                             </div>
                         </div>
 
@@ -128,19 +132,38 @@ document.addEventListener('DOMContentLoaded', function() {
     const ozmalAlani = document.getElementById('ozmal_alani');
     const taseronAlaniPlaka = document.getElementById('taseron_alani_plaka');
     const taseronDetayAlani = document.getElementById('taseron_detay_alani');
+    const taseronFirmaSelect = document.getElementById('taseron_firma_id');
     const tevkifatToggle = document.getElementById('tevkifat-toggle');
     const tevkifatSelect = document.getElementById('tevkifat_orani');
+    const truncateWords = (text, limit = 4) => {
+        const words = String(text || '').trim().split(/\s+/).filter(Boolean);
+        return words.length > limit ? words.slice(0, limit).join(' ') : words.join(' ');
+    };
 
-    if (musteriSelect) {
-        new TomSelect(musteriSelect, {
+    function createFirmaSelect(selectElement) {
+        if (!selectElement) {
+            return;
+        }
+        new TomSelect(selectElement, {
             create: false,
             maxOptions: null,
             openOnFocus: true,
             allowEmptyOption: true,
             searchField: ['text'],
             sortField: [{ field: 'text', direction: 'asc' }],
+            render: {
+                item: function(data, escape) {
+                    return '<div title="' + escape(data.text) + '">' + escape(truncateWords(data.text)) + '</div>';
+                },
+                option: function(data, escape) {
+                    return '<div title="' + escape(data.text) + '">' + escape(truncateWords(data.text)) + '</div>';
+                },
+            },
         });
     }
+
+    createFirmaSelect(musteriSelect);
+    createFirmaSelect(taseronFirmaSelect);
 
     // 1. Tip Değişimini Dinle
     function toggleFields() {

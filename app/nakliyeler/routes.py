@@ -548,6 +548,7 @@ def ekle():
             # Decimal dönüşümleri
             nakliye.tutar = to_decimal(form.tutar.data)
             nakliye.taseron_maliyet = to_decimal(form.taseron_maliyet.data) if nakliye.nakliye_tipi == 'taseron' else Decimal('0.00')
+            nakliye.taseron_kdv_orani = form.taseron_kdv_orani.data if nakliye.nakliye_tipi == 'taseron' else None
             if kiralama_id: nakliye.kiralama_id = kiralama_id
             
             nakliye.hesapla_ve_guncelle()
@@ -671,6 +672,7 @@ def duzenle(id):
 
             nakliye.tutar = to_decimal(form.tutar.data)
             nakliye.taseron_maliyet = to_decimal(form.taseron_maliyet.data) if nakliye.nakliye_tipi == 'taseron' else Decimal('0.00')
+            nakliye.taseron_kdv_orani = form.taseron_kdv_orani.data if nakliye.nakliye_tipi == 'taseron' else None
 
             nakliye.hesapla_ve_guncelle()
 

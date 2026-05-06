@@ -51,6 +51,7 @@ class Nakliye(db.Model):
     
     # --- TAŞERON MALİYETİ (Dışarıya Yaptırıyorsak Bizim Giderimiz) ---
     taseron_maliyet = db.Column(db.Numeric(15, 2), nullable=True, default=Decimal('0.00'))
+    taseron_kdv_orani = db.Column(db.Integer, nullable=True, default=20)
     
     # --- Durum ve Arşiv Kontrolleri ---
     cari_islendi_mi = db.Column(db.Boolean, default=False, index=True)

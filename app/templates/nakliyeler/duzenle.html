@@ -116,6 +116,13 @@
                                     <span class="input-group-text small text-danger">TL</span>
                                 </div>
                             </div>
+                            <div class="col-md-4 shadow-sm rounded p-2 bg-danger-subtle" id="taseron_kdv_section" style="display: none;">
+                                <label class="form-label fw-bold text-danger small">Taşeron KDV Oranı</label>
+                                <div class="input-group">
+                                    {{ form.taseron_kdv_orani(class="form-control", placeholder="20") }}
+                                    <span class="input-group-text small text-danger">%</span>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="mb-4">
@@ -146,6 +153,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const ozMalSection = document.getElementById('oz_mal_section');
     const taseronSection = document.getElementById('taseron_section');
     const maliyetSection = document.getElementById('maliyet_section');
+    const taseronKdvSection = document.getElementById('taseron_kdv_section');
     const tevkifatToggle = document.getElementById('tevkifat-toggle');
     const tevkifatSelect = document.getElementById('tevkifat_orani');
     
@@ -171,10 +179,12 @@ document.addEventListener('DOMContentLoaded', function() {
             ozMalSection.style.display = 'block';
             taseronSection.style.display = 'none';
             maliyetSection.style.display = 'none';
+            taseronKdvSection.style.display = 'none';
         } else if (selectedValue === 'taseron') {
             ozMalSection.style.display = 'none';
             taseronSection.style.display = 'block';
             maliyetSection.style.display = 'block';
+            taseronKdvSection.style.display = 'block';
         }
     }
 

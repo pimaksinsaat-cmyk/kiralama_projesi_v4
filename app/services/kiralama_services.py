@@ -1205,6 +1205,7 @@ class KiralamaService(BaseService):
             yeni_sefer.nakliye_tipi = 'taseron'
             yeni_sefer.taseron_firma_id = kalem.nakliye_tedarikci_id
             yeni_sefer.taseron_maliyet = to_decimal(kalem.nakliye_alis_fiyat)
+            yeni_sefer.taseron_kdv_orani = kalem.nakliye_alis_kdv
             yeni_sefer.plaka = "Dış Nakliye"
             yeni_sefer.arac_id = None
 
@@ -1242,6 +1243,7 @@ class KiralamaService(BaseService):
             yeni_sefer.nakliye_tipi = 'oz_mal'
             yeni_sefer.taseron_firma_id = None
             yeni_sefer.taseron_maliyet = Decimal('0.00')
+            yeni_sefer.taseron_kdv_orani = None
             yeni_sefer.arac_id = kalem.nakliye_araci_id
             yeni_sefer.plaka = None
             if yeni_sefer.arac_id:

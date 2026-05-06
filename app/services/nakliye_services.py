@@ -69,6 +69,11 @@ class CariServis:
         nakliye_islem_tarihi = getattr(nakliye, 'islem_tarihi', None) or nakliye.tarih
         if nakliye.nakliye_tipi == 'taseron' and nakliye.taseron_firma_id and nakliye.taseron_maliyet > 0:
             aciklama = f"Nakliye Taşeron Gideri: {nakliye.guzergah} ({nakliye.plaka or ''})"
+            hk_kdv = getattr(nakliye, 'taseron_kdv_orani', None)
+            if hk_kdv is None:
+                hk_kdv = getattr(nakliye, 'kdv_orani', None)
+            if hk_kdv is None:
+                hk_kdv = 0
             if eski_maliyet:
                 # Tedarikçi veya maliyet tutarı değişmiş olabilir
                 eski_maliyet.firma_id = nakliye.taseron_firma_id
@@ -76,11 +81,10 @@ class CariServis:
                 eski_maliyet.tarih = nakliye.tarih
                 eski_maliyet.islem_tarihi = nakliye_islem_tarihi
                 eski_maliyet.aciklama = aciklama
+                eski_maliyet.kdv_orani = hk_kdv
+                eski_maliyet.nakliye_alis_kdv = hk_kdv
             else:
                 # Yeni maliyet kaydı oluştur
-                hk_kdv = getattr(nakliye, 'kdv_orani', None)
-                if hk_kdv is None:
-                    hk_kdv = 0
                 yeni_maliyet = HizmetKaydi(
                     firma_id=nakliye.taseron_firma_id,
                     tarih=nakliye.tarih,
