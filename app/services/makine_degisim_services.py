@@ -259,7 +259,7 @@ class MakineDegisimService(BaseService):
                         if HizmetKaydi:
                             db.session.flush()
                             swap_taseron_hizmeti = HizmetKaydi.query.filter_by(
-                                ozel_id=yeni_nakliye.id,
+                                nakliye_id=yeni_nakliye.id,
                                 yon='gelen'
                             ).order_by(HizmetKaydi.id.desc()).first()
                 else:
@@ -273,8 +273,7 @@ class MakineDegisimService(BaseService):
                             tutar=alis_fiyat,
                             yon='gelen',
                             aciklama=ozel_guzergah,
-                            fatura_no=form_no,
-                            ozel_id=yeni_nakliye.id
+                            fatura_no=form_no
                         )
                         db.session.add(swap_taseron_hizmeti)
 

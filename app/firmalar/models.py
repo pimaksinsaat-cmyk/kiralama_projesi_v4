@@ -129,16 +129,24 @@ class Firma(BaseModel):
             .correlate(HizmetKaydi)
             .scalar_subquery()
         )
-        kdv_oran_expr = sa.cast(
-            func.coalesce(
+        hizmet_kdv_expr = sa.case(
+            (
+                HizmetKaydi.yon == 'gelen',
+                func.coalesce(
+                    HizmetKaydi.nakliye_alis_kdv,
+                    HizmetKaydi.kiralama_alis_kdv,
+                    HizmetKaydi.kdv_orani,
+                    nak_kdv_subq,
+                    0,
+                ),
+            ),
+            else_=func.coalesce(
                 nak_kdv_subq,
-                HizmetKaydi.nakliye_alis_kdv,
-                HizmetKaydi.kiralama_alis_kdv,
                 HizmetKaydi.kdv_orani,
                 0,
             ),
-            sa.Numeric(10, 4),
         )
+        kdv_oran_expr = sa.cast(hizmet_kdv_expr, sa.Numeric(10, 4))
         kdv_carpan_expr = sa.cast(1, sa.Numeric(10, 4)) + (kdv_oran_expr / sa.cast(100, sa.Numeric(10, 4)))
         tutar_kdvli_expr = HizmetKaydi.tutar * kdv_carpan_expr
 

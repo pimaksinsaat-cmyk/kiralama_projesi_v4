@@ -845,11 +845,16 @@ class FirmaService(BaseService):
             HizmetKaydi.firma_id == firma.id,
             HizmetKaydi.is_deleted == False,
             HizmetKaydi.yon == 'gelen',
-            HizmetKaydi.ozel_id.isnot(None),
             or_(
-                HizmetKaydi.aciklama.like('Taşeron Nakliye Bedeli%'),
-                HizmetKaydi.aciklama.like('Dönüş Nakliye:%'),
-                HizmetKaydi.aciklama.like('Nakliye Taşeron Gideri:%')
+                HizmetKaydi.nakliye_id.isnot(None),
+                and_(
+                    HizmetKaydi.ozel_id.isnot(None),
+                    or_(
+                        HizmetKaydi.aciklama.like('Taşeron Nakliye Bedeli%'),
+                        HizmetKaydi.aciklama.like('Dönüş Nakliye:%'),
+                        HizmetKaydi.aciklama.like('Nakliye Taşeron Gideri:%')
+                    )
+                )
             )
         ).order_by(HizmetKaydi.tarih).all()
         legacy_taseron_nakliye_ids = {
@@ -884,12 +889,20 @@ class FirmaService(BaseService):
                 # harici_kalemler adımında zaten harici_kiralama satırı olarak eklendi
                 continue
             aciklama_text = (hizmet.aciklama or '').strip()
-            is_legacy_standalone_taseron = aciklama_text.startswith('Nakliye Taşeron Gideri:')
+            is_standalone_taseron = getattr(hizmet, 'nakliye_id', None) is not None
+            is_legacy_standalone_taseron = (
+                not is_standalone_taseron
+                and aciklama_text.startswith('Nakliye Taşeron Gideri:')
+            )
+            if is_standalone_taseron:
+                nakliye_obj = db.session.get(Nakliye, hizmet.nakliye_id)
+                nakliye_link_id = hizmet.nakliye_id
+                kiralama_link_id = nakliye_obj.kiralama_id if nakliye_obj else None
             if is_legacy_standalone_taseron:
                 nakliye_obj = legacy_taseron_nakliye_by_id.get(hizmet.ozel_id)
                 nakliye_link_id = hizmet.ozel_id
                 kiralama_link_id = nakliye_obj.kiralama_id if nakliye_obj else None
-            else:
+            elif not is_standalone_taseron:
                 kalem_obj = kiralama_kalemi_by_id.get(hizmet.ozel_id)
                 nakliye_link_id = None
                 kiralama_link_id = kalem_obj.kiralama_id if kalem_obj else None
@@ -928,8 +941,8 @@ class FirmaService(BaseService):
                 kiralama_kalemi_by_id[kalem.id] = kalem
         for fatura in faturalar:
             islem_tarih = getattr(fatura, 'islem_tarihi', None) or fatura.tarih
-            # nakliye_id dolu → nakliye satırı olarak zaten gösterildi
-            if getattr(fatura, 'nakliye_id', None):
+            # Müşteri nakliye satışı nakliye adımında gösterilir; taşeron alış ayrı satırdır.
+            if getattr(fatura, 'nakliye_id', None) and fatura.yon == 'giden':
                 continue
             # Önceki adımlarda zaten satıra dönüştürülen HKD'ler (harici kiralama, taşeron)
             if fatura.id in included_hizmet_kaydi_ids:

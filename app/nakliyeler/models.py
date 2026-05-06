@@ -56,12 +56,18 @@ class Nakliye(db.Model):
     # --- Durum ve Arşiv Kontrolleri ---
     cari_islendi_mi = db.Column(db.Boolean, default=False, index=True)
 
-    cari_hareket = db.relationship(
+    hizmet_kayitlari = db.relationship(
         'HizmetKaydi', 
         backref='ilgili_nakliye', 
-        cascade='all, delete-orphan', 
-        uselist=False
+        cascade='all, delete-orphan',
     )
+
+    @property
+    def cari_hareket(self):
+        for hizmet in self.hizmet_kayitlari:
+            if hizmet.yon == 'giden':
+                return hizmet
+        return self.hizmet_kayitlari[0] if self.hizmet_kayitlari else None
 
     def hesapla_ve_guncelle(self):
         """ Sözleşme tutarını kaydeder. KDV fatura kesilirken ayrıca hesaplanacak. """
@@ -93,8 +99,8 @@ class Nakliye(db.Model):
         Bakiye tutarlılığı ve audit trail için gereklidir.
         """
         # İlişkili HizmetKaydi'yi soft delete et
-        if self.cari_hareket:
-            self.cari_hareket.delete(soft=True, user_id=user_id)
+        for hizmet in list(self.hizmet_kayitlari):
+            hizmet.delete(soft=True, user_id=user_id)
 
         if soft:
             self.is_active = False

@@ -63,8 +63,14 @@ class CariServis:
         """
         Taşeron nakliyelerde tedarikçinin alacak kaydını (maliyet) yönetir.
         """
-        # Taşeron maliyetlerini ozel_id üzerinden takip ediyoruz
-        eski_maliyet = HizmetKaydi.query.filter_by(ozel_id=nakliye.id, yon='gelen').first()
+        eski_maliyet = HizmetKaydi.query.filter_by(nakliye_id=nakliye.id, yon='gelen').first()
+        if not eski_maliyet:
+            eski_maliyet = HizmetKaydi.query.filter(
+                HizmetKaydi.nakliye_id.is_(None),
+                HizmetKaydi.ozel_id == nakliye.id,
+                HizmetKaydi.yon == 'gelen',
+                HizmetKaydi.aciklama.like('Nakliye Taşeron Gideri:%'),
+            ).order_by(HizmetKaydi.id.asc()).first()
 
         nakliye_islem_tarihi = getattr(nakliye, 'islem_tarihi', None) or nakliye.tarih
         if nakliye.nakliye_tipi == 'taseron' and nakliye.taseron_firma_id and nakliye.taseron_maliyet > 0:
@@ -77,6 +83,8 @@ class CariServis:
             if eski_maliyet:
                 # Tedarikçi veya maliyet tutarı değişmiş olabilir
                 eski_maliyet.firma_id = nakliye.taseron_firma_id
+                eski_maliyet.nakliye_id = nakliye.id
+                eski_maliyet.ozel_id = None
                 eski_maliyet.tutar = nakliye.taseron_maliyet
                 eski_maliyet.tarih = nakliye.tarih
                 eski_maliyet.islem_tarihi = nakliye_islem_tarihi
@@ -92,7 +100,7 @@ class CariServis:
                     tutar=nakliye.taseron_maliyet,
                     yon='gelen', # Bize gelen hizmet = Taşeron Alacağı (Gider)
                     aciklama=aciklama,
-                    ozel_id=nakliye.id,
+                    nakliye_id=nakliye.id,
                     kdv_orani=hk_kdv,
                     nakliye_alis_kdv=hk_kdv
                 )
@@ -113,5 +121,10 @@ class CariServis:
         """
         HizmetKaydi.query.filter(
             (HizmetKaydi.nakliye_id == nakliye_id) | 
-            ((HizmetKaydi.ozel_id == nakliye_id) & (HizmetKaydi.yon == 'gelen'))
+            (
+                (HizmetKaydi.nakliye_id.is_(None)) &
+                (HizmetKaydi.ozel_id == nakliye_id) &
+                (HizmetKaydi.yon == 'gelen') &
+                (HizmetKaydi.aciklama.like('Nakliye Taşeron Gideri:%'))
+            )
         ).delete()

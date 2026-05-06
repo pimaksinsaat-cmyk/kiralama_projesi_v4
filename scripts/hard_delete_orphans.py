@@ -125,6 +125,24 @@ def delete_logical_orphans(connection):
                 select count(*)
                 from hizmet_kaydi h
                 where h.yon = 'gelen'
+                  and h.nakliye_id is not null
+                  and h.aciklama like 'Nakliye Taşeron Gideri:%'
+                  and not exists (select 1 from nakliye n where n.id = h.nakliye_id)
+            """,
+            'delete_sql': """
+                delete from hizmet_kaydi
+                where yon = 'gelen'
+                  and nakliye_id is not null
+                  and aciklama like 'Nakliye Taşeron Gideri:%'
+                  and not exists (select 1 from nakliye n where n.id = hizmet_kaydi.nakliye_id)
+            """,
+        },
+        {
+            'name': 'hizmet_kaydi_nakliye_taseron_legacy',
+            'count_sql': """
+                select count(*)
+                from hizmet_kaydi h
+                where h.yon = 'gelen'
                   and h.nakliye_id is null
                   and h.ozel_id is not null
                   and h.aciklama like 'Nakliye Taşeron Gideri:%'
