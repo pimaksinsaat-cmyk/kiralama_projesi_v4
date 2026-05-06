@@ -342,11 +342,7 @@ def index():
         except Exception as kur_err:
             current_app.logger.warning("TCMB kurlari alinamadı (index): %s", kur_err, exc_info=True)
             kurlar = {}
-        kur_son_guncelleme = KiralamaService.get_kur_son_guncelleme()
-        kur_son_guncelleme_text = (
-            kur_son_guncelleme.strftime('%d.%m.%Y %H:%M:%S')
-            if kur_son_guncelleme else 'Henüz güncellenmedi'
-        )
+        kur_son_guncelleme_text = KiralamaService.get_kur_son_guncelleme_text()
 
         try:
             subeler = get_cached_subeler()
@@ -1219,19 +1215,17 @@ def api_kurlari_guncelle():
     """TCMB kurlarını manuel tetikler ve güncel cache'i JSON olarak döner."""
     try:
         kurlar = KiralamaService.refresh_tcmb_kurlari(force=True)
-        son = KiralamaService.get_kur_son_guncelleme()
         return jsonify({
             'success': True,
             'kurlar': {
                 'USD': str(kurlar.get('USD', '0.00')),
                 'EUR': str(kurlar.get('EUR', '0.00')),
             },
-            'son_guncelleme': son.strftime('%d.%m.%Y %H:%M:%S') if son else 'Henüz güncellenmedi',
+            'son_guncelleme': KiralamaService.get_kur_son_guncelleme_text(),
         })
     except Exception as e:
         current_app.logger.warning("Kur manuel güncelleme hatası: %s", e, exc_info=True)
         kurlar = KiralamaService.get_tcmb_kurlari()
-        son = KiralamaService.get_kur_son_guncelleme()
         return jsonify({
             'success': False,
             'error': 'Kur güncellenemedi. Son bilinen değer gösteriliyor.',
@@ -1239,5 +1233,5 @@ def api_kurlari_guncelle():
                 'USD': str(kurlar.get('USD', '0.00')),
                 'EUR': str(kurlar.get('EUR', '0.00')),
             },
-            'son_guncelleme': son.strftime('%d.%m.%Y %H:%M:%S') if son else 'Henüz güncellenmedi',
+            'son_guncelleme': KiralamaService.get_kur_son_guncelleme_text(),
         }), 500

@@ -1,7 +1,7 @@
 import os
 import requests
 import xml.etree.ElementTree as ET
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 import logging
 import re
@@ -23,6 +23,12 @@ from app.subeler.models import Sube
 from app.ayarlar.models import AppSettings
 
 logger = logging.getLogger(__name__)
+
+TURKIYE_TZ = timezone(timedelta(hours=3))
+
+
+def _turkiye_simdi():
+    return datetime.now(TURKIYE_TZ)
 
 
 def _tcmb_request_verify():
@@ -262,29 +268,49 @@ class KiralamaKalemiService(BaseService):
         is_yeri_donus = is_yeri_donus or musteri_adi
         # ------------------------------------
 
-        # Harici nakliye varsa tedarikçi carisine nakliye bedeli işle
-        if kalem.is_harici_nakliye and kalem.nakliye_tedarikci_id and to_decimal(kalem.nakliye_alis_fiyat) > 0:
-            HizmetKaydi.query.filter(
-                HizmetKaydi.ozel_id == kalem.id,
-                HizmetKaydi.yon == 'gelen',
-                HizmetKaydi.aciklama.like('%nakliye bedeli%')
-            ).delete(synchronize_session=False)
+        # Harici dönüş nakliye giderini idempotent tut: aynı kalem/firma/form için
+        # kayıt varsa güncelle, eski mükerrer dönüş kayıtlarını soft-delete et.
+        form_no_donus = kalem.kiralama.kiralama_form_no if kalem.kiralama else None
+        donus_taseron_kayitlari = HizmetKaydi.query.filter(
+            HizmetKaydi.ozel_id == kalem.id,
+            HizmetKaydi.yon == 'gelen',
+            HizmetKaydi.fatura_no == form_no_donus,
+            HizmetKaydi.aciklama.like('Dönüş Nakliye:%'),
+            HizmetKaydi.is_deleted == False,
+        ).order_by(HizmetKaydi.id.asc()).all()
 
-            aciklama = (
-                f"Dönüş Nakliye: {makine_bilgisi_donus} - {donus_sube_adi}"
-            )
-            hizmet_kaydi = HizmetKaydi(
-                firma_id=kalem.nakliye_tedarikci_id,
-                tarih=date.today(),
-                islem_tarihi=kalem.kiralama_bitis or date.today(),
-                tutar=to_decimal(kalem.nakliye_alis_fiyat),
-                yon='gelen',
-                fatura_no=kalem.kiralama.kiralama_form_no if kalem.kiralama else None,
-                ozel_id=kalem.id,
-                aciklama=aciklama,
-                kdv_orani=getattr(kalem.kiralama, 'kdv_orani', None) or 20
-            )
-            db.session.add(hizmet_kaydi)
+        aktif_donus_taseron = None
+        if kalem.is_harici_nakliye and kalem.nakliye_tedarikci_id and to_decimal(kalem.nakliye_alis_fiyat) > 0:
+            for kayit in donus_taseron_kayitlari:
+                if kayit.firma_id == kalem.nakliye_tedarikci_id and aktif_donus_taseron is None:
+                    aktif_donus_taseron = kayit
+                    continue
+                kayit.is_deleted = True
+                kayit.is_active = False
+                kayit.deleted_at = datetime.now(timezone.utc)
+                db.session.add(kayit)
+
+            if aktif_donus_taseron is None:
+                aktif_donus_taseron = HizmetKaydi(yon='gelen')
+
+            aktif_donus_taseron.firma_id = kalem.nakliye_tedarikci_id
+            aktif_donus_taseron.tarih = date.today()
+            aktif_donus_taseron.islem_tarihi = kalem.kiralama_bitis or date.today()
+            aktif_donus_taseron.tutar = to_decimal(kalem.nakliye_alis_fiyat)
+            aktif_donus_taseron.yon = 'gelen'
+            aktif_donus_taseron.fatura_no = form_no_donus
+            aktif_donus_taseron.ozel_id = kalem.id
+            aktif_donus_taseron.aciklama = f"Dönüş Nakliye: {makine_bilgisi_donus} - {donus_sube_adi}"
+            aktif_donus_taseron.kdv_orani = getattr(kalem.kiralama, 'kdv_orani', None) or 20
+            aktif_donus_taseron.is_deleted = False
+            aktif_donus_taseron.is_active = True
+            db.session.add(aktif_donus_taseron)
+        else:
+            for kayit in donus_taseron_kayitlari:
+                kayit.is_deleted = True
+                kayit.is_active = False
+                kayit.deleted_at = datetime.now(timezone.utc)
+                db.session.add(kayit)
 
         # Müşteri carisine dönüş nakliye satış seferi ekle (hem öz mal hem harici)
         if kalem.kiralama:
@@ -368,7 +394,7 @@ class KiralamaKalemiService(BaseService):
         HizmetKaydi.query.filter(
             HizmetKaydi.ozel_id == kalem.id,
             HizmetKaydi.yon == 'gelen',
-            HizmetKaydi.aciklama.like('%nakliye bedeli%')
+            HizmetKaydi.aciklama.like('Dönüş Nakliye:%')
         ).delete(synchronize_session=False)
         HizmetKaydi.query.filter(
             HizmetKaydi.ozel_id == kalem.id,
@@ -479,7 +505,7 @@ class KiralamaService(BaseService):
         - Uygulama açılışında ve scheduler ile saatlik çağrılması hedeflenir.
         - Başarısız olursa mevcut cache korunur; yoksa default kullanılır.
         """
-        simdi = datetime.now()
+        simdi = _turkiye_simdi()
         if (
             not force
             and cls._kur_cache is not None
@@ -512,6 +538,16 @@ class KiralamaService(BaseService):
     def get_kur_son_guncelleme(cls):
         """Kur cache'in son güncelleme zamanını döner (datetime | None)."""
         return cls._kur_son_guncelleme
+
+    @classmethod
+    def get_kur_son_guncelleme_text(cls):
+        """Kur cache zamanini Turkiye saatiyle ekranda gosterilecek metne cevirir."""
+        son = cls._kur_son_guncelleme
+        if not son:
+            return 'Henüz güncellenmedi'
+        if son.tzinfo is not None:
+            son = son.astimezone(TURKIYE_TZ)
+        return son.strftime('%d.%m.%Y %H:%M:%S')
 
     @staticmethod
     def _get_gidis_nakliye_satis(kalem):

@@ -9,6 +9,7 @@ from app.services.base import BaseService, ValidationError
 from app.firmalar.models import Firma
 from app.kiralama.models import Kiralama, KiralamaKalemi
 from app.cari.models import Odeme
+from app.services.cari_services import TASERON_NAKLIYE_PREFIXLERI
 from app.nakliyeler.models import Nakliye
 from app.extensions import db
 from app.ayarlar.models import AppSettings
@@ -340,10 +341,7 @@ class FirmaService(BaseService):
             # diğer kayıtlar (fatura, nakliye vb.) için DB'deki değeri kullan.
             tutar = KiralamaService.hesapla_hizmet_kaydi_canli_tutari(h)
             aciklama_text = (h.aciklama or '').strip()
-            taseron_nakliye_kaydi = (
-                aciklama_text.startswith('Taşeron Nakliye Bedeli')
-                or aciklama_text.startswith('Dönüş Nakliye:')
-            )
+            taseron_nakliye_kaydi = aciklama_text.startswith(TASERON_NAKLIYE_PREFIXLERI)
             if getattr(h, 'nakliye_id', None):
                 tur_adi, tur_tipi, ozel_id = 'Nakliye', 'nakliye', h.nakliye_id
             elif taseron_nakliye_kaydi:
@@ -850,7 +848,8 @@ class FirmaService(BaseService):
             HizmetKaydi.ozel_id.isnot(None),
             or_(
                 HizmetKaydi.aciklama.like('Taşeron Nakliye Bedeli%'),
-                HizmetKaydi.aciklama.like('Dönüş Nakliye:%')
+                HizmetKaydi.aciklama.like('Dönüş Nakliye:%'),
+                HizmetKaydi.aciklama.like('Nakliye Taşeron Gideri:%')
             )
         ).order_by(HizmetKaydi.tarih).all()
         taseron_kalem_ids = {

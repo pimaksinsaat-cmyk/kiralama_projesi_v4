@@ -15,6 +15,12 @@ NAKLIYE_MUHASEBE_PREFIXLERI = (
     'Müşteri Nakliye Fark',
 )
 
+TASERON_NAKLIYE_PREFIXLERI = (
+    'Taşeron Nakliye Bedeli',
+    'Dönüş Nakliye:',
+    'Nakliye Taşeron Gideri:',
+)
+
 
 def hizmet_kaydi_bakiyeye_dahil_mi(h) -> bool:
     """
