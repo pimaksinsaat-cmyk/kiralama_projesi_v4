@@ -326,7 +326,7 @@ class KiralamaKalemiService(BaseService):
                     f"{makine_bilgisi_donus} {musteri_adi} firmasının {is_yeri_donus}'nden "
                     f"{donus_sube_adi} şubesine getirildi"
                 )
-                nak_tipi = 'harici' if kalem.is_harici_nakliye else 'oz_mal'
+                nak_tipi = 'taseron' if kalem.is_harici_nakliye else 'oz_mal'
                 donus_sefer = Nakliye(
                     kiralama_id=kalem.kiralama_id,
                     firma_id=kalem.kiralama.firma_musteri_id,
@@ -340,6 +340,16 @@ class KiralamaKalemiService(BaseService):
                     nakliye_tipi=nak_tipi,
                     arac_id=kalem.nakliye_araci_id if not kalem.is_harici_nakliye else None,
                 )
+                if kalem.is_harici_nakliye and kalem.nakliye_tedarikci_id:
+                    donus_sefer.taseron_firma_id = kalem.nakliye_tedarikci_id
+                    donus_sefer.taseron_maliyet = to_decimal(kalem.nakliye_alis_fiyat)
+                    donus_sefer.taseron_kdv_orani = kalem.nakliye_alis_kdv
+                    donus_sefer.plaka = "Dış Nakliye"
+                    donus_sefer.arac_id = None
+                else:
+                    donus_sefer.taseron_firma_id = None
+                    donus_sefer.taseron_maliyet = Decimal('0.00')
+                    donus_sefer.taseron_kdv_orani = None
                 if not kalem.is_harici_nakliye and kalem.nakliye_araci_id:
                     secilen_arac = db.session.get(NakliyeAraci, kalem.nakliye_araci_id)
                     if secilen_arac:
@@ -1187,6 +1197,17 @@ class KiralamaService(BaseService):
             ).order_by(Nakliye.id.asc()).all()
             if len(legacy_adaylar) == 1:
                 yeni_sefer = legacy_adaylar[0]
+            else:
+                makine_adi_norm = (makine_adi or '').strip().lower()
+                guzergah_norm = (guzergah_gidis or '').strip().lower()
+                for aday in legacy_adaylar:
+                    aday_guzergah_norm = (aday.guzergah or '').strip().lower()
+                    if (
+                        aday_guzergah_norm == guzergah_norm
+                        or (makine_adi_norm and makine_adi_norm in aday_guzergah_norm)
+                    ):
+                        yeni_sefer = aday
+                        break
         if not yeni_sefer:
             yeni_sefer = Nakliye(kiralama_id=kiralama.id)
 
@@ -1271,7 +1292,7 @@ class KiralamaService(BaseService):
                     f"{makine_adi} {firma_adi} firmasının {is_yeri}'nden "
                     f"{donus_sube_adi} şubesine getirildi"
                 )
-                nak_tipi = 'harici' if kalem.is_harici_nakliye else 'oz_mal'
+                nak_tipi = 'taseron' if kalem.is_harici_nakliye else 'oz_mal'
                 donus_sefer = Nakliye(
                     kiralama_id=kiralama.id,
                     firma_id=kiralama.firma_musteri_id,
@@ -1285,6 +1306,16 @@ class KiralamaService(BaseService):
                     nakliye_tipi=nak_tipi,
                     arac_id=kalem.nakliye_araci_id if not kalem.is_harici_nakliye else None,
                 )
+                if kalem.is_harici_nakliye and kalem.nakliye_tedarikci_id:
+                    donus_sefer.taseron_firma_id = kalem.nakliye_tedarikci_id
+                    donus_sefer.taseron_maliyet = to_decimal(kalem.nakliye_alis_fiyat)
+                    donus_sefer.taseron_kdv_orani = kalem.nakliye_alis_kdv
+                    donus_sefer.plaka = "Dış Nakliye"
+                    donus_sefer.arac_id = None
+                else:
+                    donus_sefer.taseron_firma_id = None
+                    donus_sefer.taseron_maliyet = Decimal('0.00')
+                    donus_sefer.taseron_kdv_orani = None
                 if not kalem.is_harici_nakliye and kalem.nakliye_araci_id:
                     secilen_arac = db.session.get(NakliyeAraci, kalem.nakliye_araci_id)
                     if secilen_arac:

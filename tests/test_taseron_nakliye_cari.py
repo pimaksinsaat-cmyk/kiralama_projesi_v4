@@ -8,9 +8,10 @@ from app.extensions import db
 from app.firmalar.models import Firma
 from app.kiralama.models import Kiralama, KiralamaKalemi
 from app.nakliyeler.models import Nakliye
+from app.nakliyeler.routes import _nakliye_filtered_query
 from app.services.firma_services import FirmaService
 from app.services.nakliye_services import CariServis
-from app.services.kiralama_services import KiralamaKalemiService
+from app.services.kiralama_services import KiralamaKalemiService, KiralamaService
 
 
 def _firma(name, *, is_musteri=True, is_tedarikci=False, vergi_no=None):
@@ -358,6 +359,100 @@ def test_taseron_maliyet_senkronize_et_yeni_kaydi_nakliye_id_ile_olusturur(app):
     assert hizmet.firma_id == taseron.id
 
 
+def test_kiralama_harici_nakliye_legacy_gidis_seferlerini_taseron_olarak_onarir(app):
+    musteri = _firma("PAK MEKANIK", vergi_no="3333333333")
+    taseron = _firma("GEYLANI ERCAN", is_tedarikci=True, vergi_no="4444444444")
+    db.session.add_all([musteri, taseron])
+    db.session.flush()
+
+    kiralama = Kiralama(
+        kiralama_form_no="PF-2026/0073",
+        firma_musteri_id=musteri.id,
+        makine_calisma_adresi="ISTINYE PARK",
+        kdv_orani=20,
+    )
+    db.session.add(kiralama)
+    db.session.flush()
+
+    kalem_1 = KiralamaKalemi(
+        kiralama_id=kiralama.id,
+        kiralama_baslangici=date(2026, 4, 13),
+        kiralama_bitis=date(2026, 5, 3),
+        kiralama_brm_fiyat=Decimal("1000.00"),
+        nakliye_satis_fiyat=Decimal("4000.00"),
+        is_harici_nakliye=True,
+        is_oz_mal_nakliye=False,
+        nakliye_tedarikci_id=taseron.id,
+        nakliye_alis_fiyat=Decimal("1500.00"),
+        nakliye_alis_kdv=20,
+    )
+    kalem_2 = KiralamaKalemi(
+        kiralama_id=kiralama.id,
+        kiralama_baslangici=date(2026, 4, 13),
+        kiralama_bitis=date(2026, 5, 3),
+        kiralama_brm_fiyat=Decimal("1000.00"),
+        nakliye_satis_fiyat=Decimal("4000.00"),
+        is_harici_nakliye=True,
+        is_oz_mal_nakliye=False,
+        nakliye_tedarikci_id=taseron.id,
+        nakliye_alis_fiyat=Decimal("1500.00"),
+        nakliye_alis_kdv=20,
+    )
+    db.session.add_all([kalem_1, kalem_2])
+    db.session.flush()
+
+    eski_pm31 = Nakliye(
+        kiralama_id=kiralama.id,
+        firma_id=musteri.id,
+        tarih=date(2026, 4, 13),
+        islem_tarihi=date(2026, 4, 13),
+        guzergah="PM31 Ikıtelli subesinden PAK MEKANIK firmasinin ISTINYE PARK'ne goturuldu",
+        tutar=Decimal("2000.00"),
+        nakliye_tipi="oz_mal",
+        taseron_maliyet=Decimal("0.00"),
+        aciklama="Gidiş: PF-2026/0073",
+    )
+    eski_pm23 = Nakliye(
+        kiralama_id=kiralama.id,
+        firma_id=musteri.id,
+        tarih=date(2026, 4, 13),
+        islem_tarihi=date(2026, 4, 13),
+        guzergah="PM23 Ikıtelli subesinden PAK MEKANIK firmasinin ISTINYE PARK'ne goturuldu",
+        tutar=Decimal("2000.00"),
+        nakliye_tipi="oz_mal",
+        taseron_maliyet=Decimal("0.00"),
+        aciklama="Gidiş: PF-2026/0073",
+    )
+    db.session.add_all([eski_pm31, eski_pm23])
+    db.session.flush()
+
+    KiralamaService._create_nakliye_ve_cari(kiralama, kalem_1, "PM31", date(2026, 4, 13))
+    KiralamaService._create_nakliye_ve_cari(kiralama, kalem_2, "PM23", date(2026, 4, 13))
+    db.session.commit()
+
+    seferler = Nakliye.query.filter_by(kiralama_id=kiralama.id).order_by(Nakliye.id.asc()).all()
+    assert len(seferler) == 2
+    assert {s.aciklama for s in seferler} == {
+        f"Gidiş: PF-2026/0073 #{kalem_1.id}",
+        f"Gidiş: PF-2026/0073 #{kalem_2.id}",
+    }
+    assert all(s.nakliye_tipi == "taseron" for s in seferler)
+    assert all(s.taseron_firma_id == taseron.id for s in seferler)
+    assert all(s.taseron_maliyet == Decimal("1500.00") for s in seferler)
+
+    filtre_sonucu = _nakliye_filtered_query(None, None, None, str(taseron.id), None).all()
+    assert {s.id for s in filtre_sonucu} == {eski_pm31.id, eski_pm23.id}
+
+    aktif_taseron_carileri = HizmetKaydi.query.filter(
+        HizmetKaydi.firma_id == taseron.id,
+        HizmetKaydi.yon == "gelen",
+        HizmetKaydi.fatura_no == "PF-2026/0073",
+        HizmetKaydi.aciklama.like("Taşeron Nakliye Bedeli%"),
+        HizmetKaydi.is_deleted == False,
+    ).all()
+    assert len(aktif_taseron_carileri) == 2
+
+
 def test_sonlandir_donus_taseron_giderini_idempotent_gunceller(app):
     musteri = _firma("PAK MEKANIK", vergi_no="3333333333")
     taseron = _firma("GEYLANI ERCAN", is_tedarikci=True, vergi_no="4444444444")
@@ -466,3 +561,16 @@ def test_sonlandir_donus_taseron_giderini_idempotent_gunceller(app):
     assert len(aktif_donuslar) == 1
     assert aktif_donuslar[0].tutar == Decimal("1500.00")
     assert len(aktif_gidisler) == 1
+
+    donus_seferleri = Nakliye.query.filter(
+        Nakliye.kiralama_id == kiralama.id,
+        Nakliye.aciklama.like(f"Dönüş: {kiralama.kiralama_form_no} #{kalem.id}"),
+    ).all()
+    assert len(donus_seferleri) == 1
+    assert donus_seferleri[0].nakliye_tipi == "taseron"
+    assert donus_seferleri[0].taseron_firma_id == taseron.id
+    assert donus_seferleri[0].taseron_maliyet == Decimal("1500.00")
+    assert donus_seferleri[0].taseron_kdv_orani == 20
+
+    filtre_sonucu = _nakliye_filtered_query(None, None, None, str(taseron.id), None).all()
+    assert donus_seferleri[0].id in {s.id for s in filtre_sonucu}
