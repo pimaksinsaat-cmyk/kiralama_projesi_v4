@@ -702,7 +702,7 @@ class FirmaService(BaseService):
                     nak_sira = 1
                 rows.append({'id': nakliye.id, 'sort_date': nakliye_islem_tarihi or form_tarihi,
                     'form_no': kir.kiralama_form_no, 'form_tarihi': form_tarihi,
-                    'kiralama_id': kir.id, 'islem_turu': 'nakliye', 'nakliye_sira': nak_sira,
+                    'kiralama_id': kir.id, 'nakliye_id': nakliye.id, 'islem_turu': 'nakliye', 'nakliye_sira': nak_sira,
                     'aciklama': nak_aciklama, 'seri_no': '',
                     'baslangic': nakliye_islem_tarihi, 'bitis': None,
                     'bitis_bugun': False, 'gun_sayisi': None,
@@ -832,7 +832,7 @@ class FirmaService(BaseService):
             nakliye_toplam = nakliye_tutar + nakliye_kdv
             rows.append({'id': nakliye.id, 'sort_date': nakliye_islem_tarihi,
                 'form_no': '-', 'form_tarihi': nakliye_islem_tarihi,
-                'kiralama_id': None, 'islem_turu': 'nakliye_satis', 'nakliye_sira': 1,
+                'kiralama_id': None, 'nakliye_id': nakliye.id, 'islem_turu': 'nakliye_satis', 'nakliye_sira': 1,
                 'aciklama': nakliye.guzergah or 'Nakliye Hizmeti', 'seri_no': '',
                 'baslangic': nakliye_islem_tarihi, 'bitis': None,
                 'bitis_bugun': False, 'gun_sayisi': None,
@@ -852,10 +852,22 @@ class FirmaService(BaseService):
                 HizmetKaydi.aciklama.like('Nakliye Taşeron Gideri:%')
             )
         ).order_by(HizmetKaydi.tarih).all()
+        legacy_taseron_nakliye_ids = {
+            hizmet.ozel_id
+            for hizmet in taseron_nakliye_kayitlari
+            if getattr(hizmet, 'ozel_id', None)
+            and (hizmet.aciklama or '').strip().startswith('Nakliye Taşeron Gideri:')
+        }
+        legacy_taseron_nakliye_by_id = {}
+        if legacy_taseron_nakliye_ids:
+            legacy_taseron_nakliye_by_id = {
+                n.id: n for n in Nakliye.query.filter(Nakliye.id.in_(legacy_taseron_nakliye_ids)).all()
+            }
         taseron_kalem_ids = {
             hizmet.ozel_id
             for hizmet in taseron_nakliye_kayitlari
             if getattr(hizmet, 'ozel_id', None)
+            and not (hizmet.aciklama or '').strip().startswith('Nakliye Taşeron Gideri:')
         }
         missing_taseron_kalem_ids = [
             kalem_id for kalem_id in taseron_kalem_ids
@@ -871,8 +883,16 @@ class FirmaService(BaseService):
             if hizmet.id in included_hizmet_kaydi_ids:
                 # harici_kalemler adımında zaten harici_kiralama satırı olarak eklendi
                 continue
-            kalem_obj = kiralama_kalemi_by_id.get(hizmet.ozel_id)
-            kiralama_link_id = kalem_obj.kiralama_id if kalem_obj else None
+            aciklama_text = (hizmet.aciklama or '').strip()
+            is_legacy_standalone_taseron = aciklama_text.startswith('Nakliye Taşeron Gideri:')
+            if is_legacy_standalone_taseron:
+                nakliye_obj = legacy_taseron_nakliye_by_id.get(hizmet.ozel_id)
+                nakliye_link_id = hizmet.ozel_id
+                kiralama_link_id = nakliye_obj.kiralama_id if nakliye_obj else None
+            else:
+                kalem_obj = kiralama_kalemi_by_id.get(hizmet.ozel_id)
+                nakliye_link_id = None
+                kiralama_link_id = kalem_obj.kiralama_id if kalem_obj else None
             islem_tarih = getattr(hizmet, 'islem_tarihi', None) or hizmet.tarih
             matrah = float(hizmet.tutar or 0)
             kdv_pct = (
@@ -885,7 +905,8 @@ class FirmaService(BaseService):
             rows.append({
                 'id': hizmet.id, 'sort_date': islem_tarih,
                 'form_no': hizmet.fatura_no or '-', 'form_tarihi': islem_tarih,
-                'kiralama_id': kiralama_link_id, 'islem_turu': 'nakliye_tedarik', 'nakliye_sira': 2,
+                'kiralama_id': kiralama_link_id, 'nakliye_id': nakliye_link_id,
+                'islem_turu': 'nakliye_tedarik', 'nakliye_sira': 2,
                 'aciklama': hizmet.aciklama or 'Taşeron Nakliye',
                 'seri_no': '',
                 'baslangic': islem_tarih, 'bitis': None,
@@ -1010,6 +1031,8 @@ class FirmaService(BaseService):
                 kiralama_id_by_form_no[key] = k.id
         for row in rows:
             if row.get('kiralama_id'):
+                continue
+            if row.get('islem_turu') in ('nakliye', 'nakliye_satis', 'nakliye_tedarik'):
                 continue
             form_no = (row.get('form_no') or '').strip()
             if not form_no or form_no == '-':

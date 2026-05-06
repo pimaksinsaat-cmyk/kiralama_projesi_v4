@@ -620,11 +620,12 @@
                         <tbody>
                             {% set start_no = (cari_pagination.page - 1) * cari_pagination.per_page + 1 %}
                             {% for row in cari_rows %}
+                            {% set row_nakliye_id = row.nakliye_id or row.id %}
                             <tr class="context-row"
-                                data-id="{% if row.islem_turu in ('nakliye_satis', 'nakliye', 'nakliye_tedarik') %}{{ row.id }}{% elif row.islem_turu == 'kiralama' %}{{ row.kiralama_id }}{% elif row.islem_turu == 'fatura' %}{{ row.id }}{% elif row.islem_turu in ('tahsilat', 'odeme') %}{{ row.id }}{% else %}{{ row.id or '' }}{% endif %}"
+                                data-id="{% if row.islem_turu in ('nakliye_satis', 'nakliye', 'nakliye_tedarik') %}{{ row_nakliye_id }}{% elif row.islem_turu == 'kiralama' %}{{ row.kiralama_id }}{% elif row.islem_turu == 'fatura' %}{{ row.id }}{% elif row.islem_turu in ('tahsilat', 'odeme') %}{{ row.id }}{% else %}{{ row.id or '' }}{% endif %}"
                                 data-type="{% if row.islem_turu in ('tahsilat', 'odeme') %}odeme{% elif row.islem_turu == 'fatura' %}fatura{% elif row.islem_turu in ('nakliye_satis', 'nakliye_tedarik') %}nakliye{% elif row.islem_turu in ('kiralama', 'nakliye') %}{{ row.islem_turu }}{% endif %}"
                                 data-ozel-id="{{ row.kiralama_id or '' }}"
-                                data-nakliye-id="{% if row.islem_turu in ('nakliye_satis', 'nakliye', 'nakliye_tedarik') %}{{ row.id }}{% else %}{% endif %}"
+                                data-nakliye-id="{% if row.islem_turu in ('nakliye_satis', 'nakliye', 'nakliye_tedarik') %}{{ row_nakliye_id }}{% else %}{% endif %}"
                                 data-nakliye-kiralama-id="{{ row.kiralama_id or '' }}"
                                 data-desc="{{ row.aciklama }}"
                                 style="cursor: context-menu;">

@@ -26,7 +26,8 @@ def _firma(name, *, is_musteri=True, is_tedarikci=False, vergi_no=None):
 def test_legacy_standalone_taseron_nakliye_gideri_cari_satirina_girer(app):
     musteri = _firma("CAGDAS YAPI", vergi_no="1111111111")
     taseron = _firma("GEYLANI ERCAN", is_tedarikci=True, vergi_no="2222222222")
-    db.session.add_all([musteri, taseron])
+    baska_musteri = _firma("OBAYAPI", vergi_no="9999999999")
+    db.session.add_all([musteri, taseron, baska_musteri])
     db.session.flush()
 
     nakliye = Nakliye(
@@ -42,6 +43,25 @@ def test_legacy_standalone_taseron_nakliye_gideri_cari_satirina_girer(app):
     nakliye.hesapla_ve_guncelle()
     db.session.add(nakliye)
     db.session.flush()
+
+    baska_kiralama = Kiralama(
+        kiralama_form_no="PF-2026/0064",
+        firma_musteri_id=baska_musteri.id,
+        makine_calisma_adresi="BASKA IS",
+        kdv_orani=20,
+    )
+    db.session.add(baska_kiralama)
+    db.session.flush()
+    id_cakisan_kalem = KiralamaKalemi(
+        kiralama_id=baska_kiralama.id,
+        kiralama_baslangici=date(2026, 3, 28),
+        kiralama_bitis=date(2026, 3, 29),
+        kiralama_brm_fiyat=Decimal("1000.00"),
+        is_active=True,
+    )
+    db.session.add(id_cakisan_kalem)
+    db.session.flush()
+    assert id_cakisan_kalem.id == nakliye.id
 
     hizmet = HizmetKaydi(
         firma_id=taseron.id,
@@ -60,6 +80,8 @@ def test_legacy_standalone_taseron_nakliye_gideri_cari_satirina_girer(app):
     legacy_row = next(row for row in rows if row["id"] == hizmet.id)
 
     assert legacy_row["islem_turu"] == "nakliye_tedarik"
+    assert legacy_row["nakliye_id"] == nakliye.id
+    assert legacy_row["kiralama_id"] is None
     assert legacy_row["toplam"] == -3000.0
     assert taseron.bakiye_ozeti["net_bakiye_kdvli"] == Decimal("-3000.000000")
 
