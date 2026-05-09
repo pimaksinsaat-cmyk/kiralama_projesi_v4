@@ -90,6 +90,7 @@ def create_app(config_class=Config):
             return redirect(url_for('auth.login', next=request.url))
 
         from app.auth.session_security import (
+            account_is_active,
             clear_active_session,
             clear_session_keys,
             mark_seen,
@@ -98,7 +99,7 @@ def create_app(config_class=Config):
             utc_now,
         )
 
-        if not current_user.is_active:
+        if not account_is_active(current_user):
             clear_active_session(current_user)
             clear_session_keys()
             logout_user()

@@ -9,6 +9,7 @@ from app.auth.forms import LoginForm
 from app.auth.session_security import (
     clear_active_session,
     clear_session_keys,
+    account_is_active,
     has_recent_active_session,
     set_active_session,
     session_token_matches,
@@ -28,7 +29,7 @@ def login():
         user = User.query.with_for_update().filter_by(username=form.username.data).first()
         
         if user and user.check_password(form.password.data):
-            if not user.is_active:
+            if not account_is_active(user):
                 flash('Hesabınız deaktif edilmiş.', 'danger')
                 return render_template('auth/login.html', form=form)
             

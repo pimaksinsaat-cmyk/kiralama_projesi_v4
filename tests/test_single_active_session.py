@@ -1,5 +1,7 @@
 from datetime import timedelta
 
+from sqlalchemy import text
+
 from app.auth.models import User
 from app.auth.session_security import (
     SESSION_LAST_PING_KEY,
@@ -125,7 +127,8 @@ def test_inactive_user_with_existing_session_is_logged_out(app, client):
     _login(client)
 
     user = db.session.get(User, user_id)
-    user.is_active = False
+    db.session.execute(text('ALTER TABLE "user" ADD COLUMN is_active BOOLEAN DEFAULT true'))
+    db.session.execute(text('UPDATE "user" SET is_active = false WHERE id = :user_id'), {"user_id": user_id})
     db.session.commit()
 
     response = client.get("/")

@@ -2,6 +2,10 @@ from datetime import datetime, timedelta, timezone
 import secrets
 
 from flask import session
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
+
+from app.extensions import db
 
 
 SESSION_TOKEN_KEY = "active_session_token"
@@ -58,6 +62,20 @@ def clear_session_keys():
 def session_token_matches(user):
     token = session.get(SESSION_TOKEN_KEY)
     return bool(token and token == getattr(user, "active_session_token", None))
+
+
+def account_is_active(user):
+    try:
+        value = db.session.execute(
+            text('SELECT is_active FROM "user" WHERE id = :user_id'),
+            {"user_id": user.id},
+        ).scalar_one_or_none()
+    except SQLAlchemyError:
+        db.session.rollback()
+        return True
+    if value is None:
+        return True
+    return bool(value)
 
 
 def should_touch_seen_at(now=None):

@@ -5,7 +5,7 @@ from app.extensions import db, login_manager
 from datetime import datetime, timezone
 from app.models.base_model import BaseModel
 
-class User(BaseModel, UserMixin):
+class User(UserMixin, BaseModel):
     __tablename__ = 'user'
 
     username = db.Column(db.String(80), unique=True, nullable=False, index=True)
