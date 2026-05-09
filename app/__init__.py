@@ -83,24 +83,30 @@ def create_app(config_class=Config):
     def require_login():
         acik_endpointler = ['auth.login', 'auth.logout', 'static']
         
-        # Authenticated AJAX/API endpoint'leri muaf tutmak
-        if request.path.startswith('/subeler/') and request.path.endswith('/makineler'):
-            if current_user.is_authenticated:
-                return None
-        
         if request.endpoint in acik_endpointler:
             return None
             
-        if not current_user.is_authenticated:
+        if current_user.is_anonymous:
             return redirect(url_for('auth.login', next=request.url))
 
         from app.auth.session_security import (
+            clear_active_session,
             clear_session_keys,
             mark_seen,
             session_token_matches,
             should_touch_seen_at,
             utc_now,
         )
+
+        if not current_user.is_active:
+            clear_active_session(current_user)
+            clear_session_keys()
+            logout_user()
+            db.session.commit()
+            return redirect(url_for('auth.login', next=request.url))
+
+        if not current_user.is_authenticated:
+            return redirect(url_for('auth.login', next=request.url))
 
         if not session_token_matches(current_user):
             clear_session_keys()

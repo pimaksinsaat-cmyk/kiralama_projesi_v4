@@ -7,6 +7,7 @@ from app.auth.session_security import (
     utc_now,
 )
 from app.extensions import db
+from app.subeler.models import Sube
 
 
 def _create_user(username="single_user", password="secret123", rol="user"):
@@ -100,6 +101,41 @@ def test_mismatched_session_token_is_logged_out(app, client):
 
     assert response.status_code == 302
     assert "/auth/login" in response.headers["Location"]
+
+
+def test_sube_makineleri_endpoint_does_not_bypass_session_token(app, client):
+    _create_user()
+    sube = Sube(isim="Token Kontrol Sube")
+    db.session.add(sube)
+    db.session.commit()
+    sube_id = sube.id
+    _login(client)
+
+    with client.session_transaction() as sess:
+        sess[SESSION_TOKEN_KEY] = "wrong-token"
+
+    response = client.get(f"/subeler/{sube_id}/makineler")
+
+    assert response.status_code == 302
+    assert "/auth/login" in response.headers["Location"]
+
+
+def test_inactive_user_with_existing_session_is_logged_out(app, client):
+    user_id = _create_user()
+    _login(client)
+
+    user = db.session.get(User, user_id)
+    user.is_active = False
+    db.session.commit()
+
+    response = client.get("/")
+
+    assert response.status_code == 302
+    assert "/auth/login" in response.headers["Location"]
+    db.session.refresh(user)
+    assert user.active_session_token is None
+    assert user.active_session_started_at is None
+    assert user.active_session_seen_at is None
 
 
 def test_seen_at_is_not_updated_before_120_seconds(app, client):
