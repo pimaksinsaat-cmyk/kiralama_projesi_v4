@@ -34,7 +34,7 @@ def login():
             
             now = utc_now()
             if has_recent_active_session(user, now=now):
-                flash('Bu kullanici baska bir ekranda aktif. Lutfen mevcut oturumdan cikis yapin veya 30 dakika bekleyin.', 'warning')
+                flash('Bu kullanici baska bir ekranda aktif. Lutfen mevcut oturumdan cikis yapin.', 'warning')
                 return render_template('auth/login.html', form=form)
 
             login_user(user, remember=False)
