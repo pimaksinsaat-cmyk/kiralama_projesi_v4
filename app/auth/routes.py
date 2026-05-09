@@ -1,31 +1,45 @@
 # app/auth/routes.py
-from flask import render_template, redirect, url_for, flash, request
+from flask import render_template, redirect, url_for, flash, request, session
 from flask_login import login_user, logout_user, login_required, current_user
 from datetime import datetime, timezone, timedelta
 from app import db
 from app.auth import auth_bp
 from app.auth.models import User
 from app.auth.forms import LoginForm
+from app.auth.session_security import (
+    clear_active_session,
+    clear_session_keys,
+    has_recent_active_session,
+    set_active_session,
+    session_token_matches,
+    utc_now,
+)
 from app.models.operation_log import OperationLog
 from app.utils import admin_required
 
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
-    if current_user.is_authenticated:
+    if current_user.is_authenticated and session.get('_user_id'):
         return redirect(url_for('main.index'))
     
     form = LoginForm()
     if form.validate_on_submit():
-        user = User.query.filter_by(username=form.username.data).first()
+        user = User.query.with_for_update().filter_by(username=form.username.data).first()
         
         if user and user.check_password(form.password.data):
             if not user.is_active:
                 flash('Hesabınız deaktif edilmiş.', 'danger')
                 return render_template('auth/login.html', form=form)
             
-            login_user(user, remember=form.beni_hatirla.data)
-            user.last_login = datetime.now(timezone.utc)
+            now = utc_now()
+            if has_recent_active_session(user, now=now):
+                flash('Bu kullanici baska bir ekranda aktif. Lutfen mevcut oturumdan cikis yapin veya 30 dakika bekleyin.', 'warning')
+                return render_template('auth/login.html', form=form)
+
+            login_user(user, remember=False)
+            set_active_session(user, now=now)
+            user.last_login = now
             db.session.commit()
             
             next_page = request.args.get('next')
@@ -39,6 +53,10 @@ def login():
 @auth_bp.route('/logout')
 @login_required
 def logout():
+    if session_token_matches(current_user):
+        clear_active_session(current_user)
+        db.session.commit()
+    clear_session_keys()
     logout_user()
     flash('Başarıyla çıkış yapıldı.', 'info')
     return redirect(url_for('auth.login'))
@@ -149,6 +167,9 @@ def sifre_degistir(user_id):
         flash('Şifre en az 4 karakter olmalıdır.', 'warning')
         return redirect(url_for('auth.kullanici_listesi'))
     user.set_password(yeni_sifre)
+    clear_active_session(user)
+    if user.id == current_user.id:
+        clear_session_keys()
     db.session.commit()
     flash(f'{user.username} şifresi güncellendi.', 'success')
     return redirect(url_for('auth.kullanici_listesi'))

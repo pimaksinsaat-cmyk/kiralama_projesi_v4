@@ -15,6 +15,12 @@ from datetime import date
 from decimal import Decimal
 
 from app.auth.models import User
+from app.auth.session_security import (
+    SESSION_LAST_PING_KEY,
+    SESSION_TOKEN_KEY,
+    new_session_token,
+    utc_now,
+)
 from app.extensions import db
 from app.filo.models import Ekipman
 from app.firmalar.models import Firma
@@ -31,10 +37,20 @@ def _unique_kod() -> str:
 
 
 def _login_user(client, user_id: int) -> None:
-    # Flask-Login session alanlari.
+    token = new_session_token()
+    now = utc_now()
+    user = db.session.get(User, user_id)
+    user.active_session_token = token
+    user.active_session_started_at = now
+    user.active_session_seen_at = now
+    db.session.commit()
+
+    # Flask-Login ve tek oturum session alanlari.
     with client.session_transaction() as session:
         session["_user_id"] = str(user_id)
         session["_fresh"] = True
+        session[SESSION_TOKEN_KEY] = token
+        session[SESSION_LAST_PING_KEY] = now.isoformat()
 
 
 def test_e2e_filo_ve_sube_makineleri(app, client):

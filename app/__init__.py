@@ -6,7 +6,7 @@ from config import Config
 from flask_wtf.csrf import CSRFProtect 
 from app.extensions import db, migrate, login_manager, server_session
 from sqlalchemy import inspect
-from flask_login import current_user
+from flask_login import current_user, logout_user
 from datetime import timedelta
 from flask import session
 
@@ -93,6 +93,24 @@ def create_app(config_class=Config):
             
         if not current_user.is_authenticated:
             return redirect(url_for('auth.login', next=request.url))
+
+        from app.auth.session_security import (
+            clear_session_keys,
+            mark_seen,
+            session_token_matches,
+            should_touch_seen_at,
+            utc_now,
+        )
+
+        if not session_token_matches(current_user):
+            clear_session_keys()
+            logout_user()
+            return redirect(url_for('auth.login', next=request.url))
+
+        now = utc_now()
+        if should_touch_seen_at(now=now):
+            mark_seen(current_user, now=now)
+            db.session.commit()
     
         # Hareketsizlik kontrolü — her istekte süreyi sıfırla
         #session.permanent = True
