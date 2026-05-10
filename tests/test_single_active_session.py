@@ -92,6 +92,24 @@ def test_expired_active_session_allows_new_login(app, client):
     assert user.active_session_token != old_token
 
 
+def test_future_active_session_timestamp_does_not_block_login(app, client):
+    user_id = _create_user()
+    _login(client)
+
+    user = db.session.get(User, user_id)
+    old_token = user.active_session_token
+    user.active_session_seen_at = utc_now() + timedelta(hours=2)
+    db.session.commit()
+
+    second_client = app.test_client()
+    second_response = _login(second_client)
+
+    assert second_response.status_code == 302
+    db.session.refresh(user)
+    assert user.active_session_token
+    assert user.active_session_token != old_token
+
+
 def test_mismatched_session_token_is_logged_out(app, client):
     _create_user()
     _login(client)
