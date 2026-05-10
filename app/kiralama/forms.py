@@ -49,7 +49,13 @@ class KiralamaKalemiForm(BaseForm):
     donus_nakliye_fatura_et = IntegerField("Dönüş Nakliyesini de Fatura Et?", default=0)
     nakliye_alis_fiyat = MoneyField('Nakliye Alış Fiyatı', validators=[Optional()], default='0.00')
     nakliye_tedarikci_id = SelectField('Nakliye Tedarikçisi', coerce=int, default=0, validators=[Optional()])
-    
+    # Dönüş taşeron nakliye (sonlandırma)
+    donus_is_harici_nakliye = IntegerField('Dönüş harici nakliye', default=0)
+    donus_nakliye_tedarikci_id = SelectField('Dönüş nakliye tedarikçisi', coerce=int, default=0, validators=[Optional()])
+    donus_nakliye_alis_fiyat = MoneyField('Dönüş nakliye alış', validators=[Optional()], default='0.00')
+    donus_nakliye_alis_kdv = IntegerField('Dönüş taşeron alış KDV (%)', validators=[Optional()], default=None)
+    donus_nakliye_araci_id = SelectField('Dönüş nakliye aracı (Öz Mal)', coerce=int, default=0, validators=[Optional()])
+
     # ÖZ MAL NAKLİYE ARACI
     nakliye_araci_id = SelectField('Nakliye Aracı (Öz Mal)', coerce=int, default=0, validators=[Optional()])
 

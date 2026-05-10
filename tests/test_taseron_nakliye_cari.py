@@ -4,9 +4,12 @@ import importlib.util
 from pathlib import Path
 
 from app.cari.models import HizmetKaydi
+from app.araclar.models import Arac
 from app.extensions import db
+from app.filo.models import Ekipman
 from app.firmalar.models import Firma
 from app.kiralama.models import Kiralama, KiralamaKalemi
+from app.subeler.models import Sube
 from app.nakliyeler.models import Nakliye
 from app.nakliyeler.routes import _nakliye_filtered_query
 from app.services.firma_services import FirmaService
@@ -529,6 +532,7 @@ def test_sonlandir_donus_taseron_giderini_idempotent_gunceller(app):
         is_harici_nakliye=True,
         nakliye_tedarikci_id=taseron.id,
         nakliye_alis_fiyat="1500.00",
+        donus_nakliye_alis_kdv=20,
         donus_nakliye_satis_fiyat="2000.00",
     )
     KiralamaKalemiService.sonlandir(
@@ -538,8 +542,17 @@ def test_sonlandir_donus_taseron_giderini_idempotent_gunceller(app):
         is_harici_nakliye=True,
         nakliye_tedarikci_id=taseron.id,
         nakliye_alis_fiyat="1500.00",
+        donus_nakliye_alis_kdv=20,
         donus_nakliye_satis_fiyat="2000.00",
     )
+
+    db.session.refresh(kalem)
+    assert kalem.is_harici_nakliye is True
+    assert kalem.nakliye_tedarikci_id == taseron.id
+    assert kalem.nakliye_alis_fiyat == Decimal("1500.00")
+    assert kalem.donus_is_harici_nakliye is True
+    assert kalem.donus_nakliye_tedarikci_id == taseron.id
+    assert kalem.donus_nakliye_alis_fiyat == Decimal("1500.00")
 
     aktif_donuslar = HizmetKaydi.query.filter(
         HizmetKaydi.firma_id == taseron.id,
@@ -574,3 +587,87 @@ def test_sonlandir_donus_taseron_giderini_idempotent_gunceller(app):
 
     filtre_sonucu = _nakliye_filtered_query(None, None, None, str(taseron.id), None).all()
     assert donus_seferleri[0].id in {s.id for s in filtre_sonucu}
+
+
+def test_sonlandir_donus_oz_mal_gidis_taseron_korunur(app):
+    musteri = _firma("KOR TEST MUS", vergi_no="5555555555")
+    gidis_ts = _firma("GIDIS NAK TS", is_tedarikci=True, vergi_no="6666666666")
+    db.session.add_all([musteri, gidis_ts])
+    db.session.flush()
+
+    sube = Sube(isim="Test Şube")
+    db.session.add(sube)
+    db.session.flush()
+
+    arac = Ekipman(
+        kod="TRK-01",
+        yakit="Dizel",
+        tipi="MAKAS",
+        marka="X",
+        model="Mdl",
+        seri_no="SN-KIR-MK",
+        calisma_yuksekligi=12,
+        kaldirma_kapasitesi=4500,
+        uretim_yili=2020,
+        sube_id=sube.id,
+        calisma_durumu="kirada",
+    )
+    nak_arac = Arac(
+        plaka="34TEST01",
+        arac_tipi="Nakliye",
+        marka_model="Nak Md2",
+        sube_id=sube.id,
+        is_nakliye_araci=True,
+    )
+    db.session.add_all([arac, nak_arac])
+    db.session.flush()
+
+    kiralama = Kiralama(
+        kiralama_form_no="PF-2026/0899",
+        firma_musteri_id=musteri.id,
+        makine_calisma_adresi="ADR",
+        kdv_orani=20,
+    )
+    db.session.add(kiralama)
+    db.session.flush()
+
+    kalem = KiralamaKalemi(
+        kiralama_id=kiralama.id,
+        ekipman_id=arac.id,
+        kiralama_baslangici=date(2026, 4, 1),
+        kiralama_bitis=date(2026, 5, 1),
+        kiralama_brm_fiyat=Decimal("500.00"),
+        nakliye_satis_fiyat=Decimal("2000.00"),
+        donus_nakliye_fatura_et=True,
+        donus_nakliye_satis_fiyat=None,
+        is_harici_nakliye=True,
+        is_oz_mal_nakliye=False,
+        nakliye_tedarikci_id=gidis_ts.id,
+        nakliye_alis_fiyat=Decimal("800.00"),
+        nakliye_alis_kdv=20,
+        sonlandirildi=False,
+        is_active=True,
+    )
+    db.session.add(kalem)
+    db.session.commit()
+
+    KiralamaKalemiService.sonlandir(
+        kalem.id,
+        "2026-05-01",
+        str(sube.id),
+        is_harici_nakliye=False,
+        nakliye_araci_id=nak_arac.id,
+        nakliye_alis_fiyat=None,
+        donus_nakliye_alis_kdv=None,
+        donus_nakliye_satis_fiyat="1000.00",
+    )
+
+    db.session.refresh(kalem)
+    assert kalem.is_harici_nakliye is True
+    assert kalem.nakliye_tedarikci_id == gidis_ts.id
+    assert kalem.nakliye_alis_fiyat == Decimal("800.00")
+    assert kalem.donus_is_harici_nakliye is False
+    assert kalem.donus_nakliye_tedarikci_id is None
+    assert kalem.donus_nakliye_alis_fiyat is None
+    assert kalem.nakliye_araci_id is None
+    assert kalem.donus_nakliye_araci_id == nak_arac.id

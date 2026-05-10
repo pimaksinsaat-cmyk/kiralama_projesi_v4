@@ -80,6 +80,11 @@ class KiralamaKalemi(BaseModel):
     nakliye_alis_tevkifat_oran = db.Column(db.String(10), nullable=True, default=None)
     nakliye_satis_tevkifat_oran = db.Column(db.String(10), nullable=True, default=None)
     nakliye_tedarikci_id = db.Column(db.Integer, db.ForeignKey('firma.id'), nullable=True)
+    # Dönüş nakliyesi taşeronu (sonlandırma modalı — gidiş taşeronundan bağımsız)
+    donus_is_harici_nakliye = db.Column(db.Boolean, default=False, nullable=False)
+    donus_nakliye_tedarikci_id = db.Column(db.Integer, db.ForeignKey('firma.id'), nullable=True)
+    donus_nakliye_alis_fiyat = db.Column(db.Numeric(15, 2), nullable=True)
+    donus_nakliye_araci_id = db.Column(db.Integer, db.ForeignKey('araclar.id'), nullable=True)
     nakliye_araci_id = db.Column(db.Integer, db.ForeignKey('ekipman.id'), nullable=True)
     
     # --- DURUM VE VERSİYONLAMA (YENİ EKLENENLER) ---
@@ -119,6 +124,8 @@ class KiralamaKalemi(BaseModel):
     nakliye_araci = db.relationship('Ekipman', foreign_keys=[nakliye_araci_id], backref='yapilan_nakliyeler')
     harici_tedarikci = db.relationship('Firma', foreign_keys=[harici_ekipman_tedarikci_id])
     nakliye_tedarikci = db.relationship('Firma', foreign_keys=[nakliye_tedarikci_id])
+    donus_nakliye_tedarikci = db.relationship('Firma', foreign_keys=[donus_nakliye_tedarikci_id])
+    donus_nakliye_araci = db.relationship('Arac', foreign_keys=[donus_nakliye_araci_id])
     donus_sube = db.relationship('Sube', foreign_keys=[donus_sube_id])
     iade_nakliye_arac = db.relationship('Arac', foreign_keys=[iade_nakliye_arac_id])
     iade_nakliye_tedarikci = db.relationship('Firma', foreign_keys=[iade_nakliye_tedarikci_id])

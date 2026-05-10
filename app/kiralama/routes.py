@@ -159,6 +159,10 @@ def populate_kiralama_form_choices(form, include_ids=None):
         f.ekipman_id.choices = pimaks_choices
         f.harici_ekipman_tedarikci_id.choices = ted_choices
         f.nakliye_tedarikci_id.choices = ted_choices
+        if hasattr(f, 'donus_nakliye_tedarikci_id'):
+            f.donus_nakliye_tedarikci_id.choices = ted_choices
+        if hasattr(f, 'donus_nakliye_araci_id'):
+            f.donus_nakliye_araci_id.choices = arac_choices
         f.nakliye_araci_id.choices = arac_choices
 
 @kiralama_bp.route('/')
@@ -613,7 +617,7 @@ def duzenle(kiralama_id):
         populate_kiralama_form_choices(form, include_ids=include_ids)
         # Güvenlik: Eğer choices None ise boş listeye çevir
         for entry in form.kalemler.entries:
-            for field_name in ['ekipman_id', 'harici_ekipman_tedarikci_id', 'nakliye_tedarikci_id', 'nakliye_araci_id']:
+            for field_name in ['ekipman_id', 'harici_ekipman_tedarikci_id', 'nakliye_tedarikci_id', 'nakliye_araci_id', 'donus_nakliye_tedarikci_id', 'donus_nakliye_araci_id']:
                 field = getattr(entry.form, field_name, None)
                 if field is not None and getattr(field, 'choices', None) is None:
                     field.choices = []
@@ -635,7 +639,7 @@ def duzenle(kiralama_id):
             k_form = entry.form
             current_app.logger.info(f"[DUZENLE] kalem[{idx}].nakliye_alis_kdv DB'den: {kalem.nakliye_alis_kdv} -> Form: {getattr(k_form, 'nakliye_alis_kdv', None)}")
             # SelectField alanlarının choices'ı None ise boş listeye set et
-            for field_name in ['ekipman_id', 'harici_ekipman_tedarikci_id', 'nakliye_tedarikci_id', 'nakliye_araci_id']:
+            for field_name in ['ekipman_id', 'harici_ekipman_tedarikci_id', 'nakliye_tedarikci_id', 'nakliye_araci_id', 'donus_nakliye_tedarikci_id', 'donus_nakliye_araci_id']:
                 field = getattr(k_form, field_name, None)
                 if field is not None and getattr(field, 'choices', None) is None:
                     field.choices = []
@@ -665,6 +669,16 @@ def duzenle(kiralama_id):
             k_form.nakliye_alis_fiyat.data = kalem.nakliye_alis_fiyat
             k_form.nakliye_tedarikci_id.data = kalem.nakliye_tedarikci_id
             k_form.nakliye_araci_id.data = kalem.nakliye_araci_id
+            if hasattr(k_form, 'donus_is_harici_nakliye'):
+                k_form.donus_is_harici_nakliye.data = 1 if getattr(kalem, 'donus_is_harici_nakliye', False) else 0
+            if hasattr(k_form, 'donus_nakliye_tedarikci_id'):
+                k_form.donus_nakliye_tedarikci_id.data = kalem.donus_nakliye_tedarikci_id
+            if hasattr(k_form, 'donus_nakliye_alis_fiyat'):
+                k_form.donus_nakliye_alis_fiyat.data = kalem.donus_nakliye_alis_fiyat
+            if hasattr(k_form, 'donus_nakliye_alis_kdv'):
+                k_form.donus_nakliye_alis_kdv.data = kalem.donus_nakliye_alis_kdv
+            if hasattr(k_form, 'donus_nakliye_araci_id'):
+                k_form.donus_nakliye_araci_id.data = kalem.donus_nakliye_araci_id
             # Ek alanlar (varsa formda karşılığı olanlar)
             if hasattr(k_form, 'sonlandirildi'):
                 k_form.sonlandirildi.data = kalem.sonlandirildi
@@ -764,6 +778,11 @@ def duzenle(kiralama_id):
                     or not _int_equal(k_data.get('nakliye_alis_kdv'), mevcut_kalem.nakliye_alis_kdv)
                     or not _int_equal(k_data.get('nakliye_satis_kdv'), mevcut_kalem.nakliye_satis_kdv)
                     or _bool_from_form(k_data.get('donus_nakliye_fatura_et')) != bool(mevcut_kalem.donus_nakliye_fatura_et)
+                    or _bool_from_form(k_data.get('donus_is_harici_nakliye')) != bool(getattr(mevcut_kalem, 'donus_is_harici_nakliye', False))
+                    or not _int_equal(k_data.get('donus_nakliye_tedarikci_id'), getattr(mevcut_kalem, 'donus_nakliye_tedarikci_id', None))
+                    or not _money_equal(k_data.get('donus_nakliye_alis_fiyat'), getattr(mevcut_kalem, 'donus_nakliye_alis_fiyat', None))
+                    or not _int_equal(k_data.get('donus_nakliye_alis_kdv'), getattr(mevcut_kalem, 'donus_nakliye_alis_kdv', None))
+                    or not _int_equal(k_data.get('donus_nakliye_araci_id'), getattr(mevcut_kalem, 'donus_nakliye_araci_id', None))
                     or (k_data.get('nakliye_alis_tevkifat_oran') or None) != mevcut_kalem.nakliye_alis_tevkifat_oran
                     or (k_data.get('nakliye_satis_tevkifat_oran') or None) != mevcut_kalem.nakliye_satis_tevkifat_oran
                 )

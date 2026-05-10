@@ -234,18 +234,18 @@ class KiralamaKalemiService(BaseService):
             else:
                 kalem.donus_sube_id = None
 
-        # Dönüş nakliye bilgilerini güncelle
-        kalem.is_harici_nakliye = bool(is_harici_nakliye)
-        kalem.is_oz_mal_nakliye = not kalem.is_harici_nakliye
-        if kalem.is_harici_nakliye:
-            kalem.nakliye_tedarikci_id = int(nakliye_tedarikci_id or 0) or None
-            kalem.nakliye_araci_id = None
-            kalem.nakliye_alis_fiyat = to_decimal(nakliye_alis_fiyat)
+        # Dönüş nakliye (modal): gidiş taşeron alanlarına dokunma — ayrı kolonlara yaz
+        kalem.donus_is_harici_nakliye = bool(is_harici_nakliye)
+        if kalem.donus_is_harici_nakliye:
+            kalem.donus_nakliye_tedarikci_id = int(nakliye_tedarikci_id or 0) or None
+            kalem.donus_nakliye_alis_fiyat = to_decimal(nakliye_alis_fiyat)
             kalem.donus_nakliye_alis_kdv = to_int_or_none(donus_nakliye_alis_kdv)
+            kalem.donus_nakliye_araci_id = None
         else:
-            kalem.nakliye_tedarikci_id = None
-            kalem.nakliye_araci_id = int(nakliye_araci_id or 0) or None
+            kalem.donus_nakliye_tedarikci_id = None
+            kalem.donus_nakliye_alis_fiyat = None
             kalem.donus_nakliye_alis_kdv = None
+            kalem.donus_nakliye_araci_id = int(nakliye_araci_id or 0) or None
 
         # --- Dönüş için ortak değişkenler ---
         musteri_adi = "Bilinmeyen Müşteri"
@@ -283,9 +283,13 @@ class KiralamaKalemiService(BaseService):
         ).order_by(HizmetKaydi.id.asc()).all()
 
         aktif_donus_taseron = None
-        if kalem.is_harici_nakliye and kalem.nakliye_tedarikci_id and to_decimal(kalem.nakliye_alis_fiyat) > 0:
+        if (
+            kalem.donus_is_harici_nakliye
+            and kalem.donus_nakliye_tedarikci_id
+            and to_decimal(kalem.donus_nakliye_alis_fiyat) > 0
+        ):
             for kayit in donus_taseron_kayitlari:
-                if kayit.firma_id == kalem.nakliye_tedarikci_id and aktif_donus_taseron is None:
+                if kayit.firma_id == kalem.donus_nakliye_tedarikci_id and aktif_donus_taseron is None:
                     aktif_donus_taseron = kayit
                     continue
                 kayit.is_deleted = True
@@ -296,10 +300,10 @@ class KiralamaKalemiService(BaseService):
             if aktif_donus_taseron is None:
                 aktif_donus_taseron = HizmetKaydi(yon='gelen')
 
-            aktif_donus_taseron.firma_id = kalem.nakliye_tedarikci_id
+            aktif_donus_taseron.firma_id = kalem.donus_nakliye_tedarikci_id
             aktif_donus_taseron.tarih = date.today()
             aktif_donus_taseron.islem_tarihi = kalem.kiralama_bitis or date.today()
-            aktif_donus_taseron.tutar = to_decimal(kalem.nakliye_alis_fiyat)
+            aktif_donus_taseron.tutar = to_decimal(kalem.donus_nakliye_alis_fiyat)
             aktif_donus_taseron.yon = 'gelen'
             aktif_donus_taseron.fatura_no = form_no_donus
             aktif_donus_taseron.ozel_id = kalem.id
@@ -330,7 +334,7 @@ class KiralamaKalemiService(BaseService):
                     f"{makine_bilgisi_donus} {musteri_adi} firmasının {is_yeri_donus}'nden "
                     f"{donus_sube_adi} şubesine getirildi"
                 )
-                nak_tipi = 'taseron' if kalem.is_harici_nakliye else 'oz_mal'
+                nak_tipi = 'taseron' if kalem.donus_is_harici_nakliye else 'oz_mal'
                 donus_sefer = Nakliye(
                     kiralama_id=kalem.kiralama_id,
                     firma_id=kalem.kiralama.firma_musteri_id,
@@ -342,11 +346,11 @@ class KiralamaKalemiService(BaseService):
                     tevkifat_orani=kalem.nakliye_satis_tevkifat_oran or None,
                     aciklama=f"Dönüş: {form_no} #{kalem.id}",
                     nakliye_tipi=nak_tipi,
-                    arac_id=kalem.nakliye_araci_id if not kalem.is_harici_nakliye else None,
+                    arac_id=kalem.donus_nakliye_araci_id if not kalem.donus_is_harici_nakliye else None,
                 )
-                if kalem.is_harici_nakliye and kalem.nakliye_tedarikci_id:
-                    donus_sefer.taseron_firma_id = kalem.nakliye_tedarikci_id
-                    donus_sefer.taseron_maliyet = to_decimal(kalem.nakliye_alis_fiyat)
+                if kalem.donus_is_harici_nakliye and kalem.donus_nakliye_tedarikci_id:
+                    donus_sefer.taseron_firma_id = kalem.donus_nakliye_tedarikci_id
+                    donus_sefer.taseron_maliyet = to_decimal(kalem.donus_nakliye_alis_fiyat)
                     donus_sefer.taseron_kdv_orani = kalem.donus_nakliye_alis_kdv
                     donus_sefer.plaka = "Dış Nakliye"
                     donus_sefer.arac_id = None
@@ -354,8 +358,8 @@ class KiralamaKalemiService(BaseService):
                     donus_sefer.taseron_firma_id = None
                     donus_sefer.taseron_maliyet = Decimal('0.00')
                     donus_sefer.taseron_kdv_orani = None
-                if not kalem.is_harici_nakliye and kalem.nakliye_araci_id:
-                    secilen_arac = db.session.get(NakliyeAraci, kalem.nakliye_araci_id)
+                if not kalem.donus_is_harici_nakliye and kalem.donus_nakliye_araci_id:
+                    secilen_arac = db.session.get(NakliyeAraci, kalem.donus_nakliye_araci_id)
                     if secilen_arac:
                         donus_sefer.plaka = secilen_arac.plaka
                 donus_sefer.hesapla_ve_guncelle()
@@ -401,6 +405,11 @@ class KiralamaKalemiService(BaseService):
 
         kalem.sonlandirildi = False
         kalem.donus_nakliye_satis_fiyat = None  # Modalın bir sonraki açılışında form varsayını kullansın
+        kalem.donus_is_harici_nakliye = False
+        kalem.donus_nakliye_tedarikci_id = None
+        kalem.donus_nakliye_alis_fiyat = None
+        kalem.donus_nakliye_araci_id = None
+        kalem.donus_nakliye_alis_kdv = None
         if kalem.ekipman:
             kalem.ekipman.calisma_durumu = 'kirada'
 
@@ -1057,6 +1066,18 @@ class KiralamaService(BaseService):
                 aktif.nakliye_satis_kdv = to_int_or_none(k_data.get('nakliye_satis_kdv'))
                 aktif.nakliye_alis_tevkifat_oran = k_data.get('nakliye_alis_tevkifat_oran') or None
                 aktif.nakliye_satis_tevkifat_oran = k_data.get('nakliye_satis_tevkifat_oran') or None
+                _donus_h = int(k_data.get('donus_is_harici_nakliye') or 0) == 1
+                aktif.donus_is_harici_nakliye = _donus_h
+                if _donus_h:
+                    aktif.donus_nakliye_tedarikci_id = int(k_data.get('donus_nakliye_tedarikci_id') or 0) or None
+                    aktif.donus_nakliye_alis_fiyat = to_decimal(k_data.get('donus_nakliye_alis_fiyat'))
+                    aktif.donus_nakliye_alis_kdv = to_int_or_none(k_data.get('donus_nakliye_alis_kdv'))
+                    aktif.donus_nakliye_araci_id = None
+                else:
+                    aktif.donus_nakliye_tedarikci_id = None
+                    aktif.donus_nakliye_alis_fiyat = None
+                    aktif.donus_nakliye_alis_kdv = None
+                    aktif.donus_nakliye_araci_id = int(k_data.get('donus_nakliye_araci_id') or 0) or None
 
                 # Orijinal sonlandirildi durumunu geri yükle
                 aktif.sonlandirildi = orijinal_sonlandirildi
@@ -1080,6 +1101,11 @@ class KiralamaService(BaseService):
                     k_data['dis_tedarik_nakliye'] = 1 if aktif.is_harici_nakliye else 0
                     k_data['nakliye_tedarikci_id'] = aktif.nakliye_tedarikci_id or 0
                     k_data['nakliye_araci_id'] = aktif.nakliye_araci_id or 0
+                    k_data['donus_is_harici_nakliye'] = 1 if getattr(aktif, 'donus_is_harici_nakliye', False) else 0
+                    k_data['donus_nakliye_tedarikci_id'] = aktif.donus_nakliye_tedarikci_id or 0
+                    k_data['donus_nakliye_alis_fiyat'] = aktif.donus_nakliye_alis_fiyat or 0
+                    k_data['donus_nakliye_alis_kdv'] = aktif.donus_nakliye_alis_kdv
+                    k_data['donus_nakliye_araci_id'] = aktif.donus_nakliye_araci_id or 0
 
                 # Ekipman Durumu
                 is_dis = int(k_data.get('dis_tedarik_ekipman') or 0) == 1
@@ -1138,7 +1164,11 @@ class KiralamaService(BaseService):
                 db.session.flush()
                 formdan_gelen_idler.append(aktif.id)
 
-                if to_decimal(aktif.nakliye_satis_fiyat) > 0 or to_decimal(aktif.nakliye_alis_fiyat) > 0:
+                if (
+                    to_decimal(aktif.nakliye_satis_fiyat) > 0
+                    or to_decimal(aktif.nakliye_alis_fiyat) > 0
+                    or getattr(aktif, 'sonlandirildi', False)
+                ):
                     cls._create_nakliye_ve_cari(kiralama, aktif, makine_adi, bas)
 
             for k in list(kiralama.kalemler):
@@ -1297,7 +1327,7 @@ class KiralamaService(BaseService):
                     f"{makine_adi} {firma_adi} firmasının {is_yeri}'nden "
                     f"{donus_sube_adi} şubesine getirildi"
                 )
-                nak_tipi = 'taseron' if kalem.is_harici_nakliye else 'oz_mal'
+                nak_tipi = 'taseron' if kalem.donus_is_harici_nakliye else 'oz_mal'
                 donus_sefer = Nakliye(
                     kiralama_id=kiralama.id,
                     firma_id=kiralama.firma_musteri_id,
@@ -1309,11 +1339,11 @@ class KiralamaService(BaseService):
                     tevkifat_orani=kalem.nakliye_satis_tevkifat_oran or None,
                     aciklama=f"Dönüş: {form_no} #{kalem.id}",
                     nakliye_tipi=nak_tipi,
-                    arac_id=kalem.nakliye_araci_id if not kalem.is_harici_nakliye else None,
+                    arac_id=kalem.donus_nakliye_araci_id if not kalem.donus_is_harici_nakliye else None,
                 )
-                if kalem.is_harici_nakliye and kalem.nakliye_tedarikci_id:
-                    donus_sefer.taseron_firma_id = kalem.nakliye_tedarikci_id
-                    donus_sefer.taseron_maliyet = to_decimal(kalem.nakliye_alis_fiyat)
+                if kalem.donus_is_harici_nakliye and kalem.donus_nakliye_tedarikci_id:
+                    donus_sefer.taseron_firma_id = kalem.donus_nakliye_tedarikci_id
+                    donus_sefer.taseron_maliyet = to_decimal(kalem.donus_nakliye_alis_fiyat)
                     donus_sefer.taseron_kdv_orani = kalem.donus_nakliye_alis_kdv
                     donus_sefer.plaka = "Dış Nakliye"
                     donus_sefer.arac_id = None
@@ -1321,8 +1351,8 @@ class KiralamaService(BaseService):
                     donus_sefer.taseron_firma_id = None
                     donus_sefer.taseron_maliyet = Decimal('0.00')
                     donus_sefer.taseron_kdv_orani = None
-                if not kalem.is_harici_nakliye and kalem.nakliye_araci_id:
-                    secilen_arac = db.session.get(NakliyeAraci, kalem.nakliye_araci_id)
+                if not kalem.donus_is_harici_nakliye and kalem.donus_nakliye_araci_id:
+                    secilen_arac = db.session.get(NakliyeAraci, kalem.donus_nakliye_araci_id)
                     if secilen_arac:
                         donus_sefer.plaka = secilen_arac.plaka
                 donus_sefer.hesapla_ve_guncelle()

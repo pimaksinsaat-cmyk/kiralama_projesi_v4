@@ -575,7 +575,10 @@
                             {% endfor %}
                         </select>
                         <input type="number" id="taseronMaliyetInput" name="nakliye_alis_fiyat" class="form-control form-control-sm border-warning mt-2" step="0.01" min="0" placeholder="Nakliye firmasına ödenecek tutar (TL)">
-                        <input type="number" id="donusTaseronKdvInput" name="donus_nakliye_alis_kdv" class="form-control form-control-sm border-warning mt-2" min="0" max="100" step="1" placeholder="Dönüş taşeron KDV (%)">
+                        <div class="mt-2 rounded border border-warning-subtle bg-warning-subtle px-2 py-1">
+                            <small id="liste-donus-taseron-kdv-hint" class="text-muted d-block mb-1">KDV oranını girin (%)</small>
+                            <input type="number" id="donusTaseronKdvInput" name="donus_nakliye_alis_kdv" class="form-control form-control-sm border-warning" min="0" max="100" step="1" aria-labelledby="liste-donus-taseron-kdv-hint">
+                        </div>
                         <div class="mt-1 text-warning small fw-bold"><i class="fas fa-info-circle me-1"></i>Seçilen firmanın cari hesabına nakliye kaydı düşer.</div>
                     </div>
 

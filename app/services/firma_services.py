@@ -730,6 +730,10 @@ class FirmaService(BaseService):
                 HizmetKaydi.firma_id == firma.id,
                 HizmetKaydi.yon == 'gelen',
                 HizmetKaydi.is_deleted == False,
+                or_(
+                    HizmetKaydi.aciklama.like('Dış Kiralama%'),
+                    HizmetKaydi.aciklama.like('Dis Kiralama%'),
+                ),
             ).order_by(HizmetKaydi.tarih).all()
             for hkd in harici_faturalar_all:
                 harici_faturalar_by_kalem.setdefault(hkd.ozel_id, []).append(hkd)

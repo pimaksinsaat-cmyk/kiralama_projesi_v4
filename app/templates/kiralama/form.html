@@ -234,6 +234,45 @@
                     </div>
                 </div>
 
+                {% if is_edit %}
+                <div id="donus-taseron-finans-alani" class="hidden mt-3 p-3 bg-light border rounded border-info">
+                    <h6 class="mb-2"><i class="fas fa-route me-2 text-info"></i><strong>Sonlanmış kalemler — dönüş taşeron nakliyesi</strong></h6>
+                    <small class="text-muted d-block mb-2">Gidiş taşeronu yukarıdaki “Harici nakliye” alanıdır; burası yalnızca sonlandırmada girilen <em>dönüş</em> maliyetidir.</small>
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-12">
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input" type="checkbox" id="g-donus-is-harici">
+                                <label class="form-check-label fw-bold" for="g-donus-is-harici">Dönüş dış nakliye (taşeron)</label>
+                            </div>
+                        </div>
+                        <div class="col-md-4" id="donus-arac-wrap">
+                            <label class="fw-bold small text-primary">Dönüş öz mal aracı</label>
+                            <select id="g-donus-nakliye-araci" class="form-control border-primary">
+                                {% for val, text in form.kalemler[0].nakliye_araci_id.choices %}
+                                <option value="{{ val }}">{{ text }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4" id="donus-tedarikci-wrap">
+                            <label class="fw-bold small">Dönüş nakliye firması</label>
+                            <select id="g-donus-nakliye-tedarikci" class="form-control">
+                                {% for val, text in form.kalemler[0].nakliye_tedarikci_id.choices %}
+                                <option value="{{ val }}">{{ text.split(' ')[:4]|join(' ') }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3" id="donus-alis-wrap">
+                            <label class="text-danger fw-bold small">Dönüş taşeron alış (TL)</label>
+                            <input type="number" id="g-donus-nakliye-alis" class="form-control border-danger" step="0.01" min="0">
+                        </div>
+                        <div class="col-md-2" id="donus-kdv-wrap">
+                            <label class="text-danger fw-bold small">Taşeron alış KDV (%)</label>
+                            <input type="number" id="g-donus-nakliye-alis-kdv" class="form-control border-danger" min="0" max="100" step="1" value="">
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
                 <!-- SÜRE VE FİYATLANDIRMA -->
                 <div class="card border-primary shadow-sm mb-3 mt-3">
                     <div class="card-body" style="padding: 1rem 2rem;">
@@ -362,6 +401,11 @@
             <input type="hidden" name="kalemler-{{ loop.index0 }}-nakliye_satis_tevkifat_oran" value="{{ k_form.form.nakliye_satis_tevkifat_oran.data or '' }}">
             <input type="hidden" name="kalemler-{{ loop.index0 }}-nakliye_alis_kdv" value="{{ k_form.form.nakliye_alis_kdv.data or '' }}">
             <input type="hidden" name="kalemler-{{ loop.index0 }}-nakliye_satis_kdv" value="{{ k_form.form.nakliye_satis_kdv.data if k_form.form.nakliye_satis_kdv.data is not none else '' }}">
+            <input type="hidden" name="kalemler-{{ loop.index0 }}-donus_is_harici_nakliye" value="{{ k_form.form.donus_is_harici_nakliye.data or 0 }}">
+            <input type="hidden" name="kalemler-{{ loop.index0 }}-donus_nakliye_tedarikci_id" value="{{ k_form.form.donus_nakliye_tedarikci_id.data or 0 }}">
+            <input type="hidden" name="kalemler-{{ loop.index0 }}-donus_nakliye_alis_fiyat" value="{{ k_form.form.donus_nakliye_alis_fiyat.data or '0' }}">
+            <input type="hidden" name="kalemler-{{ loop.index0 }}-donus_nakliye_alis_kdv" value="{{ k_form.form.donus_nakliye_alis_kdv.data if k_form.form.donus_nakliye_alis_kdv.data is not none else '' }}">
+            <input type="hidden" name="kalemler-{{ loop.index0 }}-donus_nakliye_araci_id" value="{{ k_form.form.donus_nakliye_araci_id.data or 0 }}">
             <input type="hidden" name="kalemler-{{ loop.index0 }}-kiralama_alis_kdv" value="{{ k_form.form.kiralama_alis_kdv.data or '' }}">
             <input type="hidden" name="kalemler-{{ loop.index0 }}-sonlandirildi" value="{{ 1 if k_form.form.sonlandirildi.data else 0 }}">
             <input type="hidden" name="kalemler-{{ loop.index0 }}-is_active" value="{{ k_form.form.is_active.data or 1 }}">
@@ -518,9 +562,31 @@ function setClosedFinancialMode(enabled) {
         if (el) el.disabled = enabled;
     });
     document.querySelectorAll('.hizli-sure-btn').forEach(btn => btn.disabled = enabled);
+    const gh = document.getElementById('g-donus-is-harici');
+    if (gh) gh.disabled = false;
     if (enabled && infoDiv) {
-        infoDiv.innerHTML = '<i class="fas fa-lock me-2"></i>Kapatılmış kalemde sadece fiyat ve KDV alanları düzenlenebilir.';
+        infoDiv.innerHTML = '<i class="fas fa-lock me-2"></i>Kapatılmış kalemde fiyat/KDV ile dönüş taşeron alanları düzenlenebilir.';
     }
+}
+
+function toggleDonusFinansPanels() {
+    const alan = document.getElementById('donus-taseron-finans-alani');
+    const cb = document.getElementById('g-donus-is-harici');
+    const wrapSel = ['donus-tedarikci-wrap', 'donus-alis-wrap', 'donus-kdv-wrap'];
+    if (!alan || !cb) return;
+    const on = cb.checked;
+    wrapSel.forEach(id => {
+        const w = document.getElementById(id);
+        if (w) w.classList.toggle('opacity-50', !on);
+    });
+    ['g-donus-nakliye-tedarikci', 'g-donus-nakliye-alis', 'g-donus-nakliye-alis-kdv'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.disabled = !on;
+    });
+    const aracWrap = document.getElementById('donus-arac-wrap');
+    const arac = document.getElementById('g-donus-nakliye-araci');
+    if (aracWrap) aracWrap.classList.toggle('opacity-50', on);
+    if (arac) arac.disabled = on;
 }
 
 function hesaplaGun(bas, bit) {
@@ -623,6 +689,11 @@ g_dis_nakliye.onchange = function() {
     }
 };
 
+(function initDonusTaseronHariciCb() {
+    const cb = document.getElementById('g-donus-is-harici');
+    if (cb) cb.addEventListener('change', toggleDonusFinansPanels);
+})();
+
 // TEVKİFAT TOGGLE
 document.getElementById('nakliye-satis-tevkifat-toggle').addEventListener('change', function() {
     const sel = document.getElementById('nakliye-satis-tevkifat-oran');
@@ -674,6 +745,17 @@ function resetEntryPanel() {
     g_ozmal_nakliye.value = "0"; g_ozmal_nakliye.dispatchEvent(new Event('change'));
     g_dis_ekipman.checked = false; g_dis_ekipman.onchange();
     g_dis_nakliye.checked = false; g_dis_nakliye.onchange();
+    const dalan = document.getElementById('donus-taseron-finans-alani');
+    if (dalan) { dalan.classList.add('hidden'); }
+    const gdh = document.getElementById('g-donus-is-harici');
+    if (gdh) {
+        gdh.checked = false;
+        setVal('g-donus-nakliye-tedarikci', '0');
+        setVal('g-donus-nakliye-alis', '');
+        setVal('g-donus-nakliye-alis-kdv', '');
+        setVal('g-donus-nakliye-araci', '0');
+        toggleDonusFinansPanels();
+    }
     refreshMakineListesi();
 }
 
@@ -708,6 +790,11 @@ function yeniGizliGrupOlustur(idx) {
         <input type="hidden" name="kalemler-${idx}-nakliye_alis_fiyat" value="0">
         <input type="hidden" name="kalemler-${idx}-nakliye_alis_kdv" value="">
         <input type="hidden" name="kalemler-${idx}-nakliye_satis_kdv" value="">
+        <input type="hidden" name="kalemler-${idx}-donus_is_harici_nakliye" value="0">
+        <input type="hidden" name="kalemler-${idx}-donus_nakliye_tedarikci_id" value="0">
+        <input type="hidden" name="kalemler-${idx}-donus_nakliye_alis_fiyat" value="0">
+        <input type="hidden" name="kalemler-${idx}-donus_nakliye_alis_kdv" value="">
+        <input type="hidden" name="kalemler-${idx}-donus_nakliye_araci_id" value="0">
         <input type="hidden" name="kalemler-${idx}-nakliye_tedarikci_id" value="0">
         <input type="hidden" name="kalemler-${idx}-nakliye_alis_tevkifat_oran" value="">
         <input type="hidden" name="kalemler-${idx}-nakliye_satis_tevkifat_oran" value="">
@@ -886,6 +973,22 @@ g_btn_ekle.onclick = function() {
         if (!editingClosedFinancial) {
             setField('nakliye_araci_id', isDisNak ? 0 : g_ozmal_nakliye.value);
         }
+        if (IS_EDIT && isSonlandirildiExisting) {
+            const gdh = document.getElementById('g-donus-is-harici');
+            if (gdh && gdh.checked) {
+                setField('donus_is_harici_nakliye', 1);
+                setField('donus_nakliye_tedarikci_id', val('g-donus-nakliye-tedarikci'));
+                setField('donus_nakliye_alis_fiyat', val('g-donus-nakliye-alis') || '0');
+                setField('donus_nakliye_alis_kdv', val('g-donus-nakliye-alis-kdv'));
+                setField('donus_nakliye_araci_id', '0');
+            } else {
+                setField('donus_is_harici_nakliye', 0);
+                setField('donus_nakliye_tedarikci_id', '0');
+                setField('donus_nakliye_alis_fiyat', '0');
+                setField('donus_nakliye_alis_kdv', '');
+                setField('donus_nakliye_araci_id', val('g-donus-nakliye-araci') || '0');
+            }
+        }
     } else {
         if (IS_EDIT) {
             const group = yeniGizliGrupOlustur(indexCounter);
@@ -1037,6 +1140,25 @@ tbody.onclick = function(e) {
         } else {
             g_ozmal_nakliye.value = group.querySelector('[name$="-nakliye_araci_id"]').value;
             g_ozmal_nakliye.dispatchEvent(new Event('change'));
+        }
+
+        const dalan = document.getElementById('donus-taseron-finans-alani');
+        const slEnded = group.querySelector('[name$="-sonlandirildi"]')?.value === '1';
+        if (dalan) {
+            if (slEnded) {
+                dalan.classList.remove('hidden');
+                const gdhEl = document.getElementById('g-donus-is-harici');
+                const dFlag = isTruthyFlag(group.querySelector('[name$="-donus_is_harici_nakliye"]')?.value || '0');
+                if (gdhEl) gdhEl.checked = dFlag;
+                setVal('g-donus-nakliye-tedarikci', group.querySelector('[name$="-donus_nakliye_tedarikci_id"]')?.value || '0');
+                setVal('g-donus-nakliye-alis', group.querySelector('[name$="-donus_nakliye_alis_fiyat"]')?.value || '');
+                const dkdv = group.querySelector('[name$="-donus_nakliye_alis_kdv"]')?.value;
+                setVal('g-donus-nakliye-alis-kdv', (dkdv !== undefined && dkdv !== '') ? dkdv : '');
+                setVal('g-donus-nakliye-araci', group.querySelector('[name$="-donus_nakliye_araci_id"]')?.value || '0');
+                toggleDonusFinansPanels();
+            } else {
+                dalan.classList.add('hidden');
+            }
         }
 
         liveCalc();
