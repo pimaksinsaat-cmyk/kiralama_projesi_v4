@@ -319,7 +319,7 @@ class KiralamaKalemiService(BaseService):
                 form_no = kalem.kiralama.kiralama_form_no or ''
                 Nakliye.query.filter(
                     Nakliye.kiralama_id == kalem.kiralama_id,
-                    Nakliye.aciklama.like(f"%: {form_no} #{kalem.id}")
+                    Nakliye.aciklama == f"Dönüş: {form_no} #{kalem.id}"
                 ).delete(synchronize_session=False)
 
                 donus_guzergah = (
@@ -420,7 +420,7 @@ class KiralamaKalemiService(BaseService):
             form_no_iptal = kalem.kiralama.kiralama_form_no or ''
             Nakliye.query.filter(
                 Nakliye.kiralama_id == kalem.kiralama_id,
-                Nakliye.aciklama.like(f"%: {form_no_iptal} #{kalem.id}")
+                Nakliye.aciklama == f"Dönüş: {form_no_iptal} #{kalem.id}"
             ).delete(synchronize_session=False)
 
         cls.save(kalem, is_new=False, auto_commit=False, actor_id=actor_id)
@@ -796,7 +796,8 @@ class KiralamaService(BaseService):
         # Kiralamaya bağlı nakliye HizmetKaydi'lerini ayrı olarak senkronize et
         from app.services.nakliye_services import CariServis as NakliyeCariServis
         db.session.flush()
-        for nakliye in kiralama.nakliyeler:
+        nakliyeler = Nakliye.query.filter_by(kiralama_id=kiralama.id).all()
+        for nakliye in nakliyeler:
             NakliyeCariServis.musteri_nakliye_senkronize_et(nakliye)
 
         if auto_commit:
@@ -1282,7 +1283,7 @@ class KiralamaService(BaseService):
                 form_no = kiralama.kiralama_form_no or ''
                 Nakliye.query.filter(
                     Nakliye.kiralama_id == kiralama.id,
-                    Nakliye.aciklama.like(f"%: {form_no} #{kalem.id}")
+                    Nakliye.aciklama == f"Dönüş: {form_no} #{kalem.id}"
                 ).delete(synchronize_session=False)
 
                 donus_sube_adi = "Şube"
