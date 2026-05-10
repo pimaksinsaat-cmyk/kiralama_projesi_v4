@@ -81,13 +81,6 @@ def ps_word_olustur(firma):
 
                 if os.path.exists(pdf_path):
                     logger.info("PDF Başarıyla oluşturuldu.")
-                    # Word dosyasını sil
-                    try: 
-                        if os.path.exists(docx_path):
-                            os.remove(docx_path)
-                    except Exception as e:
-                        logger.warning(f"Word dosyası silinemedi: {e}")
-                    
                     return pdf_path
                 else:
                     logger.warning("PDF oluşmadı, Word dönülüyor.")
@@ -109,8 +102,6 @@ def ps_word_olustur(firma):
                 ], check=True, capture_output=True, timeout=60)
                 
                 if os.path.exists(pdf_path):
-                    try: os.remove(docx_path)
-                    except: pass
                     return pdf_path
             except Exception as e:
                 logger.error(f"Linux PDF Hatası: {str(e)}")

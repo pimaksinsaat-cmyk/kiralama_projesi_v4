@@ -1,0 +1,79 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ belge_baslik }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
+        <div>
+            <h3 class="mb-1">{{ belge_baslik }}</h3>
+            <div class="text-muted">{{ belge_alt_baslik }}</div>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            {% if pdf_available %}
+            <a class="btn btn-primary" href="{{ pdf_url }}" target="_blank" rel="noopener">
+                <i class="fas fa-file-pdf me-1"></i> PDF Aç / Yazdır
+            </a>
+            {% else %}
+            <button type="button" class="btn btn-outline-secondary" disabled>
+                <i class="fas fa-file-pdf me-1"></i> PDF Oluşturulamadı
+            </button>
+            {% endif %}
+
+            {% if docx_available %}
+            <a class="btn btn-success" href="{{ docx_url }}">
+                <i class="fas fa-file-word me-1"></i> Word ile Aç
+            </a>
+            {% else %}
+            <button type="button" class="btn btn-outline-secondary" disabled>
+                <i class="fas fa-file-word me-1"></i> Word Hazır Değil
+            </button>
+            {% endif %}
+
+            <a class="btn btn-light border" href="{{ return_url }}" id="preview-close-button">
+                <i class="fas fa-arrow-left me-1"></i> Listeye Dön
+            </a>
+        </div>
+    </div>
+
+    {% if not pdf_available and docx_available %}
+    <div class="alert alert-warning">
+        PDF oluşturulamadı. Word dosyası hazır; Word ile açıp yazdırabilirsiniz.
+    </div>
+    {% endif %}
+
+    {% if pdf_available %}
+    <div class="border rounded bg-light" style="height: 78vh; min-height: 520px;">
+        <iframe
+            src="{{ pdf_url }}"
+            title="{{ belge_baslik }}"
+            style="width: 100%; height: 100%; border: 0;"
+        ></iframe>
+    </div>
+    {% else %}
+    <div class="border rounded bg-light text-center py-5">
+        <i class="fas fa-file-word fa-3x text-success mb-3"></i>
+        <h5>PDF önizlemesi yok</h5>
+        <p class="text-muted mb-0">Belgenin Word dosyası arşivde saklandı.</p>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const closeButton = document.getElementById('preview-close-button');
+    if (!closeButton) return;
+
+    closeButton.addEventListener('click', function(event) {
+        event.preventDefault();
+
+        if (window.opener && !window.opener.closed) {
+            window.close();
+            return;
+        }
+
+        window.location.href = closeButton.href;
+    });
+});
+</script>
+{% endblock %}

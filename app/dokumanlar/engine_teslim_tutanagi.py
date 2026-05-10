@@ -90,8 +90,6 @@ def teslim_tutanagi_uret(kiralama, kalemler_verisi, musteri):
         
         pdf_file = pdf_donustur_motoru(docx_path, output_dir)
         if pdf_file:
-            try: os.remove(docx_path)
-            except: pass
             return pdf_file, None
         
         return docx_path, None

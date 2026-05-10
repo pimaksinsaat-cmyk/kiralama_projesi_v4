@@ -236,8 +236,6 @@ def kiralama_formu_yazdir(rental_id):
         pdf_file = pdf_donustur(docx_path, output_dir)
         
         if pdf_file and os.path.exists(pdf_file):
-            try: os.remove(docx_path)
-            except: pass
             return send_file(pdf_file, mimetype='application/pdf')
         
         flash("PDF dönüşümü başarısız olduğu için DOCX gönderildi. Sunucuda docx2pdf veya soffice kurulu değil olabilir.", "warning")

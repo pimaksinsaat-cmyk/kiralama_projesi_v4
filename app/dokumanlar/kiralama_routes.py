@@ -4,11 +4,12 @@ import platform
 import logging
 import re
 from datetime import date
-from flask import send_file, flash, redirect, url_for, current_app
+from flask import send_file, flash, redirect, render_template, request, url_for, current_app
 from flask_login import current_user
 from docxtpl import DocxTemplate
 from app import db
 from .pdf_utils import convert_docx_to_pdf
+from .archive_utils import document_hash_summary
 from app.services.operation_log_service import OperationLogService
 from app.utils import turkish_upper
 
@@ -218,8 +219,10 @@ def kiralama_formu_yazdir(rental_id):
 
         # 5. PDF DÖNÜŞTÜRME
         pdf_file = pdf_donustur(docx_path, output_dir)
+        pdf_path = pdf_file if pdf_file and os.path.exists(pdf_file) else docx_path.replace(".docx", ".pdf")
         
-        if pdf_file and os.path.exists(pdf_file):
+        if os.path.exists(pdf_path):
+            hash_summary = document_hash_summary(pdf=pdf_path, docx=docx_path)
             OperationLogService.log(
                 module='dokumanlar',
                 action='kiralama_formu_yazdir_pdf',
@@ -227,26 +230,58 @@ def kiralama_formu_yazdir(rental_id):
                 username=getattr(current_user, 'username', None),
                 entity_type='Kiralama',
                 entity_id=rental_id,
-                description=f"Kiralama formu PDF üretildi: {safe_f_no}",
+                description=f"Kiralama formu PDF/DOCX arşivlendi: {safe_f_no}; {hash_summary}",
                 success=True,
             )
-            try: os.remove(docx_path) # PDF başarılıysa Word'ü temizle
-            except: pass
-            return send_file(pdf_file, mimetype='application/pdf')
-        
-        # PDF dönüşümü başarısız olursa beklemeden Word'ü gönder
-        OperationLogService.log(
-            module='dokumanlar',
-            action='kiralama_formu_yazdir_docx_fallback',
-            user_id=getattr(current_user, 'id', None),
-            username=getattr(current_user, 'username', None),
-            entity_type='Kiralama',
-            entity_id=rental_id,
-            description=f"PDF üretilemedi, DOCX gönderildi: {safe_f_no}",
-            success=False,
+        else:
+            hash_summary = document_hash_summary(docx=docx_path)
+            OperationLogService.log(
+                module='dokumanlar',
+                action='kiralama_formu_yazdir_docx_fallback',
+                user_id=getattr(current_user, 'id', None),
+                username=getattr(current_user, 'username', None),
+                entity_type='Kiralama',
+                entity_id=rental_id,
+                description=f"PDF üretilemedi, DOCX arşivlendi/gönderildi: {safe_f_no}; {hash_summary}",
+                success=False,
+            )
+
+        pdf_available = os.path.exists(pdf_path)
+        docx_available = os.path.exists(docx_path)
+        requested_format = request.args.get('format', '').lower()
+
+        if requested_format == 'pdf':
+            if not pdf_available:
+                flash("PDF oluşturulamadı. Word dosyasını kullanabilirsiniz.", "warning")
+                return redirect(url_for('dokumanlar.kiralama_formu_yazdir', rental_id=rental_id))
+            return send_file(
+                pdf_path,
+                mimetype='application/pdf',
+                as_attachment=False,
+                download_name=f"{safe_f_no}_Form.pdf",
+            )
+
+        if requested_format == 'docx':
+            if not docx_available:
+                flash("Word dosyası bulunamadı.", "warning")
+                return redirect(url_for('dokumanlar.kiralama_formu_yazdir', rental_id=rental_id))
+            return send_file(
+                docx_path,
+                mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                as_attachment=True,
+                download_name=f"{safe_f_no}_Form.docx",
+            )
+
+        return render_template(
+            'dokumanlar/onizleme.html',
+            belge_baslik="Kiralama Formunu Oluştur",
+            belge_alt_baslik=f"{kiralama.kiralama_form_no} - {musteri.firma_adi}",
+            pdf_available=pdf_available,
+            docx_available=docx_available,
+            pdf_url=url_for('dokumanlar.kiralama_formu_yazdir', rental_id=rental_id, format='pdf'),
+            docx_url=url_for('dokumanlar.kiralama_formu_yazdir', rental_id=rental_id, format='docx'),
+            return_url=url_for('kiralama.index'),
         )
-        flash("PDF dönüşümü başarısız olduğu için DOCX gönderildi. Sunucuda docx2pdf veya soffice kurulu değil olabilir.", "warning")
-        return send_file(docx_path, as_attachment=False)
 
     except Exception as e:
         logger.error(f"Döküman Üretim Hatası: {str(e)}")
