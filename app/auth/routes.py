@@ -11,6 +11,7 @@ from app.auth.session_security import (
     clear_session_keys,
     account_is_active,
     has_recent_active_session,
+    mark_seen,
     set_active_session,
     session_token_matches,
     utc_now,
@@ -61,6 +62,18 @@ def logout():
     logout_user()
     flash('Başarıyla çıkış yapıldı.', 'info')
     return redirect(url_for('auth.login'))
+
+
+@auth_bp.route('/session/ping')
+@login_required
+def session_ping():
+    if not session_token_matches(current_user):
+        return ('', 401)
+    mark_seen(current_user, now=utc_now())
+    db.session.commit()
+    return ('', 204)
+
+
 @auth_bp.route('/admin/kullanicilar')
 @login_required
 @admin_required

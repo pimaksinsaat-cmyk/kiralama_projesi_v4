@@ -9,6 +9,7 @@ services:
     volumes:
       - .:/app
     environment:
+      - FLASK_APP=run.py
       - DATABASE_URL=postgresql://postgres:gizlisifre@db:5432/kiralama_db
       - TEMPLATES_AUTO_RELOAD=true
       - DISABLE_STATIC_CACHE=true

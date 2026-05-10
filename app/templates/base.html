@@ -340,6 +340,27 @@
     </footer>
 
     <script src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
+    {% if current_user.is_authenticated %}
+    <script>
+        (function () {
+            const pingUrl = "{{ url_for('auth.session_ping') }}";
+            const ping = () => {
+                fetch(pingUrl, {
+                    method: "GET",
+                    credentials: "same-origin",
+                    cache: "no-store"
+                }).catch(() => {});
+            };
+
+            window.setInterval(ping, 60000);
+            document.addEventListener("visibilitychange", () => {
+                if (!document.hidden) {
+                    ping();
+                }
+            });
+        })();
+    </script>
+    {% endif %}
     {% block scripts %}{% endblock %}
 
 <script>

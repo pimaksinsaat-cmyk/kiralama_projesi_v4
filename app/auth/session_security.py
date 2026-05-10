@@ -10,8 +10,8 @@ from app.extensions import db
 
 SESSION_TOKEN_KEY = "active_session_token"
 SESSION_LAST_PING_KEY = "active_session_last_ping"
-SESSION_TIMEOUT = timedelta(minutes=30)
-SESSION_PING_THROTTLE = timedelta(seconds=120)
+SESSION_TIMEOUT = timedelta(minutes=5)
+SESSION_PING_THROTTLE = timedelta(seconds=60)
 
 
 def utc_now():

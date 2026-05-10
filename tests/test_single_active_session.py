@@ -5,6 +5,7 @@ from sqlalchemy import text
 from app.auth.models import User
 from app.auth.session_security import (
     SESSION_LAST_PING_KEY,
+    SESSION_TIMEOUT,
     SESSION_TOKEN_KEY,
     utc_now,
 )
@@ -90,6 +91,40 @@ def test_expired_active_session_allows_new_login(app, client):
     db.session.refresh(user)
     assert user.active_session_token
     assert user.active_session_token != old_token
+
+
+def test_session_expires_after_short_heartbeat_window(app, client):
+    user_id = _create_user()
+    _login(client)
+
+    user = db.session.get(User, user_id)
+    old_token = user.active_session_token
+    user.active_session_seen_at = utc_now() - SESSION_TIMEOUT - timedelta(seconds=1)
+    db.session.commit()
+
+    second_client = app.test_client()
+    second_response = _login(second_client)
+
+    assert second_response.status_code == 302
+    db.session.refresh(user)
+    assert user.active_session_token
+    assert user.active_session_token != old_token
+
+
+def test_session_ping_refreshes_seen_at(app, client):
+    user_id = _create_user()
+    _login(client)
+
+    user = db.session.get(User, user_id)
+    old_seen_at = utc_now() - timedelta(minutes=3)
+    user.active_session_seen_at = old_seen_at
+    db.session.commit()
+
+    response = client.get("/auth/session/ping")
+
+    assert response.status_code == 204
+    db.session.refresh(user)
+    assert user.active_session_seen_at > old_seen_at
 
 
 def test_future_active_session_timestamp_does_not_block_login(app, client):
