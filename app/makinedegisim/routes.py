@@ -17,7 +17,7 @@ from app.firmalar.models import Firma
 from app.filo.models import Ekipman
 from app.subeler.models import Sube
 from app.araclar.models import Arac
-from app.utils import ensure_active_sube_exists
+from app.utils import ensure_active_sube_exists, get_safe_next_redirect
 
 # --- GÜVENLİK YARDIMCISI ---
 def get_actor_id():
@@ -34,7 +34,7 @@ def _kiralama_return_url():
     default_url = url_for('kiralama.index')
     target = (
         request.form.get('return_url')
-        or request.args.get('next')
+        or get_safe_next_redirect(request.args.get('next'))
         or request.referrer
         or default_url
     )

@@ -181,7 +181,7 @@
 
         <div class="butonlar">
          {{ form.submit(class="buton", value="Kaydet") }}
-         <a href="{{ request.args.get('next') or request.referrer or url_for('filo.index') }}" class="buton iptal">İptal</a>
+         <a href="{{ safe_next_url or request.referrer or url_for('filo.index') }}" class="buton iptal">İptal</a>
          </div>
     </form>
 </div>

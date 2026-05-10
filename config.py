@@ -63,6 +63,14 @@ class Config:
     CARI_DONEM_FILTRESI_ENABLED = _env_to_bool('CARI_DONEM_FILTRESI_ENABLED', True)
 
 
+class ProductionConfig(Config):
+    """HTTPS üretim dağıtımı: SECRET_KEY ortamdan gelmeli, güvenli çerez."""
+    DEBUG = False
+    TESTING = False
+    SESSION_COOKIE_SECURE = _env_to_bool('SESSION_COOKIE_SECURE', True)
+    SECRET_KEY = os.environ.get('SECRET_KEY')
+
+
 class TestingConfig(Config):
     """Pytest ve yerel otomatik testler için."""
     TESTING = True

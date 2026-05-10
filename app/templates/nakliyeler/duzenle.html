@@ -134,7 +134,7 @@
                             <button type="submit" class="btn btn-warning btn-lg shadow-sm fw-bold">
                                 <i class="fas fa-save me-2"></i> Değişiklikleri Kaydet
                             </button>
-                            <a href="{{ request.args.get('next') or request.referrer or url_for('nakliyeler.index') }}" class="btn btn-light border">Vazgeç ve Geri Dön</a>
+                            <a href="{{ safe_next_url or request.referrer or url_for('nakliyeler.index') }}" class="btn btn-light border">Vazgeç ve Geri Dön</a>
                         </div>
                     </form>
                 </div>

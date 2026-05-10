@@ -25,7 +25,7 @@ from app.kiralama.forms import KiralamaForm
 from app.services.kiralama_services import KiralamaService, KiralamaKalemiService
 from app.services.base import ValidationError
 from app.services.operation_log_service import OperationLogService
-from app.utils import ensure_active_sube_exists, tr_ilike
+from app.utils import ensure_active_sube_exists, get_safe_next_redirect, tr_ilike
 
 # --- BELLEK İÇİ ÖNBELLEKLEME (IN-MEMORY CACHE) ---
 _CACHE_DATA = {
@@ -44,7 +44,7 @@ def _kiralama_return_url(default_endpoint='kiralama.index'):
     default_url = url_for(default_endpoint)
     target = (
         request.form.get('return_url')
-        or request.args.get('next')
+        or get_safe_next_redirect(request.args.get('next'))
         or request.referrer
         or default_url
     )

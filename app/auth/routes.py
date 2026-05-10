@@ -16,7 +16,7 @@ from app.auth.session_security import (
     utc_now,
 )
 from app.models.operation_log import OperationLog
-from app.utils import admin_required
+from app.utils import admin_required, get_safe_next_redirect
 
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
@@ -43,7 +43,7 @@ def login():
             user.last_login = now
             db.session.commit()
             
-            next_page = request.args.get('next')
+            next_page = get_safe_next_redirect(request.args.get('next'))
             flash(f'Hoş geldiniz, {user.username}!', 'success')
             return redirect(next_page or url_for('main.index'))
         

@@ -2,7 +2,7 @@
 import os
 
 from flask import Flask, request, redirect, url_for  # ← 'app' kaldırıldı
-from config import Config
+from config import Config, ProductionConfig
 from flask_wtf.csrf import CSRFProtect 
 from app.extensions import db, migrate, login_manager, server_session
 from sqlalchemy import inspect
@@ -16,10 +16,14 @@ def create_app(config_class=Config):
 
     app = Flask(__name__)
     app.config.from_object(config_class)
+    if config_class is ProductionConfig and not app.config.get('SECRET_KEY'):
+        raise ValueError(
+            'ProductionConfig için SECRET_KEY ortam değişkeni tanımlanmalıdır.'
+        )
     app.jinja_env.auto_reload = app.config.get('TEMPLATES_AUTO_RELOAD', False)
 
     # Özel Jinja filtresini kaydet
-    from .utils import truncate_name, para_format
+    from .utils import truncate_name, para_format, login_next_query_value
     app.jinja_env.filters['truncate_name'] = truncate_name
     app.jinja_env.filters['para'] = para_format
 
@@ -46,7 +50,9 @@ def create_app(config_class=Config):
                         rol='admin',
                         is_active=True
                     )
-                    yeni_admin.set_password('123456')  # Şifreyi daha sonra değiştirin!
+                    yeni_admin.set_password(
+                        os.environ.get('ADMIN_BOOTSTRAP_PASSWORD', '123456')
+                    )
                     db.session.add(yeni_admin)
                     db.session.commit()
 
@@ -70,6 +76,12 @@ def create_app(config_class=Config):
         pass
     # CSRF uygulamasını başlat
     csrf.init_app(app)
+    session_dir = app.config.get('SESSION_FILE_DIR')
+    if session_dir:
+        try:
+            os.makedirs(session_dir, exist_ok=True)
+        except OSError:
+            pass
     server_session.init_app(app)
 
     # Login Manager
@@ -87,7 +99,7 @@ def create_app(config_class=Config):
             return None
             
         if current_user.is_anonymous:
-            return redirect(url_for('auth.login', next=request.url))
+            return redirect(url_for('auth.login', next=login_next_query_value()))
 
         from app.auth.session_security import (
             account_is_active,
@@ -104,15 +116,15 @@ def create_app(config_class=Config):
             clear_session_keys()
             logout_user()
             db.session.commit()
-            return redirect(url_for('auth.login', next=request.url))
+            return redirect(url_for('auth.login', next=login_next_query_value()))
 
         if not current_user.is_authenticated:
-            return redirect(url_for('auth.login', next=request.url))
+            return redirect(url_for('auth.login', next=login_next_query_value()))
 
         if not session_token_matches(current_user):
             clear_session_keys()
             logout_user()
-            return redirect(url_for('auth.login', next=request.url))
+            return redirect(url_for('auth.login', next=login_next_query_value()))
 
         now = utc_now()
         if should_touch_seen_at(now=now):
@@ -204,6 +216,15 @@ def create_app(config_class=Config):
     # 16. Genel Ayarlar
     from app.ayarlar import ayarlar_bp
     app.register_blueprint(ayarlar_bp, url_prefix='/ayarlar')
+
+    @app.context_processor
+    def inject_safe_next():
+        from flask import has_request_context, request
+        from app.utils import get_safe_next_redirect
+
+        if not has_request_context():
+            return {'safe_next_url': None}
+        return {'safe_next_url': get_safe_next_redirect(request.args.get('next'))}
     
     # Sadece ana uygulama çalışırken migrate işlemleri otomatik yapılsın
     # if os.environ.get("FLASK_RUN_FROM_CLI") == "true":

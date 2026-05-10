@@ -41,6 +41,77 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+
+def get_safe_next_redirect(candidate):
+    """
+    Giriş sonrası veya şablon href: yalnızca mevcut istekle aynı host (şema+host+port).
+    redirect() için path+query döner; güvensiz veya boşsa None.
+    """
+    from flask import has_request_context, request
+    from urllib.parse import urlparse, urljoin
+
+    if not has_request_context():
+        return None
+    if candidate is None:
+        return None
+    raw = str(candidate).strip()
+    if not raw or any(c in raw for c in '\n\r\x00'):
+        return None
+
+    # Göreli yol: urljoin sonrası urlparse çoğu zaman netloc boş bırakır; hostname None olur.
+    if raw.startswith('/') and not raw.startswith('//'):
+        parts = raw.split('?', 1)
+        path = parts[0] or '/'
+        query = parts[1] if len(parts) > 1 else ''
+        if not path.startswith('/') or path.startswith('//'):
+            return None
+        if query and any(c in query for c in '\n\r\x00'):
+            return None
+        if query:
+            return path + '?' + query
+        return path
+
+    ref = urlparse(request.host_url)
+    try:
+        test = urlparse(urljoin(request.host_url, raw))
+    except ValueError:
+        return None
+
+    if test.scheme not in ('http', 'https'):
+        return None
+
+    ref_host = (ref.hostname or '').lower()
+    test_host = (test.hostname or '').lower()
+    if not ref_host or not test_host or ref_host != test_host:
+        return None
+    if ref.port != test.port:
+        return None
+
+    path = test.path or '/'
+    if not path.startswith('/'):
+        path = '/' + path
+    if test.query:
+        return path + '?' + test.query
+    return path
+
+
+def login_next_query_value():
+    """Giriş sayfasına yönlendirirken kullanılacak güvenli next (yalnızca path+query)."""
+    from flask import has_request_context, request
+
+    if not has_request_context():
+        return None
+    path = request.path or '/'
+    if not path.startswith('/') or path.startswith('//'):
+        path = '/'
+    qs = request.query_string.decode('utf-8', errors='replace') if request.query_string else ''
+    if qs and ('\n' in qs or '\r' in qs):
+        return path
+    if qs:
+        return path + '?' + qs
+    return path
+
+
 # Ortak hata mesajı değişkeni
 secim_hata_mesaji = "Lütfen geçerli bir seçim yapınız."
 

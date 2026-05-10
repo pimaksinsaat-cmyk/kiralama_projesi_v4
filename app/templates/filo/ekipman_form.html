@@ -196,7 +196,7 @@
 
         <div class="butonlar">
          <button type="submit" class="buton">{% if is_edit %}Değişiklikleri Kaydet{% else %}Kaydet{% endif %}</button>
-         <a href="{{ url_for(request.args.get('next', 'filo.index')) }}" class="buton iptal">{% if is_edit %}Vazgeç{% else %}İptal{% endif %}</a>
+         <a href="{{ safe_next_url or url_for('filo.index') }}" class="buton iptal">{% if is_edit %}Vazgeç{% else %}İptal{% endif %}</a>
          </div>
     </form>
 </div>
