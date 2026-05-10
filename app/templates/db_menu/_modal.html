@@ -3,60 +3,138 @@
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title"><i class="fas fa-database me-2 text-primary"></i>DB Yedekleme</h5>
+                <h5 class="modal-title"><i class="fas fa-database me-2 text-primary"></i>Yedekleme ve Arşiv</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
             </div>
             <div class="modal-body">
+                <ul class="nav nav-tabs mb-3" id="backupTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="db-backup-tab" data-bs-toggle="tab" data-bs-target="#db-backup-pane" type="button" role="tab">
+                            <i class="fas fa-database me-1"></i> Veritabanı
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="document-archive-tab" data-bs-toggle="tab" data-bs-target="#document-archive-pane" type="button" role="tab">
+                            <i class="fas fa-folder-open me-1"></i> Belge Arşivi
+                        </button>
+                    </li>
+                </ul>
 
-                <!-- Manuel SQL Yedek -->
-                <div class="mb-4">
-                    <h6 class="fw-semibold mb-2">
-                        <i class="fas fa-download me-1 text-success"></i> Manuel SQL Yedeği Al
-                    </h6>
-                    <p class="text-muted small mb-2">
-                        Butona basınca tüm veritabanı <code>.sql</code> formatında indirilir.
-                    </p>
-                    <a href="{{ url_for('db_menu.db_yedek_sql') }}" class="btn btn-success">
-                        <i class="fas fa-file-code me-1"></i> SQL Yedeği İndir
-                    </a>
+                <div class="tab-content" id="backupTabsContent">
+                    <div class="tab-pane fade show active" id="db-backup-pane" role="tabpanel" aria-labelledby="db-backup-tab" tabindex="0">
+                        <div class="mb-4">
+                            <h6 class="fw-semibold mb-2">
+                                <i class="fas fa-download me-1 text-success"></i> Manuel SQL Yedeği Al
+                            </h6>
+                            <p class="text-muted small mb-2">
+                                Butona basınca tüm veritabanı <code>.sql</code> formatında indirilir.
+                            </p>
+                            <a href="{{ url_for('db_menu.db_yedek_sql') }}" class="btn btn-success">
+                                <i class="fas fa-file-code me-1"></i> SQL Yedeği İndir
+                            </a>
+                        </div>
+
+                        <hr>
+
+                        <h6 class="fw-semibold mb-2">
+                            <i class="fas fa-clock me-1 text-info"></i> Otomatik Günlük Yedekler
+                        </h6>
+                        {% if db_yedek_listesi %}
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Dosya Adı</th>
+                                        <th>Boyut</th>
+                                        <th>Tarih</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for y in db_yedek_listesi %}
+                                    <tr>
+                                        <td><i class="fas fa-file-code me-1 text-muted"></i>{{ y.ad }}</td>
+                                        <td>{{ y.boyut_kb }} KB</td>
+                                        <td>{{ y.tarih }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <p class="text-muted small">Henüz otomatik yedek oluşturulmamış.</p>
+                        {% endif %}
+                        <p class="text-muted small mt-2">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Otomatik yedekler her gece saat 02:00'de alınır, son 7 günlük saklanır.
+                            Yedekler <code>backups/</code> klasöründe tutulur.
+                        </p>
+                    </div>
+
+                    <div class="tab-pane fade" id="document-archive-pane" role="tabpanel" aria-labelledby="document-archive-tab" tabindex="0">
+                        <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+                            <div>
+                                <h6 class="fw-semibold mb-1">
+                                    <i class="fas fa-folder-open me-1 text-warning"></i> Belge Arşivi Disk Kullanımı
+                                </h6>
+                                <p class="text-muted small mb-0">
+                                    Sadece <code>app/static/arsiv</code> altındaki <code>.pdf</code> ve <code>.docx</code> dosyaları kapsanır.
+                                </p>
+                            </div>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" id="documentArchiveRefreshBtn">
+                                <i class="fas fa-rotate me-1"></i> Yenile
+                            </button>
+                        </div>
+
+                        <div class="row g-2 mb-3" id="documentArchiveMetrics">
+                            <div class="col-6 col-md-3">
+                                <div class="border rounded p-2 bg-light">
+                                    <div class="small text-muted">Dosya</div>
+                                    <div class="fw-semibold" data-metric="file_count">-</div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="border rounded p-2 bg-light">
+                                    <div class="small text-muted">Boyut / Disk</div>
+                                    <div class="fw-semibold" data-metric="total_size_mb">-</div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="border rounded p-2 bg-light">
+                                    <div class="small text-muted">En Eski</div>
+                                    <div class="fw-semibold small" data-metric="oldest_mtime">-</div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="border rounded p-2 bg-light">
+                                    <div class="small text-muted">En Yeni</div>
+                                    <div class="fw-semibold small" data-metric="newest_mtime">-</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-info small">
+                            Önce ZIP yedeğini indirin. Silme önizlemesi ve gerçek silme işlemi, indirme sırasında oluşturulan manifest ve SHA-256 hash kontrolüyle yapılır.
+                        </div>
+
+                        <div class="d-flex flex-wrap gap-2 mb-3">
+                            <a href="{{ url_for('db_menu.belge_arsiv_yedek') }}" class="btn btn-success" id="documentArchiveDownloadBtn">
+                                <i class="fas fa-file-archive me-1"></i> Belge Arşivi ZIP İndir
+                            </a>
+                            <button type="button" class="btn btn-outline-primary" id="documentArchiveDryRunBtn" disabled>
+                                <i class="fas fa-search me-1"></i> Silme Önizlemesi
+                            </button>
+                            <button type="button" class="btn btn-danger" id="documentArchiveDeleteBtn" disabled>
+                                <i class="fas fa-trash-alt me-1"></i> Önizlenenleri Serverdan Sil
+                            </button>
+                        </div>
+
+                        <div class="small text-muted mb-2" id="documentArchiveState">
+                            Henüz bu oturumda belge arşiv yedeği indirilmedi.
+                        </div>
+
+                        <pre class="bg-light border rounded p-2 small mb-0 d-none" id="documentArchiveResult" style="max-height: 240px; overflow:auto;"></pre>
+                    </div>
                 </div>
-
-                <hr>
-
-                <!-- Otomatik Günlük Yedekler Listesi -->
-                <h6 class="fw-semibold mb-2">
-                    <i class="fas fa-clock me-1 text-info"></i> Otomatik Günlük Yedekler
-                </h6>
-                {% if db_yedek_listesi %}
-                <div class="table-responsive">
-                    <table class="table table-sm table-hover align-middle">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Dosya Adı</th>
-                                <th>Boyut</th>
-                                <th>Tarih</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for y in db_yedek_listesi %}
-                            <tr>
-                                <td><i class="fas fa-file-code me-1 text-muted"></i>{{ y.ad }}</td>
-                                <td>{{ y.boyut_kb }} KB</td>
-                                <td>{{ y.tarih }}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                {% else %}
-                <p class="text-muted small">Henüz otomatik yedek oluşturulmamış.</p>
-                {% endif %}
-                <p class="text-muted small mt-2">
-                    <i class="fas fa-info-circle me-1"></i>
-                    Otomatik yedekler her gece saat 02:00'de alınır, son 7 günlük saklanır.
-                    Yedekler <code>backups/</code> klasöründe tutulur.
-                </p>
-
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-light" data-bs-dismiss="modal">Kapat</button>
@@ -64,4 +142,145 @@
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const archiveTab = document.getElementById('document-archive-tab');
+    const refreshBtn = document.getElementById('documentArchiveRefreshBtn');
+    const downloadBtn = document.getElementById('documentArchiveDownloadBtn');
+    const dryRunBtn = document.getElementById('documentArchiveDryRunBtn');
+    const deleteBtn = document.getElementById('documentArchiveDeleteBtn');
+    const stateEl = document.getElementById('documentArchiveState');
+    const resultEl = document.getElementById('documentArchiveResult');
+    let backupDownloaded = false;
+    let dryRunReady = false;
+
+    function csrfToken() {
+        return '{{ csrf_token() }}';
+    }
+
+    function formatDate(value) {
+        if (!value) return '-';
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return '-';
+        return date.toLocaleString('tr-TR');
+    }
+
+    function setMetric(name, value) {
+        const el = document.querySelector(`#documentArchiveMetrics [data-metric="${name}"]`);
+        if (el) el.textContent = value;
+    }
+
+    function formatArchiveDiskSize(data) {
+        const archiveMb = data.total_size_mb ?? 0;
+        if (data.disk_total_gb === null || data.disk_total_gb === undefined) {
+            return `${archiveMb} MB / -`;
+        }
+        return `${archiveMb} MB / ${data.disk_total_gb} GB`;
+    }
+
+    async function loadArchiveStatus() {
+        try {
+            setMetric('file_count', '...');
+            setMetric('total_size_mb', '...');
+            const response = await fetch('{{ url_for("db_menu.belge_arsiv_durum") }}', {
+                headers: { 'Accept': 'application/json' }
+            });
+            if (!response.ok) throw new Error('Durum bilgisi alınamadı.');
+            const data = await response.json();
+            setMetric('file_count', data.file_count ?? 0);
+            setMetric('total_size_mb', formatArchiveDiskSize(data));
+            setMetric('oldest_mtime', formatDate(data.oldest_mtime));
+            setMetric('newest_mtime', formatDate(data.newest_mtime));
+        } catch (err) {
+            setMetric('file_count', '-');
+            setMetric('total_size_mb', '-');
+            stateEl.textContent = err.message || 'Belge arşivi durumu alınamadı.';
+        }
+    }
+
+    function showResult(data) {
+        resultEl.classList.remove('d-none');
+        resultEl.textContent = JSON.stringify(data, null, 2);
+    }
+
+    async function archiveDeleteRequest(dryRun) {
+        const response = await fetch('{{ url_for("db_menu.belge_arsiv_sil") }}', {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken()
+            },
+            body: JSON.stringify({ dry_run: dryRun })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            throw new Error(data.error || 'Belge arşivi işlemi başarısız oldu.');
+        }
+        return data;
+    }
+
+    if (archiveTab) {
+        archiveTab.addEventListener('shown.bs.tab', loadArchiveStatus);
+    }
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', loadArchiveStatus);
+    }
+    if (downloadBtn) {
+        downloadBtn.addEventListener('click', function () {
+            backupDownloaded = true;
+            dryRunReady = false;
+            dryRunBtn.disabled = false;
+            deleteBtn.disabled = true;
+            stateEl.textContent = 'ZIP indirme başlatıldı. İndirme tamamlandıktan sonra silme önizlemesi çalıştırılabilir.';
+        });
+    }
+    if (dryRunBtn) {
+        dryRunBtn.addEventListener('click', async function () {
+            if (!backupDownloaded) {
+                stateEl.textContent = 'Önce belge arşivi ZIP yedeğini indirin.';
+                return;
+            }
+            dryRunBtn.disabled = true;
+            stateEl.textContent = 'Silme önizlemesi hazırlanıyor...';
+            try {
+                const data = await archiveDeleteRequest(true);
+                dryRunReady = true;
+                deleteBtn.disabled = false;
+                showResult(data);
+                stateEl.textContent = 'Önizleme tamamlandı. Hash uyuşan dosyalar gerçek silme için hazır.';
+            } catch (err) {
+                dryRunReady = false;
+                deleteBtn.disabled = true;
+                stateEl.textContent = err.message;
+            } finally {
+                dryRunBtn.disabled = false;
+            }
+        });
+    }
+    if (deleteBtn) {
+        deleteBtn.addEventListener('click', async function () {
+            if (!backupDownloaded || !dryRunReady) {
+                stateEl.textContent = 'Gerçek silmeden önce yedek indirin ve silme önizlemesi çalıştırın.';
+                return;
+            }
+            const confirmed = window.confirm('Önizlenen ve hash kontrolünden geçen arşiv dosyaları serverdan silinecek. Devam edilsin mi?');
+            if (!confirmed) return;
+            deleteBtn.disabled = true;
+            stateEl.textContent = 'Serverdaki dosyalar hash kontrolüyle siliniyor...';
+            try {
+                const data = await archiveDeleteRequest(false);
+                showResult(data);
+                stateEl.textContent = 'Silme işlemi tamamlandı. Disk metrikleri yenileniyor.';
+                await loadArchiveStatus();
+            } catch (err) {
+                stateEl.textContent = err.message;
+            } finally {
+                deleteBtn.disabled = false;
+            }
+        });
+    }
+});
+</script>
 {% endif %}
