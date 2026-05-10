@@ -270,6 +270,7 @@
                                     data-baslangic="{{ kalem.kiralama_baslangici.strftime('%Y-%m-%d') if kalem.kiralama_baslangici else '' }}"
                                     data-bitis="{{ kalem.kiralama_bitis.strftime('%Y-%m-%d') if kalem.kiralama_bitis else '' }}"
                                     data-nakliye-satis="{{ kalem.nakliye_satis_fiyat or 0 }}"
+                                    data-donus-nakliye-alis-kdv="{{ kalem.donus_nakliye_alis_kdv if kalem.donus_nakliye_alis_kdv is not none else (kalem.nakliye_alis_kdv if kalem.nakliye_alis_kdv is not none else 20) }}"
                                     data-donus-nakliye-satis="{{ kalem.donus_nakliye_satis_fiyat if kalem.donus_nakliye_satis_fiyat is not none else '' }}"
                                     data-donus-fatura-et="{{ 1 if kalem.donus_nakliye_fatura_et else 0 }}">
 
@@ -315,6 +316,7 @@
                                     data-baslangic="{{ kalem.kiralama_baslangici.strftime('%Y-%m-%d') if kalem.kiralama_baslangici else '' }}"
                                     data-bitis="{{ kalem.kiralama_bitis.strftime('%Y-%m-%d') if kalem.kiralama_bitis else '' }}"
                                     data-nakliye-satis="{{ kalem.nakliye_satis_fiyat or 0 }}"
+                                    data-donus-nakliye-alis-kdv="{{ kalem.donus_nakliye_alis_kdv if kalem.donus_nakliye_alis_kdv is not none else (kalem.nakliye_alis_kdv if kalem.nakliye_alis_kdv is not none else 20) }}"
                                     data-donus-nakliye-satis="{{ kalem.donus_nakliye_satis_fiyat if kalem.donus_nakliye_satis_fiyat is not none else '' }}"
                                     data-donus-fatura-et="{{ 1 if kalem.donus_nakliye_fatura_et else 0 }}">
 
@@ -573,6 +575,7 @@
                             {% endfor %}
                         </select>
                         <input type="number" id="taseronMaliyetInput" name="nakliye_alis_fiyat" class="form-control form-control-sm border-warning mt-2" step="0.01" min="0" placeholder="Nakliye firmasına ödenecek tutar (TL)">
+                        <input type="number" id="donusTaseronKdvInput" name="donus_nakliye_alis_kdv" class="form-control form-control-sm border-warning mt-2" min="0" max="100" step="1" placeholder="Dönüş taşeron KDV (%)">
                         <div class="mt-1 text-warning small fw-bold"><i class="fas fa-info-circle me-1"></i>Seçilen firmanın cari hesabına nakliye kaydı düşer.</div>
                     </div>
 
@@ -851,7 +854,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const contextMenuKalem = document.getElementById('context-menu-kalem');
     const backdrop = document.getElementById('modal-backdrop-sonlandir');
 
-    let state = { kUrl: null, sUrl: null, fNo: null, csrf: null, kId: null, eKod: null, kCsrf: null, rentalId: null, baslangic: null, bitis: null, nakliyeSatis: 0, donusNakliyeSatis: null, donusFaturaEt: false };
+    let state = { kUrl: null, sUrl: null, fNo: null, csrf: null, kId: null, eKod: null, kCsrf: null, rentalId: null, baslangic: null, bitis: null, nakliyeSatis: 0, donusNakliyeSatis: null, donusNakliyeAlisKdv: 20, donusFaturaEt: false };
     const listStateKey = 'kiralama.index.returnState';
 
     function refreshReturnUrls() {
@@ -1010,6 +1013,7 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('taseronFirmaDiv').style.display = 'none';
         document.getElementById('taseronFirmaSelect').value = '';
         document.getElementById('taseronMaliyetInput').value = '';
+        document.getElementById('donusTaseronKdvInput').value = state.donusNakliyeAlisKdv || 20;
         const donusInput = document.getElementById('donusNakliyeSatisInput');
         const donusNakTutari = parseFloat(state.nakliyeSatis || 0);
         const defaultDonus = (state.donusNakliyeSatis !== null && state.donusNakliyeSatis !== '')
@@ -1067,6 +1071,7 @@ document.addEventListener('DOMContentLoaded', function() {
             state.bitis = this.dataset.bitis || '';
             state.nakliyeSatis = this.dataset.nakliyeSatis || '0';
             state.donusNakliyeSatis = this.dataset.donusNakliyeSatis || '';
+            state.donusNakliyeAlisKdv = this.dataset.donusNakliyeAlisKdv || 20;
             state.donusFaturaEt = this.dataset.donusFaturaEt === '1';
             
             const done = this.dataset.sonlandirilmis === '1';
@@ -1150,6 +1155,8 @@ document.addEventListener('DOMContentLoaded', function() {
         state.eKod = item.dataset.ekipmanKod;
         state.kCsrf = item.dataset.csrfToken;
         state.nakliyeSatis = item.dataset.nakliyeSatis || 0;
+        state.donusNakliyeSatis = item.dataset.donusNakliyeSatis || '';
+        state.donusNakliyeAlisKdv = item.dataset.donusNakliyeAlisKdv || 20;
         state.donusFaturaEt = item.dataset.donusFaturaEt === '1';
         
         const done = item.dataset.sonlandirilmis === '1';
@@ -1247,6 +1254,9 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!this.checked) {
             document.getElementById('taseronFirmaSelect').value = '';
             document.getElementById('taseronMaliyetInput').value = '';
+            document.getElementById('donusTaseronKdvInput').value = '';
+        } else {
+            document.getElementById('donusTaseronKdvInput').value = state.donusNakliyeAlisKdv || 20;
         }
     });
 
@@ -1270,7 +1280,9 @@ document.addEventListener('DOMContentLoaded', function() {
         if (harici) {
             const sel = document.getElementById('taseronFirmaSelect');
             const maliyetInput = document.getElementById('taseronMaliyetInput');
+            const kdvInput = document.getElementById('donusTaseronKdvInput');
             const maliyet = parseFloat(maliyetInput.value || '0');
+            const kdv = parseFloat(kdvInput.value || '');
             if (!sel.value) {
                 e.preventDefault();
                 alert('Lütfen harici nakliye firmasını seçin.');
@@ -1280,6 +1292,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 e.preventDefault();
                 alert('Lütfen nakliye firmasına ödenecek tutarı girin (0\'dan büyük).');
                 maliyetInput.focus();
+                return;
+            }
+            if (!Number.isFinite(kdv) || kdv < 0 || kdv > 100) {
+                e.preventDefault();
+                alert('Lütfen dönüş taşeron KDV oranını 0 ile 100 arasında girin.');
+                kdvInput.focus();
                 return;
             }
             const firmaAdi = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : '';

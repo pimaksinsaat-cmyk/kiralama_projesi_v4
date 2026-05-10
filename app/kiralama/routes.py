@@ -936,6 +936,7 @@ def sonlandir_kalem():
         nakliye_tedarikci_id = request.form.get('nakliye_tedarikci_id', type=int)
         nakliye_araci_id = request.form.get('nakliye_araci_id', type=int)
         nakliye_alis_fiyat = request.form.get('nakliye_alis_fiyat')
+        donus_nakliye_alis_kdv = request.form.get('donus_nakliye_alis_kdv')
         donus_nakliye_satis_fiyat = request.form.get('donus_nakliye_satis_fiyat')
         
         KiralamaKalemiService.sonlandir(
@@ -947,6 +948,7 @@ def sonlandir_kalem():
             nakliye_tedarikci_id=nakliye_tedarikci_id,
             nakliye_araci_id=nakliye_araci_id,
             nakliye_alis_fiyat=nakliye_alis_fiyat,
+            donus_nakliye_alis_kdv=donus_nakliye_alis_kdv,
             donus_nakliye_satis_fiyat=donus_nakliye_satis_fiyat,
         )
         OperationLogService.log(

@@ -123,6 +123,7 @@ class KiralamaKalemiService(BaseService):
         nakliye_tedarikci_id=None,
         nakliye_araci_id=None,
         nakliye_alis_fiyat=None,
+        donus_nakliye_alis_kdv=None,
         donus_nakliye_satis_fiyat=None,
     ):
         """Kiralama kalemini sonlandırır ve makinenin durumunu günceller."""
@@ -240,9 +241,11 @@ class KiralamaKalemiService(BaseService):
             kalem.nakliye_tedarikci_id = int(nakliye_tedarikci_id or 0) or None
             kalem.nakliye_araci_id = None
             kalem.nakliye_alis_fiyat = to_decimal(nakliye_alis_fiyat)
+            kalem.donus_nakliye_alis_kdv = to_int_or_none(donus_nakliye_alis_kdv)
         else:
             kalem.nakliye_tedarikci_id = None
             kalem.nakliye_araci_id = int(nakliye_araci_id or 0) or None
+            kalem.donus_nakliye_alis_kdv = None
 
         # --- Dönüş için ortak değişkenler ---
         musteri_adi = "Bilinmeyen Müşteri"
@@ -301,7 +304,8 @@ class KiralamaKalemiService(BaseService):
             aktif_donus_taseron.fatura_no = form_no_donus
             aktif_donus_taseron.ozel_id = kalem.id
             aktif_donus_taseron.aciklama = f"Dönüş Nakliye: {makine_bilgisi_donus} - {donus_sube_adi}"
-            aktif_donus_taseron.kdv_orani = getattr(kalem.kiralama, 'kdv_orani', None) or 20
+            aktif_donus_taseron.kdv_orani = None
+            aktif_donus_taseron.nakliye_alis_kdv = kalem.donus_nakliye_alis_kdv
             aktif_donus_taseron.is_deleted = False
             aktif_donus_taseron.is_active = True
             db.session.add(aktif_donus_taseron)
@@ -343,7 +347,7 @@ class KiralamaKalemiService(BaseService):
                 if kalem.is_harici_nakliye and kalem.nakliye_tedarikci_id:
                     donus_sefer.taseron_firma_id = kalem.nakliye_tedarikci_id
                     donus_sefer.taseron_maliyet = to_decimal(kalem.nakliye_alis_fiyat)
-                    donus_sefer.taseron_kdv_orani = kalem.nakliye_alis_kdv
+                    donus_sefer.taseron_kdv_orani = kalem.donus_nakliye_alis_kdv
                     donus_sefer.plaka = "Dış Nakliye"
                     donus_sefer.arac_id = None
                 else:
@@ -1310,7 +1314,7 @@ class KiralamaService(BaseService):
                 if kalem.is_harici_nakliye and kalem.nakliye_tedarikci_id:
                     donus_sefer.taseron_firma_id = kalem.nakliye_tedarikci_id
                     donus_sefer.taseron_maliyet = to_decimal(kalem.nakliye_alis_fiyat)
-                    donus_sefer.taseron_kdv_orani = kalem.nakliye_alis_kdv
+                    donus_sefer.taseron_kdv_orani = kalem.donus_nakliye_alis_kdv
                     donus_sefer.plaka = "Dış Nakliye"
                     donus_sefer.arac_id = None
                 else:

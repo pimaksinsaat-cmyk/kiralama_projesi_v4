@@ -73,6 +73,7 @@ class KiralamaKalemi(BaseModel):
     nakliye_satis_fiyat = db.Column(db.Numeric(15, 2), nullable=True, default=0.0) 
     donus_nakliye_fatura_et = db.Column(db.Boolean, default=False, nullable=False)
     donus_nakliye_satis_fiyat = db.Column(db.Numeric(15, 2), nullable=True)
+    donus_nakliye_alis_kdv = db.Column(db.Integer, nullable=True, default=None)
     nakliye_alis_fiyat = db.Column(db.Numeric(15, 2), nullable=True, default=0.0)
     nakliye_alis_kdv = db.Column(db.Integer, nullable=True, default=None)
     nakliye_satis_kdv = db.Column(db.Integer, nullable=True, default=None)
