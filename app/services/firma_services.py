@@ -619,10 +619,45 @@ class FirmaService(BaseService):
                 row_id=row.get('id'),
             )
 
+        def _nakliye_kalem_bilgisi(kalem):
+            if not kalem:
+                return '', ''
+            if kalem.ekipman:
+                makine_adi = kalem.ekipman.kod or ''
+                sube_adi = kalem.ekipman.sube.isim if kalem.ekipman.sube else ''
+            else:
+                makine_adi = " ".join(
+                    p for p in [kalem.harici_ekipman_marka, kalem.harici_ekipman_model]
+                    if p
+                ).strip()
+                sube_adi = ''
+            return makine_adi, sube_adi
+
+        def _nakliye_kalemini_bul(nakliye, kir, kir_kalem_map):
+            match = re.search(r'#\s*(\d+)', nakliye.aciklama or '')
+            if match:
+                kalem = kiralama_kalemi_by_id.get(int(match.group(1))) or kir_kalem_map.get(int(match.group(1)))
+                if kalem:
+                    return kalem
+
+            guzergah_norm = (nakliye.guzergah or '').strip().lower()
+            if guzergah_norm:
+                for kalem in kir.kalemler:
+                    makine_adi, _ = _nakliye_kalem_bilgisi(kalem)
+                    if makine_adi and makine_adi.lower() in guzergah_norm:
+                        return kalem
+                    if kalem.ekipman and kalem.ekipman.kod and kalem.ekipman.kod.lower() in guzergah_norm:
+                        return kalem
+                    harici_marka = (kalem.harici_ekipman_marka or '').strip().lower()
+                    if harici_marka and harici_marka in guzergah_norm:
+                        return kalem
+            return None
+
         # --- Kiralama ve nakliye satırları ---
         for kir in sorted(firma.kiralamalar, key=lambda k: k.kiralama_form_no or ''):
             form_tarihi = kir.kiralama_olusturma_tarihi or (kir.created_at.date() if kir.created_at else None)
             kdv_pct = kir.kdv_orani or 0
+            kir_kalem_map = {kalem.id: kalem for kalem in (kir.kalemler or [])}
 
             for kalem in kir.kalemler:
                 if kalem.kiralama_baslangici:
@@ -664,16 +699,8 @@ class FirmaService(BaseService):
                     'kdv_tutar': kdv_tutar, 'toplam': toplam, 'bakiye': 0.0})
 
             # Nakliye satırları
-            ilk_kod = ''
-            sube_adi = ''
-            for k in kir.kalemler:
-                if k.ekipman:
-                    ilk_kod = k.ekipman.kod or ''
-                    sube_adi = k.ekipman.sube.isim if k.ekipman.sube else ''
-                else:
-                    ilk_kod = k.harici_ekipman_marka or ''
-                if ilk_kod:
-                    break
+            fallback_kalem = next(iter(kir.kalemler or []), None)
+            fallback_kod, fallback_sube = _nakliye_kalem_bilgisi(fallback_kalem)
             firma_kisa = ''
             if kir.firma_musteri and kir.firma_musteri.firma_adi:
                 firma_kisa = kir.firma_musteri.firma_adi.split()[0]
@@ -689,16 +716,22 @@ class FirmaService(BaseService):
                 nak_kdv_pct = float(nakliye.kdv_orani or 0)
                 nak_kdv = nak_tutar * nak_kdv_pct / 100
                 gl = (nakliye.guzergah or '').lower()
+                nakliye_kalem = _nakliye_kalemini_bul(nakliye, kir, kir_kalem_map)
+                nakliye_kod, nakliye_sube = _nakliye_kalem_bilgisi(nakliye_kalem)
+                if not nakliye_kod:
+                    nakliye_kod = fallback_kod
+                if not nakliye_sube:
+                    nakliye_sube = fallback_sube
                 if 'getirildi' in gl:
-                    rota = f"{firma_kisa}→{sube_adi}" if firma_kisa and sube_adi else (firma_kisa or sube_adi or 'dönüş')
-                    nak_aciklama = f"{ilk_kod} {rota} dönüş".strip()
+                    rota = f"{firma_kisa}→{nakliye_sube}" if firma_kisa and nakliye_sube else (firma_kisa or nakliye_sube or 'dönüş')
+                    nak_aciklama = f"{nakliye_kod} {rota} dönüş".strip()
                     nak_sira = 2
                 elif 'götürüldü' in gl:
-                    rota = f"{sube_adi}→{firma_kisa}" if sube_adi and firma_kisa else (sube_adi or firma_kisa or 'gidiş')
-                    nak_aciklama = f"{ilk_kod} {rota} gidiş".strip()
+                    rota = f"{nakliye_sube}→{firma_kisa}" if nakliye_sube and firma_kisa else (nakliye_sube or firma_kisa or 'gidiş')
+                    nak_aciklama = f"{nakliye_kod} {rota} gidiş".strip()
                     nak_sira = 1
                 else:
-                    nak_aciklama = f"{ilk_kod} {sube_adi}→{firma_kisa}".strip(' →') if (sube_adi or firma_kisa) else 'Nakliye Hizmeti'
+                    nak_aciklama = f"{nakliye_kod} {nakliye_sube}→{firma_kisa}".strip(' →') if (nakliye_sube or firma_kisa) else (nakliye.guzergah or 'Nakliye Hizmeti')
                     nak_sira = 1
                 rows.append({'id': nakliye.id, 'sort_date': nakliye_islem_tarihi or form_tarihi,
                     'form_no': kir.kiralama_form_no, 'form_tarihi': form_tarihi,
