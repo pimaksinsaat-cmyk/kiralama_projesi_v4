@@ -369,14 +369,14 @@
         </tr>
         {% endif %}
     </tbody>
-    {% if cari_rows %}
+    {% if cari_rows and cari_foot_bakiye is defined and cari_foot_bakiye is not none %}
     <tfoot>
         <tr>
             <td colspan="10" class="text-end">TOPLAM:</td>
-            <td class="text-end">{{ "{:,.2f}".format(cari_rows | selectattr('toplam', 'ge', 0) | sum(attribute='toplam')).replace(',','X').replace('.',',').replace('X','.') }} TL</td>
-            <td class="text-end text-success">{{ "{:,.2f}".format(cari_rows | selectattr('toplam', 'lt', 0) | sum(attribute='toplam') | abs).replace(',','X').replace('.',',').replace('X','.') }} TL</td>
-            <td class="text-end {% if cari_rows[-1].bakiye > 0 %}bakiye-pozitif{% endif %}">
-                {{ "{:,.2f}".format(cari_rows[-1].bakiye).replace(',','X').replace('.',',').replace('X','.') }} TL
+            <td class="text-end">{{ "{:,.2f}".format(cari_foot_borc).replace(',','X').replace('.',',').replace('X','.') }} TL</td>
+            <td class="text-end text-success">{{ "{:,.2f}".format(cari_foot_alacak).replace(',','X').replace('.',',').replace('X','.') }} TL</td>
+            <td class="text-end {% if cari_foot_bakiye > 0 %}bakiye-pozitif{% elif cari_foot_bakiye < 0 %}bakiye-negatif{% endif %}">
+                {{ "{:,.2f}".format(cari_foot_bakiye).replace(',','X').replace('.',',').replace('X','.') }} TL
             </td>
         </tr>
     </tfoot>

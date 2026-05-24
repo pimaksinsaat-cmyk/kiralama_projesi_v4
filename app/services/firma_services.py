@@ -527,6 +527,22 @@ class FirmaService(BaseService):
             'durum_rengi': durum_rengi
         }
 
+    @staticmethod
+    def _coerce_scalar_to_date(val):
+        """SQL min() sonucunu date'e çevirir (SQLite/PostgreSQL uyumu)."""
+        if val is None:
+            return None
+        if isinstance(val, datetime):
+            return val.date()
+        if isinstance(val, date):
+            return val
+        if isinstance(val, str):
+            s = val.strip()
+            if not s:
+                return None
+            return date.fromisoformat(s[:10])
+        return None
+
     @classmethod
     def firma_en_erken_islem_gunu(cls, firma_id):
         """
@@ -534,62 +550,72 @@ class FirmaService(BaseService):
         bağlı tüm hizmet / ödeme / kiralama / nakliye / cari defter kayıtlarından
         en erken işlem günü (ORM hareket listesinden bağımsız; nakliye faturaları dahil).
 
-        Performans: Tek SQL gidiş-dönüşü; her alt sorgu yalnızca ilgili tabloda
-        ``firma_id`` (veya eşdeğeri) ile filtrelenir — tüm veritabanını taramaz.
-        Uygun indekslerle süre tipik olarak birkaç ms–onlarca ms düzeyindedir.
+        Her kaynak ayrı sorgulanır; union_all + Date tipi SQLite'ta fromisoformat
+        hatasına yol açabildiği için sonuç Python'da birleştirilir.
         """
-        from sqlalchemy import Date as SA_Date, cast, func, select, union_all
+        from sqlalchemy import func, select
 
         from app.cari.models import HizmetKaydi, Odeme, CariHareket
 
-        q_hiz = select(func.min(func.coalesce(HizmetKaydi.islem_tarihi, HizmetKaydi.tarih)).label('d')).where(
-            HizmetKaydi.firma_id == firma_id,
-            HizmetKaydi.is_deleted.is_(False),
-        )
-        q_od = select(func.min(func.coalesce(Odeme.islem_tarihi, Odeme.tarih)).label('d')).where(
-            Odeme.firma_musteri_id == firma_id,
-            Odeme.is_deleted.is_(False),
-        )
-        q_car = select(func.min(CariHareket.tarih).label('d')).where(
-            CariHareket.firma_id == firma_id,
-            CariHareket.is_deleted.is_(False),
-        )
-        q_kir_form = select(func.min(Kiralama.kiralama_olusturma_tarihi).label('d')).where(
-            Kiralama.firma_musteri_id == firma_id,
-            Kiralama.is_deleted.is_(False),
-        )
-        q_kir_ca = select(
-            cast(func.min(Kiralama.created_at), SA_Date).label('d')
-        ).where(
-            Kiralama.firma_musteri_id == firma_id,
-            Kiralama.is_deleted.is_(False),
-        )
-        q_nak_mus = select(func.min(Nakliye.tarih).label('d')).where(
-            Nakliye.firma_id == firma_id,
-            Nakliye.is_active.is_(True),
-        )
-        q_nak_tas = select(func.min(Nakliye.tarih).label('d')).where(
-            Nakliye.taseron_firma_id == firma_id,
-            Nakliye.is_active.is_(True),
-        )
-        q_kalem = select(func.min(KiralamaKalemi.kiralama_baslangici).label('d')).where(
-            KiralamaKalemi.harici_ekipman_tedarikci_id == firma_id,
-            KiralamaKalemi.is_active.is_(True),
-            KiralamaKalemi.is_deleted.is_(False),
-        )
+        def _min_date(q):
+            # ORM Date tipi işlemcisi SQLite'ta date nesnesinde fromisoformat hatası
+            # verebildiği için ham execute + Python normalizasyonu kullanılır.
+            val = db.session.execute(q).scalar()
+            return cls._coerce_scalar_to_date(val)
 
-        u = union_all(
-            q_hiz,
-            q_od,
-            q_car,
-            q_kir_form,
-            q_kir_ca,
-            q_nak_mus,
-            q_nak_tas,
-            q_kalem,
-        ).subquery('ilk_islem_bilesen')
-
-        return db.session.scalar(select(func.min(u.c.d)))
+        candidates = [
+            _min_date(
+                select(func.min(func.coalesce(HizmetKaydi.islem_tarihi, HizmetKaydi.tarih))).where(
+                    HizmetKaydi.firma_id == firma_id,
+                    HizmetKaydi.is_deleted.is_(False),
+                )
+            ),
+            _min_date(
+                select(func.min(func.coalesce(Odeme.islem_tarihi, Odeme.tarih))).where(
+                    Odeme.firma_musteri_id == firma_id,
+                    Odeme.is_deleted.is_(False),
+                )
+            ),
+            _min_date(
+                select(func.min(CariHareket.tarih)).where(
+                    CariHareket.firma_id == firma_id,
+                    CariHareket.is_deleted.is_(False),
+                )
+            ),
+            _min_date(
+                select(func.min(Kiralama.kiralama_olusturma_tarihi)).where(
+                    Kiralama.firma_musteri_id == firma_id,
+                    Kiralama.is_deleted.is_(False),
+                )
+            ),
+            _min_date(
+                select(func.min(Kiralama.created_at)).where(
+                    Kiralama.firma_musteri_id == firma_id,
+                    Kiralama.is_deleted.is_(False),
+                )
+            ),
+            _min_date(
+                select(func.min(Nakliye.tarih)).where(
+                    Nakliye.firma_id == firma_id,
+                    Nakliye.is_active.is_(True),
+                )
+            ),
+            _min_date(
+                select(func.min(Nakliye.tarih)).where(
+                    Nakliye.taseron_firma_id == firma_id,
+                    Nakliye.is_active.is_(True),
+                )
+            ),
+            _min_date(
+                select(func.min(KiralamaKalemi.kiralama_baslangici)).where(
+                    KiralamaKalemi.harici_ekipman_tedarikci_id == firma_id,
+                    KiralamaKalemi.is_active.is_(True),
+                    KiralamaKalemi.is_deleted.is_(False),
+                )
+            ),
+        ]
+        candidates = [d for d in candidates if d is not None]
+        return min(candidates) if candidates else None
 
     @staticmethod
     def build_cari_rows(firma, today_date):

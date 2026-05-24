@@ -109,6 +109,22 @@ def _sum_cari_rows_net(rows):
     return net
 
 
+def _cari_yazdir_footer_totals(cari_rows, devreden_bakiye=None):
+    """Yazdır/PDF Cari tfoot: borç, alacak (pozitif), kapanış bakiyesi (devreden dahil)."""
+    borc = Decimal('0')
+    alacak = Decimal('0')
+    for row in cari_rows or []:
+        t = Decimal(str(row.get('toplam') or 0))
+        if t > 0:
+            borc += t
+        elif t < 0:
+            alacak += abs(t)
+    bakiye = borc - alacak
+    if devreden_bakiye is not None:
+        bakiye += Decimal(str(devreden_bakiye))
+    return float(borc), float(alacak), float(bakiye)
+
+
 def _build_kiralama_bilgi_tab(firma, start_date_str, end_date_str, kiralama_page, kiralama_per_page):
     """Firma bilgi > Kiralamalar sekmesi: liste + sayfalama (oluşturma tarihi yaklaşımı A)."""
     allowed_pp = {10, 25, 50, 100}
@@ -758,6 +774,14 @@ def bilgi_yazdir(id):
         elif tab != 'kiralama':
             rapor_tarihi = today_date.strftime('%d.%m.%Y')
 
+        cari_foot_borc = None
+        cari_foot_alacak = None
+        cari_foot_bakiye = None
+        if tab == 'cari' and cari_rows:
+            cari_foot_borc, cari_foot_alacak, cari_foot_bakiye = _cari_yazdir_footer_totals(
+                cari_rows, cari_devreden_print
+            )
+
         return render_template(
             'firmalar/yazdir.html',
             **finans_verileri,
@@ -769,8 +793,15 @@ def bilgi_yazdir(id):
             cari_export_period=bool(tab == 'cari' and cari_export_period),
             cari_devreden_bakiye=cari_devreden_print,
             filt_start_print=filt_start_print,
+            cari_foot_borc=cari_foot_borc,
+            cari_foot_alacak=cari_foot_alacak,
+            cari_foot_bakiye=cari_foot_bakiye,
         )
     except Exception as e:
+        current_app.logger.error(
+            f"Yazdırma hatası (Firma ID: {id}): {e}",
+            exc_info=True,
+        )
         flash("Yazdırma verisi yüklenemedi.", "danger")
         return redirect(url_for('firmalar.bilgi', id=id))
 

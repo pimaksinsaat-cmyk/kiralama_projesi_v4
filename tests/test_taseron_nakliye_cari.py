@@ -30,6 +30,22 @@ def _firma(name, *, is_musteri=True, is_tedarikci=False, vergi_no=None):
     )
 
 
+def _ekipman(kod, sube):
+    return Ekipman(
+        kod=kod,
+        yakit="Elektrik",
+        tipi="Platform",
+        marka="Pimaks",
+        model="Model",
+        seri_no=f"SN-{kod}",
+        calisma_yuksekligi=15,
+        kaldirma_kapasitesi=250,
+        uretim_yili=2024,
+        calisma_durumu="bosta",
+        sube_id=sube.id,
+    )
+
+
 def _load_normalization_migration():
     path = Path(__file__).resolve().parents[1] / "migrations" / "versions" / "u6v7w8x9y0z1_normalize_nakliye_taseron_hizmet_kaydi.py"
     spec = importlib.util.spec_from_file_location("nakliye_hizmet_normalization", path)
@@ -362,6 +378,64 @@ def test_taseron_maliyet_senkronize_et_yeni_kaydi_nakliye_id_ile_olusturur(app):
     assert hizmet.firma_id == taseron.id
 
 
+def test_kiralama_legacy_tek_gidis_seferini_kalem_id_ile_gunceller(app):
+    musteri = _firma("ASES TEKNOLOJI", vergi_no="3333333333")
+    sube = Sube(isim="Ikitelli")
+    db.session.add_all([musteri, sube])
+    db.session.flush()
+
+    ekipman = _ekipman("PM39", sube)
+    db.session.add(ekipman)
+    db.session.flush()
+
+    kiralama = Kiralama(
+        kiralama_form_no="PF-2026/0115",
+        firma_musteri_id=musteri.id,
+        makine_calisma_adresi="Saha",
+        kdv_orani=20,
+    )
+    db.session.add(kiralama)
+    db.session.flush()
+
+    kalem = KiralamaKalemi(
+        kiralama_id=kiralama.id,
+        ekipman_id=ekipman.id,
+        kiralama_baslangici=date(2026, 5, 17),
+        kiralama_bitis=date(2026, 5, 20),
+        kiralama_brm_fiyat=Decimal("1000.00"),
+        nakliye_satis_fiyat=Decimal("4000.00"),
+        nakliye_satis_kdv=20,
+        is_harici_nakliye=False,
+        is_oz_mal_nakliye=True,
+    )
+    db.session.add(kalem)
+    db.session.flush()
+
+    legacy = Nakliye(
+        kiralama_id=kiralama.id,
+        firma_id=musteri.id,
+        tarih=date(2026, 5, 17),
+        islem_tarihi=date(2026, 5, 17),
+        guzergah="PM39 Ikitelli subesinden ASES firmasina goturuldu",
+        tutar=Decimal("1000.00"),
+        nakliye_tipi="oz_mal",
+        taseron_maliyet=Decimal("0.00"),
+        aciklama="Gidiş: PF-2026/0115",
+    )
+    db.session.add(legacy)
+    db.session.flush()
+
+    KiralamaService._create_nakliye_ve_cari(kiralama, kalem, "PM39", date(2026, 5, 17))
+    db.session.commit()
+
+    seferler = Nakliye.query.filter_by(kiralama_id=kiralama.id).all()
+    assert len(seferler) == 1
+    assert seferler[0].id == legacy.id
+    assert seferler[0].aciklama == f"Gidiş: PF-2026/0115 #{kalem.id}"
+    assert seferler[0].guzergah.startswith("PM39")
+    assert seferler[0].tutar == Decimal("4000.00")
+
+
 def test_kiralama_harici_nakliye_legacy_gidis_seferlerini_taseron_olarak_onarir(app):
     musteri = _firma("PAK MEKANIK", vergi_no="3333333333")
     taseron = _firma("GEYLANI ERCAN", is_tedarikci=True, vergi_no="4444444444")
@@ -454,6 +528,123 @@ def test_kiralama_harici_nakliye_legacy_gidis_seferlerini_taseron_olarak_onarir(
         HizmetKaydi.is_deleted == False,
     ).all()
     assert len(aktif_taseron_carileri) == 2
+
+
+def test_build_cari_rows_kiralama_nakliye_aciklamasini_ilk_kalemden_degilde_kalem_idden_alir(app):
+    musteri = _firma("ASES TEKNOLOJI", vergi_no="3333333333")
+    sube = Sube(isim="Ikitelli")
+    db.session.add_all([musteri, sube])
+    db.session.flush()
+
+    pm39 = _ekipman("PM39", sube)
+    pm41 = _ekipman("PM41", sube)
+    db.session.add_all([pm39, pm41])
+    db.session.flush()
+
+    kiralama = Kiralama(
+        kiralama_form_no="PF-2026/0115",
+        firma_musteri_id=musteri.id,
+        makine_calisma_adresi="Saha",
+        kdv_orani=20,
+    )
+    db.session.add(kiralama)
+    db.session.flush()
+
+    kalem_pm39 = KiralamaKalemi(
+        kiralama_id=kiralama.id,
+        ekipman_id=pm39.id,
+        kiralama_baslangici=date(2026, 5, 17),
+        kiralama_bitis=date(2026, 5, 20),
+        kiralama_brm_fiyat=Decimal("1000.00"),
+        nakliye_satis_fiyat=Decimal("4000.00"),
+        nakliye_satis_kdv=20,
+    )
+    kalem_haulotte = KiralamaKalemi(
+        kiralama_id=kiralama.id,
+        is_dis_tedarik_ekipman=True,
+        harici_ekipman_marka="HAULOTTE",
+        harici_ekipman_model="HA15IP",
+        kiralama_baslangici=date(2026, 5, 17),
+        kiralama_bitis=date(2026, 5, 20),
+        kiralama_brm_fiyat=Decimal("1000.00"),
+        nakliye_satis_fiyat=Decimal("4000.00"),
+        nakliye_satis_kdv=20,
+    )
+    kalem_pm41 = KiralamaKalemi(
+        kiralama_id=kiralama.id,
+        ekipman_id=pm41.id,
+        kiralama_baslangici=date(2026, 5, 18),
+        kiralama_bitis=date(2026, 5, 20),
+        kiralama_brm_fiyat=Decimal("1000.00"),
+        nakliye_satis_fiyat=Decimal("1500.00"),
+        nakliye_satis_kdv=20,
+    )
+    db.session.add_all([kalem_pm39, kalem_haulotte, kalem_pm41])
+    db.session.flush()
+
+    seferler = [
+        Nakliye(
+            kiralama_id=kiralama.id,
+            firma_id=musteri.id,
+            tarih=date(2026, 5, 17),
+            islem_tarihi=date(2026, 5, 17),
+            guzergah="PM39 Ikitelli subesinden ASES firmasina goturuldu",
+            tutar=Decimal("4000.00"),
+            kdv_orani=20,
+            nakliye_tipi="oz_mal",
+            aciklama=f"Gidis: PF-2026/0115 #{kalem_pm39.id}",
+        ),
+        Nakliye(
+            kiralama_id=kiralama.id,
+            firma_id=musteri.id,
+            tarih=date(2026, 5, 17),
+            islem_tarihi=date(2026, 5, 17),
+            guzergah="HAULOTTE HA15IP ASES firmasina goturuldu",
+            tutar=Decimal("4000.00"),
+            kdv_orani=20,
+            nakliye_tipi="oz_mal",
+            aciklama=f"Gidis: PF-2026/0115 #{kalem_haulotte.id}",
+        ),
+        Nakliye(
+            kiralama_id=kiralama.id,
+            firma_id=musteri.id,
+            tarih=date(2026, 5, 18),
+            islem_tarihi=date(2026, 5, 18),
+            guzergah="PM41 Ikitelli subesinden ASES firmasina goturuldu",
+            tutar=Decimal("1500.00"),
+            kdv_orani=20,
+            nakliye_tipi="oz_mal",
+            aciklama=f"Gidis: PF-2026/0115 #{kalem_pm41.id}",
+        ),
+        Nakliye(
+            kiralama_id=kiralama.id,
+            firma_id=musteri.id,
+            tarih=date(2026, 5, 20),
+            islem_tarihi=date(2026, 5, 20),
+            guzergah="HAULOTTE HA15IP ASES firmasindan Tedarikciye Iade subesine getirildi",
+            tutar=Decimal("4000.00"),
+            kdv_orani=20,
+            nakliye_tipi="oz_mal",
+            aciklama=f"Donus: PF-2026/0115 #{kalem_haulotte.id}",
+        ),
+    ]
+    db.session.add_all(seferler)
+    db.session.commit()
+
+    rows = FirmaService.build_cari_rows(musteri, date(2026, 5, 20))
+    nakliye_rows = {
+        row["id"]: row["aciklama"]
+        for row in rows
+        if row.get("islem_turu") == "nakliye" and row.get("form_no") == "PF-2026/0115"
+    }
+
+    assert nakliye_rows[seferler[0].id].startswith("PM39 ")
+    assert nakliye_rows[seferler[1].id].startswith("HAULOTTE HA15IP ")
+    assert nakliye_rows[seferler[2].id].startswith("PM41 ")
+    assert nakliye_rows[seferler[3].id].startswith("HAULOTTE HA15IP ")
+    assert "PM39" not in nakliye_rows[seferler[1].id]
+    assert "PM39" not in nakliye_rows[seferler[2].id]
+    assert nakliye_rows[seferler[3].id].endswith("dönüş")
 
 
 def test_sonlandir_donus_taseron_giderini_idempotent_gunceller(app):

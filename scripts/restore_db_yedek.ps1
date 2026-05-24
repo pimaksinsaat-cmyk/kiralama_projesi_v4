@@ -20,6 +20,8 @@ param(
     [string]$SqlFile = "db_yedek.sql",
     [string]$DbContainer = "kiralama_veritabani",
     [string]$WebContainer = "kiralama_web",
+    [string]$DbService = "db",
+    [string]$WebService = "web",
     [string]$DbName = "kiralama_db",
     [string]$DbUser = "postgres",
     [string]$BackupDir = "backups",
@@ -46,6 +48,118 @@ function Invoke-Checked {
     if ($LASTEXITCODE -ne 0) {
         throw "$Label basarisiz oldu. ExitCode=$LASTEXITCODE"
     }
+}
+
+function Get-ContainerRunningState([string]$ContainerName) {
+    $state = docker inspect -f '{{.State.Running}}' $ContainerName 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        throw "$ContainerName konteyneri bulunamadi."
+    }
+    return ($state -eq "true")
+}
+
+function Test-ContainerExists([string]$ContainerName) {
+    $name = docker ps -a --filter "name=^/$ContainerName$" --format "{{.Names}}"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Docker konteyner listesi okunamadi. ExitCode=$LASTEXITCODE"
+    }
+    return ($name -eq $ContainerName)
+}
+
+function Start-ComposeService([string]$ServiceName) {
+    docker compose up -d $ServiceName
+    if ($LASTEXITCODE -ne 0) {
+        throw "$ServiceName servisi docker compose ile baslatilamadi. ExitCode=$LASTEXITCODE"
+    }
+}
+
+function Stop-ContainerIfRunning([string]$ContainerName) {
+    Write-Step "$ContainerName konteyneri kontrol ediliyor"
+    if (-not (Test-ContainerExists $ContainerName)) {
+        Write-Host "$ContainerName bulunamadi; restore sonunda docker compose ile olusturulacak." -ForegroundColor Yellow
+        return
+    }
+
+    if (Get-ContainerRunningState $ContainerName) {
+        docker stop $ContainerName
+        if ($LASTEXITCODE -ne 0) {
+            throw "$ContainerName konteyneri durdurulamadi. ExitCode=$LASTEXITCODE"
+        }
+        Write-Host "$ContainerName durduruldu." -ForegroundColor Green
+    }
+    else {
+        Write-Host "$ContainerName zaten calismiyor." -ForegroundColor Yellow
+    }
+}
+
+function Start-Or-Restart-Container([string]$ContainerName, [string]$ServiceName) {
+    Write-Step "$ContainerName konteyneri calistiriliyor"
+    if (-not (Test-ContainerExists $ContainerName)) {
+        Write-Host "$ContainerName bulunamadi; docker compose ile olusturuluyor." -ForegroundColor Yellow
+        Start-ComposeService $ServiceName
+        return
+    }
+
+    if (Get-ContainerRunningState $ContainerName) {
+        docker restart $ContainerName
+        if ($LASTEXITCODE -ne 0) {
+            throw "$ContainerName konteyneri yeniden baslatilamadi. ExitCode=$LASTEXITCODE"
+        }
+        Write-Host "$ContainerName yeniden baslatildi." -ForegroundColor Green
+    }
+    else {
+        docker start $ContainerName
+        if ($LASTEXITCODE -ne 0) {
+            throw "$ContainerName konteyneri baslatilamadi. ExitCode=$LASTEXITCODE"
+        }
+        Write-Host "$ContainerName baslatildi." -ForegroundColor Green
+    }
+}
+
+function Start-ContainerIfStopped([string]$ContainerName, [string]$ServiceName) {
+    Write-Step "$ContainerName konteyneri kontrol ediliyor"
+    if (-not (Test-ContainerExists $ContainerName)) {
+        Write-Host "$ContainerName bulunamadi; docker compose ile olusturuluyor." -ForegroundColor Yellow
+        Start-ComposeService $ServiceName
+        return
+    }
+
+    if (Get-ContainerRunningState $ContainerName) {
+        Write-Host "$ContainerName calisiyor." -ForegroundColor Green
+    }
+    else {
+        docker start $ContainerName
+        if ($LASTEXITCODE -ne 0) {
+            throw "$ContainerName konteyneri baslatilamadi. ExitCode=$LASTEXITCODE"
+        }
+        Write-Host "$ContainerName baslatildi." -ForegroundColor Green
+    }
+}
+
+function Wait-ContainerHealthy([string]$ContainerName, [int]$TimeoutSeconds = 60) {
+    Write-Step "$ContainerName saglik durumu bekleniyor"
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ((Get-Date) -lt $deadline) {
+        $status = docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' $ContainerName 2>$null
+        if ($LASTEXITCODE -ne 0) {
+            throw "$ContainerName konteyneri saglik durumu okunamadi."
+        }
+
+        if ($status -eq "healthy") {
+            Write-Host "$ContainerName healthy." -ForegroundColor Green
+            return
+        }
+
+        if ($status -eq "none") {
+            Write-Host "$ContainerName icin healthcheck yok; calisiyor kabul edildi." -ForegroundColor Yellow
+            return
+        }
+
+        Start-Sleep -Seconds 2
+    }
+
+    throw "$ContainerName konteyneri $TimeoutSeconds saniye icinde healthy olmadi."
 }
 
 $ProjectRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
@@ -83,6 +197,9 @@ Write-Host "DB         : $DbContainer / $DbName"
 Write-Host "Web        : $WebContainer"
 Write-Host "Encoding   : UTF-8 olarak okunuyor"
 
+Start-ContainerIfStopped $DbContainer $DbService
+Wait-ContainerHealthy $DbContainer
+
 Invoke-Checked "PostgreSQL encoding kontrolu" {
     docker exec $DbContainer psql -U $DbUser -d $DbName -Atc "SHOW server_encoding; SHOW client_encoding;"
 }
@@ -112,23 +229,22 @@ Invoke-Checked "SQL dosyasi konteynere kopyalaniyor" {
 }
 
 if (-not $NoStopWeb) {
-    Invoke-Checked "Web konteyneri gecici durduruluyor" {
-        docker stop $WebContainer
-    }
+    Stop-ContainerIfRunning $WebContainer
 }
 
 try {
     Invoke-Checked "SQL yedegi PostgreSQL'e aktariliyor" {
         docker exec $DbContainer psql -U $DbUser -d $DbName -v ON_ERROR_STOP=1 -f $ContainerSql
     }
+
+    Invoke-Checked "Kullanici aktif oturumlari temizleniyor" {
+        $ClearActiveSessionsSql = "DO `$`$ BEGIN EXECUTE 'UPDATE ' || chr(34) || 'user' || chr(34) || ' SET active_session_token = NULL, active_session_started_at = NULL, active_session_seen_at = NULL'; END `$`$;"
+        docker exec $DbContainer psql -U $DbUser -d $DbName -v ON_ERROR_STOP=1 -c $ClearActiveSessionsSql
+    }
 }
 finally {
     if (-not $NoStopWeb) {
-        Write-Step "Web konteyneri tekrar baslatiliyor"
-        docker start $WebContainer
-        if ($LASTEXITCODE -ne 0) {
-            Write-Host "Web konteyneri baslatilamadi; lutfen manuel kontrol edin." -ForegroundColor Yellow
-        }
+        Start-Or-Restart-Container $WebContainer $WebService
     }
 }
 
