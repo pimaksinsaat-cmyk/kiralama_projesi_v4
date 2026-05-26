@@ -369,6 +369,11 @@ class KiralamaKalemiService(BaseService):
         
         # Cari hesaplamayı tetikle
         KiralamaService.guncelle_cari_toplam(kalem.kiralama_id, auto_commit=False)
+        if kalem.is_dis_tedarik_ekipman and kalem.harici_ekipman_tedarikci_id:
+            KiralamaService.guncelle_tedarikci_cari_toplam(
+                kalem.harici_ekipman_tedarikci_id,
+                auto_commit=False,
+            )
         db.session.commit()
         return kalem
 
@@ -844,6 +849,10 @@ class KiralamaService(BaseService):
                 HizmetKaydi.firma_id == firma_id,
                 HizmetKaydi.yon == 'gelen',
                 HizmetKaydi.is_deleted == False,
+                db.or_(
+                    HizmetKaydi.aciklama.like('Dış Kiralama%'),
+                    HizmetKaydi.aciklama.like('Dis Kiralama%'),
+                ),
             ).order_by(HizmetKaydi.id.asc()).all()
 
             cari_kayit = mevcut_kayitlar[0] if mevcut_kayitlar else None
@@ -863,7 +872,7 @@ class KiralamaService(BaseService):
                 cari_kayit.nakliye_alis_kdv = kalem.nakliye_alis_kdv
                 cari_kayit.aciklama = f"Dış Kiralama (Güncelleme): {makine_adi}"
                 db.session.add(cari_kayit)
-            elif tahakkuk > 0:
+            else:
                 yeni = HizmetKaydi(
                     firma_id=firma_id,
                     tarih=date.today(),
@@ -944,7 +953,7 @@ class KiralamaService(BaseService):
                         kalem.harici_ekipman_yukseklik = to_int_or_none(k_data.get('harici_ekipman_calisma_yuksekligi'))
                         kalem.harici_ekipman_uretim_yili = to_int_or_none(k_data.get('harici_ekipman_uretim_tarihi'))
                         makine_adi = kalem.harici_ekipman_marka or "Dış Ekipman"
-                        if kalem.kiralama_alis_fiyat > 0 and kalem.harici_ekipman_tedarikci_id > 0:
+                        if kalem.harici_ekipman_tedarikci_id > 0:
                             ust_sinir = bit if kalem.sonlandirildi else min(bit, _bugun())
                             gun = cls._hesapla_gun_sayisi(bas, ust_sinir)
                             tedarikci_id = kalem.harici_ekipman_tedarikci_id if kalem.harici_ekipman_tedarikci_id and kalem.harici_ekipman_tedarikci_id > 0 else kalem.nakliye_tedarikci_id
@@ -1140,7 +1149,7 @@ class KiralamaService(BaseService):
                     
                     makine_adi = aktif.harici_ekipman_marka or "Dış Ekipman"
 
-                    if aktif.kiralama_alis_fiyat > 0 and aktif.harici_ekipman_tedarikci_id > 0:
+                    if aktif.harici_ekipman_tedarikci_id > 0:
                         ust_sinir = bit if aktif.sonlandirildi else min(bit, _bugun())
                         gun = cls._hesapla_gun_sayisi(bas, ust_sinir)
                         db.session.add(HizmetKaydi(

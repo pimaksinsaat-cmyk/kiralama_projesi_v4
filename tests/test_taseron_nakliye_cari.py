@@ -862,3 +862,227 @@ def test_sonlandir_donus_oz_mal_gidis_taseron_korunur(app):
     assert kalem.donus_nakliye_alis_fiyat is None
     assert kalem.nakliye_araci_id is None
     assert kalem.donus_nakliye_araci_id == nak_arac.id
+
+
+def test_harici_kiralama_cari_satiri_sonlandirilmis_kalemde_kalem_suresini_kullanir(app):
+    musteri = _firma("KASKA METAL", vergi_no="5555555555")
+    tedarikci = _firma("ALMER MAKINE", is_tedarikci=True, vergi_no="6666666666")
+    db.session.add_all([musteri, tedarikci])
+    db.session.flush()
+
+    kiralama = Kiralama(
+        kiralama_form_no="PF-2026/0102",
+        firma_musteri_id=musteri.id,
+        kiralama_olusturma_tarihi=date(2026, 5, 9),
+        kdv_orani=20,
+    )
+    db.session.add(kiralama)
+    db.session.flush()
+
+    kalem = KiralamaKalemi(
+        kiralama_id=kiralama.id,
+        kiralama_baslangici=date(2026, 5, 9),
+        kiralama_bitis=date(2026, 5, 13),
+        kiralama_brm_fiyat=Decimal("1500.00"),
+        kiralama_alis_fiyat=Decimal("1200.00"),
+        kiralama_alis_kdv=20,
+        is_dis_tedarik_ekipman=True,
+        harici_ekipman_tedarikci_id=tedarikci.id,
+        harici_ekipman_marka="ZOOMLION",
+        sonlandirildi=True,
+        is_active=True,
+    )
+    db.session.add(kalem)
+    db.session.flush()
+
+    db.session.add(HizmetKaydi(
+        firma_id=tedarikci.id,
+        tarih=date(2026, 5, 9),
+        islem_tarihi=date(2026, 5, 9),
+        tutar=Decimal("1200.00"),
+        yon="gelen",
+        fatura_no=kiralama.kiralama_form_no,
+        ozel_id=kalem.id,
+        aciklama="Dış Kiralama: ZOOMLION",
+        kdv_orani=20,
+        kiralama_alis_kdv=20,
+    ))
+    db.session.commit()
+
+    rows = FirmaService.build_cari_rows(tedarikci, date(2026, 5, 26))
+    row = next(r for r in rows if r.get("form_no") == "PF-2026/0102")
+
+    assert row["baslangic"] == date(2026, 5, 9)
+    assert row["bitis"] == date(2026, 5, 13)
+    assert row["bitis_bugun"] is False
+    assert row["gun_sayisi"] == 5
+    assert row["brm_fiyat"] == 1200.0
+    assert row["matrah"] == 6000.0
+    assert row["toplam"] == -7200.0
+
+
+def test_harici_kiralama_fatura_fallback_satiri_kalem_suresini_kullanir(app):
+    musteri = _firma("KASKA METAL PASIF", vergi_no="5656565656")
+    tedarikci = _firma("ALMER MAKINE PASIF", is_tedarikci=True, vergi_no="6767676767")
+    db.session.add_all([musteri, tedarikci])
+    db.session.flush()
+
+    kiralama = Kiralama(
+        kiralama_form_no="PF-2026/0102-P",
+        firma_musteri_id=musteri.id,
+        kiralama_olusturma_tarihi=date(2026, 5, 9),
+        kdv_orani=20,
+    )
+    db.session.add(kiralama)
+    db.session.flush()
+
+    kalem = KiralamaKalemi(
+        kiralama_id=kiralama.id,
+        kiralama_baslangici=date(2026, 5, 9),
+        kiralama_bitis=date(2026, 5, 13),
+        kiralama_brm_fiyat=Decimal("1500.00"),
+        kiralama_alis_fiyat=Decimal("1200.00"),
+        kiralama_alis_kdv=20,
+        is_dis_tedarik_ekipman=True,
+        harici_ekipman_tedarikci_id=tedarikci.id,
+        harici_ekipman_marka="ZOOMLION",
+        sonlandirildi=True,
+        is_active=False,
+    )
+    db.session.add(kalem)
+    db.session.flush()
+
+    db.session.add(HizmetKaydi(
+        firma_id=tedarikci.id,
+        tarih=date(2026, 5, 9),
+        islem_tarihi=date(2026, 5, 9),
+        tutar=Decimal("1200.00"),
+        yon="gelen",
+        fatura_no=kiralama.kiralama_form_no,
+        ozel_id=kalem.id,
+        aciklama="Dış Kiralama: ZOOMLION",
+        kdv_orani=20,
+        kiralama_alis_kdv=20,
+    ))
+    db.session.commit()
+
+    rows = FirmaService.build_cari_rows(tedarikci, date(2026, 5, 26))
+    row = next(r for r in rows if r.get("form_no") == "PF-2026/0102-P")
+
+    assert row["islem_turu"] == "harici_kiralama"
+    assert row["bitis"] == date(2026, 5, 13)
+    assert row["gun_sayisi"] == 5
+    assert row["brm_fiyat"] == 1200.0
+    assert row["matrah"] == 6000.0
+
+
+def test_sonlandir_harici_kiralama_tedarikci_carisini_tam_sureye_gunceller(app):
+    musteri = _firma("KASKA METAL 2", vergi_no="7777777777")
+    tedarikci = _firma("ALMER MAKINE 2", is_tedarikci=True, vergi_no="8888888888")
+    db.session.add_all([musteri, tedarikci])
+    db.session.flush()
+
+    kiralama = Kiralama(
+        kiralama_form_no="PF-2026/0103",
+        firma_musteri_id=musteri.id,
+        kiralama_olusturma_tarihi=date(2026, 5, 9),
+        kdv_orani=20,
+    )
+    db.session.add(kiralama)
+    db.session.flush()
+
+    kalem = KiralamaKalemi(
+        kiralama_id=kiralama.id,
+        kiralama_baslangici=date(2026, 5, 9),
+        kiralama_bitis=date(2026, 5, 20),
+        kiralama_brm_fiyat=Decimal("1500.00"),
+        kiralama_alis_fiyat=Decimal("1200.00"),
+        kiralama_alis_kdv=20,
+        is_dis_tedarik_ekipman=True,
+        harici_ekipman_tedarikci_id=tedarikci.id,
+        harici_ekipman_marka="ZOOMLION",
+        sonlandirildi=False,
+        is_active=True,
+    )
+    db.session.add(kalem)
+    db.session.flush()
+
+    hizmet = HizmetKaydi(
+        firma_id=tedarikci.id,
+        tarih=date(2026, 5, 9),
+        islem_tarihi=date(2026, 5, 9),
+        tutar=Decimal("1200.00"),
+        yon="gelen",
+        fatura_no=kiralama.kiralama_form_no,
+        ozel_id=kalem.id,
+        aciklama="Dış Kiralama: ZOOMLION",
+        kdv_orani=20,
+        kiralama_alis_kdv=20,
+    )
+    db.session.add(hizmet)
+    db.session.commit()
+
+    KiralamaKalemiService.sonlandir(
+        kalem.id,
+        "2026-05-13",
+        "tedarikci",
+        is_harici_nakliye=True,
+        nakliye_tedarikci_id=tedarikci.id,
+        nakliye_alis_fiyat=Decimal("500.00"),
+        donus_nakliye_alis_kdv=20,
+    )
+
+    db.session.refresh(hizmet)
+    assert hizmet.tutar == Decimal("6000.00")
+    assert hizmet.islem_tarihi == date(2026, 5, 9)
+    assert hizmet.kiralama_alis_kdv == 20
+    assert HizmetKaydi.query.filter(
+        HizmetKaydi.firma_id == tedarikci.id,
+        HizmetKaydi.ozel_id == kalem.id,
+        HizmetKaydi.aciklama.like("Dönüş Nakliye:%"),
+        HizmetKaydi.is_deleted == False,
+    ).count() == 1
+
+
+def test_tedarikci_cari_sifir_alis_fiyatli_dis_kiralama_kaydi_olusturur(app):
+    musteri = _firma("HERMES YALITIM", vergi_no="9090909090")
+    tedarikci = _firma("OBAYAPI BEDELSIZ", is_tedarikci=True, vergi_no="9191919191")
+    db.session.add_all([musteri, tedarikci])
+    db.session.flush()
+
+    kiralama = Kiralama(
+        kiralama_form_no="PF-2026/0090",
+        firma_musteri_id=musteri.id,
+        kiralama_olusturma_tarihi=date(2026, 4, 23),
+        kdv_orani=20,
+    )
+    db.session.add(kiralama)
+    db.session.flush()
+
+    kalem = KiralamaKalemi(
+        kiralama_id=kiralama.id,
+        kiralama_baslangici=date(2026, 4, 24),
+        kiralama_bitis=date(2026, 4, 25),
+        kiralama_brm_fiyat=Decimal("1700.00"),
+        kiralama_alis_fiyat=Decimal("0.00"),
+        kiralama_alis_kdv=20,
+        is_dis_tedarik_ekipman=True,
+        harici_ekipman_tedarikci_id=tedarikci.id,
+        harici_ekipman_marka="BEDELSIZ MAKINE",
+        sonlandirildi=True,
+        is_active=True,
+    )
+    db.session.add(kalem)
+    db.session.commit()
+
+    KiralamaService.guncelle_tedarikci_cari_toplam(tedarikci.id)
+
+    hizmet = HizmetKaydi.query.filter(
+        HizmetKaydi.firma_id == tedarikci.id,
+        HizmetKaydi.ozel_id == kalem.id,
+        HizmetKaydi.aciklama.like("Dış Kiralama%"),
+        HizmetKaydi.is_deleted == False,
+    ).one()
+    assert hizmet.tutar == Decimal("0.00")
+    assert hizmet.fatura_no == "PF-2026/0090"
+    assert hizmet.islem_tarihi == date(2026, 4, 24)

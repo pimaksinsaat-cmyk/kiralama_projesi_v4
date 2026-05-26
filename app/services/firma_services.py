@@ -813,9 +813,22 @@ class FirmaService(BaseService):
             if harici_faturalar:
                 for hkd in harici_faturalar:
                     islem_tarih = getattr(hkd, 'islem_tarihi', None) or hkd.tarih
-                    # Aktif (sonlanmamış) kalemlerde saklı tutar bayatlar; canlı hesap kullan
-                    if not kalem.sonlandirildi and (hkd.aciklama or '').startswith('Dış Kiralama'):
-                        hkd_tutar = float(KiralamaService.hesapla_hizmet_kaydi_canli_tutari(hkd))
+                    alis_fiyat = float(kalem.kiralama_alis_fiyat or 0)
+                    if kalem.kiralama_baslangici:
+                        if kalem.sonlandirildi and kalem.kiralama_bitis:
+                            bitis = kalem.kiralama_bitis
+                            bitis_bugun = False
+                        else:
+                            bitis = today_date
+                            bitis_bugun = True
+                        gun_sayisi = max((bitis - kalem.kiralama_baslangici).days + 1, 0)
+                    else:
+                        bitis = None
+                        bitis_bugun = False
+                        gun_sayisi = 0
+
+                    if (hkd.aciklama or '').startswith(('Dış Kiralama', 'Dis Kiralama')):
+                        hkd_tutar = alis_fiyat * gun_sayisi
                     else:
                         hkd_tutar = float(hkd.tutar or 0)
                     hkd_kdv_pct = float(
@@ -823,17 +836,14 @@ class FirmaService(BaseService):
                         else (hkd.kdv_orani or 0)
                     )
                     hkd_kdv = hkd_tutar * hkd_kdv_pct / 100
-                    # Aktif kalemde bitiş tarihi bugün, gün sayısı dinamik
-                    if not kalem.sonlandirildi and kalem.kiralama_baslangici:
-                        alis_fiyat = float(kalem.kiralama_alis_fiyat or 0)
-                        gun_sayisi = (today_date - kalem.kiralama_baslangici).days + 1
+                    if (hkd.aciklama or '').startswith(('Dış Kiralama', 'Dis Kiralama')):
                         rows.append({
                             'id': hkd.id, 'sort_date': islem_tarih or form_tarihi,
                             'form_no': kir.kiralama_form_no, 'form_tarihi': form_tarihi,
                             'kiralama_id': kir.id, 'islem_turu': 'harici_kiralama', 'nakliye_sira': 0,
                             'aciklama': hkd.aciklama or aciklama_base, 'seri_no': seri_no,
-                            'baslangic': kalem.kiralama_baslangici, 'bitis': today_date,
-                            'bitis_bugun': True, 'gun_sayisi': gun_sayisi,
+                            'baslangic': kalem.kiralama_baslangici, 'bitis': bitis,
+                            'bitis_bugun': bitis_bugun, 'gun_sayisi': gun_sayisi,
                             'brm_fiyat': alis_fiyat, 'matrah': hkd_tutar, 'kdv_orani': hkd_kdv_pct,
                             'kdv_tutar': hkd_kdv, 'toplam': -(hkd_tutar + hkd_kdv), 'bakiye': 0.0,
                         })
@@ -1026,6 +1036,53 @@ class FirmaService(BaseService):
                 if is_harici_kiralama_fatura:
                     kalem_obj = kiralama_kalemi_by_id.get(ozel_id)
                     if kalem_obj and getattr(kalem_obj, 'is_active', True):
+                        continue
+                    if kalem_obj:
+                        kir = kalem_obj.kiralama
+                        form_tarihi = (
+                            kir.kiralama_olusturma_tarihi
+                            if kir else islem_tarih
+                        )
+                        alis_fiyat = float(kalem_obj.kiralama_alis_fiyat or 0)
+                        if kalem_obj.kiralama_baslangici:
+                            if kalem_obj.sonlandirildi and kalem_obj.kiralama_bitis:
+                                bitis = kalem_obj.kiralama_bitis
+                                bitis_bugun = False
+                            else:
+                                bitis = today_date
+                                bitis_bugun = True
+                            gun_sayisi = max((bitis - kalem_obj.kiralama_baslangici).days + 1, 0)
+                        else:
+                            bitis = None
+                            bitis_bugun = False
+                            gun_sayisi = 0
+                        tutar = alis_fiyat * gun_sayisi
+                        kdv_pct = (
+                            fatura.kiralama_alis_kdv
+                            if fatura.kiralama_alis_kdv is not None
+                            else (fatura.kdv_orani or 0)
+                        )
+                        kdv_tutar = tutar * float(kdv_pct or 0) / 100
+                        rows.append({
+                            'id': fatura.id, 'sort_date': islem_tarih,
+                            'form_no': fatura.fatura_no or (kir.kiralama_form_no if kir else '-'),
+                            'form_tarihi': form_tarihi,
+                            'kiralama_id': kalem_obj.kiralama_id,
+                            'islem_turu': 'harici_kiralama',
+                            'nakliye_sira': 0,
+                            'aciklama': fatura.aciklama or 'Dış Kiralama',
+                            'seri_no': kalem_obj.harici_ekipman_seri_no or '',
+                            'baslangic': kalem_obj.kiralama_baslangici,
+                            'bitis': bitis,
+                            'bitis_bugun': bitis_bugun,
+                            'gun_sayisi': gun_sayisi,
+                            'brm_fiyat': alis_fiyat,
+                            'matrah': tutar,
+                            'kdv_orani': kdv_pct,
+                            'kdv_tutar': kdv_tutar,
+                            'toplam': -(tutar + kdv_tutar),
+                            'bakiye': 0.0,
+                        })
                         continue
             tutar = float(fatura.tutar or 0)
             aciklama_text_lower = (fatura.aciklama or '').strip()
