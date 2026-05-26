@@ -77,9 +77,9 @@ def test_e2e_filo_ve_sube_makineleri(app, client):
         db.session.add(musteri)
         db.session.flush()
 
-        ekipman_kod = _unique_kod()
-        ekipman = Ekipman(
-            kod=ekipman_kod,
+        bosta_ekipman_kod = _unique_kod()
+        bosta_ekipman = Ekipman(
+            kod=bosta_ekipman_kod,
             yakit="Elektrik",
             tipi="MAKAS",
             marka="E2E Marka",
@@ -90,8 +90,45 @@ def test_e2e_filo_ve_sube_makineleri(app, client):
             uretim_yili=2023,
             calisma_durumu="bosta",
             sube_id=sube.id,
+            is_active=True,
+        )
+        db.session.add(bosta_ekipman)
+        db.session.flush()
+
+        ekipman_kod = _unique_kod()
+        ekipman = Ekipman(
+            kod=ekipman_kod,
+            yakit="Elektrik",
+            tipi="MAKAS",
+            marka="E2E Kirada Marka",
+            model="E2E Kirada Model",
+            seri_no=f"SN-{uuid.uuid4().hex[:8]}",
+            calisma_yuksekligi=10,
+            kaldirma_kapasitesi=2000,
+            uretim_yili=2023,
+            calisma_durumu="kirada",
+            sube_id=sube.id,
+            is_active=True,
         )
         db.session.add(ekipman)
+        db.session.flush()
+
+        serviste_ekipman_kod = _unique_kod()
+        serviste_ekipman = Ekipman(
+            kod=serviste_ekipman_kod,
+            yakit="Elektrik",
+            tipi="MAKAS",
+            marka="Servis Marka",
+            model="Servis Model",
+            seri_no=f"SN-{uuid.uuid4().hex[:8]}",
+            calisma_yuksekligi=12,
+            kaldirma_kapasitesi=1800,
+            uretim_yili=2022,
+            calisma_durumu="serviste",
+            sube_id=sube.id,
+            is_active=True,
+        )
+        db.session.add(serviste_ekipman)
         db.session.flush()
 
         kiralama = Kiralama(
@@ -129,9 +166,15 @@ def test_e2e_filo_ve_sube_makineleri(app, client):
     assert payload is not None
     assert payload["sube_id"] == sube_id
     assert payload["bosta_sayisi"] >= 1
-    assert any(item["kod"] == ekipman_kod for item in payload["bosta"])
+    assert payload["kirada_sayisi"] >= 1
+    assert payload["serviste_sayisi"] == 1
+    assert any(item["kod"] == bosta_ekipman_kod for item in payload["bosta"])
+    assert any(item["kod"] == ekipman_kod for item in payload["kirada"])
+    assert any(item["kod"] == serviste_ekipman_kod for item in payload["serviste"])
+    assert all(item["kod"] != serviste_ekipman_kod for item in payload["bosta"])
+    assert all(item["kod"] != serviste_ekipman_kod for item in payload["kirada"])
 
     with app.app_context():
         db_ekipman = Ekipman.query.filter_by(id=ekipman_id).first()
         assert db_ekipman is not None
-        assert db_ekipman.calisma_durumu == "bosta"
+        assert db_ekipman.calisma_durumu == "kirada"

@@ -106,11 +106,8 @@ def index():
     for sube in aktif_subeler:
         toplam = Ekipman.query.filter_by(sube_id=sube.id, is_active=True).count()
         bosta = Ekipman.query.filter_by(sube_id=sube.id, calisma_durumu='bosta', is_active=True).count()
-        kirada = Ekipman.query.filter(
-            Ekipman.sube_id == sube.id,
-            Ekipman.calisma_durumu != 'bosta',
-            Ekipman.is_active == True
-        ).count()
+        kirada = Ekipman.query.filter_by(sube_id=sube.id, calisma_durumu='kirada', is_active=True).count()
+        serviste = Ekipman.query.filter_by(sube_id=sube.id, calisma_durumu='serviste', is_active=True).count()
         harici_bekleyen = KiralamaKalemi.query.filter_by(
             donus_sube_id=sube.id,
             is_dis_tedarik_ekipman=True,
@@ -122,7 +119,7 @@ def index():
             'detay': sube,
             'istatistik': {
                 'toplam': toplam, 'kirada': kirada, 'bosta': bosta,
-                'harici_bekleyen': harici_bekleyen,
+                'serviste': serviste, 'harici_bekleyen': harici_bekleyen,
             }
         })
     return render_template('subeler/index.html', sube_verileri=sube_verileri)
@@ -179,15 +176,13 @@ def sube_makineleri(sube_id):
         
         # Makineleri durumuna göre kategorize et
         bosta = Ekipman.query.filter_by(sube_id=sube_id, calisma_durumu='bosta', is_active=True).all()
-        kirada = Ekipman.query.filter(
-            Ekipman.sube_id == sube_id,
-            Ekipman.calisma_durumu != 'bosta',
-            Ekipman.is_active == True
-        ).all()
+        kirada = Ekipman.query.filter_by(sube_id=sube_id, calisma_durumu='kirada', is_active=True).all()
+        serviste = Ekipman.query.filter_by(sube_id=sube_id, calisma_durumu='serviste', is_active=True).all()
         
         # 'plaka' yerine 'kod' kullan ve ekstra alanlar ekle
         bosta_list = [{'id': e.id, 'kod': e.kod, 'marka': e.marka, 'yukseklik': e.calisma_yuksekligi, 'kapasite': e.kaldirma_kapasitesi} for e in bosta]
         kirada_list = [{'id': e.id, 'kod': e.kod, 'marka': e.marka, 'yukseklik': e.calisma_yuksekligi, 'kapasite': e.kaldirma_kapasitesi} for e in kirada]
+        serviste_list = [{'id': e.id, 'kod': e.kod, 'marka': e.marka, 'yukseklik': e.calisma_yuksekligi, 'kapasite': e.kaldirma_kapasitesi} for e in serviste]
 
         harici_kalemler = (KiralamaKalemi.query
             .filter_by(donus_sube_id=sube_id, is_dis_tedarik_ekipman=True, sonlandirildi=True, is_active=True)
@@ -207,8 +202,10 @@ def sube_makineleri(sube_id):
             'sube_adi': sube.isim,
             'bosta': bosta_list,
             'kirada': kirada_list,
+            'serviste': serviste_list,
             'bosta_sayisi': len(bosta),
             'kirada_sayisi': len(kirada),
+            'serviste_sayisi': len(serviste),
             'harici': harici_list,
         })
     except Exception as e:

@@ -177,7 +177,7 @@
                 <div class="status-badge" title="Aktif"></div>
             </div>
 
-            <div class="stat-row" style="grid-template-columns: {% if item.istatistik.harici_bekleyen %}1fr 1fr 1fr 1fr{% else %}1fr 1fr 1fr{% endif %};">
+            <div class="stat-row" style="grid-template-columns: {% if item.istatistik.harici_bekleyen %}repeat(5, minmax(0, 1fr)){% else %}repeat(4, minmax(0, 1fr)){% endif %};">
                 <div class="stat-item" style="border-right: 1px solid #eee;">
                     <span class="stat-value">{{ item.istatistik.toplam }}</span>
                     <span class="stat-label">Ekipman</span>
@@ -186,9 +186,13 @@
                     <span class="stat-value" style="color: var(--success-green);">{{ item.istatistik.kirada }}</span>
                     <span class="stat-label">Sahada</span>
                 </div>
-                <div class="stat-item" {% if item.istatistik.harici_bekleyen %}style="border-right: 1px solid #eee;"{% endif %}>
+                <div class="stat-item" style="border-right: 1px solid #eee;">
                     <span class="stat-value" style="color: var(--warning-orange);">{{ item.istatistik.bosta }}</span>
                     <span class="stat-label">Depoda</span>
+                </div>
+                <div class="stat-item" {% if item.istatistik.harici_bekleyen %}style="border-right: 1px solid #eee;"{% endif %}>
+                    <span class="stat-value" style="color: #6f42c1;">{{ item.istatistik.serviste or 0 }}</span>
+                    <span class="stat-label">Serviste</span>
                 </div>
                 {% if item.istatistik.harici_bekleyen %}
                 <div class="stat-item">
@@ -287,6 +291,25 @@
             </div>
 
             <!-- Harici (Dış Tedarik) Makineler -->
+            <div style="margin-bottom: 2rem;">
+                <h5 style="color: #6f42c1; font-weight: 700; margin: 0 0 0.8rem 0; display: flex; align-items: center; gap: 8px; padding: 0.5rem 0.8rem; background-color: #f3e8ff; border-left: 4px solid #6f42c1; border-radius: 4px;">
+                    <span style="font-size: 1.2rem;">Srv</span> Serviste (<span id="serviste-count">0</span>)
+                </h5>
+                <div id="serviste-table" style="overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+                        <thead>
+                            <tr style="background-color: #f5f5f5; border: 1px solid #ddd;">
+                                <th style="padding: 0.75rem; text-align: left; font-weight: 600; border-right: 1px solid #ddd; color: #333;">Kod</th>
+                                <th style="padding: 0.75rem; text-align: left; font-weight: 600; border-right: 1px solid #ddd; color: #333;">Marka</th>
+                                <th style="padding: 0.75rem; text-align: center; font-weight: 600; border-right: 1px solid #ddd; color: #333;">YÃ¼kseklik (m)</th>
+                                <th style="padding: 0.75rem; text-align: center; font-weight: 600; color: #333;">Kapasite (kg)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="serviste-list"></tbody>
+                    </table>
+                </div>
+            </div>
+
             <div id="harici-section" style="display:none;">
                 <h5 style="color: #856404; font-weight: 700; margin: 0 0 0.8rem 0; display: flex; align-items: center; gap: 8px; padding: 0.5rem 0.8rem; background-color: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">
                     <span style="font-size: 1.2rem;">🟡</span> Harici / İade Bekliyor (<span id="harici-count">0</span>)
@@ -435,12 +458,12 @@
     });
 
     // Tablo satırı render fonksiyonu (Excel stilinde)
-    const renderTableRow = (e, index) => `
+    const renderTableRow = (e, index, durum = 'bosta') => `
         <tr style="border: 1px solid #eee; background-color: ${index % 2 === 0 ? '#ffffff' : '#f9f9f9'}; transition: background-color 0.2s; cursor: context-menu;" 
             class="makine-satiri"
             data-ekipman-id="${e.id}"
             data-kod="${e.kod}"
-            data-durum="bosta"
+            data-durum="${durum}"
             data-kirala-url="/kiralama/yeni/${e.id}"
             data-finansal-rapor-url="/filo/finansal_rapor/${e.id}"
             data-kiralama-gecmisi-url="/filo/kiralama_gecmisi/${e.id}"
@@ -560,7 +583,7 @@
                 if (data.bosta.length === 0) {
                     bostaList.innerHTML = '<tr><td colspan="4" style="padding: 1rem; text-align: center; color: #999;">Depoda makine bulunmuyor</td></tr>';
                 } else {
-                    bostaList.innerHTML = data.bosta.map((e, i) => renderTableRow(e, i)).join('');
+                    bostaList.innerHTML = data.bosta.map((e, i) => renderTableRow(e, i, 'bosta')).join('');
                     
                     // Context menu listeners ekle
                     document.querySelectorAll('#bosta-list .makine-satiri').forEach(row => {
@@ -576,10 +599,27 @@
                 if (data.kirada.length === 0) {
                     kiradaList.innerHTML = '<tr><td colspan="4" style="padding: 1rem; text-align: center; color: #999;">Sahada makine bulunmuyor</td></tr>';
                 } else {
-                    kiradaList.innerHTML = data.kirada.map((e, i) => renderTableRow(e, i)).join('');
+                    kiradaList.innerHTML = data.kirada.map((e, i) => renderTableRow(e, i, 'kirada')).join('');
 
                     // Context menu listeners ekle
                     document.querySelectorAll('#kirada-list .makine-satiri').forEach(row => {
+                        row.addEventListener('contextmenu', (e) => showContextMenu(e, row));
+                    });
+                }
+
+                // Serviste makineler
+                const servisteList = document.getElementById('serviste-list');
+                const servisteCount = document.getElementById('serviste-count');
+                const servisteData = data.serviste || [];
+                servisteCount.textContent = servisteData.length;
+
+                if (servisteData.length === 0) {
+                    servisteList.innerHTML = '<tr><td colspan="4" style="padding: 1rem; text-align: center; color: #999;">Serviste makine bulunmuyor</td></tr>';
+                } else {
+                    servisteList.innerHTML = servisteData.map((e, i) => renderTableRow(e, i, 'serviste')).join('');
+
+                    // Context menu listeners ekle
+                    document.querySelectorAll('#serviste-list .makine-satiri').forEach(row => {
                         row.addEventListener('contextmenu', (e) => showContextMenu(e, row));
                     });
                 }
