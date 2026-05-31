@@ -911,17 +911,16 @@ def _get_cari_durum_raporu_verisi(sort_by, sort_dir, q):
         rapor = [s for s in rapor if q_lower in tr_lower(s.get('firma_adi') or '')]
 
     if sort_by == 'firma_adi':
-        sort_key = lambda s: tr_lower(s.get('firma_adi') or '')
+        rapor = sorted(rapor, key=lambda s: tr_lower(s.get('firma_adi') or ''), reverse=(sort_dir == 'desc'))
     elif sort_by in ('bakiye', 'bakiye_kdvli'):
         key_name = 'bakiye_kdvli' if sort_by == 'bakiye_kdvli' else 'bakiye'
-        sort_key = lambda s: float(s.get(key_name) or 0)
+        rapor = sorted(rapor, key=lambda s: tr_lower(s.get('firma_adi') or ''))
+        rapor = sorted(rapor, key=lambda s: float(s.get(key_name) or 0), reverse=(sort_dir == 'desc'))
     else:
         def durum_key(s):
             bakiye = float(s.get('bakiye_kdvli') or 0)
             return 'borclu' if bakiye > 0.5 else ('alacakli' if bakiye < -0.5 else 'kapali')
-        sort_key = durum_key
-
-    rapor = sorted(rapor, key=sort_key, reverse=(sort_dir == 'desc'))
+        rapor = sorted(rapor, key=durum_key, reverse=(sort_dir == 'desc'))
     return rapor, genel_toplam, sort_by, sort_dir
 
 @cari_bp.route('/cari-durum-raporu')
@@ -934,7 +933,7 @@ def cari_durum_raporu():
         q = (request.args.get('q', '', type=str) or '').strip()
 
         allowed_per_page = {10, 25, 50, 100}
-        allowed_sort_by = {'firma_adi', 'bakiye', 'durum'}
+        allowed_sort_by = {'firma_adi', 'bakiye', 'bakiye_kdvli', 'durum'}
         allowed_sort_dir = {'asc', 'desc'}
 
         if per_page not in allowed_per_page:

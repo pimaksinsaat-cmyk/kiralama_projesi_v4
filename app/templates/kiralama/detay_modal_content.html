@@ -189,7 +189,7 @@
                 {% if kalem.nakliye_alis_kdv is not none %} (KDV %{{ kalem.nakliye_alis_kdv }}){% endif %}
                 {% if kalem.nakliye_alis_tevkifat_oran %} | Tevkifat: {{ kalem.nakliye_alis_tevkifat_oran }}{% endif %}
             {% elif kalem.nakliye_araci %}
-                Öz Mal — {{ kalem.nakliye_araci.plaka if kalem.nakliye_araci.plaka else kalem.nakliye_araci.kod }}
+                Öz Mal — {{ kalem.nakliye_araci.kod }}
             {% else %}
                 Öz Mal
             {% endif %}
