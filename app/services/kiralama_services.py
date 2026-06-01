@@ -365,6 +365,35 @@ class KiralamaKalemiService(BaseService):
                 donus_sefer.hesapla_ve_guncelle()
                 db.session.add(donus_sefer)
 
+                if (
+                    kalem.donus_is_harici_nakliye
+                    and kalem.donus_nakliye_tedarikci_id
+                    and to_decimal(kalem.donus_nakliye_alis_fiyat) > 0
+                ):
+                    donus_taseron_kayitlari = HizmetKaydi.query.filter(
+                        HizmetKaydi.ozel_id == kalem.id,
+                        HizmetKaydi.yon == 'gelen',
+                        HizmetKaydi.fatura_no == kiralama.kiralama_form_no,
+                        HizmetKaydi.aciklama.like('Dönüş Nakliye:%'),
+                    ).order_by(HizmetKaydi.id.asc()).all()
+                    donus_taseron_cari = donus_taseron_kayitlari[0] if donus_taseron_kayitlari else HizmetKaydi(yon='gelen')
+                    for fazla_kayit in donus_taseron_kayitlari[1:]:
+                        db.session.delete(fazla_kayit)
+
+                    donus_taseron_cari.firma_id = kalem.donus_nakliye_tedarikci_id
+                    donus_taseron_cari.tarih = kalem.kiralama_bitis or date.today()
+                    donus_taseron_cari.islem_tarihi = kalem.kiralama_bitis or date.today()
+                    donus_taseron_cari.tutar = to_decimal(kalem.donus_nakliye_alis_fiyat)
+                    donus_taseron_cari.yon = 'gelen'
+                    donus_taseron_cari.fatura_no = kiralama.kiralama_form_no
+                    donus_taseron_cari.ozel_id = kalem.id
+                    donus_taseron_cari.aciklama = f"Dönüş Nakliye: {makine_adi} - {donus_sube_adi}"
+                    donus_taseron_cari.kdv_orani = None
+                    donus_taseron_cari.nakliye_alis_kdv = kalem.donus_nakliye_alis_kdv
+                    donus_taseron_cari.is_deleted = False
+                    donus_taseron_cari.is_active = True
+                    db.session.add(donus_taseron_cari)
+
         cls.save(kalem, is_new=False, auto_commit=False, actor_id=actor_id)
         
         # Cari hesaplamayı tetikle
@@ -1058,8 +1087,6 @@ class KiralamaService(BaseService):
                 is_yeni = not aktif.id
                 orijinal_sonlandirildi = aktif.sonlandirildi if not is_yeni else False
                 is_kapatilmis_mevcut = (not is_yeni) and (bool(orijinal_sonlandirildi) or not bool(aktif.is_active))
-                if is_kapatilmis_mevcut:
-                    bas, bit = aktif.kiralama_baslangici, aktif.kiralama_bitis
 
                 aktif.kiralama_baslangici, aktif.kiralama_bitis = bas, bit
                 aktif.kiralama_brm_fiyat = to_decimal(k_data.get('kiralama_brm_fiyat'))
@@ -1096,26 +1123,6 @@ class KiralamaService(BaseService):
                 hesaplanan_tutar = cls._hesapla_kalem_satis_tutari(bas, bit, aktif.kiralama_brm_fiyat, aktif.nakliye_satis_fiyat)
                 logger.info(f"[UPDATE-TUTAR-DOGRULAMA] Kalem ID={aktif.id}, Gün={gun}, Günlük Fiyat={aktif.kiralama_brm_fiyat}, Nakliye={aktif.nakliye_satis_fiyat}, Hesaplanan Toplam={hesaplanan_tutar}")
                 
-                if is_kapatilmis_mevcut:
-                    k_data['dis_tedarik_ekipman'] = 1 if aktif.is_dis_tedarik_ekipman else 0
-                    k_data['ekipman_id'] = aktif.ekipman_id or 0
-                    k_data['harici_ekipman_tedarikci_id'] = aktif.harici_ekipman_tedarikci_id or 0
-                    k_data['harici_ekipman_tipi'] = aktif.harici_ekipman_tipi
-                    k_data['harici_ekipman_marka'] = aktif.harici_ekipman_marka
-                    k_data['harici_ekipman_model'] = aktif.harici_ekipman_model
-                    k_data['harici_ekipman_seri_no'] = aktif.harici_ekipman_seri_no
-                    k_data['harici_ekipman_kaldirma_kapasitesi'] = aktif.harici_ekipman_kapasite
-                    k_data['harici_ekipman_calisma_yuksekligi'] = aktif.harici_ekipman_yukseklik
-                    k_data['harici_ekipman_uretim_tarihi'] = aktif.harici_ekipman_uretim_yili
-                    k_data['dis_tedarik_nakliye'] = 1 if aktif.is_harici_nakliye else 0
-                    k_data['nakliye_tedarikci_id'] = aktif.nakliye_tedarikci_id or 0
-                    k_data['nakliye_araci_id'] = aktif.nakliye_araci_id or 0
-                    k_data['donus_is_harici_nakliye'] = 1 if getattr(aktif, 'donus_is_harici_nakliye', False) else 0
-                    k_data['donus_nakliye_tedarikci_id'] = aktif.donus_nakliye_tedarikci_id or 0
-                    k_data['donus_nakliye_alis_fiyat'] = aktif.donus_nakliye_alis_fiyat or 0
-                    k_data['donus_nakliye_alis_kdv'] = aktif.donus_nakliye_alis_kdv
-                    k_data['donus_nakliye_araci_id'] = aktif.donus_nakliye_araci_id or 0
-
                 # Ekipman Durumu
                 is_dis = int(k_data.get('dis_tedarik_ekipman') or 0) == 1
                 makine_adi = "Makine"
@@ -1179,6 +1186,24 @@ class KiralamaService(BaseService):
                     or getattr(aktif, 'sonlandirildi', False)
                 ):
                     cls._create_nakliye_ve_cari(kiralama, aktif, makine_adi, bas)
+                    if (
+                        aktif.sonlandirildi
+                        and aktif.donus_is_harici_nakliye
+                        and aktif.donus_nakliye_tedarikci_id
+                        and to_decimal(aktif.donus_nakliye_alis_fiyat) > 0
+                    ):
+                        db.session.add(HizmetKaydi(
+                            firma_id=aktif.donus_nakliye_tedarikci_id,
+                            tarih=aktif.kiralama_bitis or date.today(),
+                            islem_tarihi=aktif.kiralama_bitis or date.today(),
+                            tutar=to_decimal(aktif.donus_nakliye_alis_fiyat),
+                            yon='gelen',
+                            fatura_no=kiralama.kiralama_form_no,
+                            ozel_id=aktif.id,
+                            aciklama=f"Dönüş Nakliye: {makine_adi}",
+                            kdv_orani=None,
+                            nakliye_alis_kdv=aktif.donus_nakliye_alis_kdv,
+                        ))
 
             for k in list(kiralama.kalemler):
                 if k.id not in formdan_gelen_idler:

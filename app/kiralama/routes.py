@@ -62,6 +62,157 @@ def _kiralama_return_url(default_endpoint='kiralama.index'):
     return target
 
 
+def _kiralama_date_to_iso(value):
+    if not value:
+        return ''
+    if hasattr(value, 'isoformat'):
+        return value.isoformat()
+    return str(value)
+
+
+def _fmt_tr_date(value):
+    if not value:
+        return '-'
+    if hasattr(value, 'strftime'):
+        return value.strftime('%d.%m.%Y')
+    return str(value)
+
+
+def _kapali_kalem_degisti_mi(k_data, kalem):
+    def _money_equal(a, b):
+        try:
+            left = Decimal(str(a or 0)).quantize(Decimal('0.01'))
+            right = Decimal(str(b or 0)).quantize(Decimal('0.01'))
+            return left == right
+        except (InvalidOperation, ValueError, TypeError):
+            return str(a or '') == str(b or '')
+
+    def _int_equal(a, b):
+        try:
+            left = None if a in (None, '') else int(a)
+            right = None if b in (None, '') else int(b)
+            return left == right
+        except (TypeError, ValueError):
+            return str(a or '') == str(b or '')
+
+    def _bool_equal(a, b):
+        def _to_bool(value):
+            try:
+                return bool(int(value or 0))
+            except (TypeError, ValueError):
+                return str(value).lower() in ('true', 'on', 'yes')
+        return _to_bool(a) == bool(b)
+
+    return any((
+        not _int_equal(k_data.get('dis_tedarik_ekipman'), 1 if kalem.is_dis_tedarik_ekipman else 0),
+        not _int_equal(k_data.get('ekipman_id'), kalem.ekipman_id),
+        not _int_equal(k_data.get('harici_ekipman_tedarikci_id'), kalem.harici_ekipman_tedarikci_id),
+        (k_data.get('harici_ekipman_tipi') or '') != (kalem.harici_ekipman_tipi or ''),
+        (k_data.get('harici_ekipman_marka') or '') != (kalem.harici_ekipman_marka or ''),
+        (k_data.get('harici_ekipman_model') or '') != (kalem.harici_ekipman_model or ''),
+        (k_data.get('harici_ekipman_seri_no') or '') != (kalem.harici_ekipman_seri_no or ''),
+        not _int_equal(k_data.get('harici_ekipman_kaldirma_kapasitesi'), kalem.harici_ekipman_kapasite),
+        not _int_equal(k_data.get('harici_ekipman_calisma_yuksekligi'), kalem.harici_ekipman_yukseklik),
+        not _int_equal(k_data.get('harici_ekipman_uretim_tarihi'), kalem.harici_ekipman_uretim_yili),
+        _kiralama_date_to_iso(k_data.get('kiralama_baslangici')) != _kiralama_date_to_iso(kalem.kiralama_baslangici),
+        _kiralama_date_to_iso(k_data.get('kiralama_bitis')) != _kiralama_date_to_iso(kalem.kiralama_bitis),
+        not _money_equal(k_data.get('kiralama_brm_fiyat'), kalem.kiralama_brm_fiyat),
+        not _money_equal(k_data.get('kiralama_alis_fiyat'), kalem.kiralama_alis_fiyat),
+        not _int_equal(k_data.get('kiralama_alis_kdv'), kalem.kiralama_alis_kdv),
+        not _int_equal(k_data.get('dis_tedarik_nakliye'), 1 if kalem.is_harici_nakliye else 0),
+        not _int_equal(k_data.get('nakliye_tedarikci_id'), kalem.nakliye_tedarikci_id),
+        not _int_equal(k_data.get('nakliye_araci_id'), kalem.nakliye_araci_id),
+        not _money_equal(k_data.get('nakliye_satis_fiyat'), kalem.nakliye_satis_fiyat),
+        not _money_equal(k_data.get('nakliye_alis_fiyat'), kalem.nakliye_alis_fiyat),
+        not _int_equal(k_data.get('nakliye_alis_kdv'), kalem.nakliye_alis_kdv),
+        not _int_equal(k_data.get('nakliye_satis_kdv'), kalem.nakliye_satis_kdv),
+        (k_data.get('nakliye_alis_tevkifat_oran') or '') != (kalem.nakliye_alis_tevkifat_oran or ''),
+        (k_data.get('nakliye_satis_tevkifat_oran') or '') != (kalem.nakliye_satis_tevkifat_oran or ''),
+        not _bool_equal(k_data.get('donus_nakliye_fatura_et'), kalem.donus_nakliye_fatura_et),
+        not _bool_equal(k_data.get('donus_is_harici_nakliye'), getattr(kalem, 'donus_is_harici_nakliye', False)),
+        not _int_equal(k_data.get('donus_nakliye_tedarikci_id'), kalem.donus_nakliye_tedarikci_id),
+        not _money_equal(k_data.get('donus_nakliye_alis_fiyat'), kalem.donus_nakliye_alis_fiyat),
+        not _int_equal(k_data.get('donus_nakliye_alis_kdv'), kalem.donus_nakliye_alis_kdv),
+        not _int_equal(k_data.get('donus_nakliye_araci_id'), kalem.donus_nakliye_araci_id),
+    ))
+
+
+def _kiralama_tarih_cakismalari(kalemler_data):
+    conflicts = []
+    posted_ranges = []
+
+    for idx, k_data in enumerate(kalemler_data):
+        try:
+            kalem_id = int(k_data.get('id') or 0)
+            ekipman_id = int(k_data.get('ekipman_id') or 0)
+            is_dis = int(k_data.get('dis_tedarik_ekipman') or 0) == 1
+        except (TypeError, ValueError):
+            continue
+
+        bas = k_data.get('kiralama_baslangici')
+        bit = k_data.get('kiralama_bitis')
+        if is_dis or ekipman_id <= 0 or not bas or not bit:
+            continue
+
+        ekipman = db.session.get(Ekipman, ekipman_id)
+        makine_kod = ekipman.kod if ekipman else f'ID {ekipman_id}'
+
+        for onceki in posted_ranges:
+            if onceki['ekipman_id'] == ekipman_id and bas <= onceki['bit'] and bit >= onceki['bas']:
+                message = (
+                    f"{makine_kod} makinesi aynı form içinde {idx + 1}. satır ile "
+                    f"{onceki['idx'] + 1}. satır arasında çakışıyor "
+                    f"({_fmt_tr_date(bas)} - {_fmt_tr_date(bit)} / "
+                    f"{_fmt_tr_date(onceki['bas'])} - {_fmt_tr_date(onceki['bit'])})."
+                )
+                conflicts.append({
+                    'idx': idx,
+                    'field': 'both',
+                    'message': message,
+                    'machine': makine_kod,
+                    'conflict_form_no': 'Aynı form',
+                    'conflict_range': f"{_fmt_tr_date(onceki['bas'])} - {_fmt_tr_date(onceki['bit'])}",
+                })
+
+        cakisan = (
+            KiralamaKalemi.query
+            .join(Kiralama, KiralamaKalemi.kiralama_id == Kiralama.id)
+            .filter(
+                KiralamaKalemi.ekipman_id == ekipman_id,
+                KiralamaKalemi.id != kalem_id,
+                KiralamaKalemi.is_deleted == False,
+                KiralamaKalemi.kiralama_baslangici <= bit,
+                KiralamaKalemi.kiralama_bitis >= bas,
+            )
+            .order_by(KiralamaKalemi.kiralama_baslangici.asc())
+            .first()
+        )
+        if cakisan:
+            cakisan_form_no = cakisan.kiralama.kiralama_form_no if cakisan.kiralama else f"#{cakisan.kiralama_id}"
+            message = (
+                f"{makine_kod} makinesi {cakisan_form_no} formunda "
+                f"{_fmt_tr_date(cakisan.kiralama_baslangici)} - {_fmt_tr_date(cakisan.kiralama_bitis)} "
+                f"tarihleri arasında kirada. Girilen aralık: {_fmt_tr_date(bas)} - {_fmt_tr_date(bit)}."
+            )
+            conflicts.append({
+                'idx': idx,
+                'field': 'both',
+                'message': message,
+                'machine': makine_kod,
+                'conflict_form_no': cakisan_form_no,
+                'conflict_range': f"{_fmt_tr_date(cakisan.kiralama_baslangici)} - {_fmt_tr_date(cakisan.kiralama_bitis)}",
+            })
+
+        posted_ranges.append({
+            'idx': idx,
+            'ekipman_id': ekipman_id,
+            'bas': bas,
+            'bit': bit,
+        })
+
+    return conflicts
+
+
 def _redirect_to_kiralama_return():
     return redirect(_kiralama_return_url())
 
@@ -603,6 +754,7 @@ def duzenle(kiralama_id):
     kiralama = db.get_or_404(Kiralama, kiralama_id)
     form = KiralamaForm(obj=kiralama)
     form.current_kiralama_id = kiralama.id
+    date_conflicts = []
 
     # Düzenleme ekranında form numarası değiştirilemez.
     if request.method == 'POST':
@@ -734,29 +886,7 @@ def duzenle(kiralama_id):
                 'doviz_kuru_eur': getattr(form, 'doviz_kuru_eur', form.doviz_kuru_usd).data
             }
             kalemler_data = [k_form.data for k_form in form.kalemler]
-            finansal_duzeltme_sayisi = 0
-
-            def _money_equal(a, b):
-                try:
-                    left = Decimal(str(a or 0)).quantize(Decimal('0.01'))
-                    right = Decimal(str(b or 0)).quantize(Decimal('0.01'))
-                    return left == right
-                except (InvalidOperation, ValueError, TypeError):
-                    return str(a or '') == str(b or '')
-
-            def _int_equal(a, b):
-                try:
-                    left = None if a in (None, '') else int(a)
-                    right = None if b in (None, '') else int(b)
-                    return left == right
-                except (TypeError, ValueError):
-                    return str(a or '') == str(b or '')
-
-            def _bool_from_form(value):
-                try:
-                    return bool(int(value or 0))
-                except (TypeError, ValueError):
-                    return str(value).lower() in ('true', 'on', 'yes')
+            kapali_duzeltme_sayisi = 0
 
             for k_data in kalemler_data:
                 try:
@@ -769,35 +899,22 @@ def duzenle(kiralama_id):
                 if not mevcut_kalem or (not mevcut_kalem.sonlandirildi and mevcut_kalem.is_active):
                     continue
 
-                finansal_degisti = (
-                    not _money_equal(k_data.get('kiralama_brm_fiyat'), mevcut_kalem.kiralama_brm_fiyat)
-                    or not _money_equal(k_data.get('kiralama_alis_fiyat'), mevcut_kalem.kiralama_alis_fiyat)
-                    or not _money_equal(k_data.get('nakliye_satis_fiyat'), mevcut_kalem.nakliye_satis_fiyat)
-                    or not _money_equal(k_data.get('nakliye_alis_fiyat'), mevcut_kalem.nakliye_alis_fiyat)
-                    or not _int_equal(k_data.get('kiralama_alis_kdv'), mevcut_kalem.kiralama_alis_kdv)
-                    or not _int_equal(k_data.get('nakliye_alis_kdv'), mevcut_kalem.nakliye_alis_kdv)
-                    or not _int_equal(k_data.get('nakliye_satis_kdv'), mevcut_kalem.nakliye_satis_kdv)
-                    or _bool_from_form(k_data.get('donus_nakliye_fatura_et')) != bool(mevcut_kalem.donus_nakliye_fatura_et)
-                    or _bool_from_form(k_data.get('donus_is_harici_nakliye')) != bool(getattr(mevcut_kalem, 'donus_is_harici_nakliye', False))
-                    or not _int_equal(k_data.get('donus_nakliye_tedarikci_id'), getattr(mevcut_kalem, 'donus_nakliye_tedarikci_id', None))
-                    or not _money_equal(k_data.get('donus_nakliye_alis_fiyat'), getattr(mevcut_kalem, 'donus_nakliye_alis_fiyat', None))
-                    or not _int_equal(k_data.get('donus_nakliye_alis_kdv'), getattr(mevcut_kalem, 'donus_nakliye_alis_kdv', None))
-                    or not _int_equal(k_data.get('donus_nakliye_araci_id'), getattr(mevcut_kalem, 'donus_nakliye_araci_id', None))
-                    or (k_data.get('nakliye_alis_tevkifat_oran') or None) != mevcut_kalem.nakliye_alis_tevkifat_oran
-                    or (k_data.get('nakliye_satis_tevkifat_oran') or None) != mevcut_kalem.nakliye_satis_tevkifat_oran
-                )
-                if finansal_degisti:
-                    finansal_duzeltme_sayisi += 1
+                if _kapali_kalem_degisti_mi(k_data, mevcut_kalem):
+                    kapali_duzeltme_sayisi += 1
 
-            if finansal_duzeltme_sayisi:
+            if kapali_duzeltme_sayisi:
                 financial_password = request.form.get('financial_edit_password') or ''
                 if not financial_password or not current_user.check_password(financial_password):
-                    raise ValidationError("Kapatılmış kalemde finansal düzeltme için kullanıcı şifresi doğrulanmalıdır.")
+                    raise ValidationError("Kapatılmış kalemde düzenleme için kullanıcı şifresi doğrulanmalıdır.")
+
+            date_conflicts = _kiralama_tarih_cakismalari(kalemler_data)
+            if date_conflicts:
+                raise ValidationError(date_conflicts[0]['message'])
 
             KiralamaService.update_kiralama_with_relations(kiralama.id, kiralama_data, kalemler_data, actor_id=actor_id)
             log_description = f"Kiralama güncellendi: {kiralama.kiralama_form_no}"
-            if finansal_duzeltme_sayisi:
-                log_description += f" | Şifre doğrulamalı finansal düzeltme: {finansal_duzeltme_sayisi} kapatılmış kalem"
+            if kapali_duzeltme_sayisi:
+                log_description += f" | Şifre doğrulamalı kapalı kalem düzenleme: {kapali_duzeltme_sayisi} kapatılmış kalem"
             OperationLogService.log(
                 module='kiralama',
                 action='update',
@@ -867,6 +984,14 @@ def duzenle(kiralama_id):
         # Rollback sonrası kiralama objesi expire olmuş olabilir, yeniden yükle
         db.session.refresh(kiralama)
         include_ids_for_map = [k.ekipman_id for k in kiralama.kalemler if k.ekipman_id]
+        if request.method == 'POST':
+            for entry in form.kalemler:
+                try:
+                    posted_ekipman_id = int(entry.form.ekipman_id.data or 0)
+                except (TypeError, ValueError):
+                    posted_ekipman_id = 0
+                if posted_ekipman_id > 0 and posted_ekipman_id not in include_ids_for_map:
+                    include_ids_for_map.append(posted_ekipman_id)
         filo_query_for_map = Ekipman.query.filter(
             Ekipman.firma_tedarikci_id.is_(None),
             or_(Ekipman.calisma_durumu == 'bosta', Ekipman.id.in_(include_ids_for_map))
@@ -891,7 +1016,7 @@ def duzenle(kiralama_id):
         subeler = []
         markalar = []
     tipler = [tip for tip, _ in EKIPMAN_TIPI_SECENEKLERI]
-    return render_template('kiralama/form.html', form=form, kiralama=kiralama, markalar=markalar, subeler=subeler, tipler=tipler, is_edit=True, ekipman_sube_map=ekipman_sube_map, ekipman_map_json=json.dumps(ekipman_map, ensure_ascii=False), return_url=_kiralama_return_url())
+    return render_template('kiralama/form.html', form=form, kiralama=kiralama, markalar=markalar, subeler=subeler, tipler=tipler, is_edit=True, ekipman_sube_map=ekipman_sube_map, ekipman_map_json=json.dumps(ekipman_map, ensure_ascii=False), return_url=_kiralama_return_url(), date_conflicts=date_conflicts)
 
 @kiralama_bp.route('/sil/<int:kiralama_id>', methods=['POST'])
 @login_required

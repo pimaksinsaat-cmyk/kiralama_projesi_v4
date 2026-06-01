@@ -50,6 +50,51 @@ function Invoke-Checked {
     }
 }
 
+function Test-DockerDaemonAvailable {
+    docker info > $null 2>&1
+    return ($LASTEXITCODE -eq 0)
+}
+
+function Ensure-DockerDaemonRunning([int]$TimeoutSeconds = 60) {
+    Write-Step "Docker daemon kontrol ediliyor"
+
+    if (Test-DockerDaemonAvailable) {
+        Write-Host "Docker daemon zaten calisiyor." -ForegroundColor Green
+        return
+    }
+
+    $dockerService = Get-Service -Name com.docker.service -ErrorAction SilentlyContinue
+    if ($null -ne $dockerService) {
+        Write-Host "com.docker.service bulundu; servis baslatiliyor." -ForegroundColor Cyan
+        if ($dockerService.Status -ne 'Running') {
+            Start-Service -Name com.docker.service
+        }
+    }
+    else {
+        Write-Host "Docker servisi bulunamadi; Docker Desktop baslatilacak." -ForegroundColor Yellow
+        $possiblePaths = @(
+            "$env:ProgramFiles\Docker\Docker\Docker Desktop.exe",
+            "$env:ProgramFiles(x86)\Docker\Docker\Docker Desktop.exe"
+        )
+        $dockerDesktopPath = $possiblePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+        if (-not $dockerDesktopPath) {
+            throw "Docker Desktop bulunamadi. Docker'i elle baslatin."
+        }
+        Start-Process -FilePath $dockerDesktopPath
+    }
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ((Get-Date) -lt $deadline) {
+        if (Test-DockerDaemonAvailable) {
+            Write-Host "Docker daemon kullanilabilir." -ForegroundColor Green
+            return
+        }
+        Start-Sleep -Seconds 2
+    }
+
+    throw "Docker daemon $TimeoutSeconds saniye icinde kullanilabilir hale gelmedi."
+}
+
 function Get-ContainerRunningState([string]$ContainerName) {
     $state = docker inspect -f '{{.State.Running}}' $ContainerName 2>$null
     if ($LASTEXITCODE -ne 0) {
@@ -197,6 +242,7 @@ Write-Host "DB         : $DbContainer / $DbName"
 Write-Host "Web        : $WebContainer"
 Write-Host "Encoding   : UTF-8 olarak okunuyor"
 
+Ensure-DockerDaemonRunning
 Start-ContainerIfStopped $DbContainer $DbService
 Wait-ContainerHealthy $DbContainer
 

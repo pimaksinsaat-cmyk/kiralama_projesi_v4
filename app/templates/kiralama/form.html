@@ -13,6 +13,8 @@
     .hidden { display: none }
     table td, table th { font-size: .85rem; white-space: nowrap; vertical-align: middle; }
     .passive-area { opacity: 0.5; pointer-events: none; filter: grayscale(0.5); }
+    .date-conflict-row { --bs-table-bg: #f8d7da !important; outline: 2px solid #dc3545; }
+    .date-conflict-field { border-color: #dc3545 !important; box-shadow: 0 0 0 .2rem rgba(220,53,69,.18) !important; }
     .card-header { background-color: #f8f9fa; border-bottom: 2px solid #dee2e6; }
     .table-warning { background-color: #fff3cd !important; transition: background-color 0.3s ease; }
     .form-check-input[type="checkbox"] { border-color: #6c757d; background-color: #dee2e6; }
@@ -25,7 +27,7 @@
 <div class="container">
     <form method="POST" id="kiralama-form">
         {{ form.hidden_tag() }}
-        <input type="hidden" name="financial_edit_password" id="financial-edit-password" value="">
+        <input type="hidden" name="financial_edit_password" id="financial-edit-password" value="{{ request.form.get('financial_edit_password', '') if date_conflicts else '' }}">
         {% if is_edit and return_url %}
         <input type="hidden" name="return_url" value="{{ return_url }}">
         {% endif %}
@@ -436,11 +438,11 @@
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header bg-warning-subtle">
-                <h5 class="modal-title fw-bold">Finansal Düzenleme Onayı</h5>
+                <h5 class="modal-title fw-bold">Şifreli Düzenleme Onayı</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
             </div>
             <div class="modal-body">
-                <p class="text-muted small mb-3">Kapatılmış kalemde sadece fiyat ve KDV alanları değiştirilebilir.</p>
+                <p class="text-muted small mb-3">Kapatılmış kalemde düzenleme yapabilmek için kullanıcı şifrenizi doğrulayın.</p>
                 <label for="financial-edit-password-input">Kullanıcı şifreniz</label>
                 <input type="password" id="financial-edit-password-input" class="form-control" autocomplete="current-password">
                 <div class="invalid-feedback d-block hidden" id="financial-edit-password-error">Şifre girilmelidir.</div>
@@ -459,6 +461,7 @@
 
 <script>
 const IS_EDIT = {{ 'true' if is_edit else 'false' }};
+const DATE_CONFLICTS = {{ date_conflicts|default([], true)|tojson|safe }};
 
 // --- OTOMATİK TARİH ATAMA ---
 document.addEventListener('DOMContentLoaded', function() {
@@ -478,6 +481,13 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('g-baslangic').addEventListener('change', gunSayisiGuncelle);
     document.getElementById('g-bitis').addEventListener('change', gunSayisiGuncelle);
     if (IS_EDIT) renderTable();
+    if (IS_EDIT && DATE_CONFLICTS.length > 0) {
+        const firstConflict = DATE_CONFLICTS[0];
+        window.setTimeout(() => {
+            const btn = tbody.querySelector(`.duzenle-btn[data-idx="${firstConflict.idx}"]`);
+            if (btn) btn.click();
+        }, 50);
+    }
 });
 
 function gunSayisiGuncelle() {
@@ -555,17 +565,38 @@ function getFinancialPasswordModal() {
     return financialPasswordModal;
 }
 
+function getDateConflict(idx) {
+    return (DATE_CONFLICTS || []).find(c => Number(c.idx) === Number(idx)) || null;
+}
+
+function markConflictFields(conflict) {
+    ['g-baslangic', 'g-bitis'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.remove('date-conflict-field');
+    });
+    if (!conflict) return;
+    if (conflict.field === 'baslangic' || conflict.field === 'both') {
+        document.getElementById('g-baslangic')?.classList.add('date-conflict-field');
+    }
+    if (conflict.field === 'bitis' || conflict.field === 'both') {
+        document.getElementById('g-bitis')?.classList.add('date-conflict-field');
+    }
+    if (infoDiv) {
+        infoDiv.innerHTML = `<i class="fas fa-exclamation-triangle me-2 text-danger"></i>${conflict.message || 'Makine tarih aralığı başka bir kiralama ile çakışıyor.'}`;
+    }
+}
+
 function setClosedFinancialMode(enabled) {
-    editingClosedFinancial = enabled;
+    editingClosedFinancial = false;
     CLOSED_OPERATIONAL_FIELD_IDS.forEach(id => {
         const el = document.getElementById(id);
-        if (el) el.disabled = enabled;
+        if (el) el.disabled = false;
     });
-    document.querySelectorAll('.hizli-sure-btn').forEach(btn => btn.disabled = enabled);
+    document.querySelectorAll('.hizli-sure-btn').forEach(btn => btn.disabled = false);
     const gh = document.getElementById('g-donus-is-harici');
     if (gh) gh.disabled = false;
     if (enabled && infoDiv) {
-        infoDiv.innerHTML = '<i class="fas fa-lock me-2"></i>Kapatılmış kalemde fiyat/KDV ile dönüş taşeron alanları düzenlenebilir.';
+        infoDiv.innerHTML = '<i class="fas fa-lock-open me-2"></i>Kapatılmış kalemde şifre doğrulandı; tüm satır alanları düzenlenebilir.';
     }
 }
 
@@ -713,6 +744,7 @@ function resetEntryPanel() {
     g_btn_vazgec.classList.add('hidden');
     if (document.getElementById('submit-btn')) document.getElementById('submit-btn').disabled = false;
     tbody.querySelectorAll('tr').forEach(tr => tr.classList.remove('table-warning', 'passive-area'));
+    markConflictFields(null);
     if (infoDiv) infoDiv.innerHTML = "";
 
     ['g-gunluk','g-alis-fiyat','g-nakliye','g-nakliye-alis',
@@ -835,19 +867,25 @@ function renderTable() {
         const tr = document.createElement('tr');
         if (editingIdx === idx) tr.className = 'table-warning';
         tr.dataset.toplam = satirToplam;
+        const conflict = getDateConflict(idx);
+        if (conflict) {
+            tr.classList.add('date-conflict-row');
+            tr.title = conflict.message || 'Tarih çakışması';
+        }
 
         const sonlandirildiInput = group.querySelector('[name$="-sonlandirildi"]');
         const isSonlandirildi = sonlandirildiInput ? sonlandirildiInput.value === '1' : false;
         const isActive = isTruthyFlag(group.querySelector('[name$="-is_active"]')?.value || '1');
         const finansalDuzeltilebilir = isSonlandirildi || !isActive;
         const duzenleBtn = finansalDuzeltilebilir
-            ? `<button type="button" class="btn btn-sm btn-warning fw-bold duzenle-btn" data-idx="${idx}" title="Finansal düzenleme"><i class="fas fa-edit me-1"></i>Finansal Düzenle</button>`
+            ? `<button type="button" class="btn btn-sm btn-warning fw-bold duzenle-btn" data-idx="${idx}" title="Şifreli düzenleme"><i class="fas fa-edit me-1"></i>Şifreli Düzenle</button>`
             : `<button type="button" class="btn btn-sm btn-outline-info duzenle-btn" data-idx="${idx}"><i class="fas fa-edit"></i></button>`;
         const silBtn = finansalDuzeltilebilir
             ? `<button type="button" class="btn btn-sm btn-outline-secondary" disabled title="Tamamlanmış kalemler silinemez"><i class="fas fa-trash opacity-50"></i></button>`
             : `<button type="button" class="btn btn-sm btn-outline-danger sil-btn" data-idx="${idx}"><i class="fas fa-trash"></i></button>`;
 
-        tr.innerHTML = `<td></td><td>${makine}</td><td>${turDetay}</td><td>${formatTRDate(bas)} / ${formatTRDate(bit)} (${gun}g)</td><td>${gun}x${formatTRCurrency(brFiyat)} + ${nkAdet}x${formatTRCurrency(nkBirim)} TL${donusFatura ? ' (Dönüş dahil)' : ' (Tek Yön)'}</td><td><b>${formatTRCurrency(satirToplam)} TL</b></td><td class="text-center">${duzenleBtn} ${silBtn}</td>`;
+        const tarihCellClass = conflict ? ' class="text-danger fw-bold"' : '';
+        tr.innerHTML = `<td></td><td>${makine}</td><td>${turDetay}</td><td${tarihCellClass}>${formatTRDate(bas)} / ${formatTRDate(bit)} (${gun}g)</td><td>${gun}x${formatTRCurrency(brFiyat)} + ${nkAdet}x${formatTRCurrency(nkBirim)} TL${donusFatura ? ' (Dönüş dahil)' : ' (Tek Yön)'}</td><td><b>${formatTRCurrency(satirToplam)} TL</b></td><td class="text-center">${duzenleBtn} ${silBtn}</td>`;
         tbody.appendChild(tr);
     });
     genelToplamEl.innerText = grandTotal.toLocaleString('tr-TR', { minimumFractionDigits: 2 }) + " TL";
@@ -913,7 +951,7 @@ g_btn_ekle.onclick = function() {
     }
 
     const duzenleBtn = isSonlandirildiExisting
-        ? `<button type="button" class="btn btn-sm btn-warning fw-bold duzenle-btn" title="Finansal düzenleme"><i class="fas fa-edit me-1"></i>Finansal Düzenle</button>`
+        ? `<button type="button" class="btn btn-sm btn-warning fw-bold duzenle-btn" title="Şifreli düzenleme"><i class="fas fa-edit me-1"></i>Şifreli Düzenle</button>`
         : `<button type="button" class="btn btn-sm btn-outline-info duzenle-btn"><i class="fas fa-edit"></i></button>`;
     const silBtn = isSonlandirildiExisting
         ? `<button type="button" class="btn btn-sm btn-outline-secondary" disabled title="Tamamlanmış kalemler silinemez"><i class="fas fa-trash opacity-50"></i></button>`
@@ -940,39 +978,31 @@ g_btn_ekle.onclick = function() {
         };
         tr.dataset.toplam = toplam;
         tr.innerHTML = satirHTML;
-        if (!editingClosedFinancial) {
-            setField('dis_tedarik_ekipman', isDis ? 1 : 0);
-            setField('ekipman_id', isDis ? 0 : g_ekipman.value);
-            setField('harici_ekipman_tedarikci_id', val('g-harici-tedarikci'));
-            setField('harici_ekipman_seri_no', val('g-harici-seri'));
-            setField('harici_ekipman_marka', val('g-harici-marka'));
-            setField('harici_ekipman_model', val('g-harici-model'));
-            setField('harici_ekipman_tipi', val('g-harici-tip'));
-            setField('harici_ekipman_calisma_yuksekligi', val('g-harici-yukseklik'));
-            setField('harici_ekipman_kaldirma_kapasitesi', val('g-harici-kapasite'));
-            setField('harici_ekipman_uretim_tarihi', val('g-harici-yil'));
-        }
+        setField('dis_tedarik_ekipman', isDis ? 1 : 0);
+        setField('ekipman_id', isDis ? 0 : g_ekipman.value);
+        setField('harici_ekipman_tedarikci_id', val('g-harici-tedarikci'));
+        setField('harici_ekipman_seri_no', val('g-harici-seri'));
+        setField('harici_ekipman_marka', val('g-harici-marka'));
+        setField('harici_ekipman_model', val('g-harici-model'));
+        setField('harici_ekipman_tipi', val('g-harici-tip'));
+        setField('harici_ekipman_calisma_yuksekligi', val('g-harici-yukseklik'));
+        setField('harici_ekipman_kaldirma_kapasitesi', val('g-harici-kapasite'));
+        setField('harici_ekipman_uretim_tarihi', val('g-harici-yil'));
         setField('kiralama_alis_fiyat', val('g-alis-fiyat'));
         setField('kiralama_alis_kdv', val('g-alis-kdv'));
-        if (!editingClosedFinancial) {
-            setField('dis_tedarik_nakliye', isDisNak ? 1 : 0);
-            setField('nakliye_tedarikci_id', val('g-nakliye-tedarikci'));
-        }
+        setField('dis_tedarik_nakliye', isDisNak ? 1 : 0);
+        setField('nakliye_tedarikci_id', val('g-nakliye-tedarikci'));
         setField('nakliye_alis_fiyat', val('g-nakliye-alis'));
         setField('nakliye_alis_kdv', val('g-nakliye-alis-kdv'));
         setField('nakliye_satis_kdv', val('g-nakliye-kdv'));
         setField('nakliye_alis_tevkifat_oran', nakAlisTevkifatVal);
         setField('nakliye_satis_tevkifat_oran', nakSatisTevkifatVal);
-        if (!editingClosedFinancial) {
-            setField('kiralama_baslangici', bas);
-            setField('kiralama_bitis', bit);
-        }
+        setField('kiralama_baslangici', bas);
+        setField('kiralama_bitis', bit);
         setField('kiralama_brm_fiyat', sFiyat);
         setField('nakliye_satis_fiyat', nToplam);
         setField('donus_nakliye_fatura_et', donusFatura ? 1 : 0);
-        if (!editingClosedFinancial) {
-            setField('nakliye_araci_id', isDisNak ? 0 : g_ozmal_nakliye.value);
-        }
+        setField('nakliye_araci_id', isDisNak ? 0 : g_ozmal_nakliye.value);
         if (IS_EDIT && isSonlandirildiExisting) {
             const gdh = document.getElementById('g-donus-is-harici');
             if (gdh && gdh.checked) {
@@ -1168,6 +1198,7 @@ tbody.onclick = function(e) {
             g_btn_vazgec.classList.remove('hidden');
             if (document.getElementById('submit-btn')) document.getElementById('submit-btn').disabled = true;
             setClosedFinancialMode(isClosedFinancial);
+            markConflictFields(getDateConflict(idx));
         } else {
             tbody.querySelectorAll('tr').forEach(tr => tr.classList.remove('table-warning', 'passive-area'));
             tbody.querySelectorAll('tr')[idx].classList.add('table-warning', 'passive-area');
