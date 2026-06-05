@@ -11,6 +11,7 @@ from app.kiralama.models import Kiralama, KiralamaKalemi
 from app.cari.models import Odeme
 from app.services.cari_services import TASERON_NAKLIYE_PREFIXLERI
 from app.nakliyeler.models import Nakliye
+from app.services.nakliye_services import _net_kdv_orani
 from app.extensions import db
 from app.ayarlar.models import AppSettings
 from app.utils import klasor_adi_temizle, normalize_turkish_upper, tr_ilike
@@ -115,6 +116,13 @@ class FirmaService(BaseService):
         if op in ('odeme', 'tahsilat'):
             return 6
         return 7
+
+    @staticmethod
+    def _musteri_nakliye_kdv_orani(nakliye):
+        """Tevkifat açıksa net KDV, kapalıysa brüt nakliye.kdv_orani."""
+        brut = nakliye.kdv_orani or 0
+        tevkifat = getattr(nakliye, 'tevkifat_orani', None) or ''
+        return _net_kdv_orani(brut, tevkifat)
 
     @staticmethod
     def _to_decimal_amount(value):
@@ -737,9 +745,7 @@ class FirmaService(BaseService):
                 if nak_tutar <= 0:
                     continue
                 nakliye_islem_tarihi = getattr(nakliye, 'islem_tarihi', None) or nakliye.tarih
-                # Muhasebe tek-kural: cari hareketler KDV dahil yürür ve box (bakiye_ozeti)
-                # ile aynı KDV kaynağını kullanır. Bu nedenle brüt kdv_orani esas alınır.
-                nak_kdv_pct = float(nakliye.kdv_orani or 0)
+                nak_kdv_pct = float(FirmaService._musteri_nakliye_kdv_orani(nakliye) or 0)
                 nak_kdv = nak_tutar * nak_kdv_pct / 100
                 gl = (nakliye.guzergah or '').lower()
                 nakliye_kalem = _nakliye_kalemini_bul(nakliye, kir, kir_kalem_map)
@@ -898,9 +904,7 @@ class FirmaService(BaseService):
         for nakliye in standalone_nakliyeler:
             nakliye_tutar = float(nakliye.tutar or 0)
             nakliye_islem_tarihi = getattr(nakliye, 'islem_tarihi', None) or nakliye.tarih
-            # Muhasebe tek-kural: cari hareketler KDV dahil yürür ve box (bakiye_ozeti)
-            # ile aynı KDV kaynağını kullanır. Bu nedenle brüt kdv_orani esas alınır.
-            nakliye_kdv_pct = float(nakliye.kdv_orani or 0)
+            nakliye_kdv_pct = float(FirmaService._musteri_nakliye_kdv_orani(nakliye) or 0)
             nakliye_kdv = nakliye_tutar * nakliye_kdv_pct / 100
             nakliye_toplam = nakliye_tutar + nakliye_kdv
             rows.append({'id': nakliye.id, 'sort_date': nakliye_islem_tarihi,

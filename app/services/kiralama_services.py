@@ -5,7 +5,7 @@ from datetime import datetime, date, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 import logging
 import re
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
@@ -16,6 +16,7 @@ from app.services.base import BaseService, ValidationError
 # İlgili Modüllerin İçe Aktarılması
 from app.kiralama.models import Kiralama, KiralamaKalemi
 from app.filo.models import Ekipman
+from app.firmalar.models import Firma
 from app.cari.models import HizmetKaydi
 from app.nakliyeler.models import Nakliye
 from app.araclar.models import Arac as NakliyeAraci
@@ -486,6 +487,7 @@ class KiralamaService(BaseService):
     """Ana kiralama formunun ve finansal entegrasyonların kalbi."""
     model = Kiralama
     use_soft_delete = False
+    UNDO_WINDOW_SECONDS = 60
 
     # KUR ÖNBELLEKLEME İÇİN SINIF DEĞİŞKENLERİ
     _kur_cache = None
@@ -1223,23 +1225,381 @@ class KiralamaService(BaseService):
             logger.error(f"Kiralama Güncelleme Hatası: {e}", exc_info=True)
             raise ValidationError(f"Güncelleme başarısız: {str(e)}")
 
+    @staticmethod
+    def _normalize_utc(dt_value):
+        if dt_value is None:
+            return None
+        if dt_value.tzinfo is None:
+            return dt_value.replace(tzinfo=timezone.utc)
+        return dt_value.astimezone(timezone.utc)
+
+    @classmethod
+    def _deleted_at_matches(cls, record_deleted_at, target_deleted_at, tolerance_seconds=2):
+        record_dt = cls._normalize_utc(record_deleted_at)
+        target_dt = cls._normalize_utc(target_deleted_at)
+        if record_dt is None or target_dt is None:
+            return False
+        return abs((record_dt - target_dt).total_seconds()) <= tolerance_seconds
+
+    @classmethod
+    def _soft_delete_instance(cls, instance, actor_id=None, deleted_at=None):
+        if getattr(instance, 'is_deleted', False):
+            return
+        deleted_at = deleted_at or datetime.now(timezone.utc)
+        instance.is_deleted = True
+        if hasattr(instance, 'is_active'):
+            instance.is_active = False
+        if hasattr(instance, 'deleted_at'):
+            instance.deleted_at = deleted_at
+        if actor_id and hasattr(instance, 'deleted_by_id'):
+            instance.deleted_by_id = actor_id
+        db.session.add(instance)
+
+    @classmethod
+    def _restore_instance(cls, instance, state=None):
+        state = state or {}
+        instance.is_deleted = state.get('is_deleted', False)
+        if hasattr(instance, 'is_active'):
+            instance.is_active = state.get('is_active', True)
+        if hasattr(instance, 'deleted_at'):
+            instance.deleted_at = cls._parse_snapshot_datetime(state.get('deleted_at'))
+        if hasattr(instance, 'deleted_by_id'):
+            instance.deleted_by_id = state.get('deleted_by_id')
+        db.session.add(instance)
+
+    @staticmethod
+    def undo_session_key(kiralama_id):
+        return f"kiralama_undo_snapshot:{kiralama_id}"
+
+    @staticmethod
+    def _snapshot_datetime(value):
+        if value is None:
+            return None
+        if hasattr(value, 'isoformat'):
+            return value.isoformat()
+        return str(value)
+
+    @classmethod
+    def _parse_snapshot_datetime(cls, value):
+        if not value:
+            return None
+        if isinstance(value, datetime):
+            return value
+        try:
+            return datetime.fromisoformat(value)
+        except (TypeError, ValueError):
+            return None
+
+    @classmethod
+    def _snapshot_model_state(cls, instance, extra_fields=None):
+        fields = ['is_deleted', 'is_active', 'deleted_at', 'deleted_by_id']
+        if extra_fields:
+            fields.extend(extra_fields)
+        state = {}
+        for field in fields:
+            if not hasattr(instance, field):
+                continue
+            value = getattr(instance, field)
+            if isinstance(value, datetime):
+                value = cls._snapshot_datetime(value)
+            state[field] = value
+        return state
+
+    @classmethod
+    def _snapshot_map(cls, instances, extra_fields=None):
+        return {
+            str(instance.id): cls._snapshot_model_state(instance, extra_fields=extra_fields)
+            for instance in instances
+            if getattr(instance, 'id', None)
+        }
+
+    @classmethod
+    def _related_nakliyeler(cls, kiralama_id):
+        return Nakliye.query.filter_by(kiralama_id=kiralama_id).all()
+
+    @classmethod
+    def _related_hizmetler(cls, kiralama, nakliyeler):
+        form_no = kiralama.kiralama_form_no
+        nakliye_ids = [n.id for n in nakliyeler if n.id]
+        filters = [HizmetKaydi.fatura_no == form_no]
+        if nakliye_ids:
+            filters.append(HizmetKaydi.nakliye_id.in_(nakliye_ids))
+        return HizmetKaydi.query.filter(or_(*filters)).all()
+
+    @classmethod
+    def _create_delete_snapshot(cls, kiralama, nakliyeler, hizmetler, actor_id=None):
+        ekipmanlar = []
+        seen_ekipman_ids = set()
+        for kalem in kiralama.kalemler:
+            if kalem.ekipman and kalem.ekipman.id not in seen_ekipman_ids:
+                ekipmanlar.append(kalem.ekipman)
+                seen_ekipman_ids.add(kalem.ekipman.id)
+
+        now = datetime.now(timezone.utc)
+        return {
+            'kiralama_id': kiralama.id,
+            'actor_id': actor_id,
+            'created_at': cls._snapshot_datetime(now),
+            'expires_at': cls._snapshot_datetime(now + timedelta(seconds=cls.UNDO_WINDOW_SECONDS)),
+            'kiralama': cls._snapshot_model_state(kiralama),
+            'kalemler': cls._snapshot_map(kiralama.kalemler),
+            'nakliyeler': cls._snapshot_map(nakliyeler),
+            'hizmetler': cls._snapshot_map(hizmetler),
+            'ekipmanlar': cls._snapshot_map(
+                ekipmanlar,
+                extra_fields=['calisma_durumu', 'sube_id'],
+            ),
+        }
+
+    @classmethod
+    def _validate_restore_snapshot(cls, kiralama_id, snapshot, actor_id=None, max_undo_seconds=None):
+        if not snapshot:
+            raise ValidationError("Geri alma bilgisi bulunamadi veya sunucu yeniden baslatildi.")
+        if snapshot.get('kiralama_id') != kiralama_id:
+            raise ValidationError("Geri alma bilgisi bu kiralama kaydi ile eslesmiyor.")
+        if snapshot.get('actor_id') and actor_id and snapshot.get('actor_id') != actor_id:
+            raise ValidationError("Bu kaydi yalnizca silme islemini yapan kullanici geri alabilir.")
+
+        expires_at = cls._parse_snapshot_datetime(snapshot.get('expires_at'))
+        if not expires_at:
+            raise ValidationError("Geri alma icin silinme zamani bulunamadi.")
+        if datetime.now(timezone.utc) > cls._normalize_utc(expires_at):
+            seconds = max_undo_seconds or cls.UNDO_WINDOW_SECONDS
+            raise ValidationError(
+                f"Geri alma suresi doldu ({seconds} saniye). Kayit artik geri getirilemez."
+            )
+
+    @classmethod
+    def _collect_affected_firma_ids(cls, kiralama, nakliyeler, hizmetler):
+        firma_ids = {kiralama.firma_musteri_id}
+        for kalem in kiralama.kalemler:
+            firma_ids.update([
+                kalem.harici_ekipman_tedarikci_id,
+                kalem.nakliye_tedarikci_id,
+                kalem.donus_nakliye_tedarikci_id,
+            ])
+        for nakliye in nakliyeler:
+            firma_ids.update([
+                getattr(nakliye, 'firma_id', None),
+                getattr(nakliye, 'taseron_firma_id', None),
+            ])
+        for hizmet in hizmetler:
+            firma_ids.add(hizmet.firma_id)
+        return {firma_id for firma_id in firma_ids if firma_id}
+
+    @classmethod
+    def _sync_firma_balances(cls, firma_ids):
+        from app.services.firma_services import FirmaService
+
+        for firma_id in sorted(firma_ids):
+            firma = db.session.get(Firma, firma_id)
+            if not firma:
+                continue
+            ozet = firma.bakiye_ozeti
+            firma.bakiye = ozet['net_bakiye']
+            FirmaService.guncelle_firma_cari_cache(firma_id, auto_commit=False)
+            db.session.add(firma)
+
+    @classmethod
+    def _sync_ekipman_states(cls, ekipman_ids, snapshot=None):
+        snapshot_states = (snapshot or {}).get('ekipmanlar') or {}
+        for ekipman_id in {eid for eid in ekipman_ids if eid}:
+            ekipman = db.session.get(Ekipman, ekipman_id)
+            if not ekipman:
+                continue
+            aktif_kullanim = (
+                KiralamaKalemi.query
+                .join(Kiralama, KiralamaKalemi.kiralama_id == Kiralama.id)
+                .filter(
+                    KiralamaKalemi.ekipman_id == ekipman_id,
+                    KiralamaKalemi.is_active == True,
+                    KiralamaKalemi.sonlandirildi == False,
+                    KiralamaKalemi.is_deleted == False,
+                    Kiralama.is_deleted == False,
+                )
+                .first()
+            )
+            if aktif_kullanim:
+                ekipman.calisma_durumu = 'kirada'
+            else:
+                state = snapshot_states.get(str(ekipman_id)) or {}
+                ekipman.calisma_durumu = state.get('calisma_durumu') or 'bosta'
+                if 'sube_id' in state:
+                    ekipman.sube_id = state.get('sube_id')
+            db.session.add(ekipman)
+
+    @classmethod
+    def _sync_ekipman_after_restore(cls, kiralama):
+        for kalem in kiralama.kalemler:
+            if not kalem.ekipman:
+                continue
+            if kalem.sonlandirildi or not kalem.is_active:
+                continue
+            kalem.ekipman.calisma_durumu = 'kirada'
+            db.session.add(kalem.ekipman)
+
+    @classmethod
+    def _check_restore_ekipman_conflicts(cls, kiralama, snapshot=None):
+        snapshot_kalemler = (snapshot or {}).get('kalemler') or {}
+        for kalem in kiralama.kalemler:
+            state = snapshot_kalemler.get(str(kalem.id), {})
+            will_be_active = state.get('is_active', kalem.is_active)
+            will_be_deleted = state.get('is_deleted', False)
+            if not kalem.ekipman_id or kalem.sonlandirildi or not will_be_active or will_be_deleted:
+                continue
+            cakisan = (
+                KiralamaKalemi.query
+                .join(Kiralama, KiralamaKalemi.kiralama_id == Kiralama.id)
+                .filter(
+                    KiralamaKalemi.ekipman_id == kalem.ekipman_id,
+                    KiralamaKalemi.id != kalem.id,
+                    KiralamaKalemi.is_active == True,
+                    KiralamaKalemi.sonlandirildi == False,
+                    KiralamaKalemi.is_deleted == False,
+                    Kiralama.is_deleted == False,
+                    Kiralama.id != kiralama.id,
+                )
+                .first()
+            )
+            if cakisan:
+                cakisan_form_no = (
+                    cakisan.kiralama.kiralama_form_no
+                    if cakisan.kiralama else f"#{cakisan.kiralama_id}"
+                )
+                makine_kod = kalem.ekipman.kod if kalem.ekipman else f"id={kalem.ekipman_id}"
+                raise ValidationError(
+                    f"Geri alınamaz: '{makine_kod}' makinesi şu an "
+                    f"{cakisan_form_no} numaralı kiralamada aktif kullanımda."
+                )
+
     @classmethod
     def delete_with_relations(cls, kiralama_id, actor_id=None):
-        """Kiralamayı siler, ekipmanları boşa çıkarır."""
+        """Kiralamayı ve bağlı kayıtları mantıksal olarak siler (geri alınabilir)."""
         kiralama = db.session.get(Kiralama, kiralama_id)
-        if not kiralama: raise ValidationError("Kiralama bulunamadı.")
+        if not kiralama:
+            raise ValidationError("Kiralama bulunamadı.")
+        if kiralama.is_deleted:
+            raise ValidationError("Kiralama zaten silinmiş.")
 
         try:
-            HizmetKaydi.query.filter_by(fatura_no=kiralama.kiralama_form_no).delete(synchronize_session=False)
-            for k in kiralama.kalemler:
-                if k.ekipman: k.ekipman.calisma_durumu = 'bosta'
-            
-            cls.delete(kiralama.id, auto_commit=False, actor_id=actor_id)
+            deleted_at = datetime.now(timezone.utc)
+            nakliyeler = cls._related_nakliyeler(kiralama.id)
+            hizmetler = cls._related_hizmetler(kiralama, nakliyeler)
+            affected_firma_ids = cls._collect_affected_firma_ids(kiralama, nakliyeler, hizmetler)
+            affected_ekipman_ids = {
+                kalem.ekipman_id for kalem in kiralama.kalemler if kalem.ekipman_id
+            }
+            snapshot = cls._create_delete_snapshot(
+                kiralama,
+                nakliyeler,
+                hizmetler,
+                actor_id=actor_id,
+            )
+
+            for kayit in hizmetler:
+                cls._soft_delete_instance(kayit, actor_id=actor_id, deleted_at=deleted_at)
+
+            for nakliye in nakliyeler:
+                nakliye.is_active = False
+                db.session.add(nakliye)
+
+            for kalem in list(kiralama.kalemler):
+                cls._soft_delete_instance(kalem, actor_id=actor_id, deleted_at=deleted_at)
+
+            cls._soft_delete_instance(kiralama, actor_id=actor_id, deleted_at=deleted_at)
+            db.session.flush()
+            cls._sync_ekipman_states(affected_ekipman_ids)
+            cls._sync_firma_balances(affected_firma_ids)
             db.session.commit()
-            return True
+            return snapshot
+        except ValidationError:
+            db.session.rollback()
+            raise
         except Exception as e:
             db.session.rollback()
-            raise ValidationError(f"Silme hatası: {str(e)}")
+            raise ValidationError(f"Silme hatası: {str(e)}") from e
+
+    @classmethod
+    def restore_with_relations(cls, kiralama_id, actor_id=None, max_undo_seconds=None, snapshot=None):
+        """Soft-delete edilmiş kiralamayı kısa süre içinde geri yükler."""
+        if max_undo_seconds is None:
+            max_undo_seconds = cls.UNDO_WINDOW_SECONDS
+
+        kiralama = db.session.get(Kiralama, kiralama_id)
+        if not kiralama:
+            raise ValidationError("Kiralama bulunamadı.")
+        if not kiralama.is_deleted:
+            raise ValidationError("Kiralama silinmiş durumda değil.")
+        if not kiralama.deleted_at:
+            raise ValidationError("Geri alma için silinme zamanı bulunamadı.")
+
+        cls._validate_restore_snapshot(
+            kiralama_id,
+            snapshot,
+            actor_id=actor_id,
+            max_undo_seconds=max_undo_seconds,
+        )
+
+        now = datetime.now(timezone.utc)
+        deleted_at = cls._normalize_utc(kiralama.deleted_at)
+        elapsed = (now - deleted_at).total_seconds()
+        if elapsed > max_undo_seconds:
+            raise ValidationError(
+                f"Geri alma süresi doldu ({max_undo_seconds} saniye). "
+                "Kayıt artık geri getirilemez."
+            )
+
+        cls._check_restore_ekipman_conflicts(kiralama, snapshot=snapshot)
+
+        try:
+            nakliyeler = cls._related_nakliyeler(kiralama.id)
+            hizmetler = cls._related_hizmetler(kiralama, nakliyeler)
+            affected_firma_ids = cls._collect_affected_firma_ids(kiralama, nakliyeler, hizmetler)
+            affected_ekipman_ids = set()
+
+            for kayit in hizmetler:
+                state = (snapshot.get('hizmetler') or {}).get(str(kayit.id))
+                if state:
+                    cls._restore_instance(kayit, state=state)
+
+            for nakliye in nakliyeler:
+                state = (snapshot.get('nakliyeler') or {}).get(str(nakliye.id), {})
+                nakliye.is_active = state.get('is_active', True)
+                db.session.add(nakliye)
+
+            cls._restore_instance(kiralama, state=snapshot.get('kiralama'))
+            for kalem in list(kiralama.kalemler):
+                state = (snapshot.get('kalemler') or {}).get(str(kalem.id))
+                if state:
+                    cls._restore_instance(kalem, state=state)
+                if kalem.ekipman_id:
+                    affected_ekipman_ids.add(kalem.ekipman_id)
+
+            db.session.flush()
+            cls._sync_ekipman_states(affected_ekipman_ids, snapshot=snapshot)
+            cls.guncelle_cari_toplam(kiralama.id, auto_commit=False)
+            for kalem in kiralama.kalemler:
+                if kalem.is_dis_tedarik_ekipman and kalem.harici_ekipman_tedarikci_id:
+                    cls.guncelle_tedarikci_cari_toplam(
+                        kalem.harici_ekipman_tedarikci_id,
+                        auto_commit=False,
+                    )
+            cls._sync_firma_balances(affected_firma_ids)
+
+            if actor_id and hasattr(kiralama, 'updated_by_id'):
+                kiralama.updated_by_id = actor_id
+            if hasattr(kiralama, 'updated_at'):
+                kiralama.updated_at = datetime.now(timezone.utc)
+            db.session.add(kiralama)
+
+            db.session.commit()
+            return kiralama
+        except ValidationError:
+            db.session.rollback()
+            raise
+        except Exception as e:
+            db.session.rollback()
+            raise ValidationError(f"Geri alma hatası: {str(e)}") from e
 
     @staticmethod
     def _create_nakliye_ve_cari(kiralama, kalem, makine_adi, bas_tarihi):

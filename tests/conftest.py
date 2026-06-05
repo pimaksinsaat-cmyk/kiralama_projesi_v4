@@ -2,12 +2,15 @@
 Pytest ortamı: in-memory SQLite (varsayılan) veya TEST_DATABASE_URL ile PostgreSQL.
 """
 import os
+import socket
 import sqlite3
 import uuid
+from threading import Thread
 
 import pytest
 from sqlalchemy import event
 from sqlalchemy.engine import Engine
+from werkzeug.serving import make_server
 
 # SQLite FK kısıtlarını uygula (dialect connection_record üzerinde olmayabilir; dbapi tipi güvenilir)
 @event.listens_for(Engine, "connect")
@@ -62,3 +65,22 @@ def app():
 @pytest.fixture
 def client(app):
     return app.test_client()
+
+
+@pytest.fixture(scope="function")
+def live_server(app):
+    """Run the Flask app on a free local port for browser-based tests."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.bind(('127.0.0.1', 0))
+    host, port = sock.getsockname()
+    sock.close()
+
+    server = make_server('127.0.0.1', port, app)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+
+    try:
+        yield f'http://127.0.0.1:{port}'
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)

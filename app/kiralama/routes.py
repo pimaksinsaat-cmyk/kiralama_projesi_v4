@@ -4,9 +4,9 @@ import json
 from decimal import Decimal, InvalidOperation
 from datetime import datetime, date, timedelta, timezone
 from urllib.parse import urlsplit
-from flask import render_template, redirect, url_for, flash, request, current_app, jsonify
+from flask import render_template, redirect, url_for, flash, request, current_app, jsonify, session
 from flask_login import current_user, login_required
-from sqlalchemy import or_, func
+from sqlalchemy import or_, func, not_
 from sqlalchemy.orm import joinedload
 
 from app import db
@@ -181,6 +181,7 @@ def _kiralama_tarih_cakismalari(kalemler_data):
                 KiralamaKalemi.ekipman_id == ekipman_id,
                 KiralamaKalemi.id != kalem_id,
                 KiralamaKalemi.is_deleted == False,
+                Kiralama.is_deleted == False,
                 KiralamaKalemi.kiralama_baslangici <= bit,
                 KiralamaKalemi.kiralama_bitis >= bas,
             )
@@ -215,6 +216,14 @@ def _kiralama_tarih_cakismalari(kalemler_data):
 
 def _redirect_to_kiralama_return():
     return redirect(_kiralama_return_url())
+
+
+def _kiralama_wants_json():
+    return (
+        request.args.get('format') == 'json'
+        or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        or 'application/json' in (request.headers.get('Accept') or '')
+    )
 
 def get_cached_subeler():
     """Şubeleri thread-safe ve bağımsız bir kilitle bellekten getirir.
@@ -321,6 +330,8 @@ def populate_kiralama_form_choices(form, include_ids=None):
 @login_required
 def index():
     """Kiralama ana listesi ve arama."""
+    per_page = 25
+    q = ''
     try:
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 25, type=int)
@@ -331,7 +342,7 @@ def index():
         query = Kiralama.query.options(
             joinedload(Kiralama.firma_musteri),
             joinedload(Kiralama.kalemler).joinedload(KiralamaKalemi.ekipman)
-        )
+        ).filter(not_(Kiralama.is_deleted.is_(True)))
 
         if q:
             search = f"%{q}%"
@@ -369,6 +380,8 @@ def index():
             kiralama_aktif_kalem_var = False
 
             for kalem in kiralama.kalemler:
+                if getattr(kalem, 'is_deleted', False):
+                    continue
                 if not kalem.kiralama_baslangici or not kalem.kiralama_bitis:
                     continue
 
@@ -458,7 +471,11 @@ def index():
                 kalem.id
                 for kiralama in kiralamalar
                 for kalem in kiralama.kalemler
-                if kalem.sonlandirildi and kalem.is_active
+                if (
+                    not getattr(kalem, 'is_deleted', False)
+                    and kalem.sonlandirildi
+                    and kalem.is_active
+                )
             }
         except Exception as date_err:
             # Listeyi düşürme; bu alan sadece UI kolaylığıdır.
@@ -538,32 +555,40 @@ def index():
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Kiralama Liste Yükleme Hatası: {str(e)}\n{traceback.format_exc()}")
-        flash(f"Liste yüklenirken bir hata oluştu.", "danger")
-        return render_template(
-            'kiralama/index.html',
-            kiralamalar=[],
-            pagination=None,
-            per_page=25,
-            q='',
-            kurlar={},
-            kur_son_guncelleme='Henüz güncellenmedi',
-            today=date.today(),
-            subeler=[],
-            nakliye_araclari=[],
-            nakliye_tedarikci_listesi=[],
-            recently_returned_kalem_ids=set(),
-            dashboard_stats={
-                'geciken': 0,
-                'yaklasan': 0,
-                'harici': 0,
-                'toplam_hacim': 0,
-                'aktif_sozlesme_adedi': 0,
-                'aktif_sozlesme_hacmi': 0,
-            },
-            harici_aktif_kalemler=[],
-            geciken_kalemler=[],
-            yaklasan_kalemler=[],
-        )
+        flash("Liste yüklenirken bir hata oluştu. Detaylar sunucu günlüğüne yazıldı.", "danger")
+        try:
+            return render_template(
+                'kiralama/index.html',
+                kiralamalar=[],
+                pagination=None,
+                per_page=per_page,
+                q=q,
+                kurlar={},
+                kur_son_guncelleme='Henüz güncellenmedi',
+                today=date.today(),
+                subeler=[],
+                nakliye_araclari=[],
+                nakliye_tedarikci_listesi=[],
+                recently_returned_kalem_ids=set(),
+                dashboard_stats={
+                    'geciken': 0,
+                    'yaklasan': 0,
+                    'harici': 0,
+                    'toplam_hacim': 0,
+                    'aktif_sozlesme_adedi': 0,
+                    'aktif_sozlesme_hacmi': 0,
+                },
+                harici_aktif_kalemler=[],
+                geciken_kalemler=[],
+                yaklasan_kalemler=[],
+            )
+        except Exception as render_err:
+            current_app.logger.error(
+                "Kiralama liste hata sayfası render edilemedi: %s",
+                render_err,
+                exc_info=True,
+            )
+            raise
 
 @kiralama_bp.route('/detay/<int:kiralama_id>')
 @login_required
@@ -572,7 +597,7 @@ def detay_modal(kiralama_id):
     kiralama = Kiralama.query.options(
         joinedload(Kiralama.firma_musteri),
         joinedload(Kiralama.kalemler).joinedload(KiralamaKalemi.ekipman),
-    ).get_or_404(kiralama_id)
+    ).filter(not_(Kiralama.is_deleted.is_(True))).get_or_404(kiralama_id)
     return render_template(
         'kiralama/detay_modal_content.html',
         kiralama=kiralama,
@@ -618,7 +643,11 @@ def ekle():
             current_app.logger.error(f"Form numarası otomatik alınamadı: {str(e)}")
             # Son form numarasını al ve kullanıcıya bilgi ver
             try:
-                last_kiralama = Kiralama.query.order_by(Kiralama.id.desc()).first()
+                last_kiralama = (
+                    Kiralama.query.filter(not_(Kiralama.is_deleted.is_(True)))
+                    .order_by(Kiralama.id.desc())
+                    .first()
+                )
                 last_form_no = last_kiralama.kiralama_form_no if last_kiralama else "Kayıt bulunamadı"
                 flash(
                     f"Uyarı: Form numarası otomatik alınamadı. Son form numarası: {last_form_no}. "
@@ -752,6 +781,9 @@ def duzenle(kiralama_id):
         return guard_response
 
     kiralama = db.get_or_404(Kiralama, kiralama_id)
+    if kiralama.is_deleted:
+        flash('Silinmiş kiralama kaydı düzenlenemez.', 'warning')
+        return redirect(url_for('kiralama.index'))
     form = KiralamaForm(obj=kiralama)
     form.current_kiralama_id = kiralama.id
     date_conflicts = []
@@ -1021,10 +1053,20 @@ def duzenle(kiralama_id):
 @kiralama_bp.route('/sil/<int:kiralama_id>', methods=['POST'])
 @login_required
 def sil(kiralama_id):
-    """Kiralama ve bağlı finansal kayıtları siler."""
+    """Kiralama ve bağlı finansal kayıtları mantıksal olarak siler (JSON yanıt)."""
     try:
+        delete_password = request.form.get('delete_confirm_password') or ''
+        if not delete_password or not current_user.check_password(delete_password):
+            raise ValidationError(
+                'Kiralama silmek için kullanıcı şifrenizi doğrulamanız gerekir.'
+            )
+
         actor_id = getattr(current_user, 'id', None)
-        KiralamaService.delete_with_relations(kiralama_id, actor_id=actor_id)
+        snapshot = KiralamaService.delete_with_relations(kiralama_id, actor_id=actor_id)
+        session[KiralamaService.undo_session_key(kiralama_id)] = snapshot
+        session.modified = True
+        kiralama = db.session.get(Kiralama, kiralama_id)
+        form_no = kiralama.kiralama_form_no if kiralama else ''
         OperationLogService.log(
             module='kiralama',
             action='delete',
@@ -1032,10 +1074,15 @@ def sil(kiralama_id):
             username=getattr(current_user, 'username', None),
             entity_type='Kiralama',
             entity_id=kiralama_id,
-            description=f"Kiralama silindi (soft/hard): ID={kiralama_id}",
+            description=f"Kiralama silindi (soft): ID={kiralama_id}",
             success=True,
         )
-        flash('Kiralama kaydı ve bağlı tüm hareketler silindi.', 'success')
+        return jsonify({
+            'ok': True,
+            'id': kiralama_id,
+            'form_no': form_no,
+            'undo_seconds': KiralamaService.UNDO_WINDOW_SECONDS,
+        })
     except ValidationError as e:
         OperationLogService.log(
             module='kiralama',
@@ -1047,7 +1094,7 @@ def sil(kiralama_id):
             description=f"Kiralama silme doğrulama hatası: {str(e)}",
             success=False,
         )
-        flash(str(e), "warning")
+        return jsonify({'ok': False, 'message': str(e)}), 400
     except Exception as e:
         current_app.logger.error(f"Kiralama Silme Hatası (ID: {kiralama_id}): {str(e)}")
         OperationLogService.log(
@@ -1060,8 +1107,64 @@ def sil(kiralama_id):
             description=f"Kiralama silme sistem hatası: {str(e)}",
             success=False,
         )
-        flash(f'Silme işlemi başarısız oldu.', 'danger')
-    return _redirect_to_kiralama_return()
+        return jsonify({'ok': False, 'message': 'Silme işlemi başarısız oldu.'}), 500
+
+
+@kiralama_bp.route('/geri-al/<int:kiralama_id>', methods=['POST'])
+@login_required
+def geri_al(kiralama_id):
+    """Soft-delete edilmiş kiralamayı kısa süre içinde geri yükler."""
+    try:
+        actor_id = getattr(current_user, 'id', None)
+        undo_key = KiralamaService.undo_session_key(kiralama_id)
+        snapshot = session.get(undo_key)
+        kiralama = KiralamaService.restore_with_relations(
+            kiralama_id,
+            actor_id=actor_id,
+            snapshot=snapshot,
+        )
+        session.pop(undo_key, None)
+        session.modified = True
+        OperationLogService.log(
+            module='kiralama',
+            action='restore',
+            user_id=actor_id,
+            username=getattr(current_user, 'username', None),
+            entity_type='Kiralama',
+            entity_id=kiralama_id,
+            description=f"Kiralama geri alındı: ID={kiralama_id}",
+            success=True,
+        )
+        return jsonify({
+            'ok': True,
+            'id': kiralama_id,
+            'form_no': kiralama.kiralama_form_no,
+        })
+    except ValidationError as e:
+        OperationLogService.log(
+            module='kiralama',
+            action='restore',
+            user_id=getattr(current_user, 'id', None),
+            username=getattr(current_user, 'username', None),
+            entity_type='Kiralama',
+            entity_id=kiralama_id,
+            description=f"Kiralama geri alma hatası: {str(e)}",
+            success=False,
+        )
+        return jsonify({'ok': False, 'message': str(e)}), 400
+    except Exception as e:
+        current_app.logger.error(f"Kiralama Geri Alma Hatası (ID: {kiralama_id}): {str(e)}")
+        OperationLogService.log(
+            module='kiralama',
+            action='restore',
+            user_id=getattr(current_user, 'id', None),
+            username=getattr(current_user, 'username', None),
+            entity_type='Kiralama',
+            entity_id=kiralama_id,
+            description=f"Kiralama geri alma sistem hatası: {str(e)}",
+            success=False,
+        )
+        return jsonify({'ok': False, 'message': 'Geri alma işlemi başarısız oldu.'}), 500
 
 @kiralama_bp.route('/kalem/sonlandir', methods=['POST'])
 @login_required

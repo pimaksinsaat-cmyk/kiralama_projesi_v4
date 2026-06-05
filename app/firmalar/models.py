@@ -118,10 +118,8 @@ class Firma(BaseModel):
             ),
         )
 
-        # Nakliye'ye bağlı HizmetKaydi kayıtlarında KDV oranı öncelikle Nakliye
-        # tablosundan alınır. HizmetKaydi otomatik oluşturulurken kdv_orani
-        # sıfır bırakılabileceğinden bu join olmadan bakiye_ozeti ile
-        # build_cari_rows arasında tutarsızlık oluşur.
+        # Müşteri nakliye satışında KDV: HizmetKaydi senkronu net/brüt oranı taşır
+        # (tevkifat açık → net, kapalı → brüt). Eski kayıtlar için Nakliye fallback.
         from app.nakliyeler.models import Nakliye as _Nakliye
         nak_kdv_subq = (
             sa.select(_Nakliye.kdv_orani)
@@ -141,8 +139,8 @@ class Firma(BaseModel):
                 ),
             ),
             else_=func.coalesce(
-                nak_kdv_subq,
                 HizmetKaydi.kdv_orani,
+                nak_kdv_subq,
                 0,
             ),
         )

@@ -1,9 +1,9 @@
 # app/__init__.py
 import os
 
-from flask import Flask, request, redirect, url_for  # ← 'app' kaldırıldı
+from flask import Flask, request, redirect, url_for, jsonify
 from config import Config, ProductionConfig
-from flask_wtf.csrf import CSRFProtect 
+from flask_wtf.csrf import CSRFProtect, CSRFError
 from app.extensions import db, migrate, login_manager, server_session
 from sqlalchemy import inspect
 from flask_login import current_user, logout_user
@@ -11,6 +11,15 @@ from datetime import timedelta
 from flask import session
 
 csrf = CSRFProtect()
+
+
+def _request_wants_json():
+    return (
+        request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        or request.args.get('format') == 'json'
+        or 'application/json' in (request.headers.get('Accept') or '')
+    )
+
 
 def create_app(config_class=Config):
 
@@ -76,6 +85,27 @@ def create_app(config_class=Config):
         pass
     # CSRF uygulamasını başlat
     csrf.init_app(app)
+
+    @app.errorhandler(CSRFError)
+    def handle_csrf_error(e):
+        if _request_wants_json():
+            return jsonify({
+                'ok': False,
+                'success': False,
+                'message': 'Güvenlik doğrulaması geçersiz. Sayfayı yenileyip tekrar deneyin.',
+            }), 400
+        return e.description, 400
+
+    @app.errorhandler(404)
+    def handle_not_found(e):
+        if _request_wants_json():
+            return jsonify({
+                'ok': False,
+                'success': False,
+                'message': 'İstenen adres bulunamadı.',
+            }), 404
+        return e
+
     session_dir = app.config.get('SESSION_FILE_DIR')
     if session_dir:
         try:
@@ -90,6 +120,16 @@ def create_app(config_class=Config):
     login_manager.login_message = 'Bu sayfayı görmek için giriş yapmalısınız.'
     login_manager.login_message_category = 'warning'
 
+    @login_manager.unauthorized_handler
+    def _login_unauthorized():
+        if _request_wants_json():
+            return jsonify({
+                'ok': False,
+                'success': False,
+                'message': 'Oturum açmanız gerekiyor.',
+            }), 401
+        return redirect(url_for('auth.login', next=login_next_query_value()))
+
     # Tüm uygulamayı login ile koru
     @app.before_request
     def require_login():
@@ -99,6 +139,12 @@ def create_app(config_class=Config):
             return None
             
         if current_user.is_anonymous:
+            if _request_wants_json():
+                return jsonify({
+                    'ok': False,
+                    'success': False,
+                    'message': 'Oturum açmanız gerekiyor.',
+                }), 401
             return redirect(url_for('auth.login', next=login_next_query_value()))
 
         from app.auth.session_security import (
@@ -116,14 +162,32 @@ def create_app(config_class=Config):
             clear_session_keys()
             logout_user()
             db.session.commit()
+            if _request_wants_json():
+                return jsonify({
+                    'ok': False,
+                    'success': False,
+                    'message': 'Hesabınız pasif. Lütfen tekrar giriş yapın.',
+                }), 401
             return redirect(url_for('auth.login', next=login_next_query_value()))
 
         if not current_user.is_authenticated:
+            if _request_wants_json():
+                return jsonify({
+                    'ok': False,
+                    'success': False,
+                    'message': 'Oturum açmanız gerekiyor.',
+                }), 401
             return redirect(url_for('auth.login', next=login_next_query_value()))
 
         if not session_token_matches(current_user):
             clear_session_keys()
             logout_user()
+            if _request_wants_json():
+                return jsonify({
+                    'ok': False,
+                    'success': False,
+                    'message': 'Oturumunuz sonlandı. Sayfayı yenileyip tekrar giriş yapın.',
+                }), 401
             return redirect(url_for('auth.login', next=login_next_query_value()))
 
         now = utc_now()

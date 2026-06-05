@@ -76,6 +76,9 @@
         border-bottom: none;
     }
     
+    #kiralama-undo-toast-container .toast { min-width: 320px; }
+    #kiralama-undo-toast-container .toast-body { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; }
+
     .status-badge { min-width: 135px; text-align: center; font-size: 0.7rem; padding: 4px; font-weight: 700; border-radius: 4px; }
     .inline-action-btn {
         display: inline-flex;
@@ -224,6 +227,7 @@
             <tbody>
                 {% for kiralama in kiralamalar %}
                 {% set satir_toplam = namespace(val=0) %}
+                {% set aktif_kalemler = kiralama.kalemler | rejectattr('is_deleted') | list %}
                 <tr class="kiralama-satiri"
                     data-kiralama-id="{{ kiralama.id }}"
                     data-duzenle-url="{{ url_for('kiralama.duzenle', kiralama_id=kiralama.id) }}"
@@ -231,7 +235,7 @@
                     data-csrf-token="{{ csrf_token() }}"
                     data-form-no="{{ kiralama.kiralama_form_no }}">
 
-                    <td class="text-center fw-bold">{{ (pagination.page - 1) * per_page + loop.index }}</td>
+                    <td class="text-center fw-bold">{{ ((pagination.page - 1) * per_page + loop.index) if pagination else loop.index }}</td>
 
                     <td class="fw-bold text-dark">{{ kiralama.kiralama_form_no }}</td>
                     
@@ -247,9 +251,10 @@
 
                     <td>
                         <div class="kalem-detay-wrapper">
-                            {% set kalemler_sayisi = kiralama.kalemler|length %}
-                            {% for kalem in kiralama.kalemler %}
+                            {% set kalemler_sayisi = aktif_kalemler|length %}
+                            {% for kalem in aktif_kalemler %}
                             {# Tutar hesaplama #}
+                            {% if kalem.kiralama_baslangici and kalem.kiralama_bitis %}
                             {% set g = (kalem.kiralama_bitis - kalem.kiralama_baslangici).days + 1 %}
                             {% set nk_sayi = 2 if kalem.donus_nakliye_fatura_et else 1 %}
                             {% set nk_birim = (kalem.nakliye_satis_fiyat or 0) / nk_sayi %}
@@ -345,6 +350,7 @@
                                     </div>
                                 </div>
                             {% endif %}
+                            {% endif %}
 
                             {% if loop.last and kalemler_sayisi > 1 %}
                                     </div>
@@ -365,7 +371,7 @@
 
                     <td>
                         <div class="durum-detay-wrapper">
-                            {% for kalem in kiralama.kalemler %}
+                            {% for kalem in aktif_kalemler %}
                             {% if loop.index == 1 %}
                                 {# İlk kalem hep görünsün #}
                                 <div class="kalem-listesi-item px-2">
@@ -640,7 +646,31 @@
     </div>
 </div>
 
+<div class="toast-container position-fixed bottom-0 end-0 p-3" id="kiralama-undo-toast-container" aria-live="polite" aria-atomic="true"></div>
+
 <form id="delete-form" method="POST" style="display: none;"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form>
+
+<div class="modal fade" id="deleteKiralamaPasswordModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger-subtle">
+                <h5 class="modal-title fw-bold text-danger">Kiralama Silme Onayı</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small mb-3">Kayıt silindikten sonra 60 saniye içinde listeden <strong>Geri Al</strong> ile geri getirebilirsiniz. Devam etmek için kullanıcı şifrenizi girin.</p>
+                <label for="delete-kiralama-password-input" class="form-label">Kullanıcı şifreniz</label>
+                <input type="password" id="delete-kiralama-password-input" class="form-control" autocomplete="current-password">
+                <div class="invalid-feedback d-block hidden" id="delete-kiralama-password-error">Şifre girilmelidir.</div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Vazgeç</button>
+                <button type="button" class="btn btn-danger fw-bold" id="delete-kiralama-password-confirm">Sil</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <form id="iptal-kalem-form" method="POST" action="{{ url_for('kiralama.iptal_et_kalem') }}" style="display: none;">
     <input type="hidden" name="csrf_token" id="iptal-csrf-token">
     <input type="hidden" name="kalem_id" id="iptal-kalem-id">
@@ -914,6 +944,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     refreshReturnUrls();
     restoreListState();
+    restorePendingUndoToast();
 
     function closeModals() {
         backdrop.style.display = 'none';
@@ -1208,14 +1239,347 @@ document.addEventListener('DOMContentLoaded', function() {
         if(state.rentalId) window.open(`/dokumanlar/yazdir/form/${state.rentalId}`, '_blank');
     };
 
-      document.getElementById('menu-sil').onclick = () => {
-        if(confirm(state.fNo + ' nolu tüm kiralama silinecek. Emin misiniz?')) {
-            const form = document.getElementById('delete-form');
-            form.action = state.sUrl; form.querySelector('input[name="csrf_token"]').value = state.csrf;
-            saveListState({ rentalId: state.rentalId, kalemId: null });
-            form.submit();
+    const DELETE_PASSWORD_VERIFY_URL = "{{ url_for('kiralama.api_financial_edit_password_verify') }}";
+    const KIRALAMA_GERI_AL_URL = {{ url_for('kiralama.geri_al', kiralama_id=0) | tojson }};
+    const KIRALAMA_UNDO_STORAGE_KEY = 'kiralama_pending_undo';
+    const deletePasswordModalEl = document.getElementById('deleteKiralamaPasswordModal');
+    const deletePasswordField = document.getElementById('delete-kiralama-password-input');
+    const deletePasswordError = document.getElementById('delete-kiralama-password-error');
+    const deletePasswordConfirm = document.getElementById('delete-kiralama-password-confirm');
+    let deletePasswordModal = null;
+    let pendingDeleteSubmit = null;
+    let activeUndoToast = null;
+    let activeUndoTimer = null;
+
+    function getDeletePasswordModal() {
+        if (!deletePasswordModalEl) return null;
+        if (!deletePasswordModal) {
+            deletePasswordModal = new bootstrap.Modal(deletePasswordModalEl);
+        }
+        return deletePasswordModal;
+    }
+
+    function kiralamaGeriAlUrl(rentalId) {
+        const id = encodeURIComponent(String(rentalId));
+        const base = KIRALAMA_GERI_AL_URL.replace(/\/0$/, '/');
+        const sep = base.includes('?') ? '&' : '?';
+        return base + id + sep + 'format=json';
+    }
+
+    function getKiralamaCsrfToken(preferred) {
+        return preferred
+            || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+            || document.querySelector('#delete-form [name="csrf_token"]')?.value
+            || '';
+    }
+
+    function kiralamaAjaxHeaders(csrf) {
+        const headers = {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json',
+        };
+        if (csrf) headers['X-CSRFToken'] = csrf;
+        return headers;
+    }
+
+    function kiralamaFetchOptions(formData, csrf) {
+        return {
+            method: 'POST',
+            body: formData,
+            headers: kiralamaAjaxHeaders(csrf),
+            credentials: 'same-origin',
+        };
+    }
+
+    async function parseKiralamaJsonResponse(response) {
+        if (response.status === 401) {
+            throw new Error('Oturumunuz sona erdi. Sayfayı yenileyip tekrar giriş yapın.');
+        }
+        if (response.status === 404) {
+            throw new Error('İstek adresi bulunamadı. Sayfayı yenileyip tekrar deneyin.');
+        }
+        const text = await response.text();
+        if (!text) {
+            return { ok: false, message: 'Sunucudan boş yanıt alındı.' };
+        }
+        const contentType = (response.headers.get('Content-Type') || '').toLowerCase();
+        if (contentType.includes('application/json')) {
+            return JSON.parse(text);
+        }
+        try {
+            return JSON.parse(text);
+        } catch (parseErr) {
+            if (/^\s*</.test(text)) {
+                throw new Error(
+                    'Sunucu beklenmeyen HTML yanıtı döndü (HTTP ' + response.status + '). Sayfayı yenileyip tekrar deneyin.'
+                );
+            }
+            throw new Error('Sunucu yanıtı işlenemedi.');
+        }
+    }
+
+    function savePendingUndo(rentalId, formNo, undoSeconds) {
+        try {
+            sessionStorage.setItem(KIRALAMA_UNDO_STORAGE_KEY, JSON.stringify({
+                rentalId,
+                formNo: formNo || '',
+                expiresAt: Date.now() + (undoSeconds || 60) * 1000,
+            }));
+        } catch (e) { /* ignore */ }
+    }
+
+    function clearPendingUndo() {
+        try {
+            sessionStorage.removeItem(KIRALAMA_UNDO_STORAGE_KEY);
+        } catch (e) { /* ignore */ }
+    }
+
+    function loadPendingUndo() {
+        try {
+            const raw = sessionStorage.getItem(KIRALAMA_UNDO_STORAGE_KEY);
+            if (!raw) return null;
+            const data = JSON.parse(raw);
+            if (!data || !data.rentalId || !data.expiresAt) {
+                clearPendingUndo();
+                return null;
+            }
+            if (Date.now() > data.expiresAt) {
+                clearPendingUndo();
+                return null;
+            }
+            const remaining = Math.max(1, Math.ceil((data.expiresAt - Date.now()) / 1000));
+            return { ...data, remaining };
+        } catch (e) {
+            clearPendingUndo();
+            return null;
+        }
+    }
+
+    function restorePendingUndoToast() {
+        const pending = loadPendingUndo();
+        if (!pending) return;
+        showDeleteUndoToast(pending.rentalId, pending.formNo, pending.remaining);
+    }
+
+    function dismissDeleteUndoToast(clearStorage) {
+        if (clearStorage !== false) {
+            clearPendingUndo();
+        }
+        if (activeUndoTimer) {
+            window.clearInterval(activeUndoTimer);
+            activeUndoTimer = null;
+        }
+        if (activeUndoToast) {
+            try {
+                activeUndoToast.bsToast?.hide();
+            } catch (e) { /* ignore */ }
+            activeUndoToast.el?.remove();
+            activeUndoToast = null;
+        }
+    }
+
+    function removeKiralamaRow(rentalId) {
+        const row = document.querySelector(`tr.kiralama-satiri[data-kiralama-id="${rentalId}"]`);
+        if (row) row.remove();
+    }
+
+    function showDeleteUndoToast(rentalId, formNo, undoSeconds) {
+        dismissDeleteUndoToast(false);
+        const container = document.getElementById('kiralama-undo-toast-container');
+        if (!container) return;
+
+        const toastEl = document.createElement('div');
+        toastEl.className = 'toast show align-items-center text-bg-dark border-0 shadow';
+        toastEl.setAttribute('role', 'alert');
+        toastEl.setAttribute('aria-live', 'assertive');
+        toastEl.innerHTML = `
+            <div class="d-flex w-100">
+                <div class="toast-body">
+                    <span><strong>${formNo || 'Kiralama'}</strong> silindi.</span>
+                    <button type="button" class="btn btn-sm btn-warning fw-bold" id="kiralama-undo-btn">Geri Al</button>
+                    <span class="small text-white-50" id="kiralama-undo-countdown"></span>
+                    <div class="w-100 small text-danger hidden mt-1" id="kiralama-undo-error"></div>
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" aria-label="Kapat"></button>
+            </div>
+        `;
+        container.appendChild(toastEl);
+
+        const bsToast = bootstrap.Toast.getOrCreateInstance(toastEl, { autohide: false });
+        bsToast.show();
+        activeUndoToast = { el: toastEl, bsToast, rentalId };
+
+        const countdownEl = toastEl.querySelector('#kiralama-undo-countdown');
+        const undoBtn = toastEl.querySelector('#kiralama-undo-btn');
+        const errorEl = toastEl.querySelector('#kiralama-undo-error');
+        let remaining = undoSeconds || 60;
+
+        const tickCountdown = () => {
+            if (countdownEl) countdownEl.textContent = `(${remaining}s)`;
+        };
+        tickCountdown();
+
+        activeUndoTimer = window.setInterval(() => {
+            remaining -= 1;
+            tickCountdown();
+            if (remaining <= 0) dismissDeleteUndoToast(true);
+        }, 1000);
+
+        toastEl.querySelector('.btn-close')?.addEventListener('click', () => dismissDeleteUndoToast(true));
+
+        undoBtn?.addEventListener('click', async () => {
+            undoBtn.disabled = true;
+            if (errorEl) {
+                errorEl.textContent = '';
+                errorEl.classList.add('hidden');
+            }
+            try {
+                const csrf = getKiralamaCsrfToken();
+                const formData = new FormData();
+                if (csrf) formData.append('csrf_token', csrf);
+                const response = await fetch(
+                    kiralamaGeriAlUrl(rentalId),
+                    kiralamaFetchOptions(formData, csrf)
+                );
+                const payload = await parseKiralamaJsonResponse(response);
+                if (!response.ok || !payload.ok) {
+                    throw new Error(payload.message || 'Geri alma başarısız.');
+                }
+                dismissDeleteUndoToast(true);
+                saveListState({ rentalId, kalemId: null });
+                window.location.reload();
+            } catch (err) {
+                if (errorEl) {
+                    errorEl.textContent = err.message || 'Geri alınamadı.';
+                    errorEl.classList.remove('hidden');
+                }
+                undoBtn.disabled = false;
+            }
+        });
+    }
+
+    async function submitKiralamaDelete(password) {
+        if (!pendingDeleteSubmit) return;
+        const pending = pendingDeleteSubmit;
+        pendingDeleteSubmit = null;
+
+        const csrf = getKiralamaCsrfToken(pending.csrf);
+        const formData = new FormData();
+        formData.append('delete_confirm_password', password);
+        if (csrf) formData.append('csrf_token', csrf);
+
+        saveListState({ rentalId: pending.rentalId, kalemId: null });
+
+        const deleteUrl = pending.sUrl + (pending.sUrl.includes('?') ? '&' : '?') + 'format=json';
+        savePendingUndo(pending.rentalId, pending.formNo, 60);
+        try {
+            const response = await fetch(deleteUrl, kiralamaFetchOptions(formData, csrf));
+            const payload = await parseKiralamaJsonResponse(response);
+            if (!response.ok || !payload.ok) {
+                clearPendingUndo();
+                throw new Error(payload.message || 'Silme işlemi başarısız oldu.');
+            }
+            const undoSeconds = payload.undo_seconds || 60;
+            const formNo = payload.form_no || pending.formNo;
+            savePendingUndo(pending.rentalId, formNo, undoSeconds);
+            removeKiralamaRow(pending.rentalId);
+            showDeleteUndoToast(pending.rentalId, formNo, undoSeconds);
+        } catch (err) {
+            alert(err.message || 'Silme işlemi başarısız oldu.');
+        }
+    }
+
+    document.getElementById('menu-sil').onclick = () => {
+        if (!state.sUrl) return;
+
+        closeModals();
+        pendingDeleteSubmit = {
+            sUrl: state.sUrl,
+            csrf: state.csrf,
+            rentalId: state.rentalId,
+            formNo: state.fNo,
+        };
+
+        if (deletePasswordField) {
+            deletePasswordField.value = '';
+        }
+        if (deletePasswordError) {
+            deletePasswordError.classList.add('hidden');
+        }
+
+        const modal = getDeletePasswordModal();
+        if (modal) {
+            modal.show();
+            window.setTimeout(() => deletePasswordField?.focus(), 150);
         }
     };
+
+    if (deletePasswordConfirm) {
+        deletePasswordConfirm.onclick = async function() {
+            const password = deletePasswordField ? deletePasswordField.value : '';
+            if (!password) {
+                if (deletePasswordError) {
+                    deletePasswordError.textContent = 'Şifre girilmelidir.';
+                    deletePasswordError.classList.remove('hidden');
+                }
+                return;
+            }
+
+            const originalText = deletePasswordConfirm.textContent;
+            deletePasswordConfirm.disabled = true;
+            deletePasswordConfirm.textContent = 'Kontrol ediliyor...';
+            if (deletePasswordError) deletePasswordError.classList.add('hidden');
+
+            try {
+                const formData = new FormData();
+                formData.append('password', password);
+                const csrfToken = getKiralamaCsrfToken(pendingDeleteSubmit?.csrf);
+                if (csrfToken) formData.append('csrf_token', csrfToken);
+                const response = await fetch(
+                    DELETE_PASSWORD_VERIFY_URL,
+                    kiralamaFetchOptions(formData, csrfToken)
+                );
+                const payload = await parseKiralamaJsonResponse(response);
+                if (!response.ok || !payload.success) {
+                    if (deletePasswordError) {
+                        deletePasswordError.textContent = payload.message || 'Şifre doğrulanamadı.';
+                        deletePasswordError.classList.remove('hidden');
+                    }
+                    deletePasswordField?.focus();
+                    deletePasswordField?.select();
+                    return;
+                }
+
+                const modal = getDeletePasswordModal();
+                if (modal) modal.hide();
+                submitKiralamaDelete(password);
+            } catch (err) {
+                if (deletePasswordError) {
+                    deletePasswordError.textContent = err.message || 'Şifre kontrolü yapılamadı. Lütfen tekrar deneyin.';
+                    deletePasswordError.classList.remove('hidden');
+                }
+            } finally {
+                deletePasswordConfirm.disabled = false;
+                deletePasswordConfirm.textContent = originalText;
+            }
+        };
+    }
+
+    if (deletePasswordField) {
+        deletePasswordField.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                deletePasswordConfirm?.click();
+            }
+        });
+    }
+
+    if (deletePasswordModalEl) {
+        deletePasswordModalEl.addEventListener('hidden.bs.modal', function() {
+            pendingDeleteSubmit = null;
+            if (deletePasswordField) deletePasswordField.value = '';
+        });
+    }
 
     // Mevcut script içindeki menu click işlemlerine ekleyin:
         document.getElementById('menu-teslim-tutanagi').onclick = () => {

@@ -31,7 +31,7 @@ if platform.system() == "Windows":
 logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
 
-def post_process_kiralama_docx(docx_path, vergi_no, sozlesme_tarihi_str, kalemler_listesi, makine_kullanim_yeri):
+def post_process_kiralama_docx(docx_path, vergi_no, sozlesme_tarihi_str, kalemler_listesi, makine_kullanim_yeri, musteri_eposta=""):
     """
     Üretilen Word dosyasında metin ve tablo düzeltmeleri yapar.
     - Tablo yapısına müdahale etmez; sadece metin düzeyinde güvenli düzeltmeler uygular
@@ -79,6 +79,18 @@ def post_process_kiralama_docx(docx_path, vergi_no, sozlesme_tarihi_str, kalemle
                 updated = re.sub(
                     r'(MAKİNE\s*KULLANIM\s*YERİ\s*)(.+)$',
                     rf'\1{makine_kullanim_yeri}',
+                    text,
+                    flags=re.IGNORECASE
+                )
+                if updated != text:
+                    paragraph.text = updated
+                    text = updated
+
+            if ('E-MAIL' in turkish_upper(text) or 'E-MAİL' in turkish_upper(text)) and musteri_eposta:
+                # Sablonda placeholder olmayabilir; "E-mail :" satirini dogrudan doldur.
+                updated = re.sub(
+                    r'(E[-\s]*MA[İI]L\s*:\s*)(.*)$',
+                    rf'\1{musteri_eposta}',
                     text,
                     flags=re.IGNORECASE
                 )
@@ -202,6 +214,12 @@ def kiralama_formu_yazdir(rental_id):
             'musteri_vergi_dairesi': musteri.vergi_dairesi or "",
             'musteri_adres': musteri.iletisim_bilgileri or "",
             'musteri_tel': musteri.telefon or "",
+            # Sablonda farkli anahtar adlari kullaniliyor olabilir; ikisini de doldur.
+            'musteri_eposta': musteri.eposta or "",
+            'musteri_email': musteri.eposta or "",
+            'musteri_e_mail': musteri.eposta or "",
+            'musteri_mail': musteri.eposta or "",
+            'eposta': musteri.eposta or "",
             'kalemler': kalemler_listesi,
             'genel_toplam': f"{genel_toplam:,.2f} TL"
         }
@@ -214,7 +232,8 @@ def kiralama_formu_yazdir(rental_id):
             musteri.vergi_no or "",
             gs_trh_fmt,
             kalemler_listesi,
-            kiralama.makine_calisma_adresi or ""
+            kiralama.makine_calisma_adresi or "",
+            musteri.eposta or "",
         )
 
         # 5. PDF DÖNÜŞTÜRME
