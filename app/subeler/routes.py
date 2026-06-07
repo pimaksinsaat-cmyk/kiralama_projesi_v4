@@ -411,20 +411,19 @@ def sabit_gider_ekle():
         return redirect(url_for('subeler.sube_masraflari', **redirect_params))
 
     try:
-        # apply_retroactively TRUE ise, baslangic_tarihi otomatik olarak yılbaşı (01.01) olsun
         baslangic_tarihi = form.baslangic_tarihi.data
-        if form.apply_retroactively.data:
-            baslangic_tarihi = date(baslangic_tarihi.year, 1, 1)
 
         yeni_donem = SubeSabitGiderDonemiService.create_donem(
             {
                 'sube_id': form.sube_id.data,
                 'kategori': form.kategori.data,
                 'baslangic_tarihi': baslangic_tarihi,
+                'periyot_tipi': form.periyot_tipi.data,
+                'periyot_degeri': form.periyot_degeri.data,
                 'aylik_tutar': form.aylik_tutar.data,
                 'kdv_orani': form.kdv_orani.data,
                 'aciklama': form.aciklama.data,
-                'apply_retroactively': form.apply_retroactively.data,
+                'apply_retroactively': False,
             }
         )
         timeline = SubeSabitGiderDonemiService.build_timeline_metadata(
@@ -433,9 +432,9 @@ def sabit_gider_ekle():
         )
         yeni_donem_status = timeline.get(yeni_donem.id, {}).get('status')
         if yeni_donem_status == 'planned':
-            flash('Planli aylik sabit gider donemi olusturuldu.', 'success')
+            flash('Planli donemsel gider donemi olusturuldu.', 'success')
         else:
-            flash('Aylik sabit gider kaydi olusturuldu.', 'success')
+            flash('Donemsel gider kaydi olusturuldu.', 'success')
     except ValidationError as exc:
         flash(str(exc), 'warning')
     except Exception as exc:
@@ -464,6 +463,8 @@ def sabit_gider_guncelle(donem_id):
                 'sube_id': donem.sube_id,
                 'kategori': donem.kategori,
                 'baslangic_tarihi': request.form.get('baslangic_tarihi'),
+                'periyot_tipi': request.form.get('periyot_tipi'),
+                'periyot_degeri': request.form.get('periyot_degeri', type=int),
                 'aylik_tutar': request.form.get('aylik_tutar', type=float),
                 'kdv_orani': request.form.get('kdv_orani', type=float),
                 'aciklama': request.form.get('aciklama'),
@@ -474,6 +475,41 @@ def sabit_gider_guncelle(donem_id):
         flash(str(exc), 'warning')
     except Exception as exc:
         flash(f'Sabit gider guncellenirken hata olustu: {exc}', 'danger')
+
+    return redirect(url_for('subeler.sube_masraflari', **redirect_params))
+
+
+@subeler_bp.route('/sabit-giderler/<int:donem_id>/yeni-fiyat', methods=['POST'])
+def sabit_gider_yeni_fiyat(donem_id):
+    donem = SubeSabitGiderDonemiService.get_by_id(donem_id)
+    if not donem:
+        flash('Sabit gider donemi bulunamadi.', 'warning')
+        return redirect(url_for('subeler.index'))
+
+    redirect_params = {
+        'sube_id': donem.sube_id,
+        'year': request.form.get('year'),
+        'month': request.form.get('month'),
+    }
+
+    try:
+        yeni_donem = SubeSabitGiderDonemiService.create_new_price_period(
+            donem_id,
+            {
+                'baslangic_tarihi': request.form.get('baslangic_tarihi'),
+                'periyot_tipi': request.form.get('periyot_tipi'),
+                'periyot_degeri': request.form.get('periyot_degeri', type=int),
+                'aylik_tutar': request.form.get('aylik_tutar', type=float),
+                'kdv_orani': request.form.get('kdv_orani', type=float),
+                'aciklama': request.form.get('aciklama'),
+                'apply_retroactively': False,
+            }
+        )
+        flash(f'Yeni fiyat donemi {yeni_donem.baslangic_tarihi.strftime("%d.%m.%Y")} tarihinden itibaren olusturuldu.', 'success')
+    except ValidationError as exc:
+        flash(str(exc), 'warning')
+    except Exception as exc:
+        flash(f'Yeni fiyat donemi olusturulurken hata olustu: {exc}', 'danger')
 
     return redirect(url_for('subeler.sube_masraflari', **redirect_params))
 

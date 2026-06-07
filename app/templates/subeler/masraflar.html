@@ -557,6 +557,19 @@
         width: 100%;
     }
 
+    .form-actions-inline {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .form-actions-inline input,
+    .form-actions-inline button {
+        width: auto;
+        min-width: 120px;
+    }
+
     .masraf-tablo {
         width: 100%;
         border-collapse: collapse;
@@ -791,16 +804,34 @@
     .row-actions.compact {
         min-width: 0;
         flex-direction: row;
-        align-items: center;
-        gap: 0.5rem;
+        align-items: flex-start;
+        gap: 0.4rem;
         flex-wrap: wrap;
     }
 
     .action-button-row {
         display: flex;
+        flex-wrap: wrap;
         gap: 0.35rem;
         align-items: center;
-        flex-wrap: wrap;
+        justify-content: flex-start;
+    }
+
+    .action-button-row button,
+    .action-button-row form {
+        min-width: 0;
+    }
+
+    .action-button-row button {
+        white-space: nowrap;
+    }
+
+    .action-button-row .duzenle-btn,
+    .action-button-row .kaydet-btn,
+    .action-button-row .sil-btn {
+        padding: 0.36rem 0.6rem;
+        font-size: 0.72rem;
+        line-height: 1.1;
     }
 
     .inline-stop-form {
@@ -848,10 +879,21 @@
         color: #64748b;
     }
 
+    .sabit-gider-grid {
+        display: grid;
+        grid-template-columns: 120px 130px 150px minmax(140px, 1fr) 80px 300px;
+        gap: 0.75rem;
+        align-items: center;
+    }
+
+    .sabit-gider-header-grid {
+        padding: 0 0.35rem;
+    }
+
     .sabit-gider-item {
         background: white;
         border: 1px solid #e2e8f0;
-        border-radius: 12px;
+        border-radius: 8px;
         padding: 1rem;
         box-shadow: 0 2px 6px rgba(0,0,0,0.04);
     }
@@ -864,6 +906,7 @@
     }
 
     .sabit-gider-col-label {
+        display: none;
         font-size: 0.72rem;
         font-weight: 700;
         color: #64748b;
@@ -874,6 +917,8 @@
     .sabit-gider-col-value {
         color: var(--text-dark);
         font-size: 0.92rem;
+        line-height: 1.35;
+        overflow-wrap: anywhere;
     }
 
     .durum-detay {
@@ -892,6 +937,32 @@
         border: 1px solid #dbe4ee;
         border-radius: 10px;
         background: #f8fafc;
+    }
+
+    @media (max-width: 1180px) {
+        .sabit-gider-grid {
+            grid-template-columns: 105px 110px 135px minmax(90px, 1fr) 65px 280px;
+            gap: 0.5rem;
+        }
+    }
+
+    @media (max-width: 992px) {
+        .sabit-gider-list-header {
+            display: none;
+        }
+
+        .sabit-gider-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.9rem;
+        }
+
+        .sabit-gider-col-label {
+            display: block;
+        }
+
+        .sabit-gider-actions-col {
+            grid-column: 1 / -1;
+        }
     }
 
     .sabit-gider-edit-card label {
@@ -1270,7 +1341,7 @@
                                     <span class="ozet-ikon sabit">S</span>
                                     <span>
                                         <strong>Sabit Gider</strong>
-                                        <small>Donemsel aylik tanimlar</small>
+                                        <small>Periyotlu donemsel tanimlar</small>
                                     </span>
                                 </div>
                             </td>
@@ -1382,7 +1453,7 @@
 
             <div class="masraf-tablo-wrapper" style="margin-bottom: 2rem;">
                 <div class="masraf-tablo-header">
-                    <h3>Aylik Sabit Gider Donemleri</h3>
+                    <h3>Donemsel Gider Donemleri</h3>
                     <div class="header-actions">
                         <button
                             type="button"
@@ -1390,7 +1461,7 @@
                             id="toggle-sabit-gider-form"
                             aria-expanded="{{ 'true' if sabit_form_acik else 'false' }}"
                             aria-controls="sabit-gider-form-panel"
-                            title="Aylik sabit gider tanimla"
+                            title="Donemsel gider tanimla"
                         >+</button>
                     </div>
                 </div>
@@ -1401,7 +1472,7 @@
                         <input type="hidden" name="year" value="{{ selected_year }}">
                         <input type="hidden" name="month" value="{{ selected_month }}">
 
-                        <p class="muted-note" style="margin: 0 0 1rem 0;">Bu tarih sabit giderin ilk baslama tarihi degil, fiyat degisim tarihidir. Ilk kayit gelecekte olsa bile mevcut sabit gider aktif kabul edilir; sonraki kayitlar degisim tarihi olarak calisir.</p>
+                        <p class="muted-note" style="margin: 0 0 1rem 0;">Baslangic tarihinden itibaren secilen takvim periyoduna gore gider hesaplanir. Ornek: 1 Ay, 2 Ay veya 1 Yil. Fiyat degisikligi icin listedeki Yeni Fiyat butonunu kullanin.</p>
 
                         <div class="collapsible-form-grid">
                             <div class="form-group">
@@ -1429,6 +1500,22 @@
                             </div>
 
                             <div class="form-group">
+                                {{ sabit_gider_form.periyot_degeri.label }}
+                                {{ sabit_gider_form.periyot_degeri(class="form-control", min="1", step="1", placeholder="1") }}
+                                {% if sabit_gider_form.periyot_degeri.errors %}
+                                    <small style="color: var(--danger-red);">{{ sabit_gider_form.periyot_degeri.errors[0] }}</small>
+                                {% endif %}
+                            </div>
+
+                            <div class="form-group">
+                                {{ sabit_gider_form.periyot_tipi.label }}
+                                {{ sabit_gider_form.periyot_tipi(class="form-control") }}
+                                {% if sabit_gider_form.periyot_tipi.errors %}
+                                    <small style="color: var(--danger-red);">{{ sabit_gider_form.periyot_tipi.errors[0] }}</small>
+                                {% endif %}
+                            </div>
+
+                            <div class="form-group">
                                 {{ sabit_gider_form.kdv_orani.label }}
                                 {{ sabit_gider_form.kdv_orani(class="form-control", placeholder="Orn: 20") }}
                                 {% if sabit_gider_form.kdv_orani.errors %}
@@ -1444,32 +1531,23 @@
                                 {% endif %}
                             </div>
 
-                            <div class="form-group full-width">
-                                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                    {{ sabit_gider_form.apply_retroactively(class="form-check-input") }}
-                                    {{ sabit_gider_form.apply_retroactively.label(class="form-check-label") }}
-                                </div>
-                                {% if sabit_gider_form.apply_retroactively.errors %}
-                                    <small style="color: var(--danger-red);">{{ sabit_gider_form.apply_retroactively.errors[0] }}</small>
-                                {% endif %}
-                            </div>
-
-                            <div class="form-group inline-submit full-width">
+                            <div class="form-group inline-submit full-width form-actions-inline">
                                 {{ sabit_gider_form.submit() }}
+                                <button type="button" class="sil-btn sabit-gider-edit-cancel" data-target="sabit-gider-form-panel">Iptal</button>
                             </div>
                         </div>
                     </form>
                 </div>
                 {% if sabit_giderler %}
                 <div class="sabit-gider-list">
-                    <div class="sabit-gider-list-header d-none d-md-block">
-                        <div class="row g-3 align-items-center">
-                            <div class="col-md-2">Kategori</div>
-                            <div class="col-md-2">Donemsel Degisiklik Tarihi</div>
-                            <div class="col-md-2">Tutar (KDV Dahil)</div>
-                            <div class="col-md-2">Aciklama</div>
-                            <div class="col-md-1">Durum</div>
-                            <div class="col-md-3">Islemler</div>
+                    <div class="sabit-gider-list-header">
+                        <div class="sabit-gider-grid sabit-gider-header-grid">
+                            <div>Kategori</div>
+                            <div>Gecerlilik Baslangici</div>
+                            <div>Periyot / Tutar</div>
+                            <div>Aciklama</div>
+                            <div>Durum</div>
+                            <div>Islemler</div>
                         </div>
                     </div>
                     {% for donem in sabit_giderler %}
@@ -1478,39 +1556,43 @@
                     {% set aylik_tutar = donem.aylik_tutar|float if donem.aylik_tutar is not none else 0 %}
                     {% set kdv_orani = donem.kdv_orani|float if donem.kdv_orani is not none else 0 %}
                     {% set kdv_dahil_tutar = aylik_tutar * (1 + (kdv_orani / 100)) %}
+                    {% set periyot_degeri = donem.periyot_degeri or 1 %}
+                    {% set periyot_tipi = donem.periyot_tipi or 'ay' %}
+                    {% set periyot_etiketi = periyot_degeri ~ ' ' ~ ('gunde bir' if periyot_tipi == 'gun' else 'ayda bir' if periyot_tipi == 'ay' else 'yilda bir') %}
                     <div class="sabit-gider-item">
-                        <div class="row g-3 align-items-center">
-                            <div class="col-12 col-md-2 sabit-gider-col">
+                        <div class="sabit-gider-grid">
+                            <div class="sabit-gider-col">
                                 <span class="sabit-gider-col-label">Kategori</span>
                                 <span class="masraf-kategori">{{ kategori_labels.get(donem.kategori, donem.kategori) }}</span>
                             </div>
-                            <div class="col-12 col-md-2 sabit-gider-col">
-                                <span class="sabit-gider-col-label">Donemsel Degisiklik Tarihi</span>
+                            <div class="sabit-gider-col">
+                                <span class="sabit-gider-col-label">Gecerlilik Baslangici</span>
                                 <span class="sabit-gider-col-value">{{ donem.baslangic_tarihi.strftime('%d.%m.%Y') }}</span>
                             </div>
-                            <div class="col-12 col-md-2 sabit-gider-col">
-                                <span class="sabit-gider-col-label">Tutar (KDV Dahil)</span>
+                            <div class="sabit-gider-col">
+                                <span class="sabit-gider-col-label">Periyot / Tutar</span>
                                 <span class="table-value">{{ '{:,.2f}'.format(kdv_dahil_tutar).replace(',', '_').replace('.', ',').replace('_', '.') }} TL</span>
+                                <span class="durum-detay">{{ periyot_etiketi }}</span>
                             </div>
-                            <div class="col-12 col-md-2 sabit-gider-col">
+                            <div class="sabit-gider-col">
                                 <span class="sabit-gider-col-label">Aciklama</span>
                                 <span class="sabit-gider-col-value">{{ donem.aciklama or '-' }}</span>
                             </div>
-                            <div class="col-6 col-md-1 sabit-gider-col">
+                            <div class="sabit-gider-col">
                                 <span class="sabit-gider-col-label">Durum</span>
                                 <span class="durum-badge {{ 'is-planned' if donem_durumu == 'Planli' else '' if donem_durumu == 'Aktif' else 'is-passive' }}">{{ donem_durumu }}</span>
                                 {% if donem_durumu == 'Kapandi' and donem_timeline.get('effective_end') %}
                                 <span class="durum-detay">Kapanis: {{ donem_timeline.get('effective_end').strftime('%d.%m.%Y') }}</span>
                                 {% endif %}
                             </div>
-                            <div class="col-12 col-md-3 sabit-gider-col">
+                            <div class="sabit-gider-col sabit-gider-actions-col">
                                 <span class="sabit-gider-col-label">Islemler</span>
                                 <div class="row-actions compact">
+                                    <div class="action-button-row">
                                     {% if donem_durumu == 'Aktif' %}
                                     <button
                                         type="button"
                                         class="sil-btn sabit-gider-stop-open"
-                                        style="padding:0.4rem 0.65rem;"
                                         data-action="{{ url_for('subeler.sabit_gider_durdur', donem_id=donem.id) }}"
                                         data-default-date="{{ yesterday if donem.baslangic_tarihi < today_date else today }}"
                                         data-category="{{ kategori_labels.get(donem.kategori, donem.kategori) }}"
@@ -1523,13 +1605,13 @@
                                         <button type="submit" class="duzenle-btn" onclick="return confirm('Bu sabit gider donemini yeniden aktif hale getirmek istediginize emin misiniz?');">Geri Al</button>
                                     </form>
                                     {% endif %}
-                                    <div class="action-button-row">
                                         <button type="button" class="duzenle-btn sabit-gider-edit-toggle" data-target="sabit-gider-edit-{{ donem.id }}" aria-expanded="false">Duzenle</button>
+                                        <button type="button" class="kaydet-btn sabit-gider-edit-toggle" data-target="sabit-gider-yeni-fiyat-{{ donem.id }}" aria-expanded="false">Yeni Fiyat</button>
                                         <form method="POST" action="{{ url_for('subeler.sabit_gider_sil', donem_id=donem.id) }}" class="inline-stop-form">
                                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                             <input type="hidden" name="year" value="{{ selected_year }}">
                                             <input type="hidden" name="month" value="{{ selected_month }}">
-                                            <button type="submit" class="sil-btn" style="padding:0.4rem 0.65rem;" onclick="return confirm('Bu sabit gider donemini silmek istediginize emin misiniz?');">Sil</button>
+                                            <button type="submit" class="sil-btn" onclick="return confirm('Bu sabit gider donemini silmek istediginize emin misiniz?');">Sil</button>
                                         </form>
                                     </div>
                                 </div>
@@ -1543,18 +1625,30 @@
                                     <input type="hidden" name="month" value="{{ selected_month }}">
                                     <div class="row g-3 sabit-gider-edit-form">
                                         <div class="col-12 col-md-3">
-                                            <label>Donemsel Degisiklik Tarihi</label>
+                                            <label>Gecerlilik Baslangici</label>
                                             <input class="inline-cell-input" type="date" name="baslangic_tarihi" value="{{ donem.baslangic_tarihi.strftime('%Y-%m-%d') }}">
                                         </div>
-                                        <div class="col-12 col-md-3">
-                                            <label>Aylik Tutar</label>
+                                        <div class="col-12 col-md-2">
+                                            <label>Periyot Tutari</label>
                                             <input class="inline-cell-input" type="number" step="0.01" min="0.01" name="aylik_tutar" value="{{ '%.2f'|format(donem.aylik_tutar or 0) }}">
+                                        </div>
+                                        <div class="col-12 col-md-2">
+                                            <label>Periyot Araligi</label>
+                                            <input class="inline-cell-input" type="number" step="1" min="1" name="periyot_degeri" value="{{ donem.periyot_degeri or 1 }}">
+                                        </div>
+                                        <div class="col-12 col-md-2">
+                                            <label>Periyot Tipi</label>
+                                            <select class="inline-cell-input" name="periyot_tipi">
+                                                <option value="ay" {% if (donem.periyot_tipi or 'ay') == 'ay' %}selected{% endif %}>Ay</option>
+                                                <option value="yil" {% if donem.periyot_tipi == 'yil' %}selected{% endif %}>Yil</option>
+                                                <option value="gun" {% if donem.periyot_tipi == 'gun' %}selected{% endif %}>Gun</option>
+                                            </select>
                                         </div>
                                         <div class="col-12 col-md-2">
                                             <label>KDV Orani</label>
                                             <input class="inline-cell-input" type="number" step="0.01" min="0" name="kdv_orani" value="{{ '%.2f'|format(donem.kdv_orani or 0) if donem.kdv_orani is not none else '' }}">
                                         </div>
-                                        <div class="col-12 col-md-4">
+                                        <div class="col-12 col-md-1">
                                             <label>Aciklama</label>
                                             <input class="inline-cell-input" type="text" name="aciklama" value="{{ donem.aciklama or '' }}">
                                         </div>
@@ -1566,14 +1660,58 @@
                                 </form>
                             </div>
                         </div>
+                        <div id="sabit-gider-yeni-fiyat-{{ donem.id }}" class="sabit-gider-edit-panel" hidden>
+                            <div class="sabit-gider-edit-card">
+                                <form method="POST" action="{{ url_for('subeler.sabit_gider_yeni_fiyat', donem_id=donem.id) }}">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <input type="hidden" name="year" value="{{ selected_year }}">
+                                    <input type="hidden" name="month" value="{{ selected_month }}">
+                                    <p class="muted-note" style="margin: 0 0 0.8rem 0;">Yeni fiyat mevcut kaydi degistirmez; secilen tarihten itibaren yeni donem olusturur.</p>
+                                    <div class="row g-3 sabit-gider-edit-form">
+                                        <div class="col-12 col-md-3">
+                                            <label>Degisiklik Tarihi</label>
+                                            <input class="inline-cell-input" type="date" name="baslangic_tarihi" value="{{ today }}">
+                                        </div>
+                                        <div class="col-12 col-md-2">
+                                            <label>Yeni Periyot Tutari</label>
+                                            <input class="inline-cell-input" type="number" step="0.01" min="0.01" name="aylik_tutar" value="{{ '%.2f'|format(donem.aylik_tutar or 0) }}">
+                                        </div>
+                                        <div class="col-12 col-md-2">
+                                            <label>Periyot Araligi</label>
+                                            <input class="inline-cell-input" type="number" step="1" min="1" name="periyot_degeri" value="{{ donem.periyot_degeri or 1 }}">
+                                        </div>
+                                        <div class="col-12 col-md-2">
+                                            <label>Periyot Tipi</label>
+                                            <select class="inline-cell-input" name="periyot_tipi">
+                                                <option value="ay" {% if (donem.periyot_tipi or 'ay') == 'ay' %}selected{% endif %}>Ay</option>
+                                                <option value="yil" {% if donem.periyot_tipi == 'yil' %}selected{% endif %}>Yil</option>
+                                                <option value="gun" {% if donem.periyot_tipi == 'gun' %}selected{% endif %}>Gun</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-12 col-md-2">
+                                            <label>KDV Orani</label>
+                                            <input class="inline-cell-input" type="number" step="0.01" min="0" name="kdv_orani" value="{{ '%.2f'|format(donem.kdv_orani or 0) if donem.kdv_orani is not none else '' }}">
+                                        </div>
+                                        <div class="col-12 col-md-1">
+                                            <label>Aciklama</label>
+                                            <input class="inline-cell-input" type="text" name="aciklama" value="{{ donem.aciklama or '' }}">
+                                        </div>
+                                    </div>
+                                    <div class="sabit-gider-edit-actions">
+                                        <button type="button" class="sil-btn sabit-gider-edit-cancel" data-target="sabit-gider-yeni-fiyat-{{ donem.id }}">Kapat</button>
+                                        <button type="submit" class="kaydet-btn">Yeni Fiyati Kaydet</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
                     </div>
                     {% endfor %}
                 </div>
                 {% else %}
                 <div class="bos-liste">
-                    <div class="bos-liste-ikon">Aylik</div>
-                    <h3>Henuz sabit gider tanimi yok</h3>
-                    <p>Kira ve benzeri duzenli giderleri yukaridaki + butonundan ekleyebilirsiniz.</p>
+                    <div class="bos-liste-ikon">Periyot</div>
+                    <h3>Henuz donemsel gider tanimi yok</h3>
+                    <p>Kira ve benzeri periyotlu giderleri yukaridaki + butonundan ekleyebilirsiniz.</p>
                 </div>
                 {% endif %}
             </div>
@@ -1873,7 +2011,8 @@
 
         function setEditRowState(targetId, shouldOpen) {
             const row = document.getElementById(targetId);
-            const button = document.querySelector('.sabit-gider-edit-toggle[data-target="' + targetId + '"]');
+            const button = document.querySelector('.sabit-gider-edit-toggle[data-target="' + targetId + '"]') ||
+                (targetId === 'sabit-gider-form-panel' ? toggleButton : null);
             if (!row || !button) {
                 return;
             }

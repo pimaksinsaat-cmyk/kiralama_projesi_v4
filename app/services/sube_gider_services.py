@@ -1,3 +1,4 @@
+import calendar
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
@@ -107,7 +108,7 @@ class SubeGiderService(BaseService):
 class SubeSabitGiderDonemiService(BaseService):
     model = SubeSabitGiderDonemi
     use_soft_delete = True
-    updatable_fields = ['kategori', 'baslangic_tarihi', 'bitis_tarihi', 'aylik_tutar', 'kdv_orani', 'aciklama', 'is_active', 'apply_retroactively']
+    updatable_fields = ['kategori', 'baslangic_tarihi', 'bitis_tarihi', 'aylik_tutar', 'periyot_gun_sayisi', 'periyot_tipi', 'periyot_degeri', 'kdv_orani', 'aciklama', 'is_active', 'apply_retroactively']
 
     @staticmethod
     def table_exists():
@@ -118,6 +119,69 @@ class SubeSabitGiderDonemiService(BaseService):
         if isinstance(value, str) and value:
             return datetime.strptime(value, '%Y-%m-%d').date()
         return value or None
+
+    @staticmethod
+    def _parse_positive_int(value, default=30):
+        if value in (None, ''):
+            return default
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            return 0
+        return parsed
+
+    @staticmethod
+    def _normalize_period_type(value):
+        value = (value or 'ay').strip()
+        return value if value in ('gun', 'ay', 'yil') else 'ay'
+
+    @staticmethod
+    def _add_months(start_date, months):
+        month_index = start_date.month - 1 + months
+        year = start_date.year + month_index // 12
+        month = month_index % 12 + 1
+        day = min(start_date.day, calendar.monthrange(year, month)[1])
+        return date(year, month, day)
+
+    @classmethod
+    def _next_period_start(cls, start_date, period_type, period_value):
+        if period_type == 'gun':
+            return start_date + timedelta(days=period_value)
+        if period_type == 'yil':
+            return cls._add_months(start_date, period_value * 12)
+        return cls._add_months(start_date, period_value)
+
+    @classmethod
+    def _calculate_periodized_overlap(cls, donem, effective_start, effective_end, report_start, report_end):
+        period_type = cls._normalize_period_type(getattr(donem, 'periyot_tipi', None))
+        period_value = int(getattr(donem, 'periyot_degeri', None) or 1)
+        if period_value <= 0:
+            period_value = 1
+
+        period_amount = float(donem.aylik_tutar or 0)
+        total = 0.0
+        cursor = effective_start
+        guard = 0
+
+        while cursor <= effective_end and cursor <= report_end:
+            next_start = cls._next_period_start(cursor, period_type, period_value)
+            if next_start <= cursor:
+                break
+
+            period_end = min(next_start - timedelta(days=1), effective_end)
+            overlap_start = max(cursor, report_start)
+            overlap_end = min(period_end, report_end)
+            if overlap_end >= overlap_start:
+                period_days = (period_end - cursor).days + 1
+                overlap_days = (overlap_end - overlap_start).days + 1
+                total += period_amount * (overlap_days / period_days)
+
+            cursor = next_start
+            guard += 1
+            if guard > 10000:
+                raise ValidationError('Periyot hesabi cok fazla tekrar urettigi icin durduruldu.')
+
+        return total
 
     @classmethod
     def build_timeline_metadata(cls, donemler, reference_date=None):
@@ -136,12 +200,7 @@ class SubeSabitGiderDonemiService(BaseService):
                 onceki_var = index > 0
                 sonraki_donem = kategori_donemleri[index + 1] if index + 1 < len(kategori_donemleri) else None
 
-                # apply_retroactively=True ise, ilk dönem geçmişe geri uygulanır (effective_start=None)
-                # apply_retroactively=False ise, sadece baslangic_tarihi'nden itibaren uygulanır
-                if donem.apply_retroactively:
-                    effective_start = donem.baslangic_tarihi if onceki_var else None
-                else:
-                    effective_start = donem.baslangic_tarihi
+                effective_start = donem.baslangic_tarihi
                 effective_end = donem.bitis_tarihi
 
                 if sonraki_donem and sonraki_donem.baslangic_tarihi:
@@ -209,7 +268,11 @@ class SubeSabitGiderDonemiService(BaseService):
         normalized['kategori'] = (normalized.get('kategori') or '').strip()
         normalized['baslangic_tarihi'] = cls._parse_date(normalized.get('baslangic_tarihi'))
         normalized['bitis_tarihi'] = cls._parse_date(normalized.get('bitis_tarihi'))
+        normalized['periyot_gun_sayisi'] = cls._parse_positive_int(normalized.get('periyot_gun_sayisi'), default=30)
+        normalized['periyot_tipi'] = cls._normalize_period_type(normalized.get('periyot_tipi'))
+        normalized['periyot_degeri'] = cls._parse_positive_int(normalized.get('periyot_degeri'), default=1)
         normalized['aciklama'] = (normalized.get('aciklama') or '').strip() or None
+        normalized['apply_retroactively'] = False
         return normalized
 
     @classmethod
@@ -225,7 +288,11 @@ class SubeSabitGiderDonemiService(BaseService):
         if instance.bitis_tarihi and instance.bitis_tarihi < instance.baslangic_tarihi:
             raise ValidationError('Bitis tarihi baslangic tarihinden once olamaz.')
         if instance.aylik_tutar is None or float(instance.aylik_tutar) <= 0:
-            raise ValidationError('Aylik tutar 0 dan buyuk olmalidir.')
+            raise ValidationError('Periyot tutari 0 dan buyuk olmalidir.')
+        if not instance.periyot_degeri or int(instance.periyot_degeri) <= 0:
+            raise ValidationError('Periyot araligi 0 dan buyuk olmalidir.')
+        if (instance.periyot_tipi or '').strip() not in ('gun', 'ay', 'yil'):
+            raise ValidationError('Periyot tipi gecersiz.')
 
     @classmethod
     def list_donemler(cls, sube_id):
@@ -244,7 +311,6 @@ class SubeSabitGiderDonemiService(BaseService):
         else:
             period_end = date(year, month + 1, 1) - timedelta(days=1)
 
-        days_in_month = (period_end - period_start).days + 1
         # Icinde bulunulan ay ise hesabi bugune kadar kap
         today = _bugun()
         effective_period_end = min(period_end, today) if period_start <= today <= period_end else period_end
@@ -265,9 +331,13 @@ class SubeSabitGiderDonemiService(BaseService):
             if overlap_end < overlap_start:
                 continue
 
-            overlap_days = (overlap_end - overlap_start).days + 1
-            monthly_amount = float(donem.aylik_tutar or 0)
-            toplam += monthly_amount * (overlap_days / days_in_month)
+            toplam += cls._calculate_periodized_overlap(
+                donem,
+                effective_start,
+                effective_end,
+                period_start,
+                effective_period_end,
+            )
 
         return toplam
 
@@ -301,8 +371,12 @@ class SubeSabitGiderDonemiService(BaseService):
             ayni_baslangic = next((donem for donem in cakisan_donemler if donem.baslangic_tarihi == instance.baslangic_tarihi), None)
             if ayni_baslangic:
                 ayni_baslangic.aylik_tutar = instance.aylik_tutar
+                ayni_baslangic.periyot_gun_sayisi = instance.periyot_gun_sayisi
+                ayni_baslangic.periyot_tipi = instance.periyot_tipi
+                ayni_baslangic.periyot_degeri = instance.periyot_degeri
                 ayni_baslangic.kdv_orani = instance.kdv_orani
                 ayni_baslangic.aciklama = instance.aciklama
+                ayni_baslangic.apply_retroactively = False
                 db.session.add(ayni_baslangic)
                 db.session.flush()
                 cls._sync_category_flags(ayni_baslangic.sube_id, ayni_baslangic.kategori)
@@ -351,8 +425,12 @@ class SubeSabitGiderDonemiService(BaseService):
         try:
             donem.baslangic_tarihi = normalized.get('baslangic_tarihi')
             donem.aylik_tutar = payload.get('aylik_tutar')
+            donem.periyot_gun_sayisi = normalized.get('periyot_gun_sayisi')
+            donem.periyot_tipi = normalized.get('periyot_tipi')
+            donem.periyot_degeri = normalized.get('periyot_degeri')
             donem.kdv_orani = payload.get('kdv_orani')
             donem.aciklama = normalized.get('aciklama')
+            donem.apply_retroactively = False
 
             cls.validate(donem, is_new=False)
 
@@ -417,6 +495,18 @@ class SubeSabitGiderDonemiService(BaseService):
         except Exception as exc:
             db.session.rollback()
             raise Exception('Sabit gider donemi guncellenirken hata olustu.') from exc
+
+    @classmethod
+    def create_new_price_period(cls, donem_id, payload, actor_id=None):
+        mevcut_donem = cls.get_by_id(donem_id)
+        if not mevcut_donem:
+            raise ValidationError('Yeni fiyat eklenecek sabit gider donemi bulunamadi.')
+
+        normalized_payload = dict(payload or {})
+        normalized_payload['sube_id'] = mevcut_donem.sube_id
+        normalized_payload['kategori'] = mevcut_donem.kategori
+        normalized_payload['apply_retroactively'] = False
+        return cls.create_donem(normalized_payload, actor_id=actor_id)
 
     @classmethod
     def stop_donem(cls, donem_id, bitis_tarihi=None):

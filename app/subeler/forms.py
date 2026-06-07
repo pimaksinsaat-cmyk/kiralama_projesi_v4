@@ -1,5 +1,5 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, TextAreaField, SubmitField, SelectField, URLField, EmailField, HiddenField, DecimalField, BooleanField
+from wtforms import StringField, TextAreaField, SubmitField, SelectField, URLField, EmailField, HiddenField, DecimalField, BooleanField, IntegerField
 from wtforms.validators import DataRequired, Length, Optional, Email, URL, NumberRange
 from datetime import datetime
 
@@ -100,20 +100,31 @@ class SubeGideriForm(FlaskForm):
 class SubeSabitGiderDonemiForm(FlaskForm):
     sube_id = HiddenField('Sube ID', validators=[DataRequired()])
     kategori = SelectField(
-        'Aylik Gider Kategorisi',
+        'Donemsel Gider Kategorisi',
         choices=GIDER_KATEGORILERI,
         validators=[DataRequired(message='Kategori secmek zorunludur')],
     )
     baslangic_tarihi = StringField(
-        'Donemsel Degisim Tarihi',
-        validators=[DataRequired(message='Donemsel degisim tarihi zorunludur')],
+        'Gecerlilik Baslangici',
+        validators=[DataRequired(message='Gecerlilik baslangici zorunludur')],
         default=lambda: datetime.now().replace(day=1).strftime('%Y-%m-%d'),
         render_kw={'type': 'date'},
     )
+    periyot_degeri = IntegerField(
+        'Periyot Araligi',
+        default=1,
+        validators=[DataRequired(message='Periyot araligi zorunludur'), NumberRange(min=1, message='Periyot araligi en az 1 olmalidir')],
+    )
+    periyot_tipi = SelectField(
+        'Periyot Tipi',
+        choices=[('ay', 'Ay'), ('yil', 'Yil'), ('gun', 'Gun')],
+        default='ay',
+        validators=[DataRequired(message='Periyot tipi zorunludur')],
+    )
     aylik_tutar = DecimalField(
-        'Aylik Tutar (TL)',
+        'Periyot Tutari (TL)',
         places=2,
-        validators=[DataRequired(message='Aylik tutar zorunludur'), NumberRange(min=0.01, message='Tutar 0 dan buyuk olmalidir')],
+        validators=[DataRequired(message='Periyot tutari zorunludur'), NumberRange(min=0.01, message='Tutar 0 dan buyuk olmalidir')],
     )
     kdv_orani = DecimalField(
         'KDV Orani (%)',
@@ -122,4 +133,4 @@ class SubeSabitGiderDonemiForm(FlaskForm):
     )
     aciklama = StringField('Aciklama', validators=[Optional(), Length(max=250)])
     apply_retroactively = BooleanField('Yılbaşından beri dikkate al (geçmiş aylara da uygulanır)')
-    submit = SubmitField('Aylik Gideri Kaydet')
+    submit = SubmitField('Donemsel Gideri Kaydet')
