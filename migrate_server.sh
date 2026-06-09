@@ -18,6 +18,8 @@ DB_PASS="Ayseela@2014"
 DB_NAME="kiralama_db"
 DB_HOST="localhost"
 SERVICE="kiralama_test"
+DB_PASS_URL="Ayseela%402014"
+DATABASE_URL_VALUE="postgresql://$DB_USER:$DB_PASS_URL@$DB_HOST:5432/$DB_NAME"
 
 BACKUP_FILE="/tmp/pre_migration_backup_$(date +%Y%m%d_%H%M%S).sql"
 
@@ -30,7 +32,7 @@ echo "======================================================="
 echo ""
 echo "=== [1/6] Mevcut migration durumu ==="
 cd $PROJECT_DIR
-FLASK_APP=run.py DATABASE_URL="postgresql://$DB_USER:$DB_PASS@$DB_HOST:5432/$DB_NAME" \
+FLASK_APP=run.py DATABASE_URL="$DATABASE_URL_VALUE" \
   SECRET_KEY="kiralama-projesi-icin-cok-gizli-anahtar-123" \
   venv/bin/flask db current
 echo ""
@@ -62,13 +64,13 @@ echo "  pip install tamamlandı."
 echo ""
 echo "=== [6/6] Migration uygulanıyor ==="
 echo "  Hedef revision: head"
-FLASK_APP=run.py DATABASE_URL="postgresql://$DB_USER:$DB_PASS@$DB_HOST:5432/$DB_NAME" \
+FLASK_APP=run.py DATABASE_URL="$DATABASE_URL_VALUE" \
   SECRET_KEY="kiralama-projesi-icin-cok-gizli-anahtar-123" \
   venv/bin/flask db upgrade
 
 echo ""
 echo "  Migration sonrası durum:"
-FLASK_APP=run.py DATABASE_URL="postgresql://$DB_USER:$DB_PASS@$DB_HOST:5432/$DB_NAME" \
+FLASK_APP=run.py DATABASE_URL="$DATABASE_URL_VALUE" \
   SECRET_KEY="kiralama-projesi-icin-cok-gizli-anahtar-123" \
   venv/bin/flask db current
 
