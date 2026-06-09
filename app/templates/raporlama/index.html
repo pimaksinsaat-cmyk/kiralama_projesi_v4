@@ -3,6 +3,12 @@
 {% block title %}Raporlama Merkezi{% endblock %}
 
 {% block content %}
+<style>
+    .external-rental-list-table .external-rental-money-col {
+        min-width: 108px;
+        white-space: nowrap;
+    }
+</style>
 <div class="container-fluid px-0">
     <div class="d-flex flex-wrap align-items-center justify-content-between mb-3">
         <div>
@@ -305,7 +311,21 @@
 
         <div class="tab-pane fade {{ 'show active' if dashboard.filters.active_tab == 'harici-kiralama' else '' }}" id="harici-kiralama-tab-pane" role="tabpanel" aria-labelledby="harici-kiralama-tab" tabindex="0">
             <div class="card border-0 shadow-sm mb-4">
-                <div class="card-header bg-white fw-semibold">Dis Tedarik Islemleri</div>
+                <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <span>Dis Tedarik Islemleri</span>
+                    <button
+                        type="button"
+                        class="btn btn-outline-primary btn-sm"
+                        id="externalRentalListToggleBtn"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#externalRentalListCollapse"
+                        aria-expanded="false"
+                        aria-controls="externalRentalListCollapse"
+                        {% if not dashboard.summary.external_rental_count %}disabled title="Secili donemde harici kiralama yok"{% endif %}
+                    >
+                        Harici Kiralamalari Listele
+                    </button>
+                </div>
                 <div class="card-body table-responsive">
                     <table class="table table-sm align-middle mb-0">
                         <thead>
@@ -327,6 +347,67 @@
                             </tr>
                         </tbody>
                     </table>
+                </div>
+                <div class="collapse border-top" id="externalRentalListCollapse">
+                    <div class="card-body pt-3 pb-0">
+                        <p class="text-muted small mb-2">Tutarlar secili tarih araligindaki gun sayisina gore hesaplanmistir.</p>
+                        {% if dashboard.external_rental_rows %}
+                        <div class="table-responsive" style="max-height: 520px;">
+                            <table class="table table-sm table-striped align-middle mb-0 external-rental-list-table">
+                                <thead class="table-light" style="position: sticky; top: 0; z-index: 1;">
+                                    <tr>
+                                        <th style="min-width: 90px;">Form No</th>
+                                        <th style="min-width: 140px;">Musteri</th>
+                                        <th style="min-width: 140px;">Tedarikci</th>
+                                        <th style="min-width: 120px;">Ekipman</th>
+                                        <th style="min-width: 175px;">Donem</th>
+                                        <th class="text-end" style="min-width: 48px;">Gun</th>
+                                        <th class="text-end external-rental-money-col">Gelir</th>
+                                        <th class="text-end external-rental-money-col">Odeme</th>
+                                        <th class="text-end external-rental-money-col">Fark</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for row in dashboard.external_rental_rows %}
+                                    <tr>
+                                        <td>
+                                            {% set form_label = row.kiralama_form_no or row.form_no or '-' %}
+                                            {% if row.kiralama_id and form_label != '-' %}
+                                            <a href="{{ url_for('kiralama.duzenle', kiralama_id=row.kiralama_id) }}" class="text-decoration-none fw-semibold" title="{{ form_label }}">{{ form_label }}</a>
+                                            {% else %}
+                                            {{ form_label }}
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <span title="{{ row.musteri }}">{{ row.musteri | truncate_name(4) }}{% if row.musteri and row.musteri != '-' and row.musteri.split()|length > 4 %}...{% endif %}</span>
+                                        </td>
+                                        <td>
+                                            <span title="{{ row.tedarikci }}">{{ row.tedarikci | truncate_name(4) }}{% if row.tedarikci and row.tedarikci != '-' and row.tedarikci.split()|length > 4 %}...{% endif %}</span>
+                                        </td>
+                                        <td>{{ row.ekipman }}</td>
+                                        <td class="text-nowrap">{{ row.baslangic.strftime('%d.%m.%Y') }} – {{ row.bitis.strftime('%d.%m.%Y') }}</td>
+                                        <td class="text-end">{{ row.gun }}</td>
+                                        <td class="text-end text-success text-nowrap external-rental-money-col">{{ '{:,.0f}'.format(row.toplam_gelir) }} TL</td>
+                                        <td class="text-end text-danger text-nowrap external-rental-money-col">{{ '{:,.0f}'.format(row.toplam_odeme) }} TL</td>
+                                        <td class="text-end text-nowrap fw-semibold external-rental-money-col {% if row.kar >= 0 %}text-primary{% else %}text-warning{% endif %}">{{ '{:,.0f}'.format(row.kar) }} TL</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                                <tfoot class="table-light">
+                                    <tr class="fw-semibold">
+                                        <td colspan="5" class="text-end">Toplam ({{ dashboard.summary.external_rental_count }} islem)</td>
+                                        <td class="text-end">{{ dashboard.external_rental_rows | sum(attribute='gun') }}</td>
+                                        <td class="text-end text-success text-nowrap external-rental-money-col">{{ '{:,.0f}'.format(dashboard.summary.external_rental_revenue) }} TL</td>
+                                        <td class="text-end text-danger text-nowrap external-rental-money-col">{{ '{:,.0f}'.format(dashboard.summary.external_rental_cost) }} TL</td>
+                                        <td class="text-end text-nowrap external-rental-money-col {% if dashboard.summary.external_rental_profit >= 0 %}text-primary{% else %}text-warning{% endif %}">{{ '{:,.0f}'.format(dashboard.summary.external_rental_profit) }} TL</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                        {% else %}
+                        <p class="text-muted mb-0">Secili donemde harici kiralama kaydi bulunamadi.</p>
+                        {% endif %}
+                    </div>
                 </div>
             </div>
 
@@ -856,6 +937,24 @@
                 submitParentForm();
             });
         }
+    })();
+
+    (function () {
+        const toggleBtn = document.getElementById('externalRentalListToggleBtn');
+        const collapseEl = document.getElementById('externalRentalListCollapse');
+        if (!toggleBtn || !collapseEl) {
+            return;
+        }
+
+        const labelShow = 'Harici Kiralamalari Listele';
+        const labelHide = 'Listeyi Gizle';
+
+        collapseEl.addEventListener('shown.bs.collapse', function () {
+            toggleBtn.textContent = labelHide;
+        });
+        collapseEl.addEventListener('hidden.bs.collapse', function () {
+            toggleBtn.textContent = labelShow;
+        });
     })();
 
     (function () {

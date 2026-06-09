@@ -594,10 +594,17 @@ def index():
 @login_required
 def detay_modal(kiralama_id):
     """AJAX: Kiralama detay bilgilerini modal içeriği olarak döner."""
-    kiralama = Kiralama.query.options(
-        joinedload(Kiralama.firma_musteri),
-        joinedload(Kiralama.kalemler).joinedload(KiralamaKalemi.ekipman),
-    ).filter(not_(Kiralama.is_deleted.is_(True))).get_or_404(kiralama_id)
+    kiralama = (
+        Kiralama.query.options(
+            joinedload(Kiralama.firma_musteri),
+            joinedload(Kiralama.kalemler).joinedload(KiralamaKalemi.ekipman),
+        )
+        .filter(
+            Kiralama.id == kiralama_id,
+            not_(Kiralama.is_deleted.is_(True)),
+        )
+        .first_or_404()
+    )
     return render_template(
         'kiralama/detay_modal_content.html',
         kiralama=kiralama,

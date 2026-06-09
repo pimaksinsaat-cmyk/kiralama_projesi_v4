@@ -598,7 +598,7 @@
                             <input class="form-check-input" type="checkbox" id="donusFiyatDegistirCheck">
                             <label class="form-check-label small text-secondary" for="donusFiyatDegistirCheck">Dönüş nakliyesinde farklı fiyat uygula</label>
                         </div>
-                        <div class="small text-warning fw-bold mt-1 d-none" id="donus-fark-uyari"><i class="fas fa-exclamation-triangle me-1"></i>Planlanan bedelden fark oluşursa müşteri carisine nakliye farkı işlenecektir.</div>
+                        <div class="small text-warning fw-bold mt-1 d-none" id="donus-fark-uyari"><i class="fas fa-exclamation-triangle me-1"></i>Girilen tutar müşteri carisine dönüş nakliye bedeli olarak işlenecektir.</div>
                     </div>
                 </div>
             </div>
@@ -1068,7 +1068,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const farkUyari = document.getElementById('donus-fark-uyari');
         if (state.donusFaturaEt) {
             degistirLabel.textContent = 'Dönüş nakliyesinde farklı fiyat uygula';
-            farkUyari.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i>Planlanan bedelden fark oluşursa müşteri carisine nakliye farkı işlenecektir.';
+            farkUyari.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i>Girilen tutar müşteri carisine dönüş nakliye bedeli olarak işlenecektir.';
         } else {
             degistirLabel.textContent = 'Dönüş nakliyesi ekle';
             farkUyari.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i>Müşteri carisine dönüş nakliye bedeli olarak işlenecektir.';

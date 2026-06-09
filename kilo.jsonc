@@ -1,5 +1,5 @@
 {
-  "$schema": "https://kilo.ai/config.json",
+  "$schema": "https://api.xiaomimimo.com/v1",
   "disabled_providers": [],
   "provider": {
     "mimo": {
@@ -17,7 +17,7 @@
       },
       "options": {
         "apiKey": "sk-sjuovlykk2ryx2nlgy4gux0glsexekl81f1cf075vglrakkz",
-        "baseURL": "BASE_URL"
+        "baseURL": "https://token-plan-sgp.xiaomimimo.com/v1"
       }
     }
   },

@@ -2,15 +2,16 @@ from collections import defaultdict
 from datetime import date, timedelta
 
 from sqlalchemy import func, inspect, or_
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import contains_eager, joinedload
 
 from app.extensions import db
 from app.utils import bugun as _bugun
 from app.araclar.models import Arac, AracBakim
 from app.filo.models import Ekipman, BakimKaydi, StokHareket
-from app.kiralama.models import KiralamaKalemi
+from app.kiralama.models import Kiralama, KiralamaKalemi
 from app.nakliyeler.models import Nakliye
 from app.personel.models import PersonelMaasDonemi
+from app.services.sube_gider_services import SubeSabitGiderDonemiService
 from app.subeler.models import Sube, SubeGideri
 from app.subeler.models import SubeSabitGiderDonemi
 
@@ -202,6 +203,76 @@ class RaporlamaService:
         )
 
     @classmethod
+    def _allocate_personel_period_to_month(cls, donem, report_start, report_end, month_start, month_end, today):
+        effective_end = min(donem.bitis_tarihi or today, today)
+        report_month_start = max(report_start, month_start)
+        report_month_end = min(report_end, month_end)
+        overlap = cls._overlap_range(
+            donem.baslangic_tarihi,
+            effective_end,
+            report_month_start,
+            report_month_end,
+        )
+        if not overlap:
+            return 0.0
+
+        return cls._allocate_monthly_amount(
+            cls._personel_period_total_amount(donem),
+            overlap[0],
+            overlap[1],
+            month_start,
+            month_end,
+        )
+
+    @staticmethod
+    def _build_sabit_gider_effective_ranges(donemler, today):
+        grouped = defaultdict(list)
+        effective_ranges = {}
+
+        for donem in donemler:
+            grouped[(donem.sube_id, donem.kategori)].append(donem)
+
+        for kategori_donemleri in grouped.values():
+            sirali_donemler = sorted(
+                kategori_donemleri,
+                key=lambda row: (row.baslangic_tarihi or date.min, row.id or 0),
+            )
+            for index, donem in enumerate(sirali_donemler):
+                effective_start = donem.baslangic_tarihi
+                effective_end = donem.bitis_tarihi
+                sonraki_donem = sirali_donemler[index + 1] if index + 1 < len(sirali_donemler) else None
+
+                if sonraki_donem and sonraki_donem.baslangic_tarihi:
+                    next_boundary = sonraki_donem.baslangic_tarihi - timedelta(days=1)
+                    if effective_end is None or effective_end > next_boundary:
+                        effective_end = next_boundary
+
+                if effective_end is None:
+                    effective_end = date.max
+
+                effective_ranges[donem.id] = (effective_start, effective_end)
+
+        return effective_ranges
+
+    @classmethod
+    def _allocate_sabit_gider_period_to_range(cls, donem, effective_start, effective_end, report_start, report_end):
+        if not effective_start or not effective_end or effective_end < effective_start:
+            return 0.0
+
+        overlap_start = max(effective_start, report_start)
+        overlap_end = min(effective_end, report_end, _bugun())
+        if overlap_end < overlap_start:
+            return 0.0
+
+        return SubeSabitGiderDonemiService._calculate_periodized_overlap(
+            donem,
+            effective_start,
+            effective_end,
+            overlap_start,
+            overlap_end,
+        )
+
+    @classmethod
     def _calculate_personel_cost(cls, start_date, end_date, sube_id=None):
         if not cls._personel_maas_donemleri_table_exists():
             return 0.0
@@ -216,18 +287,15 @@ class RaporlamaService:
 
         today = _bugun()
         for donem in query.all():
-            effective_end = min(donem.bitis_tarihi or today, today)
             for month_start in cls._iterate_month_starts(start_date, end_date):
                 month_end = cls._month_end(month_start)
-                overlap = cls._overlap_range(donem.baslangic_tarihi, effective_end, month_start, month_end)
-                if not overlap:
-                    continue
-                total_cost += cls._allocate_monthly_amount(
-                    cls._personel_period_total_amount(donem),
-                    overlap[0],
-                    overlap[1],
+                total_cost += cls._allocate_personel_period_to_month(
+                    donem,
+                    start_date,
+                    end_date,
                     month_start,
                     month_end,
+                    today,
                 )
 
         return total_cost
@@ -247,15 +315,19 @@ class RaporlamaService:
         # Her (sube_id, kategori) için en eski kayıt: baslangic_tarihi ileride olsa bile
         # rapor döneminden itibaren aktif say (ilk kayıt her zaman geçerli).
         donemler = query.all()
-        en_eski = {}
-        for d in donemler:
-            k = (d.sube_id, d.kategori)
-            if k not in en_eski or d.baslangic_tarihi < en_eski[k]:
-                en_eski[k] = d.baslangic_tarihi
 
         today = _bugun()
+        effective_ranges = cls._build_sabit_gider_effective_ranges(donemler, today)
         for donem in donemler:
-            k = (donem.sube_id, donem.kategori)
+            effective_start, effective_end = effective_ranges.get(donem.id, (None, None))
+            total_cost += cls._allocate_sabit_gider_period_to_range(
+                donem,
+                effective_start,
+                effective_end,
+                start_date,
+                end_date,
+            )
+            continue
             # İlk kayıt ilerideyse rapor döneminden itibaren aktif say
             if en_eski[k] == donem.baslangic_tarihi:
                 effective_start = min(donem.baslangic_tarihi, start_date)
@@ -483,22 +555,15 @@ class RaporlamaService:
                 query = query.filter(PersonelMaasDonemi.sube_id == sube_id)
 
             for donem in query.all():
-                effective_end = min(donem.bitis_tarihi or _bugun(), _bugun())
+                today = _bugun()
                 for month_row in month_rows:
-                    month_overlap = cls._overlap_range(
-                        donem.baslangic_tarihi,
-                        effective_end,
+                    month_row["personel_gideri"] += cls._allocate_personel_period_to_month(
+                        donem,
+                        start_date,
+                        end_date,
                         month_row["month_start"],
                         month_row["month_end"],
-                    )
-                    if not month_overlap:
-                        continue
-                    month_row["personel_gideri"] += cls._allocate_monthly_amount(
-                        cls._personel_period_total_amount(donem),
-                        month_overlap[0],
-                        month_overlap[1],
-                        month_row["month_start"],
-                        month_row["month_end"],
+                        today,
                     )
 
         if cls._sube_sabit_gider_donemleri_table_exists():
@@ -509,6 +574,8 @@ class RaporlamaService:
                 query = query.filter(SubeSabitGiderDonemi.sube_id == sube_id)
 
             sabit_donemler = query.all()
+            today = _bugun()
+            effective_ranges = cls._build_sabit_gider_effective_ranges(sabit_donemler, today)
             # Her (sube_id, kategori) için en eski kayıt tespit et
             en_eski_sabit = {}
             for d in sabit_donemler:
@@ -517,6 +584,18 @@ class RaporlamaService:
                     en_eski_sabit[k] = d.baslangic_tarihi
 
             for donem in sabit_donemler:
+                effective_start, effective_end = effective_ranges.get(donem.id, (None, None))
+                for month_row in month_rows:
+                    report_month_start = max(start_date, month_row["month_start"])
+                    report_month_end = min(end_date, month_row["month_end"])
+                    month_row["sabit_gideri"] += cls._allocate_sabit_gider_period_to_range(
+                        donem,
+                        effective_start,
+                        effective_end,
+                        report_month_start,
+                        report_month_end,
+                    )
+                continue
                 k = (donem.sube_id, donem.kategori)
                 # İlk kayıt ilerideyse rapor döneminden itibaren aktif say
                 if en_eski_sabit[k] == donem.baslangic_tarihi:
@@ -970,6 +1049,11 @@ class RaporlamaService:
         # Harici kiralama kalemlerinde dogrudan sube baglantisi olmadigi icin sube filtresi uygulanamiyor.
         kalemler = (
             KiralamaKalemi.query
+            .join(Kiralama, KiralamaKalemi.kiralama_id == Kiralama.id)
+            .options(
+                contains_eager(KiralamaKalemi.kiralama).joinedload(Kiralama.firma_musteri),
+                joinedload(KiralamaKalemi.harici_tedarikci),
+            )
             .filter(
                 KiralamaKalemi.is_active.is_(True),
                 KiralamaKalemi.is_dis_tedarik_ekipman.is_(True),
@@ -1020,9 +1104,17 @@ class RaporlamaService:
                 ] if part
             ).strip() or "Harici Ekipman"
 
+            kiralama_form_no = "-"
+            kir = kalem.kiralama
+            if kir and kir.kiralama_form_no:
+                kiralama_form_no = str(kir.kiralama_form_no).strip() or "-"
+
             rows.append(
                 {
                     "kalem_id": kalem.id,
+                    "kiralama_id": kalem.kiralama_id,
+                    "form_no": kiralama_form_no,
+                    "kiralama_form_no": kiralama_form_no,
                     "musteri": musteri,
                     "tedarikci": tedarikci,
                     "ekipman": ekipman_etiket,
