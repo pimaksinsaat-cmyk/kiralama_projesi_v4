@@ -17,7 +17,7 @@ DB_USER="cuneytdemir"
 DB_PASS="Ayseela@2014"
 DB_NAME="kiralama_db"
 DB_HOST="localhost"
-SERVICE="kiralama_test"
+SERVICE="kiralama_v4"
 DB_PASS_URL="Ayseela%402014"
 DATABASE_URL_VALUE="postgresql://$DB_USER:$DB_PASS_URL@$DB_HOST:5432/$DB_NAME"
 
