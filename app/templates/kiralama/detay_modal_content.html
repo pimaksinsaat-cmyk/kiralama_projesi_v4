@@ -64,7 +64,8 @@
 {% set genel_toplam = namespace(val=0) %}
 
 {% for kalem in k.kalemler %}
-{% set gun = (kalem.kiralama_bitis - kalem.kiralama_baslangici).days + 1 if kalem.kiralama_baslangici and kalem.kiralama_bitis else 0 %}
+{% set gun = hesapla_kalem_etkin_gun(kalem, tam_sozlesme=True) %}
+{% set muaf_gun = toplam_muaf_gun_sayisi(kalem) %}
 {% set kira_tutari = (kalem.kiralama_brm_fiyat or 0) * gun %}
 {% set nakliye_tutari = kalem.nakliye_satis_fiyat or 0 %}
 {% set kalem_toplam = kira_tutari + nakliye_tutari %}
@@ -118,8 +119,8 @@
                 <div class="detay-value">{{ kalem.kiralama_bitis.strftime('%d.%m.%Y') if kalem.kiralama_bitis else '-' }}</div>
             </div>
             <div class="col-md-1">
-                <div class="detay-label">Gün</div>
-                <div class="detay-value">{{ gun }}</div>
+                <div class="detay-label">Etkin Gün</div>
+                <div class="detay-value">{{ gun }}{% if muaf_gun %} <small class="text-warning">({{ muaf_gun }} muaf)</small>{% endif %}</div>
             </div>
             <div class="col-md-2">
                 <div class="finansal-box">
@@ -176,6 +177,21 @@
                 </div>
             </div>
             {% endif %}
+        </div>
+        {% endif %}
+
+        {% if kalem.dondurmalar %}
+        <div class="mt-2 small">
+            <div class="detay-label mb-1"><i class="fas fa-snowflake me-1 text-info"></i>Dondurma Dönemleri</div>
+            <ul class="mb-0 ps-3">
+                {% for d in kalem.dondurmalar %}
+                <li>
+                    {{ d.baslangic_tarihi.strftime('%d.%m.%Y') }} – {{ d.bitis_tarihi.strftime('%d.%m.%Y') }}
+                    ({{ d.muaf_gun_sayisi }} gün muaf{% if d.tedarikci_alis_dondur %}, alış dahil{% endif %})
+                    {% if d.aciklama %}<span class="text-muted">— {{ d.aciklama }}</span>{% endif %}
+                </li>
+                {% endfor %}
+            </ul>
         </div>
         {% endif %}
 

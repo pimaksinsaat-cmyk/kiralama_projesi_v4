@@ -183,6 +183,15 @@ class MakineDegisimService(BaseService):
             db.session.add(yeni_kalem)
             db.session.flush() # ID almak için flush
 
+            from app.kiralama.models import KiralamaKalemDondurma
+            aktif_dondurmalar = KiralamaKalemDondurma.query.filter_by(
+                kalem_id=aktif_kalem.id,
+                is_deleted=False,
+            ).all()
+            for dondurma in aktif_dondurmalar:
+                dondurma.kalem_id = yeni_kalem.id
+                db.session.add(dondurma)
+
             # =========================================================
             # 5. CARİ VE NAKLİYE ENTEGRASYONU 
             # =========================================================
@@ -313,6 +322,11 @@ class MakineDegisimService(BaseService):
 
             # Toplamları Güncelle
             guncelle_cari_toplam(ana_kiralama_id)
+            if yeni_kalem.is_dis_tedarik_ekipman and yeni_kalem.harici_ekipman_tedarikci_id:
+                from app.services.kiralama_services import KiralamaService
+                KiralamaService.guncelle_tedarikci_cari_toplam(
+                    yeni_kalem.harici_ekipman_tedarikci_id,
+                )
 
         except Exception as e:
             db.session.rollback()

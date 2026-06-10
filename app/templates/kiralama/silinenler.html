@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+
+{% block title %}Silinen Kiralama Kayitlari{% endblock %}
+
+{% block content %}
+<style>
+    .archive-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 18px;
+    }
+    .archive-title {
+        margin: 0;
+        font-size: 1.35rem;
+        font-weight: 800;
+        color: #343a40;
+    }
+    .archive-subtitle {
+        margin: 4px 0 0;
+        color: #6c757d;
+        font-size: 0.85rem;
+    }
+    .archive-toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 14px;
+        flex-wrap: wrap;
+    }
+    .archive-search {
+        display: flex;
+        gap: 8px;
+        min-width: min(520px, 100%);
+    }
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 12px;
+        font-size: 0.85rem;
+    }
+    th,
+    td {
+        padding: 10px;
+        border: 1px solid #dee2e6;
+        text-align: left;
+        vertical-align: middle;
+    }
+    th {
+        background-color: #f8f9fa;
+        font-weight: 700;
+        color: #495057;
+        text-transform: uppercase;
+        font-size: 0.75rem;
+    }
+    .machine-list {
+        margin: 0;
+        padding-left: 18px;
+    }
+    .machine-list li + li {
+        margin-top: 3px;
+    }
+    .pagination {
+        display: flex;
+        gap: 4px;
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+    .pagination .page-link {
+        display: inline-block;
+        padding: 6px 12px;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        color: #667eea;
+        text-decoration: none;
+        font-size: 0.875rem;
+    }
+    .pagination .active .page-link {
+        background: #667eea;
+        border-color: #667eea;
+        color: #fff;
+    }
+    .pagination .disabled .page-link {
+        color: #adb5bd;
+        pointer-events: none;
+    }
+</style>
+
+<div class="container">
+    <div class="archive-header">
+        <div>
+            <h1 class="archive-title">Silinen Kiralama Kayitlari</h1>
+            <p class="archive-subtitle">Arsivdeki kiralama kayitlarini inceleyip geri yukleyebilirsiniz.</p>
+        </div>
+        <a href="{{ url_for('kiralama.index') }}" class="btn btn-outline-secondary btn-sm fw-bold">
+            <i class="fas fa-arrow-left me-2"></i>Kiralama Listesi
+        </a>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ 'danger' if category == 'danger' else 'success' }} py-2 mb-3 small shadow-sm fw-bold" role="alert">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="archive-toolbar">
+        <form method="GET" action="{{ url_for('kiralama.silinenler') }}" class="archive-search">
+            <input type="text" name="q" class="form-control form-control-sm shadow-sm border-secondary" placeholder="Form no, musteri veya makine kodu ara..." value="{{ q or '' }}">
+            <input type="hidden" name="per_page" value="{{ per_page }}">
+            <button type="submit" class="btn btn-dark btn-sm px-4 shadow-sm">ARA</button>
+        </form>
+        <form method="GET" action="{{ url_for('kiralama.silinenler') }}" class="d-flex align-items-center gap-2 mb-0">
+            <input type="hidden" name="q" value="{{ q or '' }}">
+            <label for="per_page" class="small text-muted mb-0">Sayfa</label>
+            <select id="per_page" name="per_page" class="form-select form-select-sm" onchange="this.form.submit()">
+                {% for option in [10, 25, 50, 100] %}
+                    <option value="{{ option }}" {% if per_page == option %}selected{% endif %}>{{ option }}</option>
+                {% endfor %}
+            </select>
+        </form>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table-hover shadow-sm rounded overflow-hidden">
+            <thead>
+                <tr>
+                    <th width="55">Sira</th>
+                    <th width="140">Form No</th>
+                    <th>Musteri</th>
+                    <th>Makine / Ekipman</th>
+                    <th width="150">Silinme Tarihi</th>
+                    <th width="130" class="text-end">Islem</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for kiralama in kiralamalar %}
+                    <tr>
+                        <td class="text-center fw-bold">{{ ((pagination.page - 1) * per_page + loop.index) if pagination else loop.index }}</td>
+                        <td class="fw-bold text-dark">{{ kiralama.kiralama_form_no }}</td>
+                        <td>
+                            {% if kiralama.firma_musteri %}
+                                <span class="fw-bold text-primary">{{ kiralama.firma_musteri.firma_adi | truncate_name }}</span>
+                            {% else %}
+                                <span class="text-danger small">Musteri tanimsiz</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% set kalemler = kiralama.kalemler | list %}
+                            {% if kalemler %}
+                                <ul class="machine-list">
+                                    {% for kalem in kalemler[:4] %}
+                                        <li>
+                                            {% if kalem.is_dis_tedarik_ekipman %}
+                                                {% set harici_ad = ((kalem.harici_ekipman_marka or '') ~ ' ' ~ (kalem.harici_ekipman_model or '')) | trim %}
+                                                {{ harici_ad or 'Harici ekipman' }}
+                                            {% elif kalem.ekipman %}
+                                                {{ kalem.ekipman.kod }}
+                                            {% else %}
+                                                Ekipman tanimsiz
+                                            {% endif %}
+                                        </li>
+                                    {% endfor %}
+                                    {% if kalemler|length > 4 %}
+                                        <li class="text-muted">+{{ kalemler|length - 4 }} kalem daha</li>
+                                    {% endif %}
+                                </ul>
+                            {% else %}
+                                <span class="text-muted small">Kalem yok</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ kiralama.deleted_at.strftime('%d.%m.%Y %H:%M') if kiralama.deleted_at else '-' }}</td>
+                        <td class="text-end">
+                            <form method="POST" action="{{ url_for('kiralama.geri_yukle_kalici', kiralama_id=kiralama.id) }}" class="d-inline" onsubmit="return confirm('Bu kiralama kaydi geri yuklensin mi?');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-success btn-sm fw-bold">
+                                    <i class="fas fa-undo me-1"></i>Geri Yukle
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-4">Silinen kiralama kaydi bulunamadi.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if pagination and pagination.pages > 1 %}
+        <div class="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
+            <div class="small text-muted">
+                Toplam {{ pagination.total }} kayit, sayfa {{ pagination.page }} / {{ pagination.pages }}
+            </div>
+            <ul class="pagination">
+                <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+                    <a class="page-link" href="{{ url_for('kiralama.silinenler', page=pagination.prev_num, per_page=per_page, q=q) if pagination.has_prev else '#' }}">Onceki</a>
+                </li>
+                {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                    {% if page_num %}
+                        <li class="page-item {% if page_num == pagination.page %}active{% endif %}">
+                            <a class="page-link" href="{{ url_for('kiralama.silinenler', page=page_num, per_page=per_page, q=q) }}">{{ page_num }}</a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">...</span></li>
+                    {% endif %}
+                {% endfor %}
+                <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+                    <a class="page-link" href="{{ url_for('kiralama.silinenler', page=pagination.next_num, per_page=per_page, q=q) if pagination.has_next else '#' }}">Sonraki</a>
+                </li>
+            </ul>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

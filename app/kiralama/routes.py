@@ -341,7 +341,8 @@ def index():
 
         query = Kiralama.query.options(
             joinedload(Kiralama.firma_musteri),
-            joinedload(Kiralama.kalemler).joinedload(KiralamaKalemi.ekipman)
+            joinedload(Kiralama.kalemler).joinedload(KiralamaKalemi.ekipman),
+            joinedload(Kiralama.kalemler).joinedload(KiralamaKalemi.dondurmalar),
         ).filter(not_(Kiralama.is_deleted.is_(True)))
 
         if q:
@@ -385,7 +386,7 @@ def index():
                 if not kalem.kiralama_baslangici or not kalem.kiralama_bitis:
                     continue
 
-                gun_fark = (kalem.kiralama_bitis - kalem.kiralama_baslangici).days + 1
+                gun_fark = KiralamaService.hesapla_kalem_etkin_gun(kalem, tam_sozlesme=True)
                 if gun_fark <= 0:
                     continue
 
@@ -590,6 +591,113 @@ def index():
             )
             raise
 
+
+@kiralama_bp.route('/silinenler')
+@login_required
+def silinenler():
+    """Silinen kiralama kayıtlarını arşiv listesi olarak gösterir."""
+    per_page = 25
+    q = ''
+    try:
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 25, type=int)
+        if per_page not in {10, 25, 50, 100}:
+            per_page = 25
+        q = (request.args.get('q', '', type=str) or '').strip()
+
+        query = Kiralama.query.options(
+            joinedload(Kiralama.firma_musteri),
+            joinedload(Kiralama.kalemler).joinedload(KiralamaKalemi.ekipman),
+        ).filter(Kiralama.is_deleted.is_(True))
+
+        if q:
+            search = f"%{q}%"
+            query = query.filter(or_(
+                Kiralama.kiralama_form_no.ilike(search),
+                Kiralama.firma_musteri.has(tr_ilike(Firma.firma_adi, search)),
+                Kiralama.kalemler.any(KiralamaKalemi.ekipman.has(Ekipman.kod.ilike(search))),
+                Kiralama.kalemler.any(tr_ilike(KiralamaKalemi.harici_ekipman_marka, search)),
+                Kiralama.kalemler.any(tr_ilike(KiralamaKalemi.harici_ekipman_model, search)),
+                Kiralama.kalemler.any(KiralamaKalemi.harici_ekipman_seri_no.ilike(search)),
+            ))
+
+        pagination = query.order_by(Kiralama.deleted_at.desc(), Kiralama.id.desc()).paginate(
+            page=page,
+            per_page=per_page,
+        )
+        return render_template(
+            'kiralama/silinenler.html',
+            kiralamalar=pagination.items,
+            pagination=pagination,
+            per_page=per_page,
+            q=q,
+        )
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Silinen kiralama listesi yükleme hatası: {str(e)}", exc_info=True)
+        flash("Silinen kayıtlar yüklenirken bir hata oluştu.", "danger")
+        return render_template(
+            'kiralama/silinenler.html',
+            kiralamalar=[],
+            pagination=None,
+            per_page=per_page,
+            q=q,
+        )
+
+
+@kiralama_bp.route('/geri-yukle-kalici/<int:kiralama_id>', methods=['POST'])
+@login_required
+def geri_yukle_kalici(kiralama_id):
+    """Arşivdeki silinmiş kiralamayı süre sınırı olmadan geri yükler."""
+    actor_id = getattr(current_user, 'id', None)
+    try:
+        kiralama = KiralamaService.restore_archived_with_relations(
+            kiralama_id,
+            actor_id=actor_id,
+        )
+        OperationLogService.log(
+            module='kiralama',
+            action='restore',
+            user_id=actor_id,
+            username=getattr(current_user, 'username', None),
+            entity_type='Kiralama',
+            entity_id=kiralama_id,
+            description=f"Kiralama arşivden geri yüklendi: ID={kiralama_id}",
+            success=True,
+        )
+        flash(f"{kiralama.kiralama_form_no} arşivden geri yüklendi.", "success")
+    except ValidationError as e:
+        OperationLogService.log(
+            module='kiralama',
+            action='restore',
+            user_id=actor_id,
+            username=getattr(current_user, 'username', None),
+            entity_type='Kiralama',
+            entity_id=kiralama_id,
+            description=f"Kiralama arşivden geri yükleme hatası: {str(e)}",
+            success=False,
+        )
+        flash(str(e), "danger")
+    except Exception as e:
+        current_app.logger.error(
+            f"Kiralama arşivden geri yükleme sistem hatası (ID: {kiralama_id}): {str(e)}",
+            exc_info=True,
+        )
+        OperationLogService.log(
+            module='kiralama',
+            action='restore',
+            user_id=actor_id,
+            username=getattr(current_user, 'username', None),
+            entity_type='Kiralama',
+            entity_id=kiralama_id,
+            description=f"Kiralama arşivden geri yükleme sistem hatası: {str(e)}",
+            success=False,
+        )
+        flash("Kiralama arşivden geri yüklenemedi.", "danger")
+
+    return redirect(url_for('kiralama.silinenler'))
+
+
 @kiralama_bp.route('/detay/<int:kiralama_id>')
 @login_required
 def detay_modal(kiralama_id):
@@ -598,6 +706,7 @@ def detay_modal(kiralama_id):
         Kiralama.query.options(
             joinedload(Kiralama.firma_musteri),
             joinedload(Kiralama.kalemler).joinedload(KiralamaKalemi.ekipman),
+            joinedload(Kiralama.kalemler).joinedload(KiralamaKalemi.dondurmalar),
         )
         .filter(
             Kiralama.id == kiralama_id,
@@ -1279,6 +1388,8 @@ def tarih_guncelle_kalem():
             flash("Bitiş tarihi başlangıç tarihinden sonra olmalıdır.", "warning")
             return _redirect_to_kiralama_return()
 
+        KiralamaKalemiService.validate_tarih_guncelle_koruma(kalem, yeni_bitis_date)
+
         # Eski tarihi kaydet
         eski_bitis = kalem.kiralama_bitis
 
@@ -1305,6 +1416,9 @@ def tarih_guncelle_kalem():
 
         flash(f"Bitiş tarihi başarıyla güncellendi: {yeni_bitis_date.strftime('%d.%m.%Y')}", "success")
 
+    except ValidationError as e:
+        db.session.rollback()
+        flash(str(e), "warning")
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Kalem Tarih Güncelleme Hatası: {str(e)}", exc_info=True)
@@ -1321,6 +1435,116 @@ def tarih_guncelle_kalem():
         flash(f"İşlem sırasında bir hata oluştu: {str(e)}", "danger")
 
     return _redirect_to_kiralama_return()
+
+
+@kiralama_bp.route('/kalem/dondur_ekle', methods=['POST'])
+@login_required
+def dondur_ekle_kalem():
+    try:
+        kalem_id = request.form.get('kalem_id', type=int)
+        bas_str = request.form.get('baslangic_tarihi')
+        bit_str = request.form.get('bitis_tarihi')
+        aciklama = request.form.get('aciklama', '')
+        tedarikci_alis = request.form.get('tedarikci_alis_dondur') in ('1', 'on', 'true', 'True')
+
+        if not kalem_id or not bas_str or not bit_str:
+            flash("Kalem ve tarih aralığı zorunludur.", "warning")
+            return _redirect_to_kiralama_return()
+
+        actor_id = getattr(current_user, 'id', None)
+        kayit = KiralamaKalemiService.dondur_ekle(
+            kalem_id,
+            bas_str,
+            bit_str,
+            aciklama=aciklama,
+            tedarikci_alis_dondur=tedarikci_alis,
+            actor_id=actor_id,
+        )
+        OperationLogService.log(
+            module='kiralama',
+            action='dondur_ekle',
+            user_id=actor_id,
+            username=getattr(current_user, 'username', None),
+            entity_type='KiralamaKalemDondurma',
+            entity_id=kayit.id,
+            description=(
+                f"Dondurma eklendi: kalem={kalem_id}, "
+                f"{kayit.baslangic_tarihi}..{kayit.bitis_tarihi}, muaf={kayit.muaf_gun_sayisi}"
+            ),
+            success=True,
+        )
+        flash("Kiralama dondurma kaydı eklendi.", "success")
+    except ValidationError as e:
+        flash(str(e), "warning")
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Dondurma ekleme hatası: {e}", exc_info=True)
+        OperationLogService.log(
+            module='kiralama',
+            action='dondur_ekle',
+            user_id=getattr(current_user, 'id', None),
+            username=getattr(current_user, 'username', None),
+            entity_type='KiralamaKalemi',
+            entity_id=request.form.get('kalem_id', type=int),
+            description=f"Dondurma ekleme hatası: {e}",
+            success=False,
+        )
+        flash("Dondurma kaydı eklenemedi.", "danger")
+    return _redirect_to_kiralama_return()
+
+
+@kiralama_bp.route('/kalem/dondur_iptal', methods=['POST'])
+@login_required
+def dondur_iptal_kalem():
+    try:
+        dondurma_id = request.form.get('dondurma_id', type=int)
+        if not dondurma_id:
+            flash("Dondurma kaydı seçilmedi.", "warning")
+            return _redirect_to_kiralama_return()
+
+        actor_id = getattr(current_user, 'id', None)
+        kayit = KiralamaKalemiService.dondur_iptal(dondurma_id, actor_id=actor_id)
+        OperationLogService.log(
+            module='kiralama',
+            action='dondur_iptal',
+            user_id=actor_id,
+            username=getattr(current_user, 'username', None),
+            entity_type='KiralamaKalemDondurma',
+            entity_id=dondurma_id,
+            description=f"Dondurma iptal: kalem={kayit.kalem_id}, muaf={kayit.muaf_gun_sayisi}",
+            success=True,
+        )
+        flash("Dondurma kaydı iptal edildi.", "success")
+    except ValidationError as e:
+        flash(str(e), "warning")
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Dondurma iptal hatası: {e}", exc_info=True)
+        flash("Dondurma iptali başarısız.", "danger")
+    return _redirect_to_kiralama_return()
+
+
+@kiralama_bp.route('/kalem/dondurmalar')
+@login_required
+def listele_dondurmalar_kalem():
+    kalem_id = request.args.get('kalem_id', type=int)
+    if not kalem_id:
+        return jsonify({'error': 'kalem_id gerekli'}), 400
+    kayitlar = KiralamaKalemiService.listele_dondurmalar(kalem_id)
+    return jsonify({
+        'kayitlar': [
+            {
+                'id': k.id,
+                'baslangic': k.baslangic_tarihi.isoformat(),
+                'bitis': k.bitis_tarihi.isoformat(),
+                'muaf_gun': k.muaf_gun_sayisi,
+                'aciklama': k.aciklama or '',
+                'tedarikci_alis_dondur': k.tedarikci_alis_dondur,
+            }
+            for k in kayitlar
+        ]
+    })
+
 
 @kiralama_bp.route('/kalem/iptal_et', methods=['POST'])
 @login_required

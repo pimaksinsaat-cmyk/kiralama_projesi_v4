@@ -103,7 +103,10 @@ class FaturaService(BaseService):
                 if akt_bas > akt_bit:
                     continue  # Bu kalem bu dönemde sahada değil
 
-                gun_sayisi = (akt_bit - akt_bas).days + 1
+                from app.services.kiralama_services import KiralamaService
+                gun_sayisi = KiralamaService._hesapla_etkin_gun_sayisi(
+                    akt_bas, akt_bit, getattr(kalem, 'dondurmalar', None) or [],
+                )
                 ekipman_sayisi += 1
 
                 # DÜZELTME: birim_fiyat → kiralama_brm_fiyat

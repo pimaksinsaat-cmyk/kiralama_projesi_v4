@@ -289,7 +289,10 @@ class EkipmanRaporuService:
             # Filtre ile kiralama aralığının kesişimini gün bazında (inclusive) hesapla
             etkin_bas = max(kalem_bas, start_date) if start_date else kalem_bas
             etkin_bit = min(kalem_bit, end_date) if end_date else kalem_bit
-            gun_sayisi = max(0, (etkin_bit - etkin_bas).days + 1)
+            from app.services.kiralama_services import KiralamaService
+            gun_sayisi = KiralamaService._hesapla_etkin_gun_sayisi(
+                etkin_bas, etkin_bit, getattr(kalem, 'dondurmalar', None) or [],
+            )
 
             kiralama_fiyat = Decimal(kalem.kiralama_brm_fiyat or 0)
             toplam_kalem_geliri = kiralama_fiyat * gun_sayisi

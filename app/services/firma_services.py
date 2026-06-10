@@ -15,6 +15,18 @@ from app.services.nakliye_services import _net_kdv_orani
 from app.extensions import db
 from app.ayarlar.models import AppSettings
 from app.utils import klasor_adi_temizle, normalize_turkish_upper, tr_ilike
+from app.services.kiralama_services import KiralamaService
+
+
+def _kalem_cari_gun_sayisi(kalem, today_date, *, alis_tarafi=False):
+    if kalem.sonlandirildi and kalem.kiralama_bitis:
+        return KiralamaService.hesapla_kalem_etkin_gun(
+            kalem, tam_sozlesme=True, alis_tarafi=alis_tarafi,
+        )
+    return KiralamaService.hesapla_kalem_etkin_gun(
+        kalem, referans_tarih=today_date, alis_tarafi=alis_tarafi,
+    )
+
 
 class FirmaService(BaseService):
     """
@@ -269,7 +281,12 @@ class FirmaService(BaseService):
     def get_financial_summary(cls, firma_id):
         """Firmanın tüm cari hareketlerini (Fatura, Ödeme, Kiralama) hesaplar."""
         firma = cls._get_base_query().options(
-            subqueryload(Firma.kiralamalar).options(subqueryload(Kiralama.kalemler).options(joinedload(KiralamaKalemi.ekipman))),
+            subqueryload(Firma.kiralamalar).options(
+                subqueryload(Kiralama.kalemler).options(
+                    joinedload(KiralamaKalemi.ekipman),
+                    joinedload(KiralamaKalemi.dondurmalar),
+                ),
+            ),
             subqueryload(Firma.odemeler).joinedload(Odeme.kasa),
             subqueryload(Firma.hizmet_kayitlari),
         ).filter_by(id=firma_id).first()
@@ -328,7 +345,9 @@ class FirmaService(BaseService):
                 kiralama_kalemi_by_id[kalem.id] = kalem
         missing_kalem_ids = [kid for kid in hkd_ozel_ids if kid not in kiralama_kalemi_by_id]
         if missing_kalem_ids:
-            extra_kalemler = KiralamaKalemi.query.filter(KiralamaKalemi.id.in_(missing_kalem_ids)).all()
+            extra_kalemler = KiralamaKalemi.query.options(
+                joinedload(KiralamaKalemi.dondurmalar),
+            ).filter(KiralamaKalemi.id.in_(missing_kalem_ids)).all()
             for kalem in extra_kalemler:
                 kiralama_kalemi_by_id[kalem.id] = kalem
 
@@ -701,7 +720,7 @@ class FirmaService(BaseService):
                     else:
                         bitis = today_date
                         bitis_bugun = True
-                    gun_sayisi = (bitis - kalem.kiralama_baslangici).days + 1
+                    gun_sayisi = _kalem_cari_gun_sayisi(kalem, today_date)
                 else:
                     bitis = None
                     bitis_bugun = False
@@ -730,7 +749,10 @@ class FirmaService(BaseService):
                     'baslangic': kalem.kiralama_baslangici, 'bitis': bitis,
                     'bitis_bugun': bitis_bugun, 'gun_sayisi': gun_sayisi,
                     'brm_fiyat': brm, 'matrah': matrah, 'kdv_orani': kdv_pct,
-                    'kdv_tutar': kdv_tutar, 'toplam': toplam, 'bakiye': 0.0})
+                    'kdv_tutar': kdv_tutar, 'toplam': toplam, 'bakiye': 0.0,
+                    'dondurma_aktif': KiralamaService.kalem_dondurma_aktif_mi(
+                        kalem, referans_tarih=today_date, alis_tarafi=False,
+                    )})
 
             # Nakliye satırları
             fallback_kalem = next(iter(kir.kalemler or []), None)
@@ -780,7 +802,8 @@ class FirmaService(BaseService):
         # (HizmetKaydi gelen, ozel_id=kalem.id) bakılır. Fatura varsa faturadan
         # satır üretilir; yoksa (henüz faturalanmamışsa) dinamik hesap kullanılır.
         harici_kalemler = KiralamaKalemi.query.options(
-            joinedload(KiralamaKalemi.kiralama)
+            joinedload(KiralamaKalemi.kiralama),
+            joinedload(KiralamaKalemi.dondurmalar),
         ).filter_by(
             harici_ekipman_tedarikci_id=firma.id, is_active=True
         ).all()
@@ -827,7 +850,7 @@ class FirmaService(BaseService):
                         else:
                             bitis = today_date
                             bitis_bugun = True
-                        gun_sayisi = max((bitis - kalem.kiralama_baslangici).days + 1, 0)
+                        gun_sayisi = _kalem_cari_gun_sayisi(kalem, today_date, alis_tarafi=True)
                     else:
                         bitis = None
                         bitis_bugun = False
@@ -852,6 +875,9 @@ class FirmaService(BaseService):
                             'bitis_bugun': bitis_bugun, 'gun_sayisi': gun_sayisi,
                             'brm_fiyat': alis_fiyat, 'matrah': hkd_tutar, 'kdv_orani': hkd_kdv_pct,
                             'kdv_tutar': hkd_kdv, 'toplam': -(hkd_tutar + hkd_kdv), 'bakiye': 0.0,
+                            'dondurma_aktif': KiralamaService.kalem_dondurma_aktif_mi(
+                                kalem, referans_tarih=today_date, alis_tarafi=True,
+                            ),
                         })
                     else:
                         rows.append({
@@ -863,6 +889,9 @@ class FirmaService(BaseService):
                             'bitis_bugun': False, 'gun_sayisi': None,
                             'brm_fiyat': hkd_tutar, 'matrah': hkd_tutar, 'kdv_orani': hkd_kdv_pct,
                             'kdv_tutar': hkd_kdv, 'toplam': -(hkd_tutar + hkd_kdv), 'bakiye': 0.0,
+                            'dondurma_aktif': KiralamaService.kalem_dondurma_aktif_mi(
+                                kalem, referans_tarih=today_date, alis_tarafi=True,
+                            ),
                         })
                     included_hizmet_kaydi_ids.add(hkd.id)
             else:
@@ -875,7 +904,7 @@ class FirmaService(BaseService):
                     else:
                         bitis = today_date
                         bitis_bugun = True
-                    gun_sayisi = (bitis - kalem.kiralama_baslangici).days + 1
+                    gun_sayisi = _kalem_cari_gun_sayisi(kalem, today_date, alis_tarafi=True)
                 else:
                     bitis = None
                     bitis_bugun = False
@@ -893,6 +922,9 @@ class FirmaService(BaseService):
                     'bitis_bugun': bitis_bugun, 'gun_sayisi': gun_sayisi,
                     'brm_fiyat': alis_fiyat, 'matrah': matrah, 'kdv_orani': alis_kdv_pct,
                     'kdv_tutar': kdv_tutar, 'toplam': toplam, 'bakiye': 0.0,
+                    'dondurma_aktif': KiralamaService.kalem_dondurma_aktif_mi(
+                        kalem, referans_tarih=today_date, alis_tarafi=True,
+                    ),
                 })
 
         # --- Standalone nakliye satışları ---
@@ -1013,7 +1045,9 @@ class FirmaService(BaseService):
         fatura_ozel_ids = {f.ozel_id for f in faturalar if getattr(f, 'ozel_id', None) is not None}
         missing_fatura_kalem_ids = [kid for kid in fatura_ozel_ids if kid not in kiralama_kalemi_by_id]
         if missing_fatura_kalem_ids:
-            extra_fatura_kalemler = KiralamaKalemi.query.filter(KiralamaKalemi.id.in_(missing_fatura_kalem_ids)).all()
+            extra_fatura_kalemler = KiralamaKalemi.query.options(
+                joinedload(KiralamaKalemi.dondurmalar),
+            ).filter(KiralamaKalemi.id.in_(missing_fatura_kalem_ids)).all()
             for kalem in extra_fatura_kalemler:
                 kiralama_kalemi_by_id[kalem.id] = kalem
         for fatura in faturalar:
@@ -1055,7 +1089,9 @@ class FirmaService(BaseService):
                             else:
                                 bitis = today_date
                                 bitis_bugun = True
-                            gun_sayisi = max((bitis - kalem_obj.kiralama_baslangici).days + 1, 0)
+                            gun_sayisi = _kalem_cari_gun_sayisi(
+                                kalem_obj, today_date, alis_tarafi=True,
+                            )
                         else:
                             bitis = None
                             bitis_bugun = False
@@ -1086,6 +1122,9 @@ class FirmaService(BaseService):
                             'kdv_tutar': kdv_tutar,
                             'toplam': -(tutar + kdv_tutar),
                             'bakiye': 0.0,
+                            'dondurma_aktif': KiralamaService.kalem_dondurma_aktif_mi(
+                                kalem_obj, referans_tarih=today_date, alis_tarafi=True,
+                            ),
                         })
                         continue
             tutar = float(fatura.tutar or 0)

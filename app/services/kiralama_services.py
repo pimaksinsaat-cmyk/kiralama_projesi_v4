@@ -14,7 +14,7 @@ from app.utils import bugun as _bugun
 from app.services.base import BaseService, ValidationError
 
 # İlgili Modüllerin İçe Aktarılması
-from app.kiralama.models import Kiralama, KiralamaKalemi
+from app.kiralama.models import Kiralama, KiralamaKalemi, KiralamaKalemDondurma
 from app.filo.models import Ekipman
 from app.firmalar.models import Firma
 from app.cari.models import HizmetKaydi
@@ -617,6 +617,8 @@ class KiralamaKalemiService(BaseService):
         if validated['donus_satis_explicit'] and fiili_donus_satis == 0:
             cls._create_zero_musteri_donus_cari(kalem, makine_bilgisi_donus)
 
+        cls._iptal_gelecek_dondurmalar(kalem, bitis_date)
+
         cls.save(kalem, is_new=False, auto_commit=False, actor_id=actor_id)
         
         # Cari hesaplamayı tetikle
@@ -628,6 +630,152 @@ class KiralamaKalemiService(BaseService):
             )
         db.session.commit()
         return kalem
+
+    @classmethod
+    def _iptal_gelecek_dondurmalar(cls, kalem, bitis_tarihi):
+        """Erken sonlandırmada bitişten sonra başlayan dondurmaları iptal eder."""
+        if not bitis_tarihi:
+            return
+        for kayit in list(kalem.dondurmalar or []):
+            if kayit.baslangic_tarihi > bitis_tarihi:
+                kayit.is_deleted = True
+                kayit.is_active = False
+                kayit.deleted_at = datetime.now(timezone.utc)
+                db.session.add(kayit)
+
+    @staticmethod
+    def _dondur_iptal_kayit(kalem, kayit):
+        yeni_bitis = kalem.kiralama_bitis - timedelta(days=kayit.muaf_gun_sayisi)
+        bas = to_date(kalem.kiralama_baslangici)
+        if bas and yeni_bitis < bas:
+            raise ValidationError("Dondurma iptali bitiş tarihini başlangıçtan önceye çeker.")
+        kalem.kiralama_bitis = yeni_bitis
+        kayit.is_deleted = True
+        kayit.is_active = False
+        kayit.deleted_at = datetime.now(timezone.utc)
+        db.session.add(kalem)
+        db.session.add(kayit)
+
+    @classmethod
+    def _validate_dondurulabilir_kalem(cls, kalem):
+        if not kalem or getattr(kalem, 'is_deleted', False):
+            raise ValidationError("Kalem bulunamadı.")
+        if not kalem.is_active:
+            raise ValidationError("Sadece aktif kalemler dondurulabilir.")
+        if kalem.sonlandirildi:
+            raise ValidationError("Sonlandırılmış kalemler dondurulamaz.")
+
+    @staticmethod
+    def _dondurma_cakisma_var(bas, bit, kayitlar):
+        for kayit in kayitlar or []:
+            if bas <= kayit.bitis_tarihi and bit >= kayit.baslangic_tarihi:
+                return True
+        return False
+
+    @classmethod
+    def dondur_ekle(
+        cls,
+        kalem_id,
+        baslangic_tarihi,
+        bitis_tarihi,
+        aciklama=None,
+        tedarikci_alis_dondur=False,
+        actor_id=None,
+    ):
+        kalem = cls.get_by_id(kalem_id)
+        cls._validate_dondurulabilir_kalem(kalem)
+
+        bas = to_date(baslangic_tarihi)
+        bit = to_date(bitis_tarihi)
+        if not bas or not bit:
+            raise ValidationError("Geçerli başlangıç ve bitiş tarihi girilmelidir.")
+        if bas > bit:
+            raise ValidationError("Başlangıç tarihi bitişten sonra olamaz.")
+
+        kalem_bas = to_date(kalem.kiralama_baslangici)
+        if kalem_bas and bas < kalem_bas:
+            raise ValidationError("Dondurma başlangıcı kiralama başlangıcından önce olamaz.")
+
+        dondurulabilir = KiralamaService._dondurulabilir_bitis_tarihi(kalem)
+        if dondurulabilir and bit > dondurulabilir:
+            raise ValidationError(
+                f"Dondurma bitişi {dondurulabilir.strftime('%d.%m.%Y')} tarihini aşamaz."
+            )
+
+        mevcut = list(kalem.dondurmalar or [])
+        if cls._dondurma_cakisma_var(bas, bit, mevcut):
+            raise ValidationError("Seçilen tarih aralığı mevcut dondurma ile çakışıyor.")
+
+        if not kalem.is_dis_tedarik_ekipman:
+            tedarikci_alis_dondur = False
+
+        muaf_gun = KiralamaService._hesapla_gun_sayisi(bas, bit)
+        kalem.kiralama_bitis = (kalem.kiralama_bitis or bit) + timedelta(days=muaf_gun)
+
+        kayit = KiralamaKalemDondurma(
+            kalem_id=kalem.id,
+            baslangic_tarihi=bas,
+            bitis_tarihi=bit,
+            muaf_gun_sayisi=muaf_gun,
+            aciklama=(aciklama or '').strip() or None,
+            tedarikci_alis_dondur=bool(tedarikci_alis_dondur),
+        )
+        db.session.add(kayit)
+        cls.save(kalem, is_new=False, auto_commit=False, actor_id=actor_id)
+
+        KiralamaService.guncelle_cari_toplam(kalem.kiralama_id, auto_commit=False)
+        if kalem.is_dis_tedarik_ekipman and kalem.harici_ekipman_tedarikci_id:
+            KiralamaService.guncelle_tedarikci_cari_toplam(
+                kalem.harici_ekipman_tedarikci_id,
+                auto_commit=False,
+            )
+        db.session.commit()
+        return kayit
+
+    @classmethod
+    def dondur_iptal(cls, dondurma_id, actor_id=None):
+        kayit = db.session.get(KiralamaKalemDondurma, dondurma_id)
+        if not kayit or kayit.is_deleted:
+            raise ValidationError("Dondurma kaydı bulunamadı.")
+        kalem = cls.get_by_id(kayit.kalem_id)
+        cls._validate_dondurulabilir_kalem(kalem)
+
+        cls._dondur_iptal_kayit(kalem, kayit)
+        cls.save(kalem, is_new=False, auto_commit=False, actor_id=actor_id)
+
+        KiralamaService.guncelle_cari_toplam(kalem.kiralama_id, auto_commit=False)
+        if kalem.is_dis_tedarik_ekipman and kalem.harici_ekipman_tedarikci_id:
+            KiralamaService.guncelle_tedarikci_cari_toplam(
+                kalem.harici_ekipman_tedarikci_id,
+                auto_commit=False,
+            )
+        db.session.commit()
+        return kayit
+
+    @classmethod
+    def listele_dondurmalar(cls, kalem_id):
+        kalem = cls.get_by_id(kalem_id)
+        if not kalem:
+            return []
+        return sorted(
+            kalem.dondurmalar or [],
+            key=lambda d: (d.baslangic_tarihi, d.id),
+        )
+
+    @classmethod
+    def validate_tarih_guncelle_koruma(cls, kalem, yeni_bitis):
+        """Planlanan bitiş güncellemesinde dondurma koruması."""
+        for kayit in kalem.dondurmalar or []:
+            if yeni_bitis <= kayit.bitis_tarihi:
+                if yeni_bitis >= kayit.baslangic_tarihi:
+                    raise ValidationError(
+                        f"Bitiş tarihi dondurma dönemine ({kayit.baslangic_tarihi.strftime('%d.%m.%Y')} - "
+                        f"{kayit.bitis_tarihi.strftime('%d.%m.%Y')}) çekilemez."
+                    )
+                raise ValidationError(
+                    f"Bitiş tarihi dondurma öncesine ({kayit.baslangic_tarihi.strftime('%d.%m.%Y')}) "
+                    f"çekilemez."
+                )
 
     @classmethod
     def iptal_et_sonlandirma(cls, kalem_id, actor_id=None):
@@ -878,7 +1026,7 @@ class KiralamaService(BaseService):
         if ust_sinir < bas:
             return Decimal('0.00')
 
-        gun = KiralamaService._hesapla_gun_sayisi(bas, ust_sinir)
+        gun = KiralamaService.hesapla_kalem_etkin_gun(kalem, referans_tarih=referans_tarih)
         kira_tahakkuk = to_decimal(kalem.kiralama_brm_fiyat) * Decimal(gun)
         return kira_tahakkuk
 
@@ -890,7 +1038,7 @@ class KiralamaService(BaseService):
         if not (bas and bit) or bit < bas:
             return Decimal('0.00')
 
-        gun = KiralamaService._hesapla_gun_sayisi(bas, bit)
+        gun = KiralamaService.hesapla_kalem_etkin_gun(kalem, tam_sozlesme=True)
         kira_toplam = to_decimal(kalem.kiralama_brm_fiyat) * Decimal(gun)
         return kira_toplam
 
@@ -913,7 +1061,9 @@ class KiralamaService(BaseService):
         ust_sinir = bit if kalem.sonlandirildi else referans_tarih
         if ust_sinir < bas:
             return Decimal('0.00')
-        gun = KiralamaService._hesapla_gun_sayisi(bas, ust_sinir)
+        gun = KiralamaService.hesapla_kalem_etkin_gun(
+            kalem, referans_tarih=referans_tarih, alis_tarafi=True,
+        )
         return to_decimal(kalem.kiralama_alis_fiyat) * Decimal(gun)
 
     @staticmethod
@@ -965,16 +1115,108 @@ class KiralamaService(BaseService):
         return max(gun, 0)
 
     @staticmethod
-    def _hesapla_kalem_satis_tutari(bas, bit, kiralama_brm_fiyat, nakliye_satis_fiyat):
+    def _get_dondurma_kayitlari(kalem, alis_tarafi=False):
+        kayitlar = list(getattr(kalem, 'dondurmalar', None) or [])
+        if not alis_tarafi:
+            return kayitlar
+        return [k for k in kayitlar if k.tedarikci_alis_dondur]
+
+    @staticmethod
+    def _dondurma_kesisim_gunleri(bas, bit, kayitlar):
+        """Verilen aralık ile çakışan dondurma günlerini birleştirip sayar."""
+        if not (bas and bit) or bit < bas or not kayitlar:
+            return 0
+
+        araliklar = []
+        for kayit in kayitlar:
+            k_bas = max(bas, kayit.baslangic_tarihi)
+            k_bit = min(bit, kayit.bitis_tarihi)
+            if k_bas <= k_bit:
+                araliklar.append((k_bas, k_bit))
+
+        if not araliklar:
+            return 0
+
+        araliklar.sort(key=lambda x: x[0])
+        birlesik = [araliklar[0]]
+        for k_bas, k_bit in araliklar[1:]:
+            son_bas, son_bit = birlesik[-1]
+            if k_bas <= son_bit + timedelta(days=1):
+                birlesik[-1] = (son_bas, max(son_bit, k_bit))
+            else:
+                birlesik.append((k_bas, k_bit))
+
+        return sum(KiralamaService._hesapla_gun_sayisi(a, b) for a, b in birlesik)
+
+    @staticmethod
+    def _hesapla_etkin_gun_sayisi(bas, bit, kayitlar, alis_tarafi=False):
+        toplam = KiralamaService._hesapla_gun_sayisi(bas, bit)
+        if toplam <= 0:
+            return 0
+        filt = kayitlar
+        if alis_tarafi:
+            filt = [k for k in (kayitlar or []) if k.tedarikci_alis_dondur]
+        muaf = KiralamaService._dondurma_kesisim_gunleri(bas, bit, filt)
+        return max(toplam - muaf, 0)
+
+    @staticmethod
+    def _dondurulabilir_bitis_tarihi(kalem):
+        bit = to_date(kalem.kiralama_bitis)
+        if not bit:
+            return None
+        toplam_muaf = sum(
+            (k.muaf_gun_sayisi or 0) for k in (kalem.dondurmalar or [])
+        )
+        return bit - timedelta(days=toplam_muaf)
+
+    @staticmethod
+    def hesapla_kalem_etkin_gun(kalem, referans_tarih=None, alis_tarafi=False, tam_sozlesme=False):
+        """Kalem için ücretli (dondurma hariç) gün sayısı."""
+        bas = to_date(kalem.kiralama_baslangici)
+        bit = to_date(kalem.kiralama_bitis)
+        if not (bas and bit):
+            return 0
+
+        if tam_sozlesme:
+            ust_sinir = bit
+        else:
+            if referans_tarih is None:
+                referans_tarih = _bugun()
+            if bas > referans_tarih:
+                return 0
+            ust_sinir = bit if kalem.sonlandirildi else referans_tarih
+
+        if ust_sinir < bas:
+            return 0
+
+        kayitlar = KiralamaService._get_dondurma_kayitlari(kalem, alis_tarafi=alis_tarafi)
+        return KiralamaService._hesapla_etkin_gun_sayisi(bas, ust_sinir, kayitlar, alis_tarafi=alis_tarafi)
+
+    @staticmethod
+    def toplam_muaf_gun_sayisi(kalem, alis_tarafi=False):
+        kayitlar = KiralamaService._get_dondurma_kayitlari(kalem, alis_tarafi=alis_tarafi)
+        return sum((k.muaf_gun_sayisi or 0) for k in kayitlar)
+
+    @staticmethod
+    def kalem_dondurma_aktif_mi(kalem, referans_tarih=None, *, alis_tarafi=False):
+        """Referans tarih bir dondurma aralığı içindeyse True döner."""
+        ref = referans_tarih or _bugun()
+        for kayit in KiralamaService._get_dondurma_kayitlari(kalem, alis_tarafi=alis_tarafi):
+            if kayit.baslangic_tarihi <= ref <= kayit.bitis_tarihi:
+                return True
+        return False
+
+    @staticmethod
+    def _hesapla_kalem_satis_tutari(bas, bit, kiralama_brm_fiyat, nakliye_satis_fiyat, kayitlar=None):
         """
         Kalem için satış tutarını backend'de YENIDEN HESAPLAR (DOĞRULUK KAYNAĞIDIR).
         Frontend'den gelen tutar KABUL EDİLMEZ.
 
         Formül:
-          gun = bitis - baslangic + 1
+          gun = bitis - baslangic + 1 - muaf
           toplam = gun * kiralama_brm_fiyat + nakliye_satis_fiyat
         """
-        gun = KiralamaService._hesapla_gun_sayisi(bas, bit)
+        gun = KiralamaService._hesapla_etkin_gun_sayisi(bas, bit, kayitlar or [])
         if gun <= 0:
             return Decimal('0.00')
         kiralama_tutari = to_decimal(kiralama_brm_fiyat) * Decimal(gun)
@@ -1822,6 +2064,83 @@ class KiralamaService(BaseService):
         except Exception as e:
             db.session.rollback()
             raise ValidationError(f"Geri alma hatası: {str(e)}") from e
+
+    @classmethod
+    def _archive_restore_kalem_state(cls, kalem):
+        return {
+            'is_deleted': False,
+            'is_active': not bool(getattr(kalem, 'revizyonlar', None)),
+            'deleted_at': None,
+            'deleted_by_id': None,
+        }
+
+    @classmethod
+    def restore_archived_with_relations(cls, kiralama_id, actor_id=None):
+        """Arşivdeki kiralamayı süre sınırı olmadan geri yükler."""
+        kiralama = db.session.get(Kiralama, kiralama_id)
+        if not kiralama:
+            raise ValidationError("Kiralama bulunamadı.")
+        if not kiralama.is_deleted:
+            raise ValidationError("Kiralama silinmiş durumda değil.")
+
+        kalem_states = {
+            str(kalem.id): cls._archive_restore_kalem_state(kalem)
+            for kalem in kiralama.kalemler
+            if getattr(kalem, 'id', None)
+        }
+        restore_snapshot = {'kalemler': kalem_states}
+        cls._check_restore_ekipman_conflicts(kiralama, snapshot=restore_snapshot)
+
+        try:
+            nakliyeler = cls._related_nakliyeler(kiralama.id)
+            hizmetler = cls._related_hizmetler(kiralama, nakliyeler)
+            affected_firma_ids = cls._collect_affected_firma_ids(kiralama, nakliyeler, hizmetler)
+            affected_ekipman_ids = {
+                kalem.ekipman_id for kalem in kiralama.kalemler if kalem.ekipman_id
+            }
+
+            for kayit in hizmetler:
+                if getattr(kayit, 'is_deleted', False):
+                    cls._restore_instance(kayit)
+
+            for nakliye in nakliyeler:
+                if hasattr(nakliye, 'is_deleted'):
+                    nakliye.is_deleted = False
+                    nakliye.deleted_at = None
+                    nakliye.deleted_by_id = None
+                nakliye.is_active = True
+                db.session.add(nakliye)
+
+            cls._restore_instance(kiralama)
+            for kalem in list(kiralama.kalemler):
+                state = kalem_states.get(str(kalem.id), {'is_deleted': False, 'is_active': True})
+                cls._restore_instance(kalem, state=state)
+
+            db.session.flush()
+            cls._sync_ekipman_states(affected_ekipman_ids)
+            cls.guncelle_cari_toplam(kiralama.id, auto_commit=False)
+            for kalem in kiralama.kalemler:
+                if kalem.is_dis_tedarik_ekipman and kalem.harici_ekipman_tedarikci_id:
+                    cls.guncelle_tedarikci_cari_toplam(
+                        kalem.harici_ekipman_tedarikci_id,
+                        auto_commit=False,
+                    )
+            cls._sync_firma_balances(affected_firma_ids)
+
+            if actor_id and hasattr(kiralama, 'updated_by_id'):
+                kiralama.updated_by_id = actor_id
+            if hasattr(kiralama, 'updated_at'):
+                kiralama.updated_at = datetime.now(timezone.utc)
+            db.session.add(kiralama)
+
+            db.session.commit()
+            return kiralama
+        except ValidationError:
+            db.session.rollback()
+            raise
+        except Exception as e:
+            db.session.rollback()
+            raise ValidationError(f"Arşivden geri yükleme hatası: {str(e)}") from e
 
     @staticmethod
     def _create_nakliye_ve_cari(kiralama, kalem, makine_adi, bas_tarihi):

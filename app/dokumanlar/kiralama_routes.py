@@ -12,6 +12,7 @@ from .pdf_utils import convert_docx_to_pdf
 from .archive_utils import document_hash_summary
 from app.services.operation_log_service import OperationLogService
 from app.utils import turkish_upper
+from app.services.kiralama_services import KiralamaService
 
 # Modellerin gerçek konumlarını içe aktarıyoruz
 try:
@@ -147,7 +148,7 @@ def kiralama_formu_yazdir(rental_id):
         
         for kalem in kiralama.kalemler:
             # Süre ve tutar hesaplama
-            gun = (kalem.kiralama_bitis - kalem.kiralama_baslangici).days + 1
+            gun = KiralamaService.hesapla_kalem_etkin_gun(kalem, tam_sozlesme=True)
             birim_fiyat = float(kalem.kiralama_brm_fiyat or 0)
             nakliye = float(kalem.nakliye_satis_fiyat or 0)
             satir_toplam = (gun * birim_fiyat) + nakliye

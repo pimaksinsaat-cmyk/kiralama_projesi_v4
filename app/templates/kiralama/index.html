@@ -114,6 +114,29 @@
     .context-menu, .context-menu-kalem { display: none; position: fixed; background-color: white; border: 1px solid #ccc; box-shadow: 0 4px 12px rgba(0,0,0,0.2); border-radius: 6px; z-index: 1000; min-width: 200px; padding: 5px 0; }
     .context-menu-item { display: block; padding: 10px 15px; color: #333; text-decoration: none; font-size: 0.9em; cursor: pointer; transition: 0.2s; }
     .context-menu-item:hover { background-color: #f8f9fa; color: #007bff; }
+    /* RAL 1028 Melon yellow — Kavun içi (#FF9B00, RGB 255 155 0) */
+    .text-kavun { color: #FF9B00 !important; }
+    .border-kavun { border-color: #FF9B00 !important; }
+    .context-menu-item.text-kavun:hover { background-color: #FFF4E5; color: #FF9B00; }
+    .btn-kavun {
+        background-color: #FF9B00;
+        border-color: #FF9B00;
+        color: #fff;
+    }
+    .btn-kavun:hover {
+        background-color: #E68C00;
+        border-color: #E68C00;
+        color: #fff;
+    }
+    .btn-outline-kavun {
+        color: #FF9B00;
+        border-color: #FF9B00;
+    }
+    .btn-outline-kavun:hover {
+        background-color: #FFF4E5;
+        color: #E68C00;
+        border-color: #E68C00;
+    }
     
     .price-text { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-weight: 700; color: #198754; white-space: nowrap; }
 
@@ -191,8 +214,9 @@
     </div>
 
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <div>
+        <div class="d-flex gap-2">
             <a href="{{ url_for('kiralama.ekle') }}" class="btn btn-primary btn-sm px-4 fw-bold shadow-sm"><i class="fas fa-plus me-2"></i>Yeni Kiralama Kaydı</a>
+            <a href="{{ url_for('kiralama.silinenler') }}" class="btn btn-outline-secondary btn-sm px-4 fw-bold shadow-sm"><i class="fas fa-archive me-2"></i>Silinen Kayıtlar</a>
         </div>
         
         <form method="GET" action="{{ url_for('kiralama.index') }}" class="d-flex mb-0" style="width: 35%;">
@@ -255,7 +279,9 @@
                             {% for kalem in aktif_kalemler %}
                             {# Tutar hesaplama #}
                             {% if kalem.kiralama_baslangici and kalem.kiralama_bitis %}
-                            {% set g = (kalem.kiralama_bitis - kalem.kiralama_baslangici).days + 1 %}
+                            {% set g = hesapla_kalem_etkin_gun(kalem, tam_sozlesme=True) %}
+                            {% set muaf_gun = toplam_muaf_gun_sayisi(kalem) %}
+                            {% set dondurulabilir = dondurulabilir_bitis_tarihi(kalem) %}
                             {% set nk_sayi = 2 if kalem.donus_nakliye_fatura_et else 1 %}
                             {% set nk_birim = (kalem.nakliye_satis_fiyat or 0) / nk_sayi %}
                             {% set bdl = (g * kalem.kiralama_brm_fiyat) + (kalem.nakliye_satis_fiyat or 0) %}
@@ -277,7 +303,9 @@
                                     data-nakliye-satis="{{ kalem.nakliye_satis_fiyat or 0 }}"
                                     data-donus-nakliye-alis-kdv="{{ kalem.donus_nakliye_alis_kdv if kalem.donus_nakliye_alis_kdv is not none else (kalem.nakliye_alis_kdv if kalem.nakliye_alis_kdv is not none else 20) }}"
                                     data-donus-nakliye-satis="{{ kalem.donus_nakliye_satis_fiyat if kalem.donus_nakliye_satis_fiyat is not none else '' }}"
-                                    data-donus-fatura-et="{{ 1 if kalem.donus_nakliye_fatura_et else 0 }}">
+                                    data-donus-fatura-et="{{ 1 if kalem.donus_nakliye_fatura_et else 0 }}"
+                                    data-dis-tedarik="{{ 1 if kalem.is_dis_tedarik_ekipman else 0 }}"
+                                    data-dondurulabilir-bitis="{{ dondurulabilir.strftime('%Y-%m-%d') if dondurulabilir else '' }}">
 
                                     {% if kalem.is_dis_tedarik_ekipman %}
                                         <span class="external-badge">DIŞ TEDARİK</span>
@@ -293,9 +321,14 @@
                                     {% else %}
                                         <span class="text-muted small">Ekipman Verisi Eksik</span>
                                     {% endif %}
+                                    {% if muaf_gun %}
+                                        <span class="badge bg-info text-dark ms-1" title="Kiralama dondurması uygulandı">
+                                            <i class="fas fa-snowflake me-1"></i>{{ muaf_gun }} gün muaf
+                                        </span>
+                                    {% endif %}
 
                                     <div class="small text-muted mt-1">
-                                        {{ g }} Gün x {{ "{:,.2f}".format(kalem.kiralama_brm_fiyat or 0).replace(",", "X").replace(".", ",").replace("X", ".") }} TL
+                                        {{ g }} Etkin Gün x {{ "{:,.2f}".format(kalem.kiralama_brm_fiyat or 0).replace(",", "X").replace(".", ",").replace("X", ".") }} TL
                                         +
                                         {{ nk_sayi }} x {{ "{:,.2f}".format(nk_birim).replace(",", "X").replace(".", ",").replace("X", ".") }} TL
                                         =
@@ -323,7 +356,9 @@
                                     data-nakliye-satis="{{ kalem.nakliye_satis_fiyat or 0 }}"
                                     data-donus-nakliye-alis-kdv="{{ kalem.donus_nakliye_alis_kdv if kalem.donus_nakliye_alis_kdv is not none else (kalem.nakliye_alis_kdv if kalem.nakliye_alis_kdv is not none else 20) }}"
                                     data-donus-nakliye-satis="{{ kalem.donus_nakliye_satis_fiyat if kalem.donus_nakliye_satis_fiyat is not none else '' }}"
-                                    data-donus-fatura-et="{{ 1 if kalem.donus_nakliye_fatura_et else 0 }}">
+                                    data-donus-fatura-et="{{ 1 if kalem.donus_nakliye_fatura_et else 0 }}"
+                                    data-dis-tedarik="{{ 1 if kalem.is_dis_tedarik_ekipman else 0 }}"
+                                    data-dondurulabilir-bitis="{{ dondurulabilir.strftime('%Y-%m-%d') if dondurulabilir else '' }}">
 
                                     {% if kalem.is_dis_tedarik_ekipman %}
                                         <span class="external-badge">DIŞ TEDARİK</span>
@@ -339,9 +374,14 @@
                                     {% else %}
                                         <span class="text-muted small">Ekipman Verisi Eksik</span>
                                     {% endif %}
+                                    {% if muaf_gun %}
+                                        <span class="badge bg-info text-dark ms-1" title="Kiralama dondurması uygulandı">
+                                            <i class="fas fa-snowflake me-1"></i>{{ muaf_gun }} gün muaf
+                                        </span>
+                                    {% endif %}
 
                                     <div class="small text-muted mt-1">
-                                        {{ g }} Gün x {{ "{:,.2f}".format(kalem.kiralama_brm_fiyat or 0).replace(",", "X").replace(".", ",").replace("X", ".") }} TL
+                                        {{ g }} Etkin Gün x {{ "{:,.2f}".format(kalem.kiralama_brm_fiyat or 0).replace(",", "X").replace(".", ",").replace("X", ".") }} TL
                                         +
                                         {{ nk_sayi }} x {{ "{:,.2f}".format(nk_birim).replace(",", "X").replace(".", ",").replace("X", ".") }} TL
                                         =
@@ -510,7 +550,8 @@
     
     <div style="height:1px; background:#eee; margin:5px 0;"></div>
     <a class="context-menu-item text-success fw-bold" id="menu-sonlandir"><i class="fas fa-stopwatch me-2"></i>Kiralamayı Sonlandır</a>
-    <a class="context-menu-item text-info fw-bold" id="menu-tarih-guncelle"><i class="fas fa-calendar-alt me-2"></i>Planlanan Bitiş Tarihini Güncelle</a>
+    <a class="context-menu-item text-kavun fw-bold" id="menu-tarih-guncelle"><i class="fas fa-calendar-alt me-2"></i>Planlanan Bitiş Tarihini Güncelle</a>
+    <a class="context-menu-item text-info fw-bold" id="menu-dondur"><i class="fas fa-snowflake me-2"></i>Kiralama Dondur</a>
     <a class="context-menu-item text-warning fw-bold" id="menu-iptal"><i class="fas fa-undo-alt me-2"></i>Sonlandırmayı İptal Et</a>
 
     <div style="height:1px; background:#eee; margin:5px 0;"></div>
@@ -538,16 +579,14 @@
 
             <div class="mb-3">
                 <label class="form-label small fw-bold text-secondary"><i class="fas fa-warehouse me-1"></i>İade Alınan Şube / Depo:</label>
-                <select name="donus_sube_id" class="form-select shadow-sm border-primary" required>
+                <select name="donus_sube_id" id="modal-donus-sube-id" class="form-select shadow-sm border-primary" required>
                     <option value="" disabled selected>Lütfen dönüş yapılan yeri seçin...</option>
-                    
-                    <option value="tedarikci" class="text-danger fw-bold">🏭 Tedarikçi / Sahibine İade Edildi</option>
-                    
-                    <optgroup label="Kendi Depolarımız">
+                    <optgroup label="Pimaks Depoları">
                         {% for s in subeler %}
                             <option value="{{ s.id }}">{{ s.isim }}</option>
                         {% endfor %}
                     </optgroup>
+                    <option value="tedarikci" id="modal-donus-tedarikci-opt" class="text-danger fw-bold">Tedarikçiye İade Edildi</option>
                 </select>
             </div>
 
@@ -612,13 +651,13 @@
 
 <!-- Planlanan Bitiş Tarihini Güncelle Modal -->
 <div id="modal-backdrop-tarih-guncelle" class="custom-backdrop">
-    <div class="custom-modal border border-info" style="max-width: 450px;">
+    <div class="custom-modal border border-kavun" style="max-width: 450px;">
         <div class="d-flex justify-content-between align-items-center mb-3">
-            <h5 class="mb-0 fw-bold text-dark"><i class="fas fa-calendar-alt text-info me-2"></i>Planlanan Bitiş Tarihini Güncelle</h5>
+            <h5 class="mb-0 fw-bold text-kavun"><i class="fas fa-calendar-alt me-2"></i>Planlanan Bitiş Tarihini Güncelle</h5>
             <button type="button" class="btn-close" onclick="closeTarihGuncelleModal()"></button>
         </div>
         <p class="small text-muted mb-3">
-            <span id="modal-tarih-guncelle-kod" class="fw-bold text-info"></span>
+            <span id="modal-tarih-guncelle-kod" class="fw-bold text-kavun"></span>
             <span id="modal-tarih-guncelle-bilgi">Yeni planlanan bitiş tarihini girin.</span>
         </p>
 
@@ -629,22 +668,91 @@
 
             <div class="mb-4">
                 <label class="form-label small fw-bold text-secondary"><i class="far fa-calendar-alt me-1"></i>Yeni Bitiş Tarihi:</label>
-                <input type="date" name="yeni_bitis_tarihi" id="modal-yeni-bitis-tarihi" class="form-control shadow-sm border-info" required>
+                <input type="date" name="yeni_bitis_tarihi" id="modal-yeni-bitis-tarihi" class="form-control shadow-sm border-kavun" required>
                 <div class="d-flex flex-wrap gap-2 mt-2">
-                    <button type="button" class="btn btn-sm btn-outline-info js-hizli-tarih" data-days="1">+1 Gün</button>
-                    <button type="button" class="btn btn-sm btn-outline-info js-hizli-tarih" data-days="7">+7 Gün</button>
-                    <button type="button" class="btn btn-sm btn-outline-info js-hizli-tarih" data-days="15">+15 Gün</button>
-                    <button type="button" class="btn btn-sm btn-outline-info js-hizli-tarih" data-days="30">+30 Gün</button>
+                    <button type="button" class="btn btn-sm btn-outline-kavun js-hizli-tarih" data-days="1">+1 Gün</button>
+                    <button type="button" class="btn btn-sm btn-outline-kavun js-hizli-tarih" data-days="7">+7 Gün</button>
+                    <button type="button" class="btn btn-sm btn-outline-kavun js-hizli-tarih" data-days="15">+15 Gün</button>
+                    <button type="button" class="btn btn-sm btn-outline-kavun js-hizli-tarih" data-days="30">+30 Gün</button>
                 </div>
             </div>
 
             <div class="d-grid gap-2">
-                <button type="submit" class="btn btn-info fw-bold shadow"><i class="fas fa-save me-2"></i> TARİHİ GÜNCELLE</button>
+                <button type="submit" class="btn btn-kavun fw-bold shadow"><i class="fas fa-save me-2"></i> TARİHİ GÜNCELLE</button>
                 <button type="button" class="btn btn-light" onclick="closeTarihGuncelleModal()">İptal</button>
             </div>
         </form>
     </div>
 </div>
+
+<div id="modal-backdrop-dondur" class="custom-backdrop">
+    <div class="custom-modal border border-info" style="max-width: 560px;">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="mb-0 fw-bold text-dark"><i class="fas fa-snowflake text-info me-2"></i>Kiralama Dondur</h5>
+            <button type="button" class="btn-close" onclick="closeDondurModal()"></button>
+        </div>
+        <p class="small text-muted mb-3">
+            <span id="modal-dondur-kod" class="fw-bold text-info"></span>
+            seçilen tarih aralığı ücretlendirilmez; bitiş tarihi otomatik uzar.
+        </p>
+
+        <form id="dondur-ekle-form" method="POST" action="{{ url_for('kiralama.dondur_ekle_kalem') }}">
+            <input type="hidden" name="csrf_token" id="modal-dondur-csrf">
+            <input type="hidden" name="kalem_id" id="modal-dondur-kalem-id">
+            <input type="hidden" name="return_url" class="js-return-url">
+
+            <div class="row g-2 mb-3">
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold text-secondary">Başlangıç</label>
+                    <input type="date" name="baslangic_tarihi" id="modal-dondur-baslangic" class="form-control form-control-sm border-info" required>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold text-secondary">Bitiş</label>
+                    <input type="date" name="bitis_tarihi" id="modal-dondur-bitis" class="form-control form-control-sm border-info" required>
+                </div>
+            </div>
+
+            <div class="alert alert-light border small py-2 mb-3" id="modal-dondur-onizleme">
+                Muaf gün: <strong id="modal-dondur-muaf-gun">0</strong> —
+                Yeni bitiş: <strong id="modal-dondur-yeni-bitis">-</strong>
+            </div>
+
+            <div class="mb-3" id="modal-dondur-tedarik-wrap" style="display:none;">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="tedarikci_alis_dondur" value="1" id="modal-dondur-tedarik-check">
+                    <label class="form-check-label small" for="modal-dondur-tedarik-check">Tedarikçi alış tarafını da dondur</label>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label small fw-bold text-secondary">Açıklama (opsiyonel)</label>
+                <input type="text" name="aciklama" id="modal-dondur-aciklama" class="form-control form-control-sm" maxlength="500">
+            </div>
+
+            <div class="d-grid gap-2 mb-3">
+                <button type="submit" class="btn btn-info fw-bold shadow-sm"><i class="fas fa-save me-2"></i>DONDURMAYI KAYDET</button>
+            </div>
+        </form>
+
+        <div id="modal-dondur-mevcut-wrap" style="display:none;">
+            <div class="small fw-bold text-secondary border-bottom pb-1 mb-2">Mevcut Dondurmalar</div>
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered mb-0 small">
+                    <thead class="table-light">
+                        <tr><th>Tarih</th><th>Muaf</th><th></th></tr>
+                    </thead>
+                    <tbody id="modal-dondur-mevcut-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<form id="dondur-iptal-form" method="POST" action="{{ url_for('kiralama.dondur_iptal_kalem') }}" style="display:none;">
+    <input type="hidden" name="csrf_token" id="modal-dondur-iptal-csrf">
+    <input type="hidden" name="dondurma_id" id="modal-dondur-iptal-id">
+    <input type="hidden" name="return_url" class="js-return-url">
+</form>
 
 <div class="toast-container position-fixed bottom-0 end-0 p-3" id="kiralama-undo-toast-container" aria-live="polite" aria-atomic="true"></div>
 
@@ -887,7 +995,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const contextMenuKalem = document.getElementById('context-menu-kalem');
     const backdrop = document.getElementById('modal-backdrop-sonlandir');
 
-    let state = { kUrl: null, sUrl: null, fNo: null, csrf: null, kId: null, eKod: null, kCsrf: null, rentalId: null, baslangic: null, bitis: null, nakliyeSatis: 0, donusNakliyeSatis: null, donusNakliyeAlisKdv: 20, donusFaturaEt: false };
+    let state = { kUrl: null, sUrl: null, fNo: null, csrf: null, kId: null, eKod: null, kCsrf: null, rentalId: null, baslangic: null, bitis: null, nakliyeSatis: 0, donusNakliyeSatis: null, donusNakliyeAlisKdv: 20, donusFaturaEt: false, disTedarik: false, dondurulabilirBitis: null, isSwap: false };
     const listStateKey = 'kiralama.index.returnState';
 
     function refreshReturnUrls() {
@@ -951,8 +1059,103 @@ document.addEventListener('DOMContentLoaded', function() {
         contextMenu.style.display = 'none';
         contextMenuKalem.style.display = 'none';
         document.getElementById('modal-backdrop-tarih-guncelle').style.display = 'none';
+        const dondurBackdrop = document.getElementById('modal-backdrop-dondur');
+        if (dondurBackdrop) dondurBackdrop.style.display = 'none';
     }
     window.closeModals = closeModals;
+
+    function closeDondurModal() {
+        document.getElementById('modal-backdrop-dondur').style.display = 'none';
+    }
+    window.closeDondurModal = closeDondurModal;
+
+    function calcInclusiveDays(basIso, bitIso) {
+        if (!basIso || !bitIso) return 0;
+        const [yb, mb, db] = basIso.split('-').map(Number);
+        const [ye, me, de] = bitIso.split('-').map(Number);
+        const bas = Date.UTC(yb, mb - 1, db);
+        const bit = Date.UTC(ye, me - 1, de);
+        if (bit < bas) return 0;
+        return Math.floor((bit - bas) / 86400000) + 1;
+    }
+
+    function updateDondurPreview() {
+        const bas = document.getElementById('modal-dondur-baslangic').value;
+        const bit = document.getElementById('modal-dondur-bitis').value;
+        const muaf = calcInclusiveDays(bas, bit);
+        document.getElementById('modal-dondur-muaf-gun').textContent = String(muaf);
+        const yeniBitis = state.bitis ? addDaysToIsoDate(state.bitis, muaf) : '';
+        document.getElementById('modal-dondur-yeni-bitis').textContent = formatDateForDisplay(yeniBitis) || '-';
+    }
+
+    function loadDondurmaListesi(kalemId) {
+        const wrap = document.getElementById('modal-dondur-mevcut-wrap');
+        const body = document.getElementById('modal-dondur-mevcut-body');
+        body.innerHTML = '';
+        wrap.style.display = 'none';
+        if (!kalemId) return;
+        fetch(`/kiralama/kalem/dondurmalar?kalem_id=${encodeURIComponent(kalemId)}`)
+            .then(r => r.ok ? r.json() : Promise.reject())
+            .then(data => {
+                const kayitlar = data.kayitlar || [];
+                if (!kayitlar.length) return;
+                wrap.style.display = 'block';
+                kayitlar.forEach(k => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${formatDateForDisplay(k.baslangic)} – ${formatDateForDisplay(k.bitis)}</td>
+                        <td>${k.muaf_gun}</td>
+                        <td class="text-end">
+                            <button type="button" class="btn btn-sm btn-outline-danger js-dondur-iptal" data-id="${k.id}">İptal</button>
+                        </td>`;
+                    body.appendChild(tr);
+                });
+                body.querySelectorAll('.js-dondur-iptal').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        if (!confirm('Bu dondurma kaydı iptal edilsin mi?')) return;
+                        document.getElementById('modal-dondur-iptal-id').value = btn.dataset.id;
+                        document.getElementById('modal-dondur-iptal-csrf').value = state.kCsrf;
+                        refreshReturnUrls();
+                        saveListState({ kalemId: state.kId });
+                        document.getElementById('dondur-iptal-form').submit();
+                    });
+                });
+            })
+            .catch(() => {});
+    }
+
+    function openDondurModal() {
+        if (!state.kId || state.isSwap) return;
+        document.getElementById('modal-dondur-kalem-id').value = state.kId;
+        document.getElementById('modal-dondur-csrf').value = state.kCsrf;
+        document.getElementById('modal-dondur-kod').innerText = state.eKod || '';
+        const basInput = document.getElementById('modal-dondur-baslangic');
+        const bitInput = document.getElementById('modal-dondur-bitis');
+        basInput.min = state.baslangic || '';
+        basInput.max = state.dondurulabilirBitis || '';
+        bitInput.min = state.baslangic || '';
+        bitInput.max = state.dondurulabilirBitis || '';
+
+        const now = new Date();
+        const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        let defaultBas = todayIso;
+        if (basInput.min && defaultBas < basInput.min) defaultBas = basInput.min;
+        if (basInput.max && defaultBas > basInput.max) defaultBas = basInput.max;
+
+        let defaultBit = addDaysToIsoDate(defaultBas, 4);
+        if (bitInput.max && defaultBit > bitInput.max) defaultBit = bitInput.max;
+        if (bitInput.min && defaultBit < bitInput.min) defaultBit = bitInput.min;
+        if (defaultBit < defaultBas) defaultBit = defaultBas;
+
+        basInput.value = defaultBas;
+        bitInput.value = defaultBit;
+        document.getElementById('modal-dondur-aciklama').value = '';
+        document.getElementById('modal-dondur-tedarik-check').checked = false;
+        document.getElementById('modal-dondur-tedarik-wrap').style.display = state.disTedarik ? 'block' : 'none';
+        updateDondurPreview();
+        loadDondurmaListesi(state.kId);
+        document.getElementById('modal-backdrop-dondur').style.display = 'flex';
+    }
 
     function getContextMenuPosition(event, menuElement) {
         const padding = 8;
@@ -1063,6 +1266,18 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('donus-lock-icon').innerHTML = '<i class="fas fa-lock"></i>';
         document.getElementById('donus-lock-icon').className = 'input-group-text bg-light text-muted';
         document.getElementById('donus-fark-uyari').classList.add('d-none');
+        const donusSubeSelect = document.getElementById('modal-donus-sube-id');
+        const tedarikciOpt = document.getElementById('modal-donus-tedarikci-opt');
+        if (donusSubeSelect) {
+            donusSubeSelect.value = '';
+        }
+        if (tedarikciOpt) {
+            const disTedarik = state.disTedarik === true;
+            tedarikciOpt.disabled = !disTedarik;
+            tedarikciOpt.classList.toggle('text-muted', !disTedarik);
+            tedarikciOpt.classList.toggle('text-danger', disTedarik);
+            tedarikciOpt.classList.toggle('fw-bold', disTedarik);
+        }
         // Checkbox etiketini ve uyarı metnini duruma göre güncelle
         const degistirLabel = document.querySelector('label[for="donusFiyatDegistirCheck"]');
         const farkUyari = document.getElementById('donus-fark-uyari');
@@ -1107,9 +1322,12 @@ document.addEventListener('DOMContentLoaded', function() {
             state.donusNakliyeSatis = this.dataset.donusNakliyeSatis || '';
             state.donusNakliyeAlisKdv = this.dataset.donusNakliyeAlisKdv || 20;
             state.donusFaturaEt = this.dataset.donusFaturaEt === '1';
+            state.disTedarik = this.dataset.disTedarik === '1';
+            state.dondurulabilirBitis = this.dataset.dondurulabilirBitis || null;
             
             const done = this.dataset.sonlandirilmis === '1';
             const isSwap = this.dataset.swap === '1';
+            state.isSwap = isSwap;
             
             document.getElementById('menu-degisim-iptal').style.display = isSwap ? 'block' : 'none';
 
@@ -1119,6 +1337,8 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!done) {
                 document.getElementById('menu-degistir').style.display = 'block';
                 document.getElementById('menu-sonlandir').style.display = 'block';
+                document.getElementById('menu-tarih-guncelle').style.display = 'block';
+                document.getElementById('menu-dondur').style.display = isSwap ? 'none' : 'block';
                 document.getElementById('menu-iptal').style.display = 'none';
                 document.getElementById('menu-degisim-iptal').style.display = 'none';
             }
@@ -1126,6 +1346,8 @@ document.addEventListener('DOMContentLoaded', function() {
             else if (done && !isSwap) {
                 document.getElementById('menu-degistir').style.display = 'none';
                 document.getElementById('menu-sonlandir').style.display = 'none';
+                document.getElementById('menu-tarih-guncelle').style.display = 'none';
+                document.getElementById('menu-dondur').style.display = 'none';
                 document.getElementById('menu-iptal').style.display = 'block';
                 document.getElementById('menu-degisim-iptal').style.display = 'none';
             
@@ -1134,6 +1356,8 @@ document.addEventListener('DOMContentLoaded', function() {
             else if (done && isSwap) {
                 document.getElementById('menu-degistir').style.display = 'none';
                 document.getElementById('menu-sonlandir').style.display = 'none';
+                document.getElementById('menu-tarih-guncelle').style.display = 'none';
+                document.getElementById('menu-dondur').style.display = 'none';
                 document.getElementById('menu-iptal').style.display = 'none';
                 document.getElementById('menu-degisim-iptal').style.display = 'block';
             }
@@ -1192,13 +1416,21 @@ document.addEventListener('DOMContentLoaded', function() {
         state.donusNakliyeSatis = item.dataset.donusNakliyeSatis || '';
         state.donusNakliyeAlisKdv = item.dataset.donusNakliyeAlisKdv || 20;
         state.donusFaturaEt = item.dataset.donusFaturaEt === '1';
+        state.baslangic = item.dataset.baslangic || '';
+        state.bitis = item.dataset.bitis || '';
+        state.disTedarik = item.dataset.disTedarik === '1';
+        state.dondurulabilirBitis = item.dataset.dondurulabilirBitis || null;
         
         const done = item.dataset.sonlandirilmis === '1';
+        const isSwap = item.dataset.swap === '1';
+        state.isSwap = isSwap;
         document.getElementById('menu-kalem-title').innerText = state.eKod;
         document.getElementById('menu-degistir').style.display = !done ? 'block' : 'none';
         document.getElementById('menu-sonlandir').style.display = !done ? 'block' : 'none';
         document.getElementById('menu-tarih-guncelle').style.display = !done ? 'block' : 'none';
-        document.getElementById('menu-iptal').style.display = done ? 'block' : 'none';
+        document.getElementById('menu-dondur').style.display = (!done && !isSwap) ? 'block' : 'none';
+        document.getElementById('menu-iptal').style.display = (done && !isSwap) ? 'block' : 'none';
+        document.getElementById('menu-degisim-iptal').style.display = (done && isSwap) ? 'block' : 'none';
 
         contextMenuKalem.style.display = 'block';
         const position = getContextMenuPosition(e, contextMenuKalem);
@@ -1604,6 +1836,23 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     };
 
+    document.getElementById('menu-dondur').onclick = () => {
+        if (state.kId && !state.isSwap) {
+            openDondurModal();
+        }
+    };
+
+    ['modal-dondur-baslangic', 'modal-dondur-bitis'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('change', updateDondurPreview);
+        if (el) el.addEventListener('input', updateDondurPreview);
+    });
+
+    document.getElementById('dondur-ekle-form').addEventListener('submit', function() {
+        refreshReturnUrls();
+        saveListState({ kalemId: state.kId });
+    });
+
     document.getElementById('menu-iptal').onclick = () => {
         if(confirm(state.eKod + ' tekrar AKTİF edilsin mi?')) {
             document.getElementById('iptal-kalem-id').value = state.kId;
@@ -1636,6 +1885,11 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!subeVal) {
             e.preventDefault();
             alert('Lütfen dönüş şubesi veya teslimat noktasını seçin.');
+            return;
+        }
+        if (!state.disTedarik && subeVal === 'tedarikci') {
+            e.preventDefault();
+            alert('Öz mal kiralamalarda tedarikçi deposu seçilemez.');
             return;
         }
         if (donusSatis < 0) {

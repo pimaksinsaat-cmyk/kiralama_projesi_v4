@@ -130,6 +130,13 @@ class KiralamaKalemi(BaseModel):
     iade_nakliye_arac = db.relationship('Arac', foreign_keys=[iade_nakliye_arac_id])
     iade_nakliye_tedarikci = db.relationship('Firma', foreign_keys=[iade_nakliye_tedarikci_id])
 
+    dondurmalar = db.relationship(
+        'KiralamaKalemDondurma',
+        back_populates='kalem',
+        lazy='selectin',
+        primaryjoin='and_(KiralamaKalemi.id==KiralamaKalemDondurma.kalem_id, KiralamaKalemDondurma.is_deleted==False)',
+    )
+
     # Versiyon Ağacı İlişkisi (Self-Referential)
     # Bir kalemin alt revizyonlarını listelemek için
     revizyonlar = db.relationship('KiralamaKalemi', backref=db.backref('ust_kayit', remote_side='KiralamaKalemi.id'))
@@ -172,3 +179,23 @@ class KiralamaKalemi(BaseModel):
     def __repr__(self):
         status = "AKTİF" if self.is_active else "PASİF/REVİZE"
         return f'<KiralamaKalemi ID:{self.id} Ver:{self.versiyon_no} {status}>'
+
+
+class KiralamaKalemDondurma(BaseModel):
+    """Kiralama kalemi için dondurma (muaf gün) dönemleri."""
+    __tablename__ = 'kiralama_kalem_dondurma'
+
+    kalem_id = db.Column(db.Integer, db.ForeignKey('kiralama_kalemi.id'), nullable=False, index=True)
+    baslangic_tarihi = db.Column(db.Date, nullable=False)
+    bitis_tarihi = db.Column(db.Date, nullable=False)
+    muaf_gun_sayisi = db.Column(db.Integer, nullable=False)
+    aciklama = db.Column(db.Text, nullable=True)
+    tedarikci_alis_dondur = db.Column(db.Boolean, default=False, nullable=False)
+
+    kalem = db.relationship('KiralamaKalemi', back_populates='dondurmalar')
+
+    def __repr__(self):
+        return (
+            f'<KiralamaKalemDondurma kalem={self.kalem_id} '
+            f'{self.baslangic_tarihi}..{self.bitis_tarihi} muaf={self.muaf_gun_sayisi}>'
+        )

@@ -644,12 +644,18 @@
                                 <td>
                                     {% if row.islem_turu == 'kiralama' %}
                                         <span class="badge bg-warning text-dark"><i class="fa fa-key"></i> Kiralama</span>
+                                        {% if row.dondurma_aktif %}
+                                            <i class="fas fa-snowflake text-info ms-1" title="Dondurma süresi devam ediyor"></i>
+                                        {% endif %}
                                     {% elif row.islem_turu == 'nakliye' %}
                                         <span class="badge bg-primary"><i class="fa fa-truck"></i> Nakliye</span>
                                     {% elif row.islem_turu == 'fatura' %}
                                         <span class="badge bg-{% if 'Satış' in row.aciklama %}danger{% elif 'Alış' in row.aciklama %}success{% else %}secondary{% endif %}"><i class="fa fa-file-invoice"></i> Fatura</span>
                                     {% elif row.islem_turu == 'harici_kiralama' %}
                                         <span class="badge bg-danger"><i class="fa fa-arrow-up"></i> Tedarik</span>
+                                        {% if row.dondurma_aktif %}
+                                            <i class="fas fa-snowflake text-info ms-1" title="Tedarik alış dondurması devam ediyor"></i>
+                                        {% endif %}
                                     {% elif row.islem_turu in ('nakliye_satis', 'nakliye_tedarik') %}
                                         <span class="badge bg-info text-dark"><i class="fa fa-truck"></i> Nakliye Sat.</span>
                                     {% elif row.islem_turu == 'tahsilat' %}

@@ -301,13 +301,13 @@
             </td>
             <td>
                 {% if row.islem_turu == 'kiralama' %}
-                    <span class="tur-badge tur-kiralama">Kiralama</span>
+                    <span class="tur-badge tur-kiralama">Kiralama</span>{% if row.dondurma_aktif %} <span title="Dondurma süresi devam ediyor">&#10052;</span>{% endif %}
                 {% elif row.islem_turu == 'nakliye' %}
                     <span class="tur-badge tur-nakliye">Nakliye</span>
                 {% elif row.islem_turu == 'fatura' %}
                     <span class="tur-badge" style="background:{% if 'Satış' in row.aciklama %}#dc3545{% elif 'Alış' in row.aciklama %}#198754{% else %}#6c757d{% endif %};color:#fff;">Fatura</span>
                 {% elif row.islem_turu == 'harici_kiralama' %}
-                    <span class="tur-badge" style="background:#dc3545;color:#fff;">Tedarik</span>
+                    <span class="tur-badge" style="background:#dc3545;color:#fff;">Tedarik</span>{% if row.dondurma_aktif %} <span title="Tedarik alış dondurması devam ediyor">&#10052;</span>{% endif %}
                 {% elif row.islem_turu == 'nakliye_satis' %}
                     <span class="tur-badge" style="background:#0dcaf0;color:#000;">Nakliye Sat.</span>
                 {% else %}

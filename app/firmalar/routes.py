@@ -229,7 +229,8 @@ def _get_firma_bilgi_context(firma_id):
         subqueryload(Firma.kiralamalar).options(
             joinedload(Kiralama.firma_musteri),
             subqueryload(Kiralama.kalemler).options(
-                joinedload(KiralamaKalemi.ekipman).joinedload(Ekipman.sube)
+                joinedload(KiralamaKalemi.ekipman).joinedload(Ekipman.sube),
+                joinedload(KiralamaKalemi.dondurmalar),
             ),
             subqueryload(Kiralama.nakliyeler),
         ),

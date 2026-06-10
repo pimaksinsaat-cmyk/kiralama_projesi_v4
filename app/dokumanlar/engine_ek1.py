@@ -9,6 +9,7 @@ from flask import send_file, flash, redirect, url_for, current_app
 from docxtpl import DocxTemplate
 from .pdf_utils import convert_docx_to_pdf
 from app.utils import turkish_upper
+from app.services.kiralama_services import KiralamaService
 
 # Loglama yapılandırması
 logging.basicConfig(level=logging.INFO)
@@ -139,7 +140,7 @@ def kiralama_formu_yazdir(rental_id):
         genel_toplam = 0
         
         for kalem in kiralama.kalemler:
-            gun = (kalem.kiralama_bitis - kalem.kiralama_baslangici).days + 1
+            gun = KiralamaService.hesapla_kalem_etkin_gun(kalem, tam_sozlesme=True)
             birim_fiyat = float(kalem.kiralama_brm_fiyat or 0)
             nakliye = float(kalem.nakliye_satis_fiyat or 0)
             satir_toplam = (gun * birim_fiyat) + nakliye
