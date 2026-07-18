@@ -15,10 +15,11 @@ from app.services.nakliye_services import _net_kdv_orani
 from app.extensions import db
 from app.ayarlar.models import AppSettings
 from app.utils import klasor_adi_temizle, normalize_turkish_upper, tr_ilike
-from app.services.kiralama_services import KiralamaService
 
 
 def _kalem_cari_gun_sayisi(kalem, today_date, *, alis_tarafi=False):
+    from app.services.kiralama_services import KiralamaService
+
     if kalem.sonlandirildi and kalem.kiralama_bitis:
         return KiralamaService.hesapla_kalem_etkin_gun(
             kalem, tam_sozlesme=True, alis_tarafi=alis_tarafi,
@@ -47,10 +48,12 @@ class FirmaService(BaseService):
     @classmethod
     def validate(cls, instance, is_new=True):
         """Vergi numarası benzersizlik kontrolü."""
-        if instance.vergi_no:
-            mevcut = cls.find_one_by(vergi_no=instance.vergi_no)
+        vergi_no = instance.vergi_no.strip() if instance.vergi_no else None
+        if vergi_no:
+            with db.session.no_autoflush:
+                mevcut = cls.find_one_by(vergi_no=vergi_no)
             if mevcut and (is_new or mevcut.id != instance.id):
-                raise ValidationError(f"'{instance.vergi_no}' vergi numarası başka bir firmada kayıtlı!")
+                raise ValidationError(f"'{vergi_no}' vergi numarası başka bir firmada kayıtlı!")
 
     @classmethod
     def before_save(cls, instance, is_new=True):
@@ -210,7 +213,7 @@ class FirmaService(BaseService):
         """Aktif firmaları listeler (Dahili Kasa hariç)."""
         query = cls._get_base_query().filter(
             and_(
-                Firma.firma_adi != 'Dahili Kasa İşlemleri',
+                Firma.firma_adi.notin_(['DAHİLİ İŞLEMLER', 'Dahili Kasa İşlemleri']),
                 or_(Firma.is_active == True, Firma.is_active.is_(None))
             )
         )
@@ -658,8 +661,21 @@ class FirmaService(BaseService):
         rows = []
         included_hizmet_kaydi_ids = set()
         kiralama_kalemi_by_id = {}
-        for kir in (firma.kiralamalar or []):
-            for kalem in (kir.kalemler or []):
+        aktif_kiralamalar = [
+            kir for kir in (firma.kiralamalar or [])
+            if not getattr(kir, 'is_deleted', False)
+            and getattr(kir, 'is_active', True)
+        ]
+
+        def _aktif_kalemler(kiralama):
+            return [
+                kalem for kalem in (kiralama.kalemler or [])
+                if not getattr(kalem, 'is_deleted', False)
+                and getattr(kalem, 'is_active', True)
+            ]
+
+        for kir in aktif_kiralamalar:
+            for kalem in _aktif_kalemler(kir):
                 kiralama_kalemi_by_id[kalem.id] = kalem
 
         def _unified_row_sort_key(row):
@@ -707,12 +723,13 @@ class FirmaService(BaseService):
             return None
 
         # --- Kiralama ve nakliye satırları ---
-        for kir in sorted(firma.kiralamalar, key=lambda k: k.kiralama_form_no or ''):
+        for kir in sorted(aktif_kiralamalar, key=lambda k: k.kiralama_form_no or ''):
             form_tarihi = kir.kiralama_olusturma_tarihi or (kir.created_at.date() if kir.created_at else None)
             kdv_pct = kir.kdv_orani or 0
-            kir_kalem_map = {kalem.id: kalem for kalem in (kir.kalemler or [])}
+            aktif_kalemler = _aktif_kalemler(kir)
+            kir_kalem_map = {kalem.id: kalem for kalem in aktif_kalemler}
 
-            for kalem in kir.kalemler:
+            for kalem in aktif_kalemler:
                 if kalem.kiralama_baslangici:
                     if kalem.sonlandirildi and kalem.kiralama_bitis:
                         bitis = kalem.kiralama_bitis
@@ -755,7 +772,7 @@ class FirmaService(BaseService):
                     )})
 
             # Nakliye satırları
-            fallback_kalem = next(iter(kir.kalemler or []), None)
+            fallback_kalem = next(iter(aktif_kalemler), None)
             fallback_kod, fallback_sube = _nakliye_kalem_bilgisi(fallback_kalem)
             firma_kisa = ''
             if kir.firma_musteri and kir.firma_musteri.firma_adi:
@@ -805,7 +822,16 @@ class FirmaService(BaseService):
             joinedload(KiralamaKalemi.kiralama),
             joinedload(KiralamaKalemi.dondurmalar),
         ).filter_by(
-            harici_ekipman_tedarikci_id=firma.id, is_active=True
+            harici_ekipman_tedarikci_id=firma.id,
+            is_active=True,
+            is_deleted=False,
+        ).filter(
+            KiralamaKalemi.kiralama.has(
+                and_(
+                    Kiralama.is_active.is_(True),
+                    Kiralama.is_deleted.is_(False),
+                )
+            )
         ).all()
         for kalem in harici_kalemler:
             kiralama_kalemi_by_id[kalem.id] = kalem
@@ -1202,7 +1228,7 @@ class FirmaService(BaseService):
         # --- Birleşik model ile sırala ---
         # Bazı legacy satırlarda kiralama_id boş gelebilir; form no üzerinden linki tamamla.
         kiralama_id_by_form_no = {}
-        for k in (firma.kiralamalar or []):
+        for k in aktif_kiralamalar:
             for key in FirmaService._form_no_link_keys(k.kiralama_form_no):
                 kiralama_id_by_form_no[key] = k.id
         for row in rows:

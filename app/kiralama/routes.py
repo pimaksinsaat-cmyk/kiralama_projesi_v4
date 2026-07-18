@@ -6,7 +6,7 @@ from datetime import datetime, date, timedelta, timezone
 from urllib.parse import urlsplit
 from flask import render_template, redirect, url_for, flash, request, current_app, jsonify, session
 from flask_login import current_user, login_required
-from sqlalchemy import or_, func, not_
+from sqlalchemy import or_, func, not_, case
 from sqlalchemy.orm import joinedload
 
 from app import db
@@ -14,7 +14,7 @@ from app.kiralama import kiralama_bp
 
 # Modeller
 from app.firmalar.models import Firma
-from app.kiralama.models import Kiralama, KiralamaKalemi
+from app.kiralama.models import Kiralama, KiralamaKalemi, KiralamaKalemDondurma
 from app.filo.models import Ekipman
 from app.filo.forms import EKIPMAN_TIPI_SECENEKLERI
 from app.subeler.models import Sube
@@ -76,6 +76,125 @@ def _fmt_tr_date(value):
     if hasattr(value, 'strftime'):
         return value.strftime('%d.%m.%Y')
     return str(value)
+
+
+HACIM_ARALIKLARI = {
+    'ytd': 'Yılbaşından Bu Yana',
+    'all': 'Tüm Kayıtlar',
+    'last_3_months': 'Son 3 Ay',
+    'this_month': 'Bu Ay',
+}
+
+
+def _hacim_araligi_secimi(raw_value):
+    key = raw_value if raw_value in HACIM_ARALIKLARI else 'ytd'
+    today = date.today()
+    if key == 'all':
+        start = None
+    elif key == 'last_3_months':
+        start = today - timedelta(days=90)
+    elif key == 'this_month':
+        start = today.replace(day=1)
+    else:
+        start = today.replace(month=1, day=1)
+    return {
+        'key': key,
+        'label': HACIM_ARALIKLARI[key],
+        'start': start,
+        'start_iso': start.isoformat() if start else '',
+        'end': today,
+        'end_iso': today.isoformat(),
+    }
+
+
+def _kiralama_arama_filtreleri(search):
+    if not search:
+        return []
+    return [
+        Kiralama.kiralama_form_no.ilike(search),
+        Kiralama.firma_musteri.has(tr_ilike(Firma.firma_adi, search)),
+        Kiralama.kalemler.any(KiralamaKalemi.ekipman.has(Ekipman.kod.ilike(search))),
+        Kiralama.kalemler.any(tr_ilike(KiralamaKalemi.harici_ekipman_marka, search)),
+        Kiralama.kalemler.any(tr_ilike(KiralamaKalemi.harici_ekipman_model, search)),
+        Kiralama.kalemler.any(KiralamaKalemi.harici_ekipman_seri_no.ilike(search)),
+    ]
+
+
+def _sozlesme_hacmi_stats(search=None, hacim_araligi=None):
+    hacim_araligi = hacim_araligi or _hacim_araligi_secimi('ytd')
+
+    muaf_gun_subq = (
+        db.session.query(
+            KiralamaKalemDondurma.kalem_id.label('kalem_id'),
+            func.coalesce(func.sum(KiralamaKalemDondurma.muaf_gun_sayisi), 0).label('muaf_gun'),
+        )
+        .filter(not_(KiralamaKalemDondurma.is_deleted.is_(True)))
+        .group_by(KiralamaKalemDondurma.kalem_id)
+        .subquery()
+    )
+
+    brut_gun = KiralamaKalemi.kiralama_bitis - KiralamaKalemi.kiralama_baslangici + 1
+    muaf_gun = func.coalesce(muaf_gun_subq.c.muaf_gun, 0)
+    etkin_gun_raw = brut_gun - muaf_gun
+    etkin_gun = case(
+        (etkin_gun_raw < 0, 0),
+        else_=etkin_gun_raw,
+    )
+    kalem_bedeli = etkin_gun * func.coalesce(KiralamaKalemi.kiralama_brm_fiyat, 0)
+
+    base = (
+        db.session.query(
+            func.coalesce(func.sum(kalem_bedeli), 0).label('toplam_hacim'),
+            func.coalesce(
+                func.sum(
+                    case(
+                        (
+                            (KiralamaKalemi.is_active.is_(True)) & (KiralamaKalemi.sonlandirildi.is_(False)),
+                            kalem_bedeli,
+                        ),
+                        else_=0,
+                    )
+                ),
+                0,
+            ).label('aktif_sozlesme_hacmi'),
+            func.count(
+                func.distinct(
+                    case(
+                        (
+                            (KiralamaKalemi.is_active.is_(True)) & (KiralamaKalemi.sonlandirildi.is_(False)),
+                            Kiralama.id,
+                        )
+                    )
+                )
+            ).label('aktif_sozlesme_adedi'),
+            func.count(func.distinct(Kiralama.id)).label('toplam_sozlesme_adedi'),
+        )
+        .select_from(KiralamaKalemi)
+        .join(Kiralama, Kiralama.id == KiralamaKalemi.kiralama_id)
+        .outerjoin(muaf_gun_subq, muaf_gun_subq.c.kalem_id == KiralamaKalemi.id)
+        .filter(
+            not_(Kiralama.is_deleted.is_(True)),
+            not_(KiralamaKalemi.is_deleted.is_(True)),
+            KiralamaKalemi.kiralama_baslangici.isnot(None),
+            KiralamaKalemi.kiralama_bitis.isnot(None),
+            KiralamaKalemi.kiralama_bitis >= KiralamaKalemi.kiralama_baslangici,
+        )
+    )
+
+    if hacim_araligi.get('start'):
+        base = base.filter(KiralamaKalemi.kiralama_baslangici >= hacim_araligi['start'])
+    if hacim_araligi.get('end'):
+        base = base.filter(KiralamaKalemi.kiralama_baslangici <= hacim_araligi['end'])
+    if search:
+        base = base.filter(or_(*_kiralama_arama_filtreleri(search)))
+
+    row = base.one()
+    return {
+        'toplam_hacim': row.toplam_hacim or Decimal('0.00'),
+        'aktif_sozlesme_hacmi': row.aktif_sozlesme_hacmi or Decimal('0.00'),
+        'aktif_sozlesme_adedi': row.aktif_sozlesme_adedi or 0,
+        'toplam_sozlesme_adedi': row.toplam_sozlesme_adedi or 0,
+    }
 
 
 def _kapali_kalem_degisti_mi(k_data, kalem):
@@ -338,6 +457,7 @@ def index():
         if per_page not in {10, 25, 50, 100}:
             per_page = 25
         q = (request.args.get('q', '', type=str) or '').strip()
+        hacim_araligi = _hacim_araligi_secimi(request.args.get('hacim_araligi', 'ytd'))
 
         query = Kiralama.query.options(
             joinedload(Kiralama.firma_musteri),
@@ -347,14 +467,7 @@ def index():
 
         if q:
             search = f"%{q}%"
-            query = query.filter(or_(
-                Kiralama.kiralama_form_no.ilike(search),
-                Kiralama.firma_musteri.has(tr_ilike(Firma.firma_adi, search)),
-                Kiralama.kalemler.any(KiralamaKalemi.ekipman.has(Ekipman.kod.ilike(search))),
-                Kiralama.kalemler.any(tr_ilike(KiralamaKalemi.harici_ekipman_marka, search)),
-                Kiralama.kalemler.any(tr_ilike(KiralamaKalemi.harici_ekipman_model, search)),
-                Kiralama.kalemler.any(KiralamaKalemi.harici_ekipman_seri_no.ilike(search)),
-            ))
+            query = query.filter(or_(*_kiralama_arama_filtreleri(search)))
 
         # Dashboard kartları sayfalamadan bağımsız olarak, filtreye uyan tüm kayıtlar üzerinden hesaplanır.
         stats_raw = query.all()
@@ -362,13 +475,19 @@ def index():
         for kiralama in stats_raw:
             stats_kiralamalar[kiralama.id] = kiralama
 
+        hacim_stats = _sozlesme_hacmi_stats(
+            search=f"%{q}%" if q else None,
+            hacim_araligi=hacim_araligi,
+        )
+
         dashboard_stats = {
             'geciken': 0,
             'yaklasan': 0,
             'harici': 0,
-            'toplam_hacim': 0,
-            'aktif_sozlesme_adedi': 0,
-            'aktif_sozlesme_hacmi': 0,
+            'toplam_hacim': hacim_stats['toplam_hacim'],
+            'aktif_sozlesme_adedi': hacim_stats['aktif_sozlesme_adedi'],
+            'aktif_sozlesme_hacmi': hacim_stats['aktif_sozlesme_hacmi'],
+            'toplam_sozlesme_adedi': hacim_stats['toplam_sozlesme_adedi'],
         }
         harici_aktif_kalemler = []
         geciken_kalemler = []
@@ -376,10 +495,6 @@ def index():
 
         today = date.today()
         for kiralama in stats_kiralamalar.values():
-            kiralama_toplam_hacim = 0
-            kiralama_aktif_hacim = 0
-            kiralama_aktif_kalem_var = False
-
             for kalem in kiralama.kalemler:
                 if getattr(kalem, 'is_deleted', False):
                     continue
@@ -390,13 +505,7 @@ def index():
                 if gun_fark <= 0:
                     continue
 
-                bedel = gun_fark * (kalem.kiralama_brm_fiyat or 0)
-                kiralama_toplam_hacim += bedel
-
                 if kalem.is_active and not kalem.sonlandirildi:
-                    kiralama_aktif_kalem_var = True
-                    kiralama_aktif_hacim += bedel
-
                     kalan = (kalem.kiralama_bitis - today).days
                     if kalan < 0:
                         dashboard_stats['geciken'] += 1
@@ -455,10 +564,14 @@ def index():
                             ) or '-',
                         })
 
-            dashboard_stats['toplam_hacim'] += kiralama_toplam_hacim
-            dashboard_stats['aktif_sozlesme_hacmi'] += kiralama_aktif_hacim
-            if kiralama_aktif_kalem_var:
-                dashboard_stats['aktif_sozlesme_adedi'] += 1
+        harici_aktif_kalemler.sort(
+            key=lambda satir: (
+                (satir.get('kiralama_form_no') or '').casefold(),
+                (satir.get('tedarikci_adi') or '').casefold(),
+                (satir.get('musteri_adi') or '').casefold(),
+            ),
+            reverse=True,
+        )
 
         pagination = query.order_by(Kiralama.kiralama_form_no.desc()).paginate(page=page, per_page=per_page)
         kiralamalar = pagination.items
@@ -512,10 +625,11 @@ def index():
 
         try:
             kurlar = KiralamaService.get_tcmb_kurlari()
+            kur_son_guncelleme_text = KiralamaService.get_kur_son_guncelleme_text()
         except Exception as kur_err:
             current_app.logger.warning("TCMB kurlari alinamadı (index): %s", kur_err, exc_info=True)
             kurlar = {}
-        kur_son_guncelleme_text = KiralamaService.get_kur_son_guncelleme_text()
+            kur_son_guncelleme_text = 'Kur alınamadı'
 
         try:
             subeler = get_cached_subeler()
@@ -549,6 +663,8 @@ def index():
             nakliye_tedarikci_listesi=nakliye_tedarikci_listesi,
             recently_returned_kalem_ids=recently_returned_kalem_ids,
             dashboard_stats=dashboard_stats,
+            hacim_araligi=hacim_araligi,
+            hacim_araliklari=HACIM_ARALIKLARI,
             harici_aktif_kalemler=harici_aktif_kalemler,
             geciken_kalemler=geciken_kalemler,
             yaklasan_kalemler=yaklasan_kalemler,
@@ -578,7 +694,10 @@ def index():
                     'toplam_hacim': 0,
                     'aktif_sozlesme_adedi': 0,
                     'aktif_sozlesme_hacmi': 0,
+                    'toplam_sozlesme_adedi': 0,
                 },
+                hacim_araligi=_hacim_araligi_secimi('ytd'),
+                hacim_araliklari=HACIM_ARALIKLARI,
                 harici_aktif_kalemler=[],
                 geciken_kalemler=[],
                 yaklasan_kalemler=[],
@@ -696,6 +815,32 @@ def geri_yukle_kalici(kiralama_id):
         flash("Kiralama arşivden geri yüklenemedi.", "danger")
 
     return redirect(url_for('kiralama.silinenler'))
+
+
+@kiralama_bp.route('/silinenler/detay/<int:kiralama_id>')
+@login_required
+def silinenler_detay(kiralama_id):
+    """Arşivdeki silinmiş kiralamanın salt okunur detay ekranını gösterir."""
+    kiralama = (
+        Kiralama.query.options(
+            joinedload(Kiralama.firma_musteri),
+            joinedload(Kiralama.kalemler).joinedload(KiralamaKalemi.ekipman),
+            joinedload(Kiralama.kalemler).joinedload(KiralamaKalemi.dondurmalar),
+            joinedload(Kiralama.kalemler).joinedload(KiralamaKalemi.harici_tedarikci),
+            joinedload(Kiralama.kalemler).joinedload(KiralamaKalemi.nakliye_tedarikci),
+            joinedload(Kiralama.kalemler).joinedload(KiralamaKalemi.nakliye_araci),
+        )
+        .filter(
+            Kiralama.id == kiralama_id,
+            Kiralama.is_deleted.is_(True),
+        )
+        .first_or_404()
+    )
+    return render_template(
+        'kiralama/silinenler_detay.html',
+        kiralama=kiralama,
+        today=date.today(),
+    )
 
 
 @kiralama_bp.route('/detay/<int:kiralama_id>')
@@ -1705,13 +1850,21 @@ def api_kurlari_guncelle():
         })
     except Exception as e:
         current_app.logger.warning("Kur manuel güncelleme hatası: %s", e, exc_info=True)
-        kurlar = KiralamaService.get_tcmb_kurlari()
+        try:
+            kurlar = KiralamaService.get_tcmb_kurlari()
+            son_guncelleme = KiralamaService.get_kur_son_guncelleme_text()
+            error_message = 'Kur güncellenemedi. Son bilinen değer gösteriliyor.'
+        except Exception as read_error:
+            current_app.logger.error("Kayitli kur verisi de okunamadi: %s", read_error, exc_info=True)
+            kurlar = {}
+            son_guncelleme = 'Kur alınamadı'
+            error_message = 'Kur güncellenemedi ve kayıtlı geçerli kur bulunamadı.'
         return jsonify({
             'success': False,
-            'error': 'Kur güncellenemedi. Son bilinen değer gösteriliyor.',
+            'error': error_message,
             'kurlar': {
-                'USD': str(kurlar.get('USD', '0.00')),
-                'EUR': str(kurlar.get('EUR', '0.00')),
+                'USD': str(kurlar.get('USD', '')),
+                'EUR': str(kurlar.get('EUR', '')),
             },
-            'son_guncelleme': KiralamaService.get_kur_son_guncelleme_text(),
+            'son_guncelleme': son_guncelleme,
         }), 500

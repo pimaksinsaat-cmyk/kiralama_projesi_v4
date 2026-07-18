@@ -87,6 +87,16 @@
         color: #adb5bd;
         pointer-events: none;
     }
+    .archive-row {
+        cursor: pointer;
+    }
+    .archive-row:hover {
+        background-color: #f3f6ff;
+    }
+    .archive-row:focus-visible {
+        outline: 2px solid #667eea;
+        outline-offset: -2px;
+    }
 </style>
 
 <div class="container">
@@ -141,9 +151,11 @@
             </thead>
             <tbody>
                 {% for kiralama in kiralamalar %}
-                    <tr>
+                    <tr class="archive-row" data-detail-url="{{ url_for('kiralama.silinenler_detay', kiralama_id=kiralama.id) }}" tabindex="0" role="link" title="Kiralama detayını aç">
                         <td class="text-center fw-bold">{{ ((pagination.page - 1) * per_page + loop.index) if pagination else loop.index }}</td>
-                        <td class="fw-bold text-dark">{{ kiralama.kiralama_form_no }}</td>
+                        <td class="fw-bold">
+                            <a href="{{ url_for('kiralama.silinenler_detay', kiralama_id=kiralama.id) }}" class="text-dark text-decoration-none">{{ kiralama.kiralama_form_no }}</a>
+                        </td>
                         <td>
                             {% if kiralama.firma_musteri %}
                                 <span class="fw-bold text-primary">{{ kiralama.firma_musteri.firma_adi | truncate_name }}</span>
@@ -177,6 +189,9 @@
                         </td>
                         <td>{{ kiralama.deleted_at.strftime('%d.%m.%Y %H:%M') if kiralama.deleted_at else '-' }}</td>
                         <td class="text-end">
+                            <a href="{{ url_for('kiralama.silinenler_detay', kiralama_id=kiralama.id) }}" class="btn btn-outline-primary btn-sm fw-bold me-1">
+                                <i class="fas fa-info-circle me-1"></i>Detay
+                            </a>
                             <form method="POST" action="{{ url_for('kiralama.geri_yukle_kalici', kiralama_id=kiralama.id) }}" class="d-inline" onsubmit="return confirm('Bu kiralama kaydi geri yuklensin mi?');">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <button type="submit" class="btn btn-success btn-sm fw-bold">
@@ -219,4 +234,19 @@
         </div>
     {% endif %}
 </div>
+<script>
+    document.querySelectorAll('.archive-row').forEach(function (row) {
+        function openDetail(event) {
+            if (event.target.closest('a, button, form, input, select, textarea')) return;
+            window.location.href = row.dataset.detailUrl;
+        }
+
+        row.addEventListener('click', openDetail);
+        row.addEventListener('keydown', function (event) {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            event.preventDefault();
+            window.location.href = row.dataset.detailUrl;
+        });
+    });
+</script>
 {% endblock %}

@@ -152,7 +152,17 @@ def _build_kiralama_bilgi_tab(firma, start_date_str, end_date_str, kiralama_page
 
 def _filter_kiralamalar_bilgi(firma, start_date_str, end_date_str, key_fn=None):
     key_fn = key_fn or (lambda k: k.id or 0)
-    kiralamalar_all = sorted(firma.kiralamalar, key=key_fn, reverse=True)
+    # Firma ilişkisi soft-delete kayıtlarını otomatik filtrelemez. Bilgi
+    # ekranında yalnızca kullanıcıya açık olan kiralamaları göster.
+    kiralamalar_all = sorted(
+        (
+            k for k in (firma.kiralamalar or [])
+            if not getattr(k, 'is_deleted', False)
+            and getattr(k, 'is_active', True)
+        ),
+        key=key_fn,
+        reverse=True,
+    )
     rng = _parse_kiralama_tab_iso_dates(start_date_str, end_date_str)
     if rng:
         kiralamalar_filtered = _kiralamalar_filtered_by_olusturma_tarihi(kiralamalar_all, rng[0], rng[1])

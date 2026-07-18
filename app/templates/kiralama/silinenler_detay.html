@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block title %}Silinen Kiralama Detayı{% endblock %}
+
+{% block content %}
+<style>
+    .archive-detail-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 16px;
+    }
+    .archive-detail-title {
+        margin: 0;
+        font-size: 1.35rem;
+        font-weight: 800;
+        color: #343a40;
+    }
+    .archive-detail-subtitle {
+        margin: 4px 0 0;
+        color: #6c757d;
+        font-size: 0.85rem;
+    }
+    @media (max-width: 576px) {
+        .archive-detail-header {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+    }
+</style>
+
+<div class="container">
+    <div class="archive-detail-header">
+        <div>
+            <h1 class="archive-detail-title">Kiralama Detayı</h1>
+            <p class="archive-detail-subtitle">{{ kiralama.kiralama_form_no }} numaralı arşiv kaydı</p>
+        </div>
+        <a href="{{ url_for('kiralama.silinenler') }}" class="btn btn-outline-secondary btn-sm fw-bold">
+            <i class="fas fa-arrow-left me-2"></i>Silinen Kayıtlar
+        </a>
+    </div>
+
+    <div class="alert alert-warning py-2 small shadow-sm fw-bold" role="alert">
+        <i class="fas fa-archive me-2"></i>Bu kiralama silinmiş arşiv kaydıdır. Bilgiler salt okunur olarak gösterilmektedir.
+    </div>
+
+    {% include 'kiralama/detay_modal_content.html' %}
+
+    <div class="d-flex justify-content-end mt-3">
+        <form method="POST" action="{{ url_for('kiralama.geri_yukle_kalici', kiralama_id=kiralama.id) }}" onsubmit="return confirm('Bu kiralama kaydı geri yüklensin mi?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-success fw-bold">
+                <i class="fas fa-undo me-1"></i>Geri Yükle
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}

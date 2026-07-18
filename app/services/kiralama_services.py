@@ -6,7 +6,7 @@ from decimal import Decimal, InvalidOperation
 import logging
 import re
 from sqlalchemy import func, or_
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.extensions import db
 from app.utils import bugun as _bugun
@@ -22,8 +22,18 @@ from app.nakliyeler.models import Nakliye
 from app.araclar.models import Arac as NakliyeAraci
 from app.subeler.models import Sube
 from app.ayarlar.models import AppSettings
+from app.models.system_state import ExchangeRate
 
 logger = logging.getLogger(__name__)
+
+
+class ExchangeRateUnavailableError(RuntimeError):
+    """Ortak kur verisi okunamadiginda veya henuz hazir olmadiginda olusur."""
+
+
+class ExchangeRateRefreshError(RuntimeError):
+    """TCMB kur yenileme islemi tamamlanamadiginda olusur."""
+
 
 TURKIYE_TZ = timezone(timedelta(hours=3))
 
@@ -860,10 +870,7 @@ class KiralamaService(BaseService):
     UNDO_WINDOW_SECONDS = 60
 
     # KUR ÖNBELLEKLEME İÇİN SINIF DEĞİŞKENLERİ
-    _kur_cache = None
-    _kur_son_guncelleme = None
-    _cache_suresi_dakika = 60 # 1 saatte bir güncelle
-    _kur_default = {'USD': Decimal('0.00'), 'EUR': Decimal('0.00')}
+    _cache_suresi_dakika = 60
 
     @staticmethod
     def _extract_form_sequence(form_no, prefix, year):
@@ -929,53 +936,77 @@ class KiralamaService(BaseService):
 
     @classmethod
     def refresh_tcmb_kurlari(cls, force=False):
-        """
-        Kur önbelleğini TCMB'den günceller.
-        - Uygulama açılışında ve scheduler ile saatlik çağrılması hedeflenir.
-        - Başarısız olursa mevcut cache korunur; yoksa default kullanılır.
-        """
-        simdi = _turkiye_simdi()
-        if (
-            not force
-            and cls._kur_cache is not None
-            and cls._kur_son_guncelleme is not None
-            and (simdi - cls._kur_son_guncelleme) < timedelta(minutes=cls._cache_suresi_dakika)
-        ):
-            return cls._kur_cache
-
+        """TCMB kurlarını ortak veritabanına atomik olarak kaydeder."""
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        last_updated = cls.get_kur_son_guncelleme()
+        if not force and last_updated and now - last_updated < timedelta(minutes=cls._cache_suresi_dakika):
+            return cls.get_tcmb_kurlari()
         try:
             rates = cls._fetch_tcmb_kurlari()
-            cls._kur_cache = rates
-            cls._kur_son_guncelleme = simdi
+            if any(rates.get(code, Decimal('0')) <= 0 for code in ('USD', 'EUR')):
+                raise ValueError('TCMB yanıtında USD/EUR satış kuru bulunamadı.')
+        except Exception as exc:
+            db.session.rollback()
+            logger.warning("TCMB kur verisi alinamadi; son gecerli kurlar korunuyor: %s", exc)
+            raise ExchangeRateRefreshError('TCMB kur verisi alinamadi.') from exc
+
+        try:
+            for currency in ('USD', 'EUR'):
+                row = db.session.get(ExchangeRate, currency)
+                if row is None:
+                    row = ExchangeRate(currency=currency)
+                    db.session.add(row)
+                row.selling_rate = rates[currency]
+                row.source = 'TCMB'
+                row.fetched_at = now
+            db.session.commit()
             return rates
-        except Exception as e:
-            logger.warning("TCMB Kur çekme hatası (refresh): %s", e)
-            if cls._kur_cache is None:
-                cls._kur_cache = dict(cls._kur_default)
-                cls._kur_son_guncelleme = simdi
-            return cls._kur_cache
+        except SQLAlchemyError as exc:
+            db.session.rollback()
+            logger.exception("TCMB kurlari ortak veritabanina kaydedilemedi.")
+            raise ExchangeRateRefreshError('TCMB kurlari kaydedilemedi.') from exc
 
     @classmethod
     def get_tcmb_kurlari(cls):
-        """
-        İşlem anında sadece bellekten kur döner.
-        Ağ çağrısı yapmaz; cache boşsa default değer döner.
-        """
-        return cls._kur_cache if cls._kur_cache is not None else dict(cls._kur_default)
+        """Son başarılı USD/EUR kurlarını ortak veritabanından okur."""
+        try:
+            rows = ExchangeRate.query.filter(ExchangeRate.currency.in_(('USD', 'EUR'))).all()
+        except SQLAlchemyError as exc:
+            db.session.rollback()
+            logger.exception("Ortak kur tablosu okunamadi.")
+            raise ExchangeRateUnavailableError('Kur verisi okunamadi.') from exc
+
+        result = {
+            row.currency: Decimal(row.selling_rate)
+            for row in rows
+            if row.currency in ('USD', 'EUR') and Decimal(row.selling_rate) > 0
+        }
+        missing = [code for code in ('USD', 'EUR') if code not in result]
+        if missing:
+            raise ExchangeRateUnavailableError(
+                f"Kur verisi henuz hazir degil: {', '.join(missing)}."
+            )
+        return result
 
     @classmethod
     def get_kur_son_guncelleme(cls):
-        """Kur cache'in son güncelleme zamanını döner (datetime | None)."""
-        return cls._kur_son_guncelleme
+        """Ortak kur tablosundaki son güncelleme zamanını döndürür."""
+        try:
+            return db.session.query(db.func.max(ExchangeRate.fetched_at)).scalar()
+        except SQLAlchemyError as exc:
+            db.session.rollback()
+            logger.exception("Kur son guncelleme zamani okunamadi.")
+            raise ExchangeRateUnavailableError('Kur guncelleme bilgisi okunamadi.') from exc
 
     @classmethod
     def get_kur_son_guncelleme_text(cls):
         """Kur cache zamanini Turkiye saatiyle ekranda gosterilecek metne cevirir."""
-        son = cls._kur_son_guncelleme
+        son = cls.get_kur_son_guncelleme()
         if not son:
             return 'Henüz güncellenmedi'
-        if son.tzinfo is not None:
-            son = son.astimezone(TURKIYE_TZ)
+        if son.tzinfo is None:
+            son = son.replace(tzinfo=timezone.utc)
+        son = son.astimezone(TURKIYE_TZ)
         return son.strftime('%d.%m.%Y %H:%M:%S')
 
     @staticmethod

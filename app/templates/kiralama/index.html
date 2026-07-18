@@ -17,6 +17,9 @@
     .stats-value { font-size: 1.1rem; font-weight: 800; color: #343a40; }
     .stats-inline-row { display: flex; gap: 12px; align-items: center; flex-wrap: nowrap; white-space: nowrap; font-size: 0.85rem; font-weight: 700; }
     .stats-inline-row > span + span { border-left: 1px solid #dee2e6; padding-left: 12px; }
+    .stats-card-clickable { cursor: pointer; }
+    .stats-card-clickable:hover { background: #f8f9fa; border-color: #adb5bd; }
+    .stats-range-note { font-size: 0.65rem; color: #6c757d; font-weight: 700; margin-top: 3px; }
     
     .kur-box { font-size: 0.8rem; background: #f8f9fa; border-radius: 4px; padding: 4px 8px; border: 1px solid #e9ecef; }
     .kur-refresh-badge { cursor: pointer; user-select: none; }
@@ -184,12 +187,19 @@
                 </div>
             </div>
 
-            <div class="stats-card-mini border-start border-success border-4 shadow-sm">
-                <div class="stats-label">Sözleşme Hacmi</div>
+            <div
+                class="stats-card-mini stats-card-clickable border-start border-success border-4 shadow-sm"
+                role="button"
+                data-bs-toggle="modal"
+                data-bs-target="#sozlesmeHacmiModal"
+                title="Sözleşme hacmi tarih aralığını değiştir"
+            >
+                <div class="stats-label">SÖZLEŞME HACMİ (KDV HARİÇ)</div>
                 <div class="stats-inline-row">
-                    <span class="text-primary">Aktif: {{ "{:,.2f}".format(dashboard_stats.aktif_sozlesme_hacmi).replace(",", "X").replace(".", ",").replace("X", ".") }} TL</span>
-                    <span class="text-success">Toplam: {{ "{:,.2f}".format(dashboard_stats.toplam_hacim).replace(",", "X").replace(".", ",").replace("X", ".") }} TL</span>
+                    <span class="text-primary">Aktif: {{ "{:,.2f}".format(dashboard_stats.aktif_sozlesme_hacmi).replace(",", "X").replace(".", ",").replace("X", ".") }} TL ({{ dashboard_stats.aktif_sozlesme_adedi }} Ad.)</span>
+                    <span class="text-success">Toplam: {{ "{:,.2f}".format(dashboard_stats.toplam_hacim).replace(",", "X").replace(".", ",").replace("X", ".") }} TL ({{ dashboard_stats.toplam_sozlesme_adedi }} Ad.)</span>
                 </div>
+                <div class="stats-range-note">{{ hacim_araligi.label }}</div>
             </div>
 
         </div>
@@ -222,6 +232,7 @@
         <form method="GET" action="{{ url_for('kiralama.index') }}" class="d-flex mb-0" style="width: 35%;">
             <input type="text" name="q" class="form-control form-control-sm me-2 shadow-sm border-secondary" placeholder="Form no, müşteri veya makine kodu ara..." value="{{ q or '' }}">
             <input type="hidden" name="per_page" value="{{ per_page }}">
+            <input type="hidden" name="hacim_araligi" value="{{ hacim_araligi.key }}">
             <button type="submit" class="btn btn-dark btn-sm px-4 shadow-sm">ARA</button>
         </form>
     </div>
@@ -501,6 +512,7 @@
 <div class="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
     <form method="GET" action="{{ url_for('kiralama.index') }}" class="d-flex align-items-center gap-2 mb-0">
         <input type="hidden" name="q" value="{{ q or '' }}">
+        <input type="hidden" name="hacim_araligi" value="{{ hacim_araligi.key }}">
         <label for="kiralama-per-page" class="small text-muted mb-0">Sayfa başına</label>
         <select id="kiralama-per-page" name="per_page" class="form-select form-select-sm" style="max-width:130px;" onchange="this.form.submit()">
             <option value="10" {{ 'selected' if per_page == 10 else '' }}>10</option>
@@ -513,19 +525,19 @@
     {% if pagination %}
     <ul class="pagination mb-0">
         <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
-            <a class="page-link" href="{{ url_for('kiralama.index', page=pagination.prev_num, per_page=per_page, q=q) }}">&laquo;</a>
+            <a class="page-link" href="{{ url_for('kiralama.index', page=pagination.prev_num, per_page=per_page, q=q, hacim_araligi=hacim_araligi.key) }}">&laquo;</a>
         </li>
         {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
             {% if page_num %}
             <li class="page-item {% if page_num == pagination.page %}active{% endif %}">
-                <a class="page-link" href="{{ url_for('kiralama.index', page=page_num, per_page=per_page, q=q) }}">{{ page_num }}</a>
+                <a class="page-link" href="{{ url_for('kiralama.index', page=page_num, per_page=per_page, q=q, hacim_araligi=hacim_araligi.key) }}">{{ page_num }}</a>
             </li>
             {% else %}
             <li class="page-item disabled"><span class="page-link">&hellip;</span></li>
             {% endif %}
         {% endfor %}
         <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
-            <a class="page-link" href="{{ url_for('kiralama.index', page=pagination.next_num, per_page=per_page, q=q) }}">&raquo;</a>
+            <a class="page-link" href="{{ url_for('kiralama.index', page=pagination.next_num, per_page=per_page, q=q, hacim_araligi=hacim_araligi.key) }}">&raquo;</a>
         </li>
     </ul>
     {% endif %}
@@ -785,6 +797,49 @@
     <input type="hidden" name="return_url" class="js-return-url">
 </form>
 
+<div class="modal fade" id="sozlesmeHacmiModal" tabindex="-1" aria-labelledby="sozlesmeHacmiModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-md">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white py-2">
+                <h6 class="modal-title mb-0" id="sozlesmeHacmiModalLabel">
+                    <i class="fas fa-chart-line me-2"></i>Sözleşme Hacmi Aralığı
+                </h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Kapat"></button>
+            </div>
+            <form method="GET" action="{{ url_for('kiralama.index') }}">
+                <div class="modal-body">
+                    <input type="hidden" name="q" value="{{ q or '' }}">
+                    <input type="hidden" name="per_page" value="{{ per_page }}">
+                    <div class="list-group">
+                        {% for key, label in hacim_araliklari.items() %}
+                        <label class="list-group-item d-flex align-items-center gap-2">
+                            <input class="form-check-input m-0" type="radio" name="hacim_araligi" value="{{ key }}" {{ 'checked' if hacim_araligi.key == key else '' }}>
+                            <span class="fw-bold">{{ label }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                    <div class="small text-muted mt-3">
+                        Aktif aralık:
+                        <strong>{{ hacim_araligi.label }}</strong>
+                        {% if hacim_araligi.start_iso %}
+                            ({{ hacim_araligi.start.strftime('%d.%m.%Y') }} - {{ hacim_araligi.end.strftime('%d.%m.%Y') }})
+                        {% else %}
+                            (tarih sınırı yok)
+                        {% endif %}
+                    </div>
+                    <div class="small text-muted mt-1">
+                        Hesap makine kira getirilerini gösterir; KDV ve nakliye dahil değildir.
+                    </div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Kapat</button>
+                    <button type="submit" class="btn btn-sm btn-success">Uygula</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="detayModal" tabindex="-1" aria-labelledby="detayModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
@@ -909,18 +964,30 @@
             </div>
             <div class="modal-body p-2">
                 <div class="table-responsive">
-                    <table class="table table-sm table-striped table-hover mb-0">
+                    <table class="table table-sm table-striped table-hover mb-0" id="hariciAktifTable">
                         <thead class="table-light">
                             <tr>
-                                <th>Form No</th>
-                                <th>Dış Tedarik Firması</th>
+                                <th data-sort-key="formNo" aria-sort="descending">
+                                    <button type="button" class="btn btn-link btn-sm p-0 text-dark fw-bold text-decoration-none harici-sort-btn" data-sort-key="formNo" title="Form numarasına göre sırala">
+                                        Form No <span class="harici-sort-indicator" aria-hidden="true">↓</span>
+                                    </button>
+                                </th>
+                                <th data-sort-key="tedarikci" aria-sort="none">
+                                    <button type="button" class="btn btn-link btn-sm p-0 text-dark fw-bold text-decoration-none harici-sort-btn" data-sort-key="tedarikci" title="Dış tedarik firmasına göre sırala">
+                                        Dış Tedarik Firması <span class="harici-sort-indicator" aria-hidden="true"></span>
+                                    </button>
+                                </th>
                                 <th>Ekipman Adı/Özellik</th>
-                                <th>Çalıştığı Firma</th>
+                                <th data-sort-key="musteri" aria-sort="none">
+                                    <button type="button" class="btn btn-link btn-sm p-0 text-dark fw-bold text-decoration-none harici-sort-btn" data-sort-key="musteri" title="Çalıştığı firmaya göre sırala">
+                                        Çalıştığı Firma <span class="harici-sort-indicator" aria-hidden="true"></span>
+                                    </button>
+                                </th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for satir in harici_aktif_kalemler %}
-                            <tr>
+                            <tr data-harici-sort-row data-form-no="{{ satir.kiralama_form_no or '' }}" data-tedarikci="{{ satir.tedarikci_adi or '' }}" data-musteri="{{ satir.musteri_adi or '' }}">
                                 <td class="fw-bold">{{ satir.kiralama_form_no }}</td>
                                 <td>{{ satir.tedarikci_adi }}</td>
                                 <td>
@@ -1052,7 +1119,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     refreshReturnUrls();
     restoreListState();
-    restorePendingUndoToast();
 
     function closeModals() {
         backdrop.style.display = 'none';
@@ -2057,6 +2123,75 @@ document.addEventListener('DOMContentLoaded', function() {
         hariciAktifOpen.style.cursor = 'pointer';
         hariciAktifOpen.style.textDecoration = 'underline';
     }
+
+    const hariciAktifTable = document.getElementById('hariciAktifTable');
+    if (hariciAktifTable) {
+        const hariciSortState = { key: 'formNo', dir: 'desc' };
+        const hariciSortButtons = hariciAktifTable.querySelectorAll('.harici-sort-btn');
+        const hariciSortHeaders = hariciAktifTable.querySelectorAll('th[data-sort-key]');
+
+        function getHariciSortValue(row, key) {
+            return (row.dataset[key] || '').trim();
+        }
+
+        function compareHariciValues(left, right, dir) {
+            if (!left && right) return 1;
+            if (left && !right) return -1;
+
+            const result = left.localeCompare(right, 'tr', {
+                numeric: true,
+                sensitivity: 'base'
+            });
+            return dir === 'asc' ? result : -result;
+        }
+
+        function updateHariciSortIndicators() {
+            hariciSortHeaders.forEach((header) => {
+                const active = header.dataset.sortKey === hariciSortState.key;
+                header.setAttribute(
+                    'aria-sort',
+                    active ? (hariciSortState.dir === 'asc' ? 'ascending' : 'descending') : 'none'
+                );
+                const indicator = header.querySelector('.harici-sort-indicator');
+                if (indicator) {
+                    indicator.textContent = active ? (hariciSortState.dir === 'asc' ? '↑' : '↓') : '';
+                }
+            });
+        }
+
+        function sortHariciAktifRows(key, dir) {
+            const tbody = hariciAktifTable.querySelector('tbody');
+            if (!tbody) return;
+
+            const rows = Array.from(tbody.querySelectorAll('tr[data-harici-sort-row]'));
+            rows
+                .map((row, index) => ({ row, index }))
+                .sort((a, b) => {
+                    const compareResult = compareHariciValues(
+                        getHariciSortValue(a.row, key),
+                        getHariciSortValue(b.row, key),
+                        dir
+                    );
+                    return compareResult || (a.index - b.index);
+                })
+                .forEach(({ row }) => tbody.appendChild(row));
+        }
+
+        hariciSortButtons.forEach((button) => {
+            button.addEventListener('click', () => {
+                const key = button.dataset.sortKey;
+                if (!key) return;
+
+                hariciSortState.dir = hariciSortState.key === key && hariciSortState.dir === 'asc' ? 'desc' : 'asc';
+                hariciSortState.key = key;
+                sortHariciAktifRows(hariciSortState.key, hariciSortState.dir);
+                updateHariciSortIndicators();
+            });
+        });
+
+        updateHariciSortIndicators();
+    }
+
     const yaklasanOpen = document.getElementById('yaklasan-open');
     const gecikenOpen = document.getElementById('geciken-open');
     [yaklasanOpen, gecikenOpen].forEach((el) => {
@@ -2151,6 +2286,8 @@ document.addEventListener('DOMContentLoaded', function() {
             setTimeout(alignKalemRows, 50);
         });
     });
+
+    restorePendingUndoToast();
 });
 </script>
 {% endblock %}
