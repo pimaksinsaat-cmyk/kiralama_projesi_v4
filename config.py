@@ -63,6 +63,16 @@ class Config:
     CARI_DONEM_FILTRESI_ENABLED = _env_to_bool('CARI_DONEM_FILTRESI_ENABLED', True)
 
 
+    # Mobil API JWT ayarlari
+    API_JWT_SECRET_KEY = os.environ.get('API_JWT_SECRET_KEY')
+    API_JWT_ISSUER = os.environ.get('API_JWT_ISSUER', 'kiralama-api')
+    API_JWT_AUDIENCE = os.environ.get('API_JWT_AUDIENCE', 'kiralama-mobile')
+    API_ACCESS_TOKEN_SECONDS = int(os.environ.get('API_ACCESS_TOKEN_SECONDS', '900'))
+    API_REFRESH_TOKEN_SECONDS = int(os.environ.get('API_REFRESH_TOKEN_SECONDS', '2592000'))
+    API_REFRESH_GRACE_SECONDS = int(os.environ.get('API_REFRESH_GRACE_SECONDS', '45'))
+    API_JWT_LEEWAY_SECONDS = int(os.environ.get('API_JWT_LEEWAY_SECONDS', '10'))
+
+
 class ProductionConfig(Config):
     """HTTPS üretim dağıtımı: SECRET_KEY ortamdan gelmeli, güvenli çerez."""
     DEBUG = False

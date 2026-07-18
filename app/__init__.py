@@ -8,7 +8,6 @@ from app.extensions import db, migrate, login_manager, server_session
 from sqlalchemy import inspect
 from flask_login import current_user, logout_user
 from datetime import timedelta
-from flask import session
 
 csrf = CSRFProtect()
 
@@ -42,11 +41,6 @@ def create_app(config_class=Config):
     if db_url and not app.config.get("TESTING"):
         db_url = db_url.replace("postgres://", "postgresql://")
         app.config['SQLALCHEMY_DATABASE_URI'] = db_url
-
-
-    # --- Günlük Otomatik Yedekleme (APScheduler) ---
-    # Werkzeug reloader'ın child sürecinde veya production'da başlat
-    import os as _os
 
     # Admin kullanıcıyı migration sonrası otomatik oluştur
     def ensure_admin():
@@ -133,6 +127,9 @@ def create_app(config_class=Config):
     # Tüm uygulamayı login ile koru
     @app.before_request
     def require_login():
+        if request.blueprint == 'api':
+            return None
+
         acik_endpointler = ['auth.login', 'auth.logout', 'static']
         
         if request.endpoint in acik_endpointler:
@@ -195,13 +192,17 @@ def create_app(config_class=Config):
             mark_seen(current_user, now=now)
             db.session.commit()
     
-        # Hareketsizlik kontrolü — her istekte süreyi sıfırla
-        #session.permanent = True
+        # Hareketsizlik kontrolü - her istekte süreyi sıfırla
         app.permanent_session_lifetime = timedelta(seconds=1800)
 
     # --- BLUEPRINT (MODÜL) KAYITLARI ---
 
     # 1. Ana Sayfa
+    # Mobil JSON API
+    from app.api import api_bp
+    app.register_blueprint(api_bp)
+    csrf.exempt(api_bp)
+
     from app.main import main_bp
     app.register_blueprint(main_bp)
 
@@ -223,6 +224,7 @@ def create_app(config_class=Config):
 
     # 4. Kiralama (Sözleşmeler)
     from app.kiralama import kiralama_bp
+    from app.kiralama import routes  # noqa: F401
     app.register_blueprint(kiralama_bp, url_prefix='/kiralama')
 
     # 4.1 Teklifler
@@ -290,80 +292,6 @@ def create_app(config_class=Config):
             return {'safe_next_url': None}
         return {'safe_next_url': get_safe_next_redirect(request.args.get('next'))}
     
-    # Sadece ana uygulama çalışırken migrate işlemleri otomatik yapılsın
-    # if os.environ.get("FLASK_RUN_FROM_CLI") == "true":
-    #     with app.app_context():
-    #         from alembic.util.exc import CommandError
-    #         from flask_migrate import stamp, upgrade
-    #         try:
-    #             upgrade()
-    #         except CommandError as exc:
-    #             # Eski/silinmis bir revizyon kaydi varsa uygulama acilisini kilitleme.
-    #             if "Can't locate revision identified by" in str(exc):
-    #                 app.logger.warning(
-    #                     "Alembic revizyonu bulunamadi. Mevcut DB surumu head olarak damgalaniyor: %s",
-    #                 exc,
-    #             )
-    #             stamp(revision='head')
-    #         # else:
-            #     raise
-
-        # with app.app_context():
-        #     from app.auth.models import User
-        #     from app.ayarlar.models import AppSettings
-        #     # İlk kurulumda tablo henüz yoksa sorgu patlamasın
-        #     if inspect(db.engine).has_table('user'):
-        #         if not User.query.filter_by(username='admin').first():
-        #             yeni_admin = User(
-        #                 username='admin',
-        #                 rol='admin',
-        #                 is_active=True
-        #             )
-                #             yeni_admin.set_password('123456')
-                #             db.session.add(yeni_admin)
-                #             db.session.commit()
-                #
-                #     if inspect(db.engine).has_table('app_settings'):
-                #         AppSettings.get_current()
-
-    # --- Günlük Otomatik Yedekleme (APScheduler) ---
-    # Werkzeug reloader'ın child sürecinde veya production'da başlat
-    import os as _os
-    if not app.debug or _os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
-        try:
-            import atexit
-            from apscheduler.schedulers.background import BackgroundScheduler
-            from app.db_menu.routes import otomatik_yedek_al
-            from app.services.kiralama_services import KiralamaService
-
-            _scheduler = BackgroundScheduler(daemon=True)
-            _scheduler.add_job(
-                func=lambda: KiralamaService.refresh_tcmb_kurlari(force=True),
-                trigger='interval',
-                hours=1,
-                id='saatlik_kur_guncelle',
-                replace_existing=True,
-                coalesce=True,
-                max_instances=1,
-            )
-            _scheduler.add_job(
-                func=lambda: otomatik_yedek_al(app),
-                trigger='cron',
-                hour=2,
-                minute=0,
-                id='gunluk_yedek',
-                replace_existing=True,
-            )
-            _scheduler.start()
-            atexit.register(lambda: _scheduler.shutdown(wait=False))
-            # Uygulama ilk başladığında kurları önceden çek (işlem anında ağ çağrısı olmasın)
-            KiralamaService.refresh_tcmb_kurlari(force=True)
-            # Uygulama ilk başladığında bugünün yedeğini al
-            otomatik_yedek_al(app)
-        except Exception:
-            pass
-
     return app
-    
 
-    
+
