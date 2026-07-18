@@ -16,8 +16,25 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
+            set -euo pipefail
+
             cd /root/kiralama_projesi_v4
-            git pull origin main
+
+            APP_SERVICE="kiralama_v4.service"
+            SCHEDULER_SERVICE="kiralama_scheduler.service"
+
+            echo ">>> Canli servis on kontrolleri"
+            systemctl is-active --quiet "$APP_SERVICE"
+
+            git pull --ff-only origin main
+
+            if ! systemctl list-unit-files "$SCHEDULER_SERVICE" --no-legend --no-pager | grep -q "^$SCHEDULER_SERVICE"; then
+              echo ">>> Scheduler servisi kuruluyor"
+              install -m 0644 deploy/kiralama_scheduler.service "/etc/systemd/system/$SCHEDULER_SERVICE"
+              systemctl daemon-reload
+              systemctl enable "$SCHEDULER_SERVICE"
+            fi
+
             source venv/bin/activate
             pip install -r requirements.txt
             export FLASK_APP=run.py
@@ -38,6 +55,36 @@ jobs:
               exit 1
             fi
 
+            MIGRATION_BACKUP="/tmp/kiralama_pre_migration_$(date +%Y%m%d_%H%M%S).dump"
+            echo ">>> Migration oncesi DB yedegi: $MIGRATION_BACKUP"
+            pg_dump "$DATABASE_URL" --format=custom --file="$MIGRATION_BACKUP"
+
+            echo ">>> Mevcut migration durumu"
+            python -m flask db current
+
+            echo ">>> Migration head kontrolu"
+            HEADS_OUTPUT=$(python -m flask db heads)
+            echo "$HEADS_OUTPUT"
+            echo "$HEADS_OUTPUT" | grep -q "b5c6d7e8f9a0"
+
+            echo ">>> Uygulama servisi durduruluyor"
+            systemctl stop "$APP_SERVICE"
+            migration_status=0
+            trap 'if [ "$migration_status" -ne 0 ]; then systemctl start "$APP_SERVICE" || true; fi' EXIT
+
             python -m flask db upgrade
 
-            systemctl restart kiralama_v4.service
+            echo ">>> Migration sonrasi durum"
+            CURRENT_OUTPUT=$(python -m flask db current)
+            echo "$CURRENT_OUTPUT"
+            echo "$CURRENT_OUTPUT" | grep -q "b5c6d7e8f9a0"
+
+            echo ">>> Uygulama ve scheduler baslatiliyor"
+            systemctl start "$APP_SERVICE"
+            systemctl restart "$SCHEDULER_SERVICE"
+            systemctl is-active --quiet "$APP_SERVICE"
+            systemctl is-active --quiet "$SCHEDULER_SERVICE"
+            migration_status=1
+            trap - EXIT
+
+            echo ">>> Deploy tamamlandi"

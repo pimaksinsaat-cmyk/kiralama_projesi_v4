@@ -77,6 +77,7 @@ def test_kiralama_delete_undo_ui_flow(app, client, live_server):
             sube_id=sube.id,
         )
         db.session.add(ekipman)
+        db.session.flush()
 
         kiralama = Kiralama(
             kiralama_form_no=f"PF-UI-{uuid.uuid4().hex[:6]}",
@@ -105,10 +106,7 @@ def test_kiralama_delete_undo_ui_flow(app, client, live_server):
     # Ensure Flask session cookie exists for browser context
     client.get("/kiralama/index")
     session_cookie_name = app.config.get("SESSION_COOKIE_NAME", "session")
-    session_cookie = next(
-        (cookie for cookie in client.cookie_jar if cookie.name == session_cookie_name),
-        None,
-    )
+    session_cookie = client.get_cookie(session_cookie_name)
     assert session_cookie is not None, "Test session cookie not found"
 
     with sync_playwright() as playwright:
@@ -116,7 +114,7 @@ def test_kiralama_delete_undo_ui_flow(app, client, live_server):
         context = browser.new_context()
         context.add_cookies([
             {
-                "name": session_cookie.name,
+                "name": session_cookie.key,
                 "value": session_cookie.value,
                 "domain": "127.0.0.1",
                 "path": "/",

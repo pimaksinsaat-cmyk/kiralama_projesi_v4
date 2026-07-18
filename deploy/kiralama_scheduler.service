@@ -1,0 +1,18 @@
+[Unit]
+Description=Kiralama background scheduler
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root/kiralama_projesi_v4
+EnvironmentFile=-/root/kiralama_projesi_v4/.env
+Environment=FLASK_CONFIG=production
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/root/kiralama_projesi_v4/venv/bin/python /root/kiralama_projesi_v4/scheduler.py
+Restart=always
+RestartSec=10
+User=root
+
+[Install]
+WantedBy=multi-user.target
