@@ -8,11 +8,30 @@ services:
       - "5000:10000"
     volumes:
       - .:/app
+      - backups_data:/app/backups
     environment:
       - FLASK_APP=run.py
+      - FLASK_CONFIG=production
       - DATABASE_URL=postgresql://postgres:gizlisifre@db:5432/kiralama_db
+      - SECRET_KEY=${SECRET_KEY:?SECRET_KEY must be set in local .env}
       - TEMPLATES_AUTO_RELOAD=true
       - DISABLE_STATIC_CACHE=true
+    depends_on:
+      db:
+        condition: service_healthy
+
+  scheduler:
+    build: .
+    container_name: kiralama_scheduler
+    restart: unless-stopped
+    command: python scheduler.py
+    volumes:
+      - .:/app
+      - backups_data:/app/backups
+    environment:
+      - FLASK_CONFIG=production
+      - DATABASE_URL=postgresql://postgres:gizlisifre@db:5432/kiralama_db
+      - SECRET_KEY=${SECRET_KEY:?SECRET_KEY must be set in local .env}
     depends_on:
       db:
         condition: service_healthy
@@ -36,3 +55,4 @@ services:
 
 volumes:
   postgres_data:
+  backups_data:
