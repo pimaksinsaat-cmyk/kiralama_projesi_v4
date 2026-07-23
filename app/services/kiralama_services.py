@@ -5,7 +5,7 @@ from datetime import datetime, date, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 import logging
 import re
-from sqlalchemy import func, or_
+from sqlalchemy import and_, func, or_
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.extensions import db
@@ -25,6 +25,16 @@ from app.ayarlar.models import AppSettings
 from app.models.system_state import ExchangeRate
 
 logger = logging.getLogger(__name__)
+
+
+def _soft_delete_hizmet_kaydi(kayit, actor_id=None):
+    """Cari kaydini geri izlenebilir sekilde pasiflestirir."""
+    kayit.is_deleted = True
+    kayit.is_active = False
+    kayit.deleted_at = datetime.now(timezone.utc)
+    if actor_id is not None and hasattr(kayit, 'deleted_by_id'):
+        kayit.deleted_by_id = actor_id
+    db.session.add(kayit)
 
 
 class ExchangeRateUnavailableError(RuntimeError):
@@ -109,9 +119,13 @@ def to_int_or_none(value):
     except (ValueError, TypeError):
         return None
 
-def guncelle_cari_toplam(kiralama_id, auto_commit=True):
+def guncelle_cari_toplam(kiralama_id, auto_commit=True, sync_firma_cache=True):
     """Dış modüllerin kiralama cari toplamını tetiklemesi için köprü fonksiyon."""
-    return KiralamaService.guncelle_cari_toplam(kiralama_id, auto_commit=auto_commit)
+    return KiralamaService.guncelle_cari_toplam(
+        kiralama_id,
+        auto_commit=auto_commit,
+        sync_firma_cache=sync_firma_cache,
+    )
 
 
 # ==============================================================================
@@ -125,10 +139,7 @@ class KiralamaKalemiService(BaseService):
 
     @staticmethod
     def _soft_delete_hizmet_kaydi(kayit):
-        kayit.is_deleted = True
-        kayit.is_active = False
-        kayit.deleted_at = datetime.now(timezone.utc)
-        db.session.add(kayit)
+        _soft_delete_hizmet_kaydi(kayit)
 
     @staticmethod
     def _validate_donus_nakliye_inputs(
@@ -375,14 +386,18 @@ class KiralamaKalemiService(BaseService):
         cls._cleanup_legacy_musteri_donus_cari(kalem)
 
         # Dönüş müşteri tahakkuku: planlanan bedeli yaz, sapma varsa farkı ayrı satır yaz.
-        HizmetKaydi.query.filter(
-            HizmetKaydi.ozel_id == kalem.id, 
-            HizmetKaydi.aciklama.like('Müşteri Dönüş Nakliye Bedeli%') 
-        ).delete(synchronize_session=False)
-        HizmetKaydi.query.filter(
+        for kayit in HizmetKaydi.query.filter(
             HizmetKaydi.ozel_id == kalem.id,
-            HizmetKaydi.aciklama.like('Nakliye Farkı%')
-        ).delete(synchronize_session=False)
+            HizmetKaydi.aciklama.like('Müşteri Dönüş Nakliye Bedeli%'),
+            HizmetKaydi.is_deleted == False,
+        ).all():
+            _soft_delete_hizmet_kaydi(kayit)
+        for kayit in HizmetKaydi.query.filter(
+            HizmetKaydi.ozel_id == kalem.id,
+            HizmetKaydi.aciklama.like('Nakliye Farkı%'),
+            HizmetKaydi.is_deleted == False,
+        ).all():
+            _soft_delete_hizmet_kaydi(kayit)
 
         # Checkbox durumunu kontrol et
         donus_checkbox_aktif = bool(kalem.donus_nakliye_fatura_et)
@@ -608,7 +623,7 @@ class KiralamaKalemiService(BaseService):
                     ).order_by(HizmetKaydi.id.asc()).all()
                     donus_taseron_cari = donus_taseron_kayitlari[0] if donus_taseron_kayitlari else HizmetKaydi(yon='gelen')
                     for fazla_kayit in donus_taseron_kayitlari[1:]:
-                        db.session.delete(fazla_kayit)
+                        _soft_delete_hizmet_kaydi(fazla_kayit)
 
                     donus_taseron_cari.firma_id = kalem.donus_nakliye_tedarikci_id
                     donus_taseron_cari.tarih = kalem.kiralama_bitis or date.today()
@@ -829,19 +844,25 @@ class KiralamaKalemiService(BaseService):
             kalem.ekipman.calisma_durumu = 'kirada'
 
         # Sonlandırma sırasında açılmış taşeron ve nakliye farkı kayıtlarını geri al
-        HizmetKaydi.query.filter(
+        for kayit in HizmetKaydi.query.filter(
             HizmetKaydi.ozel_id == kalem.id,
             HizmetKaydi.yon == 'gelen',
-            HizmetKaydi.aciklama.like('Dönüş Nakliye:%')
-        ).delete(synchronize_session=False)
-        HizmetKaydi.query.filter(
+            HizmetKaydi.aciklama.like('Dönüş Nakliye:%'),
+            HizmetKaydi.is_deleted == False,
+        ).all():
+            _soft_delete_hizmet_kaydi(kayit)
+        for kayit in HizmetKaydi.query.filter(
             HizmetKaydi.ozel_id == kalem.id,
-            HizmetKaydi.aciklama.like('Müşteri Dönüş Nakliye Bedeli%')
-        ).delete(synchronize_session=False)
-        HizmetKaydi.query.filter(
+            HizmetKaydi.aciklama.like('Müşteri Dönüş Nakliye Bedeli%'),
+            HizmetKaydi.is_deleted == False,
+        ).all():
+            _soft_delete_hizmet_kaydi(kayit)
+        for kayit in HizmetKaydi.query.filter(
             HizmetKaydi.ozel_id == kalem.id,
-            HizmetKaydi.aciklama.like('Nakliye Farkı%')
-        ).delete(synchronize_session=False)
+            HizmetKaydi.aciklama.like('Nakliye Farkı%'),
+            HizmetKaydi.is_deleted == False,
+        ).all():
+            _soft_delete_hizmet_kaydi(kayit)
 
         # Dönüş özmal sefer kaydını geri al
         if kalem.kiralama:
@@ -1019,6 +1040,83 @@ class KiralamaService(BaseService):
         else:
             # Sadece gidiş seçildi: doğrudan kullan
             return to_decimal(kalem.nakliye_satis_fiyat)
+
+    @staticmethod
+    def _swap_reason_for_kalem(kalem):
+        """Kalemin swap nedenini tek kaynaktan çözer; legacy kalemlerde None döner."""
+        from app.makinedegisim.models import MakineDegisim
+
+        if not kalem or not kalem.id:
+            return None
+        degisim = MakineDegisim.query.filter(
+            MakineDegisim.is_deleted == False,
+            db.or_(
+                MakineDegisim.eski_kalem_id == kalem.id,
+                MakineDegisim.yeni_kalem_id == kalem.id,
+            ),
+        ).order_by(MakineDegisim.id.desc()).first()
+        return (degisim.neden or '').strip().lower() if degisim else None
+
+    @classmethod
+    def _soft_delete_donus_nakliye_artifacts(cls, kalem):
+        """Kaleme bağlı dönüş seferi ve cari kayıtlarını transaction içinde kapatır."""
+        if not kalem or not kalem.kiralama:
+            return 0
+
+        form_no = kalem.kiralama.kiralama_form_no or ''
+        seferler = Nakliye.query.filter(
+            Nakliye.kiralama_id == kalem.kiralama_id,
+            Nakliye.aciklama == f"Dönüş: {form_no} #{kalem.id}",
+            Nakliye.is_active == True,
+        ).all()
+        kapatilan = 0
+        nakliye_ids = {sefer.id for sefer in seferler}
+        for sefer in seferler:
+            sefer.is_active = False
+            db.session.add(sefer)
+            kapatilan += 1
+
+        cari_kayitlari = HizmetKaydi.query.filter(
+            HizmetKaydi.is_deleted == False,
+            db.or_(
+                HizmetKaydi.nakliye_id.in_(nakliye_ids or {-1}),
+                and_(
+                    HizmetKaydi.ozel_id == kalem.id,
+                    HizmetKaydi.aciklama.like('Dönüş Nakliye:%'),
+                ),
+            ),
+        ).all()
+        for kayit in cari_kayitlari:
+            _soft_delete_hizmet_kaydi(kayit)
+            kapatilan += 1
+        return kapatilan
+
+    @classmethod
+    def reconcile_swap_donus_nakliye(cls, kalem, neden=None, explicit_sales=None):
+        """Swap politikasına göre eski kalemin dönüş hareketini reconcile eder.
+
+        Pozitif swap ekranı bedeli yeni swap seferinde tutulur; eski dönüş seferi
+        bununla birlikte kapatılır. Arıza/periyodik swaplar müşteri dönüşünü
+        bedelsiz bırakır. Müşteri talebi swaplarında mevcut ücretli dönüş korunur.
+        """
+        reason = (neden or cls._swap_reason_for_kalem(kalem) or '').strip().lower()
+        explicit_sales = to_decimal(explicit_sales)
+        if explicit_sales > 0 or reason in ('serviste', 'periyodik', 'bakimda'):
+            return cls._soft_delete_donus_nakliye_artifacts(kalem)
+        return 0
+
+    @classmethod
+    def reconcile_donus_nakliye_policy(cls, kalem):
+        """Form güncellemesinde dönüş seferini güncel fiyat politikasına uyarlar."""
+        reason = cls._swap_reason_for_kalem(kalem)
+        if reason in ('serviste', 'periyodik', 'bakimda'):
+            return cls._soft_delete_donus_nakliye_artifacts(kalem)
+        if reason == 'bosta':
+            # Müşteri talebi swapında daha önce açıkça oluşturulmuş ücret korunur.
+            return 0
+        if kalem.sonlandirildi and cls._get_donus_nakliye_satis(kalem) <= 0:
+            return cls._soft_delete_donus_nakliye_artifacts(kalem)
+        return 0
 
     @staticmethod
     def _get_planlanan_donus_nakliye_satis(kalem):
@@ -1255,7 +1353,7 @@ class KiralamaService(BaseService):
         return kiralama_tutari + nakliye_tutari
 
     @staticmethod
-    def guncelle_cari_toplam(kiralama_id, auto_commit=True):
+    def guncelle_cari_toplam(kiralama_id, auto_commit=True, sync_firma_cache=True):
         """Kiralamaya ait müşteri carisini bekleyen (tahakkuk eden) tutara göre günceller."""
         kiralama = db.session.get(Kiralama, kiralama_id)
         if not kiralama:
@@ -1282,7 +1380,7 @@ class KiralamaService(BaseService):
         # Ayni kiralama icin birden fazla bekleyen bakiye kaydi olusmussa tek kayda indir.
         for kayit in aday_kayitlar:
             if cari_kayit and kayit.id != cari_kayit.id:
-                db.session.delete(kayit)
+                _soft_delete_hizmet_kaydi(kayit)
 
         toplam_tahakkuk = Decimal('0.00')
         toplam_sozlesme = Decimal('0.00')
@@ -1344,6 +1442,10 @@ class KiralamaService(BaseService):
         for nakliye in nakliyeler:
             NakliyeCariServis.musteri_nakliye_senkronize_et(nakliye)
 
+        if sync_firma_cache and kiralama.firma_musteri_id:
+            # Tahakkuk ve firma cache'i ayni transaction icinde yenilenmelidir.
+            KiralamaService._sync_firma_balances({kiralama.firma_musteri_id})
+
         if auto_commit:
             try:
                 db.session.commit()
@@ -1352,13 +1454,186 @@ class KiralamaService(BaseService):
                 logger.error(f"Cari Toplam Güncelleme Commit Hatası: {e}")
                 raise ValidationError("Finansal kayıt güncellenemedi.")
 
+    @classmethod
+    def sync_all_cari_totals(cls):
+        """Acik kiralamalarin tahakkuk ve firma cache'lerini topluca yeniler."""
+        kiralamalar = Kiralama.query.filter(
+            Kiralama.is_deleted == False,
+            Kiralama.is_active == True,
+        ).order_by(Kiralama.id.asc()).all()
+        affected_firma_ids = set()
+        supplier_firma_ids = {
+            firma_id for (firma_id,) in db.session.query(
+                KiralamaKalemi.harici_ekipman_tedarikci_id
+            ).join(Kiralama, KiralamaKalemi.kiralama_id == Kiralama.id).filter(
+                KiralamaKalemi.harici_ekipman_tedarikci_id.isnot(None),
+                KiralamaKalemi.is_active == True,
+                KiralamaKalemi.is_deleted == False,
+                Kiralama.is_active == True,
+                Kiralama.is_deleted == False,
+            ).distinct().all()
+        }
+
+        for kiralama in kiralamalar:
+            cls.guncelle_cari_toplam(
+                kiralama.id,
+                auto_commit=False,
+                sync_firma_cache=False,
+            )
+            if kiralama.firma_musteri_id:
+                affected_firma_ids.add(kiralama.firma_musteri_id)
+
+        supplier_dedupe = 0
+        for firma_id in sorted(supplier_firma_ids):
+            result = cls.guncelle_tedarikci_cari_toplam(
+                firma_id,
+                auto_commit=False,
+                sync_firma_cache=False,
+            ) or {}
+            supplier_dedupe += int(result.get('dedupe_sayisi', 0))
+
+        affected_firma_ids.update(supplier_firma_ids)
+        cls._sync_firma_balances(affected_firma_ids)
+        db.session.commit()
+        return {
+            'kiralama_sayisi': len(kiralamalar),
+            'firma_sayisi': len(affected_firma_ids),
+            'tedarikci_sayisi': len(supplier_firma_ids),
+            'tedarikci_dedupe_sayisi': supplier_dedupe,
+        }
+
+    @classmethod
+    def validate_chain_date_range(cls, kalem, baslangic, bitis):
+        """Ayni swap zincirinde tarih araligi cakismasini engeller."""
+        if not baslangic or not bitis or baslangic > bitis:
+            raise ValidationError("Kiralama tarih araligi gecersiz.")
+        chain_id = kalem.chain_id or kalem.id
+        conflict = KiralamaKalemi.query.filter(
+            KiralamaKalemi.chain_id == chain_id,
+            KiralamaKalemi.id != kalem.id,
+            KiralamaKalemi.is_deleted == False,
+            KiralamaKalemi.kiralama_baslangici <= bitis,
+            KiralamaKalemi.kiralama_bitis >= baslangic,
+        ).first()
+        if conflict:
+            raise ValidationError(
+                f"Swap zincirinde tarih cakismasi var: kalem #{conflict.id}."
+            )
+
     @staticmethod
-    def guncelle_tedarikci_cari_toplam(firma_id, auto_commit=True):
+    def _guncelle_tedarikci_cari_toplam_v2(
+        firma_id,
+        auto_commit=True,
+        sync_firma_cache=True,
+    ):
+        if not firma_id:
+            return {'kalem_sayisi': 0, 'dedupe_sayisi': 0}
+        from app.makinedegisim.models import MakineDegisim
+
+        aktif_kalemler = KiralamaKalemi.query.filter(
+            KiralamaKalemi.harici_ekipman_tedarikci_id == firma_id,
+            KiralamaKalemi.is_active == True,
+            KiralamaKalemi.is_deleted == False,
+        ).all()
+        linked_ids = {
+            hizmet_id for (hizmet_id,) in db.session.query(
+                MakineDegisim.swap_kira_hizmet_id
+            ).filter(
+                MakineDegisim.swap_kira_hizmet_id.isnot(None),
+                MakineDegisim.is_deleted == False,
+            ).all()
+        }
+        dedupe_sayisi = 0
+
+        for kalem in aktif_kalemler:
+            kir = kalem.kiralama
+            if not kir or kir.is_deleted:
+                continue
+
+            mevcut = HizmetKaydi.query.filter(
+                HizmetKaydi.ozel_id == kalem.id,
+                HizmetKaydi.firma_id == firma_id,
+                HizmetKaydi.yon == 'gelen',
+                HizmetKaydi.is_deleted == False,
+            ).order_by(HizmetKaydi.id.asc()).all()
+            sistem = [
+                kayit for kayit in mevcut
+                if kayit.id in linked_ids
+                or kayit.kaynak in ('dis_kiralama_tahakkuk', 'swap_dis_kiralama')
+                or (kayit.aciklama or '').startswith(('Dış Kiralama', 'Dis Kiralama'))
+            ]
+            canonical = next(
+                (kayit for kayit in sistem if kayit.kaynak == 'dis_kiralama_tahakkuk'),
+                None,
+            ) or next((kayit for kayit in sistem if kayit.id in linked_ids), None)
+            if canonical is None and sistem:
+                canonical = sistem[0]
+
+            for kayit in sistem:
+                if canonical is None or kayit.id != canonical.id:
+                    _soft_delete_hizmet_kaydi(kayit)
+                    dedupe_sayisi += 1
+            if dedupe_sayisi and sistem:
+                db.session.flush()
+
+            tahakkuk = KiralamaService._hesapla_bekleyen_alis_kalem_tutari(kalem)
+            makine_adi = kalem.harici_ekipman_marka or "Dış Ekipman"
+            bas = to_date(kalem.kiralama_baslangici) or date.today()
+            if canonical is None:
+                canonical = HizmetKaydi(
+                    firma_id=firma_id,
+                    tarih=date.today(),
+                    islem_tarihi=bas,
+                    tutar=tahakkuk,
+                    yon='gelen',
+                    fatura_no=kir.kiralama_form_no,
+                    ozel_id=kalem.id,
+                    aciklama=f"Dış Kiralama (Güncelleme): {makine_adi}",
+                    kaynak='dis_kiralama_tahakkuk',
+                    kdv_orani=kalem.kiralama_alis_kdv,
+                    kiralama_alis_kdv=kalem.kiralama_alis_kdv,
+                    nakliye_alis_kdv=kalem.nakliye_alis_kdv,
+                )
+            else:
+                canonical.firma_id = firma_id
+                canonical.tarih = date.today()
+                canonical.islem_tarihi = bas
+                canonical.tutar = tahakkuk
+                canonical.yon = 'gelen'
+                canonical.fatura_no = kir.kiralama_form_no
+                canonical.ozel_id = kalem.id
+                canonical.aciklama = f"Dış Kiralama (Güncelleme): {makine_adi}"
+                canonical.kaynak = 'dis_kiralama_tahakkuk'
+                canonical.is_deleted = False
+                canonical.is_active = True
+                canonical.deleted_at = None
+                canonical.kdv_orani = kalem.kiralama_alis_kdv
+                canonical.kiralama_alis_kdv = kalem.kiralama_alis_kdv
+                canonical.nakliye_alis_kdv = kalem.nakliye_alis_kdv
+            db.session.add(canonical)
+
+        if sync_firma_cache:
+            KiralamaService._sync_firma_balances({firma_id})
+        if auto_commit:
+            db.session.commit()
+        return {'kalem_sayisi': len(aktif_kalemler), 'dedupe_sayisi': dedupe_sayisi}
+
+    @staticmethod
+    def guncelle_tedarikci_cari_toplam(
+        firma_id,
+        auto_commit=True,
+        sync_firma_cache=True,
+    ):
         """Firma tedarikçi olarak bağlı olduğu aktif harici kiralama kalemlerinin
         'Dış Kiralama' HKD kayıtlarını bugüne kadar tahakkuk eden tutarla günceller.
         guncelle_cari_toplam'ın müşteri versiyonunun TEDARİKÇİ karşılığıdır."""
         if not firma_id:
-            return
+            return {'kalem_sayisi': 0, 'dedupe_sayisi': 0}
+        return KiralamaService._guncelle_tedarikci_cari_toplam_v2(
+            firma_id,
+            auto_commit=auto_commit,
+            sync_firma_cache=sync_firma_cache,
+        )
         aktif_kalemler = KiralamaKalemi.query.filter(
             KiralamaKalemi.harici_ekipman_tedarikci_id == firma_id,
             KiralamaKalemi.is_active == True,
@@ -1383,7 +1658,7 @@ class KiralamaService(BaseService):
 
             cari_kayit = mevcut_kayitlar[0] if mevcut_kayitlar else None
             for fazla in mevcut_kayitlar[1:]:
-                db.session.delete(fazla)
+                _soft_delete_hizmet_kaydi(fazla)
 
             tahakkuk = KiralamaService._hesapla_bekleyen_alis_kalem_tutari(kalem)
             makine_adi = kalem.harici_ekipman_marka or "Dış Ekipman"
@@ -1522,6 +1797,9 @@ class KiralamaService(BaseService):
                     KiralamaKalemiService.save(kalem, is_new=True, auto_commit=False, actor_id=actor_id)
                     db.session.flush()
                     logger.debug(f"[CREATE] Kalem flush sonrası id: {kalem.id}")
+                    if kalem.chain_id is None:
+                        kalem.chain_id = kalem.id
+                        db.session.add(kalem)
                     if dis_kiralama_hizmet is not None and not getattr(dis_kiralama_hizmet, 'ozel_id', None):
                         # Kalem ID'si flush sonrası belli olur; kayıt kiralama ile bağlansın.
                         dis_kiralama_hizmet.ozel_id = kalem.id
@@ -1555,7 +1833,10 @@ class KiralamaService(BaseService):
         if not kiralama: raise ValidationError("Kiralama bulunamadı.")
 
         try:
-            HizmetKaydi.query.filter_by(fatura_no=kiralama.kiralama_form_no).delete(synchronize_session=False)
+            for kayit in HizmetKaydi.query.filter_by(
+                fatura_no=kiralama.kiralama_form_no,
+            ).filter(HizmetKaydi.is_deleted == False).all():
+                _soft_delete_hizmet_kaydi(kayit)
             # Dönüş sefer kayıtlarını koru (bunlar sonlandırma sırasında eklenir)
             Nakliye.query.filter(
                 Nakliye.kiralama_id == kiralama.id,
@@ -1701,6 +1982,12 @@ class KiralamaService(BaseService):
                             kdv_orani=None,
                             nakliye_alis_kdv=aktif.donus_nakliye_alis_kdv,
                         ))
+
+            # Form güncellemesi dönüş seferlerini körlemesine korumaz; swap
+            # nedeni ve güncel ücret politikasına göre eski hareketleri kapatır.
+            for policy_kalem in list(kiralama.kalemler):
+                if not policy_kalem.is_deleted:
+                    cls.reconcile_donus_nakliye_policy(policy_kalem)
 
             for k in list(kiralama.kalemler):
                 if k.id not in formdan_gelen_idler:
@@ -1894,6 +2181,13 @@ class KiralamaService(BaseService):
             firma.bakiye = ozet['net_bakiye']
             FirmaService.guncelle_firma_cari_cache(firma_id, auto_commit=False)
             db.session.add(firma)
+
+    @classmethod
+    def sync_firma_caches(cls, firma_ids, auto_commit=False):
+        """Firma cache'lerini bir batch icinde yeniler."""
+        cls._sync_firma_balances({firma_id for firma_id in (firma_ids or []) if firma_id})
+        if auto_commit:
+            db.session.commit()
 
     @classmethod
     def _sync_ekipman_states(cls, ekipman_ids, snapshot=None):
@@ -2276,8 +2570,18 @@ class KiralamaService(BaseService):
         yeni_sefer.hesapla_ve_guncelle()
         db.session.add(yeni_sefer)
 
-        # Sonlandırılmış kalem ise dönüş nakliyeyi de yeniden oluştur
-        if kalem.sonlandirildi:
+        # Sonlandırılmış kalem ise dönüş nakliyeyi yalnızca politika izin
+        # veriyorsa yeniden oluştur. Swap müşteri talebiyse mevcut ücretli
+        # dönüş kaydı korunur; arıza/periyodik swapta reconcile temizler.
+        swap_reason = KiralamaService._swap_reason_for_kalem(kalem)
+        if (
+            kalem.sonlandirildi
+            and swap_reason not in ('serviste', 'periyodik', 'bakimda')
+            and (
+                KiralamaService._get_donus_nakliye_satis(kalem) > 0
+                or swap_reason == 'bosta'
+            )
+        ):
             donus_satis = KiralamaService._get_donus_nakliye_satis(kalem)
             if donus_satis and donus_satis > 0:
                 form_no = kiralama.kiralama_form_no or ''

@@ -604,10 +604,17 @@ def index():
         # PostgreSQL: Tek transaction içinde bir kiralamada SQL hatası tüm oturumu
         # "aborted" yapar; her kiralama için SAVEPOINT (begin_nested) ile izole et.
         try:
+            affected_firma_ids = set()
             for kiralama in kiralamalar:
                 try:
                     with db.session.begin_nested():
-                        KiralamaService.guncelle_cari_toplam(kiralama.id, auto_commit=False)
+                        KiralamaService.guncelle_cari_toplam(
+                            kiralama.id,
+                            auto_commit=False,
+                            sync_firma_cache=False,
+                        )
+                        if kiralama.firma_musteri_id:
+                            affected_firma_ids.add(kiralama.firma_musteri_id)
                 except Exception as row_err:
                     current_app.logger.warning(
                         "Kiralama cari senkronizasyon (id=%s): %s",
@@ -616,6 +623,7 @@ def index():
                         exc_info=True,
                     )
             if kiralamalar:
+                KiralamaService.sync_firma_caches(affected_firma_ids, auto_commit=False)
                 db.session.commit()
         except Exception as sync_err:
             db.session.rollback()
@@ -1534,6 +1542,11 @@ def tarih_guncelle_kalem():
             return _redirect_to_kiralama_return()
 
         KiralamaKalemiService.validate_tarih_guncelle_koruma(kalem, yeni_bitis_date)
+        KiralamaService.validate_chain_date_range(
+            kalem,
+            bas_date,
+            yeni_bitis_date,
+        )
 
         # Eski tarihi kaydet
         eski_bitis = kalem.kiralama_bitis
@@ -1541,8 +1554,14 @@ def tarih_guncelle_kalem():
         # Yeni tarihi set et
         kalem.kiralama_bitis = yeni_bitis_date
 
-        # DB'ye kaydet
+        # Tahakkuk ve cache ayni transaction icinde guncellensin.
         db.session.add(kalem)
+        KiralamaService.guncelle_cari_toplam(kalem.kiralama_id, auto_commit=False)
+        if kalem.is_dis_tedarik_ekipman and kalem.harici_ekipman_tedarikci_id:
+            KiralamaService.guncelle_tedarikci_cari_toplam(
+                kalem.harici_ekipman_tedarikci_id,
+                auto_commit=False,
+            )
         db.session.commit()
 
         actor_id = getattr(current_user, 'id', None)

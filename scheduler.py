@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 RATE_LOCK_KEY = 741001
 BACKUP_LOCK_KEY = 741002
+CARI_SYNC_LOCK_KEY = 741003
 
 
 def _select_config():
@@ -91,6 +92,14 @@ def create_database_backup():
     )
 
 
+def sync_rental_cari_totals():
+    _run_locked_job(
+        'Gunluk kiralama cari senkronizasyonu',
+        CARI_SYNC_LOCK_KEY,
+        KiralamaService.sync_all_cari_totals,
+    )
+
+
 def main():
     global app
     app = create_app(_select_config())
@@ -111,6 +120,16 @@ def main():
         hour=2,
         minute=0,
         id='gunluk_yedek',
+        replace_existing=True,
+        coalesce=True,
+        max_instances=1,
+    )
+    scheduler.add_job(
+        sync_rental_cari_totals,
+        trigger='cron',
+        hour=1,
+        minute=0,
+        id='gunluk_kiralama_cari_senkronizasyonu',
         replace_existing=True,
         coalesce=True,
         max_instances=1,

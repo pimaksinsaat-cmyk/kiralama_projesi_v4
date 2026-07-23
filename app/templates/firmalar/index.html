@@ -69,7 +69,22 @@
     .sort-link { color: inherit; text-decoration: none; margin-left: 6px; font-size: 0.9em; }
     .sort-link:hover { color: #667eea; }
     .firmalar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; gap: 0.75rem; flex-wrap: wrap; }
-    .firmalar-actions { display: flex; align-items: center; gap: 0.5rem; }
+    .firmalar-actions { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+    .firma-status-summary { display: flex; align-items: stretch; gap: 0; padding: 0.2rem 0.3rem; border: 1px solid #dee2e6; border-radius: 0.45rem; background: #f8f9fa; flex-wrap: wrap; }
+    .firma-status-item { display: inline-flex; align-items: center; gap: 0.28rem; padding: 0.22rem 0.5rem; border: 0; border-radius: 0; background: transparent; line-height: 1.1; white-space: nowrap; }
+    .firma-status-item + .firma-status-item { border-left: 1px solid #dee2e6; }
+    .firma-status-item .label { font-size: 0.67rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; }
+    .firma-status-item .separator { color: #adb5bd; font-size: 0.78rem; }
+    .firma-status-item .value { color: #343a40; font-size: 0.9rem; font-weight: 400; font-variant-numeric: tabular-nums; }
+    .firma-status-item .count-unit { color: #6c757d; font-size: 0.72rem; font-weight: 400; }
+    .firma-status-total { color: #5c6770; }
+    .firma-status-active { color: #557363; }
+    .firma-status-inactive { color: #806f4c; }
+    @media (max-width: 768px) {
+        .firmalar-header { align-items: stretch; }
+        .firmalar-actions, .firma-status-summary, .search-form { width: 100%; }
+        .search-form { min-width: 0; }
+    }
 </style>
 
 <div>
@@ -89,6 +104,23 @@
                         </a>
                     </li>
                 </ul>
+            </div>
+            <div class="firma-status-summary" aria-label="Firma durum özetleri">
+                <div class="firma-status-item firma-status-total" title="Silinmemiş ve dahili kasa dışındaki toplam firmalar">
+                    <span class="label">Toplam</span>
+                    <span class="separator">:</span>
+                    <span class="value">{{ toplam_firma_sayisi }} <small class="count-unit">ad</small></span>
+                </div>
+                <div class="firma-status-item firma-status-active" title="Aktif firmalar">
+                    <span class="label">Aktif</span>
+                    <span class="separator">:</span>
+                    <span class="value">{{ aktif_firma_sayisi }} <small class="count-unit">ad</small></span>
+                </div>
+                <div class="firma-status-item firma-status-inactive" title="Pasif firmalar">
+                    <span class="label">Pasif</span>
+                    <span class="separator">:</span>
+                    <span class="value">{{ pasif_firma_sayisi }} <small class="count-unit">ad</small></span>
+                </div>
             </div>
         </div>
         <form method="GET" action="{{ url_for('firmalar.index') }}" class="search-form">

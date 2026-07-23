@@ -65,7 +65,7 @@ jobs:
             echo ">>> Migration head kontrolu"
             HEADS_OUTPUT=$(python -m flask db heads)
             echo "$HEADS_OUTPUT"
-            echo "$HEADS_OUTPUT" | grep -q "b5c6d7e8f9a0"
+            echo "$HEADS_OUTPUT" | grep -q "b9c0d1e2f3a4"
 
             echo ">>> Uygulama servisi durduruluyor"
             systemctl stop "$APP_SERVICE"
@@ -77,7 +77,7 @@ jobs:
             echo ">>> Migration sonrasi durum"
             CURRENT_OUTPUT=$(python -m flask db current)
             echo "$CURRENT_OUTPUT"
-            echo "$CURRENT_OUTPUT" | grep -q "b5c6d7e8f9a0"
+            echo "$CURRENT_OUTPUT" | grep -q "b9c0d1e2f3a4"
 
             echo ">>> Uygulama ve scheduler baslatiliyor"
             systemctl start "$APP_SERVICE"

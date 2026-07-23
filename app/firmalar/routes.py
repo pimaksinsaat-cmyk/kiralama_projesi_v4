@@ -329,6 +329,7 @@ def index():
             sort_dir = 'asc'
         
         query = FirmaService.get_active_firms(search_query=q)
+        firma_sayaclari = FirmaService.get_status_counts()
         sort_column = allowed_sort_fields[sort_by]
         sort_expression = asc(sort_column) if sort_dir == 'asc' else desc(sort_column)
         query = query.order_by(None).order_by(sort_expression, desc(Firma.id))
@@ -343,6 +344,7 @@ def index():
             q=q,
             sort_by=sort_by,
             sort_dir=sort_dir,
+            **firma_sayaclari,
             form=SozlesmeNoDuzeltForm()
         )
     except Exception as e:

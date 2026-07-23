@@ -1,6 +1,6 @@
 from app.extensions import db
 from datetime import datetime, timezone
-from sqlalchemy import func
+from sqlalchemy import event, func
 from app.models.base_model import BaseModel
 
 
@@ -101,6 +101,8 @@ class HizmetKaydi(BaseModel):
         nullable=True
     )
     ozel_id = db.Column(db.Integer, nullable=True)
+    # Cari hareketin sistem kaynagini ayirt eder; legacy kayitlarda nullable'dir.
+    kaynak = db.Column(db.String(40), nullable=True, index=True)
     
     # tarih: mevcut davranış için korunur (legacy)
     tarih = db.Column(db.Date, nullable=False, default=lambda: datetime.now(timezone.utc).date())
@@ -132,6 +134,32 @@ class HizmetKaydi(BaseModel):
     
     def __repr__(self):
         return f'<Hizmet {self.tutar} ({self.yon})>'
+
+
+def _derive_hizmet_kaynagi(hizmet):
+    """Yeni ve legacy cari kayitlar icin tek provenance siniflandiricisi."""
+    if hizmet.kaynak:
+        return hizmet.kaynak
+    aciklama = (hizmet.aciklama or '').strip()
+    if aciklama.startswith('Kiralama Bekleyen Bakiye'):
+        return 'kiralama_tahakkuk'
+    if aciklama.startswith(('Dış Kiralama', 'Dis Kiralama')):
+        return 'dis_kiralama_tahakkuk'
+    if aciklama.startswith(('Dönüş Nakliye', 'Dönüş:', 'Nakliye Farkı')):
+        return 'donus_nakliye'
+    if aciklama.startswith(('Taşeron Nakliye Bedeli', 'Nakliye Taşeron Gideri')):
+        return 'taseron_nakliye'
+    if hizmet.nakliye_id:
+        return 'musteri_nakliye' if hizmet.yon == 'giden' else 'taseron_nakliye'
+    if hizmet.ozel_id is None:
+        return 'manual'
+    return 'legacy_unclassified'
+
+
+@event.listens_for(HizmetKaydi, 'before_insert')
+@event.listens_for(HizmetKaydi, 'before_update')
+def _set_hizmet_kaynagi(_mapper, _connection, target):
+    target.kaynak = _derive_hizmet_kaynagi(target)
 
 
 # 8. CARI HAREKET (Bekleyen Bakiye için Ana Defter)

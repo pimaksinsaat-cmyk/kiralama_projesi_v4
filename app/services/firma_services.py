@@ -2,7 +2,7 @@ import os
 from datetime import date, datetime, timezone
 from decimal import Decimal
 import re
-from sqlalchemy import or_, and_
+from sqlalchemy import or_, and_, case, func
 from sqlalchemy.orm import joinedload, subqueryload
 
 from app.services.base import BaseService, ValidationError
@@ -20,7 +20,9 @@ from app.utils import klasor_adi_temizle, normalize_turkish_upper, tr_ilike
 def _kalem_cari_gun_sayisi(kalem, today_date, *, alis_tarafi=False):
     from app.services.kiralama_services import KiralamaService
 
-    if kalem.sonlandirildi and kalem.kiralama_bitis:
+    # Swap ile kapanan kalemler is_active=False olabilir; bu kalemlerin
+    # tahakkuku kapanış tarihine kadar olan sözleşme günlerinden oluşur.
+    if (kalem.sonlandirildi or not getattr(kalem, 'is_active', True)) and kalem.kiralama_bitis:
         return KiralamaService.hesapla_kalem_etkin_gun(
             kalem, tam_sozlesme=True, alis_tarafi=alis_tarafi,
         )
@@ -35,6 +37,7 @@ class FirmaService(BaseService):
     """
     model = Firma
     use_soft_delete = True
+    internal_firma_names = ('DAHİLİ İŞLEMLER', 'Dahili Kasa İşlemleri')
     
     # Güncellenebilir alanlar
     updatable_fields = [
@@ -213,7 +216,7 @@ class FirmaService(BaseService):
         """Aktif firmaları listeler (Dahili Kasa hariç)."""
         query = cls._get_base_query().filter(
             and_(
-                Firma.firma_adi.notin_(['DAHİLİ İŞLEMLER', 'Dahili Kasa İşlemleri']),
+                Firma.firma_adi.notin_(cls.internal_firma_names),
                 or_(Firma.is_active == True, Firma.is_active.is_(None))
             )
         )
@@ -226,6 +229,25 @@ class FirmaService(BaseService):
                 Firma.eposta.ilike(f"%{search_query}%")
             ))
         return query.order_by(Firma.id.desc())
+
+    @classmethod
+    def get_status_counts(cls):
+        """Silinmemiş ve dahili kasa dışındaki firma durum sayılarını döndürür."""
+        active_condition = or_(Firma.is_active == True, Firma.is_active.is_(None))
+        base_query = cls._get_base_query().filter(
+            Firma.firma_adi.notin_(cls.internal_firma_names)
+        )
+        total_count, active_count, inactive_count = base_query.with_entities(
+            func.count(Firma.id),
+            func.coalesce(func.sum(case((active_condition, 1), else_=0)), 0),
+            func.coalesce(func.sum(case((Firma.is_active == False, 1), else_=0)), 0),
+        ).one()
+        return {
+            'toplam_firma_sayisi': int(total_count or 0),
+            'aktif_firma_sayisi': int(active_count or 0),
+            'pasif_firma_sayisi': int(inactive_count or 0),
+        }
+
     @classmethod
     def get_inactive_firms(cls, search_query=None):
         """Arşivlenmiş (is_active=False) firmaları listeler."""
@@ -667,15 +689,20 @@ class FirmaService(BaseService):
             and getattr(kir, 'is_active', True)
         ]
 
-        def _aktif_kalemler(kiralama):
+        def _cari_kalemler(kiralama):
+            """Kiralamanın silinmemiş tüm tarihsel kalemlerini döndürür.
+
+            Swap eski kalemi pasifleştirir. Cari ekstrede bu kalem yine de
+            gerçek bir kiralama hareketi olarak görünmelidir; aksi halde
+            zincirin ilk makinesinin günleri kaybolur.
+            """
             return [
                 kalem for kalem in (kiralama.kalemler or [])
                 if not getattr(kalem, 'is_deleted', False)
-                and getattr(kalem, 'is_active', True)
             ]
 
         for kir in aktif_kiralamalar:
-            for kalem in _aktif_kalemler(kir):
+            for kalem in _cari_kalemler(kir):
                 kiralama_kalemi_by_id[kalem.id] = kalem
 
         def _unified_row_sort_key(row):
@@ -726,12 +753,12 @@ class FirmaService(BaseService):
         for kir in sorted(aktif_kiralamalar, key=lambda k: k.kiralama_form_no or ''):
             form_tarihi = kir.kiralama_olusturma_tarihi or (kir.created_at.date() if kir.created_at else None)
             kdv_pct = kir.kdv_orani or 0
-            aktif_kalemler = _aktif_kalemler(kir)
-            kir_kalem_map = {kalem.id: kalem for kalem in aktif_kalemler}
+            cari_kalemler = _cari_kalemler(kir)
+            kir_kalem_map = {kalem.id: kalem for kalem in cari_kalemler}
 
-            for kalem in aktif_kalemler:
+            for kalem in cari_kalemler:
                 if kalem.kiralama_baslangici:
-                    if kalem.sonlandirildi and kalem.kiralama_bitis:
+                    if (kalem.sonlandirildi or not getattr(kalem, 'is_active', True)) and kalem.kiralama_bitis:
                         bitis = kalem.kiralama_bitis
                         bitis_bugun = False
                     else:
@@ -772,7 +799,10 @@ class FirmaService(BaseService):
                     )})
 
             # Nakliye satırları
-            fallback_kalem = next(iter(aktif_kalemler), None)
+            fallback_kalem = next(
+                (kalem for kalem in cari_kalemler if getattr(kalem, 'is_active', True)),
+                None,
+            ) or next(iter(cari_kalemler), None)
             fallback_kod, fallback_sube = _nakliye_kalem_bilgisi(fallback_kalem)
             firma_kisa = ''
             if kir.firma_musteri and kir.firma_musteri.firma_adi:

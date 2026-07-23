@@ -335,15 +335,9 @@ class CariRaporService:
         g_borc_kdvli, g_alacak_kdvli = Decimal('0'), Decimal('0')
 
         for f in firmalar:
-            borc = Decimal('0')
-            alacak = Decimal('0')
-            for row in FirmaService.build_cari_rows(f, bugun()):
-                tutar = Decimal(str(row.get('toplam') or 0))
-                if tutar > 0:
-                    borc += tutar
-                elif tutar < 0:
-                    alacak += abs(tutar)
-            bakiye = borc - alacak
+            borc = Decimal(str(f.cari_borc_kdvli or 0))
+            alacak = Decimal(str(f.cari_alacak_kdvli or 0))
+            bakiye = Decimal(str(f.cari_bakiye_kdvli or 0))
 
             rapor.append({
                 'id': f.id,

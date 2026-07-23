@@ -97,6 +97,19 @@
         outline: 2px solid #667eea;
         outline-offset: -2px;
     }
+    .action-cell {
+        white-space: nowrap;
+    }
+    .action-buttons {
+        display: inline-flex;
+        align-items: center;
+        justify-content: flex-end;
+        flex-wrap: nowrap;
+        gap: 6px;
+    }
+    .action-buttons form {
+        margin: 0;
+    }
 </style>
 
 <div class="container">
@@ -146,7 +159,7 @@
                     <th>Musteri</th>
                     <th>Makine / Ekipman</th>
                     <th width="150">Silinme Tarihi</th>
-                    <th width="130" class="text-end">Islem</th>
+                    <th width="200" class="text-center">Islem</th>
                 </tr>
             </thead>
             <tbody>
@@ -188,16 +201,18 @@
                             {% endif %}
                         </td>
                         <td>{{ kiralama.deleted_at.strftime('%d.%m.%Y %H:%M') if kiralama.deleted_at else '-' }}</td>
-                        <td class="text-end">
-                            <a href="{{ url_for('kiralama.silinenler_detay', kiralama_id=kiralama.id) }}" class="btn btn-outline-primary btn-sm fw-bold me-1">
-                                <i class="fas fa-info-circle me-1"></i>Detay
-                            </a>
-                            <form method="POST" action="{{ url_for('kiralama.geri_yukle_kalici', kiralama_id=kiralama.id) }}" class="d-inline" onsubmit="return confirm('Bu kiralama kaydi geri yuklensin mi?');">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <button type="submit" class="btn btn-success btn-sm fw-bold">
-                                    <i class="fas fa-undo me-1"></i>Geri Yukle
-                                </button>
-                            </form>
+                        <td class="text-end action-cell">
+                            <div class="action-buttons">
+                                <a href="{{ url_for('kiralama.silinenler_detay', kiralama_id=kiralama.id) }}" class="btn btn-outline-primary btn-sm fw-bold">
+                                    <i class="fas fa-info-circle me-1"></i>Detay
+                                </a>
+                                <form method="POST" action="{{ url_for('kiralama.geri_yukle_kalici', kiralama_id=kiralama.id) }}" onsubmit="return confirm('Bu kiralama kaydi geri yuklensin mi?');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-success btn-sm fw-bold">
+                                        <i class="fas fa-undo me-1"></i>Geri Yukle
+                                    </button>
+                                </form>
+                            </div>
                         </td>
                     </tr>
                 {% else %}

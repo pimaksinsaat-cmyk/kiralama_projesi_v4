@@ -24,30 +24,15 @@ def main():
                 db.session.add(row)
                 cleaned += 1
 
-        kiralamalar = Kiralama.query.order_by(Kiralama.id.asc()).all()
-        total = len(kiralamalar)
-        ok = 0
-        fail = 0
-
-        for kiralama in kiralamalar:
-            try:
-                KiralamaService.guncelle_cari_toplam(kiralama.id, auto_commit=False)
-                ok += 1
-            except Exception as exc:
-                db.session.rollback()
-                fail += 1
-                print(f"[HATA] Kiralama ID={kiralama.id} Form={kiralama.kiralama_form_no}: {exc}")
-
         try:
-            db.session.commit()
+            result = KiralamaService.sync_all_cari_totals()
         except Exception as exc:
             db.session.rollback()
             print(f"[KRITIK] Toplu commit hatasi: {exc}")
             return
 
-        print(f"Toplam kiralama: {total}")
-        print(f"Basarili senkron: {ok}")
-        print(f"Hatali kayit: {fail}")
+        print(f"Senkronlanan aktif kiralama: {result['kiralama_sayisi']}")
+        print(f"Senkronlanan firma cache: {result['firma_sayisi']}")
         print(f"Temizlenen yetim cari kaydi: {cleaned}")
 
 
