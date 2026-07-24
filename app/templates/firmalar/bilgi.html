@@ -33,6 +33,7 @@
     .pagination .page-item.active .page-link { background: #667eea; border-color: #667eea; color: white; }
     .pagination .page-item.disabled .page-link { color: #adb5bd; pointer-events: none; }
     .pagination .page-item .page-link:hover { background: #eef2ff; border-color: #a5b4fc; }
+    .swap-cari-badge { font-size: 0.72em; vertical-align: middle; white-space: nowrap; }
 </style>
 
 <div class="container mt-4">
@@ -627,7 +628,7 @@
                                 data-ozel-id="{{ row.kiralama_id or '' }}"
                                 data-nakliye-id="{% if row.islem_turu in ('nakliye_satis', 'nakliye', 'nakliye_tedarik') %}{{ row_nakliye_id }}{% else %}{% endif %}"
                                 data-nakliye-kiralama-id="{{ row.kiralama_id or '' }}"
-                                data-desc="{{ row.aciklama }}"
+                                data-desc="{{ row.aciklama }}{% if row.swap_makine_kodu %} &lt;&gt;{{ row.swap_makine_kodu | lower }}{% endif %}"
                                 style="cursor: context-menu;">
                                 <td>{{ loop.index + start_no - 1 }}</td>
                                 <td>
@@ -668,6 +669,9 @@
                                 </td>
                                 <td class="small">
                                     {{ row.aciklama }}
+                                    {% if row.swap_makine_kodu %}
+                                        <span class="badge bg-info text-dark swap-cari-badge" title="Swap ile gelen makine">&lt;&gt;{{ row.swap_makine_kodu | lower }}</span>
+                                    {% endif %}
                                     {% if row.seri_no %}
                                         <div class="text-muted" style="font-size:0.8em;">S/N: {{ row.seri_no }}</div>
                                     {% endif %}

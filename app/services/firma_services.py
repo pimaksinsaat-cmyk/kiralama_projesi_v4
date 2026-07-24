@@ -678,6 +678,7 @@ class FirmaService(BaseService):
         diğer özet görünümler bu metodu kullanmalıdır.
         """
         from app.cari.models import HizmetKaydi
+        from app.makinedegisim.models import MakineDegisim
         from app.services.kiralama_services import KiralamaService
 
         rows = []
@@ -704,6 +705,51 @@ class FirmaService(BaseService):
         for kir in aktif_kiralamalar:
             for kalem in _cari_kalemler(kir):
                 kiralama_kalemi_by_id[kalem.id] = kalem
+
+        # Swap ile kapanan eski kalemlerin cari açıklamasında yeni makineyi
+        # göstermek için eşleşmeleri bir kez hazırla. Bu bilgi yalnızca cari
+        # satırı üretilirken türetilir; mevcut kayıtların açıklaması değişmez.
+        swap_replacements = {}
+        if kiralama_kalemi_by_id:
+            swap_logs = MakineDegisim.query.filter(
+                MakineDegisim.eski_kalem_id.in_(list(kiralama_kalemi_by_id)),
+                MakineDegisim.is_deleted.is_(False),
+            ).all()
+            yeni_kalem_ids = {log.yeni_kalem_id for log in swap_logs if log.yeni_kalem_id}
+            yeni_kalemler = {}
+            if yeni_kalem_ids:
+                yeni_kalemler = {
+                    kalem.id: kalem
+                    for kalem in KiralamaKalemi.query.filter(
+                        KiralamaKalemi.id.in_(yeni_kalem_ids),
+                        KiralamaKalemi.is_deleted.is_(False),
+                    ).all()
+                }
+
+            def _swap_makine_gosterim_kodu(kalem):
+                if not kalem:
+                    return 'Makine'
+                if kalem.ekipman and kalem.ekipman.kod:
+                    return kalem.ekipman.kod.strip()
+                dis_tedarik_makine = ' '.join(
+                    parca.strip()
+                    for parca in (
+                        kalem.harici_ekipman_marka,
+                        kalem.harici_ekipman_model,
+                    )
+                    if parca and parca.strip()
+                )
+                return (
+                    dis_tedarik_makine
+                    or (kalem.harici_ekipman_seri_no or '').strip()
+                    or 'Makine'
+                )
+
+            for log in swap_logs:
+                eski_kalem = kiralama_kalemi_by_id.get(log.eski_kalem_id)
+                yeni_kalem = yeni_kalemler.get(log.yeni_kalem_id)
+                if eski_kalem and yeni_kalem:
+                    swap_replacements[eski_kalem.id] = _swap_makine_gosterim_kodu(yeni_kalem)
 
         def _unified_row_sort_key(row):
             return FirmaService._unified_sort_key(
@@ -786,10 +832,13 @@ class FirmaService(BaseService):
                     yuk = f"/{kalem.harici_ekipman_yukseklik}m" if kalem.harici_ekipman_yukseklik else ''
                     aciklama = f"{ekipman_kodu} {kalem.harici_ekipman_model or ''} - {kap}{yuk}".strip(' -')
 
+                swap_makine_kodu = swap_replacements.get(kalem.id)
+
                 rows.append({'id': kalem.id, 'sort_date': kalem.kiralama_baslangici or form_tarihi,
                     'form_no': kir.kiralama_form_no, 'form_tarihi': form_tarihi,
                     'kiralama_id': kir.id, 'islem_turu': 'kiralama', 'nakliye_sira': 0,
                     'aciklama': aciklama, 'seri_no': seri_no,
+                    'swap_makine_kodu': swap_makine_kodu,
                     'baslangic': kalem.kiralama_baslangici, 'bitis': bitis,
                     'bitis_bugun': bitis_bugun, 'gun_sayisi': gun_sayisi,
                     'brm_fiyat': brm, 'matrah': matrah, 'kdv_orani': kdv_pct,

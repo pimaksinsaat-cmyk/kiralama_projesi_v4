@@ -4,11 +4,28 @@ import uuid
 
 from app.extensions import db
 from app.cari.models import HizmetKaydi
+from app.filo.models import Ekipman
 from app.firmalar.models import Firma
 from app.kiralama.models import Kiralama, KiralamaKalemi
+from app.makinedegisim.models import MakineDegisim
 from app.services.firma_services import FirmaService
 from app.services.cari_services import CariRaporService
 from app.services.kiralama_services import KiralamaService
+
+
+def _ekipman(kod, marka, model):
+    return Ekipman(
+        kod=kod,
+        yakit="Diesel",
+        tipi="LIFT",
+        marka=marka,
+        model=model,
+        seri_no=f"SN-{uuid.uuid4().hex[:8]}",
+        calisma_yuksekligi=15,
+        kaldirma_kapasitesi=2500,
+        uretim_yili=2024,
+        calisma_durumu="kirada",
+    )
 
 
 def _swap_contract():
@@ -69,6 +86,86 @@ def test_swap_chain_keeps_old_machine_in_customer_cari(app):
         assert rental_rows[eski.id]['gun_sayisi'] == 11
         assert rental_rows[yeni.id]['gun_sayisi'] == 1
         assert sum(row['toplam'] for row in rental_rows.values()) == 1440.0
+
+
+def test_swap_cari_marks_old_machine_with_replacement_code(app):
+    with app.app_context():
+        firma, kiralama, eski, yeni = _swap_contract()
+        eski_makine = _ekipman("PM03", "Marka Eski", "M1")
+        yeni_makine = _ekipman("PM14", "Marka Yeni", "M2")
+        db.session.add_all([eski_makine, yeni_makine])
+        db.session.flush()
+        eski.ekipman_id = eski_makine.id
+        yeni.ekipman_id = yeni_makine.id
+        db.session.add(MakineDegisim(
+            kiralama_id=kiralama.id,
+            eski_kalem_id=eski.id,
+            yeni_kalem_id=yeni.id,
+            eski_ekipman_id=eski_makine.id,
+            yeni_ekipman_id=yeni_makine.id,
+            neden="serviste",
+        ))
+        db.session.commit()
+
+        rows = FirmaService.build_cari_rows(firma, date.today())
+        rental_rows = {
+            row['id']: row for row in rows
+            if row.get('islem_turu') == 'kiralama'
+        }
+
+        assert "↔" not in rental_rows[eski.id]['aciklama']
+        assert rental_rows[eski.id]['swap_makine_kodu'] == "PM14"
+        assert rental_rows[yeni.id].get('swap_makine_kodu') is None
+
+
+def test_swap_cari_uses_external_machine_fallback_and_ignores_deleted_swap(app):
+    with app.app_context():
+        firma, kiralama, eski, yeni = _swap_contract()
+        eski.is_dis_tedarik_ekipman = True
+        eski.harici_ekipman_marka = "JLG"
+        eski.harici_ekipman_model = "450AJ"
+        yeni.is_dis_tedarik_ekipman = True
+        yeni.harici_ekipman_marka = "Haulotte"
+        yeni.harici_ekipman_model = "HA20"
+        swap = MakineDegisim(
+            kiralama_id=kiralama.id,
+            eski_kalem_id=eski.id,
+            yeni_kalem_id=yeni.id,
+            neden="serviste",
+            is_deleted=True,
+        )
+        db.session.add(swap)
+        db.session.commit()
+
+        rows = FirmaService.build_cari_rows(firma, date.today())
+        rental_rows = {
+            row['id']: row for row in rows
+            if row.get('islem_turu') == 'kiralama'
+        }
+
+        assert rental_rows[eski.id].get('swap_makine_kodu') is None
+
+        swap.is_deleted = False
+        db.session.commit()
+        rows = FirmaService.build_cari_rows(firma, date.today())
+        rental_rows = {
+            row['id']: row for row in rows
+            if row.get('islem_turu') == 'kiralama'
+        }
+        assert rental_rows[eski.id]['swap_makine_kodu'] == "Haulotte HA20"
+
+
+def test_normal_return_without_swap_has_no_change_marker(app):
+    with app.app_context():
+        firma, _, eski, yeni = _swap_contract()
+        rows = FirmaService.build_cari_rows(firma, date.today())
+
+        rental_rows = {
+            row['id']: row for row in rows
+            if row.get('islem_turu') == 'kiralama'
+        }
+
+        assert all(row.get('swap_makine_kodu') is None for row in rental_rows.values())
 
 
 def test_daily_cari_sync_updates_accrual_and_firma_cache(app):

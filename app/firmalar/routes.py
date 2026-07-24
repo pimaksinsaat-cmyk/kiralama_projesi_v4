@@ -1022,6 +1022,8 @@ def bilgi_excel(id):
                     islem_tarih = row.get('sort_date') or row.get('baslangic') or row.get('form_tarihi')
                     islem_turu = row.get('islem_turu') or 'İşlem'
                     aciklama = row.get('aciklama') or ''
+                    if row.get('swap_makine_kodu'):
+                        aciklama = f"{aciklama} <>{str(row['swap_makine_kodu']).lower()}"
                     matrah = float(row.get('matrah') or 0) if row.get('matrah') is not None else None
                     kdv_orani = float(row.get('kdv_orani') or 0) if row.get('kdv_orani') is not None else None
                     kdv_tutari = float(row.get('kdv_tutar') or 0) if row.get('kdv_tutar') is not None else None

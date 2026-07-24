@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import re
 import uuid
+from io import BytesIO
 from datetime import date
 from decimal import Decimal
 
@@ -21,6 +22,7 @@ from app.extensions import db
 from app.filo.models import Ekipman
 from app.firmalar.models import Firma
 from app.kiralama.models import Kiralama, KiralamaKalemi
+from app.makinedegisim.models import MakineDegisim
 from app.subeler.models import Sube
 
 
@@ -146,6 +148,77 @@ def test_bilgi_iki_tarih_parametresi_donem_modu_ve_filtre_disı(app, client):
     assert "Dönem Alacak" in body
     assert "Dönem Bakiyesi" in body or "Dönem Bakiye" in body
     assert "Filtre dışı" in body
+
+
+def test_swap_badge_ekran_yazdirma_ve_excel_ciktilarinda_gorunur(app, client):
+    with app.app_context():
+        admin_id, firma_id = _setup_data(app)
+        firma = db.session.get(Firma, firma_id)
+        kiralama = firma.kiralamalar[0]
+        eski_kalem = kiralama.kalemler[0]
+        eski_kalem.is_active = False
+        eski_kalem.sonlandirildi = True
+        eski_kalem.kiralama_bitis = date(2026, 4, 14)
+
+        yeni_ekipman = Ekipman(
+            kod="PM14", yakit="Elektrik", tipi="MAKAS",
+            marka="Yeni Marka", model="M14",
+            seri_no=f"SN-{uuid.uuid4().hex[:8]}",
+            calisma_yuksekligi=10, kaldirma_kapasitesi=2000,
+            uretim_yili=2023, calisma_durumu="kirada",
+        )
+        db.session.add(yeni_ekipman)
+        db.session.flush()
+
+        yeni_kalem = KiralamaKalemi(
+            kiralama_id=kiralama.id,
+            ekipman_id=yeni_ekipman.id,
+            kiralama_baslangici=date(2026, 4, 15),
+            kiralama_bitis=date(2026, 4, 30),
+            kiralama_brm_fiyat=Decimal("100.00"),
+            sonlandirildi=False, is_active=True,
+            parent_id=eski_kalem.id, chain_id=eski_kalem.id, versiyon_no=2,
+        )
+        db.session.add(yeni_kalem)
+        db.session.flush()
+        db.session.add(MakineDegisim(
+            kiralama_id=kiralama.id,
+            eski_kalem_id=eski_kalem.id,
+            yeni_kalem_id=yeni_kalem.id,
+            eski_ekipman_id=eski_kalem.ekipman_id,
+            yeni_ekipman_id=yeni_ekipman.id,
+            neden="serviste",
+        ))
+        db.session.commit()
+
+    _login(client, admin_id)
+
+    ekran = client.get(f"/firmalar/bilgi/{firma_id}?tab=cari")
+    assert ekran.status_code == 200
+    ekran_body = ekran.data.decode("utf-8", errors="replace")
+    assert "swap-cari-badge" in ekran_body
+    assert "&lt;&gt;pm14" in ekran_body
+
+    yazdir = client.get(f"/firmalar/bilgi/{firma_id}/yazdir?tab=cari")
+    assert yazdir.status_code == 200
+    yazdir_body = yazdir.data.decode("utf-8", errors="replace")
+    assert "swap-cari-badge" in yazdir_body
+    assert "&lt;&gt;pm14" in yazdir_body
+
+    excel = client.get(f"/firmalar/bilgi/{firma_id}/excel?tab=cari")
+    assert excel.status_code == 200
+    from openpyxl import load_workbook
+    workbook = load_workbook(BytesIO(excel.data), read_only=True, data_only=True)
+    values = [
+        cell.value
+        for sheet in workbook.worksheets
+        for row in sheet.iter_rows()
+        for cell in row
+    ]
+    assert any(
+        value == "<>pm14" or (isinstance(value, str) and "<>pm14" in value)
+        for value in values
+    )
 
 
 def _tr_amount_to_decimal(text: str) -> Decimal:

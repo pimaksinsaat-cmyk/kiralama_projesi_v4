@@ -68,6 +68,18 @@
             font-weight: 600;
             color: #2d3e50;
         }
+        .swap-cari-badge {
+            display: inline-block;
+            padding: 1px 4px;
+            margin-left: 3px;
+            border-radius: 3px;
+            background: #cff4fc;
+            color: #055160;
+            border: 1px solid #9eeaf9;
+            font-size: 9px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
 
         /* TABLO */
         table {
@@ -316,6 +328,9 @@
             </td>
             <td>
                 {{ row.aciklama }}
+                {% if row.swap_makine_kodu %}
+                    <span class="swap-cari-badge">&lt;&gt;{{ row.swap_makine_kodu | lower }}</span>
+                {% endif %}
                 {% if row.seri_no %}
                     <div style="font-size:9px; color:#6c757d;">S/N: {{ row.seri_no }}</div>
                 {% endif %}
