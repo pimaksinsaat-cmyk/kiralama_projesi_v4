@@ -321,7 +321,10 @@ class FirmaService(BaseService):
         nakliye_ids = [h.nakliye_id for h in firma.hizmet_kayitlari if getattr(h, 'nakliye_id', None)]
         nakliye_info_map = {}
         if nakliye_ids:
-            nakliyeler = Nakliye.query.filter(Nakliye.id.in_(nakliye_ids)).with_entities(
+            nakliyeler = Nakliye.query.filter(
+                Nakliye.id.in_(nakliye_ids),
+                *Nakliye.active_filters(),
+            ).with_entities(
                 Nakliye.id, Nakliye.tevkifat_orani, Nakliye.kiralama_id, Nakliye.kdv_orani
             ).all()
             kiralama_ids_for_nakliye = [n.kiralama_id for n in nakliyeler if n.kiralama_id]
@@ -649,13 +652,13 @@ class FirmaService(BaseService):
             _min_date(
                 select(func.min(Nakliye.tarih)).where(
                     Nakliye.firma_id == firma_id,
-                    Nakliye.is_active.is_(True),
+                    *Nakliye.active_filters(),
                 )
             ),
             _min_date(
                 select(func.min(Nakliye.tarih)).where(
                     Nakliye.taseron_firma_id == firma_id,
-                    Nakliye.is_active.is_(True),
+                    *Nakliye.active_filters(),
                 )
             ),
             _min_date(
@@ -857,7 +860,7 @@ class FirmaService(BaseService):
             if kir.firma_musteri and kir.firma_musteri.firma_adi:
                 firma_kisa = kir.firma_musteri.firma_adi.split()[0]
             for nakliye in kir.nakliyeler:
-                if not nakliye.is_active:
+                if not nakliye.is_active or getattr(nakliye, 'is_deleted', False):
                     continue
                 nak_tutar = float(nakliye.tutar or 0)
                 if nak_tutar <= 0:
@@ -1035,7 +1038,7 @@ class FirmaService(BaseService):
         # --- Standalone nakliye satışları ---
         standalone_nakliyeler = Nakliye.query.filter(
             Nakliye.firma_id == firma.id,
-            Nakliye.is_active == True,
+            *Nakliye.active_filters(),
             Nakliye.kiralama_id == None
         ).order_by(Nakliye.islem_tarihi, Nakliye.tarih).all()
         for nakliye in standalone_nakliyeler:
@@ -1080,7 +1083,10 @@ class FirmaService(BaseService):
         legacy_taseron_nakliye_by_id = {}
         if legacy_taseron_nakliye_ids:
             legacy_taseron_nakliye_by_id = {
-                n.id: n for n in Nakliye.query.filter(Nakliye.id.in_(legacy_taseron_nakliye_ids)).all()
+                n.id: n for n in Nakliye.query.filter(
+                    Nakliye.id.in_(legacy_taseron_nakliye_ids),
+                    *Nakliye.active_filters(),
+                ).all()
             }
         taseron_kalem_ids = {
             hizmet.ozel_id

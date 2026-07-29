@@ -358,18 +358,31 @@
             </div>
             <div class="modal-body p-4">
                 Bu nakliye kaydını silmek istediğinize emin misiniz?<br>
-                <div class="alert alert-warning mt-3 mb-0 small border-0 bg-warning-subtle text-dark">
+                <div class="alert alert-warning mt-3 mb-3 small border-0 bg-warning-subtle text-dark">
                     <i class="fas fa-info-circle me-2"></i>
-                    <b>Önemli:</b> Bu işlem bağlı olan cari hizmet kaydını ve maliyet kayıtlarını da otomatik olarak silecektir.
+                    <b>Önemli:</b> Bağlı cari hizmet ve maliyet kayıtları da listeden çıkarılacaktır.
+                    İşlem {{ 60 }} saniye içinde geri alınabilir.
                 </div>
+                <label for="deleteConfirmPassword" class="form-label fw-semibold">Kullanıcı şifreniz</label>
+                <input type="password" class="form-control" id="deleteConfirmPassword" autocomplete="current-password" placeholder="Şifrenizi girin">
+                <div id="deletePasswordError" class="text-danger small mt-2" style="display:none;"></div>
             </div>
             <div class="modal-footer bg-light border-0">
                 <button type="button" class="btn btn-secondary px-4" data-bs-dismiss="modal">Vazgeç</button>
-                <form id="deleteForm" action="" method="POST" style="display:inline;">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit" class="btn btn-danger px-4 shadow-sm">Evet, Kalıcı Olarak Sil</button>
-                </form>
+                <button type="button" class="btn btn-danger px-4 shadow-sm" id="deleteConfirmBtn">Evet, Sil</button>
             </div>
+        </div>
+    </div>
+</div>
+
+<div id="nakliyeUndoToast" class="position-fixed bottom-0 end-0 p-3" style="z-index: 1100; display:none;">
+    <div class="toast show align-items-center text-bg-dark border-0" role="alert">
+        <div class="d-flex align-items-center">
+            <div class="toast-body">
+                Nakliye silindi. <span id="nakliyeUndoCountdown">60</span> sn içinde geri alınabilir.
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-light me-2" id="nakliyeUndoBtn">Geri Al</button>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" id="nakliyeUndoDismiss" aria-label="Close"></button>
         </div>
     </div>
 </div>
@@ -553,10 +566,19 @@
         const kiralamaGitLink = document.getElementById('ctxKiralamaGit');
         
         const deleteModalEl = document.getElementById('deleteModal');
-        const deleteForm = document.getElementById('deleteForm');
         const deleteModal = new bootstrap.Modal(deleteModalEl);
+        const deleteConfirmBtn = document.getElementById('deleteConfirmBtn');
+        const deletePasswordField = document.getElementById('deleteConfirmPassword');
+        const deletePasswordError = document.getElementById('deletePasswordError');
+        const undoToast = document.getElementById('nakliyeUndoToast');
+        const undoBtn = document.getElementById('nakliyeUndoBtn');
+        const undoDismiss = document.getElementById('nakliyeUndoDismiss');
+        const undoCountdown = document.getElementById('nakliyeUndoCountdown');
+        const csrfToken = '{{ csrf_token() }}';
 
         let currentDeleteUrl = "";
+        let pendingUndoId = null;
+        let undoTimer = null;
 
         function getContextMenuPosition(event, menuElement) {
             const padding = 8;
@@ -585,6 +607,28 @@
                 x: Math.max(padding, posX),
                 y: Math.max(padding, posY)
             };
+        }
+
+        function dismissUndoToast() {
+            if (undoTimer) {
+                clearInterval(undoTimer);
+                undoTimer = null;
+            }
+            pendingUndoId = null;
+            if (undoToast) undoToast.style.display = 'none';
+        }
+
+        function showUndoToast(nakliyeId, seconds) {
+            pendingUndoId = nakliyeId;
+            let remaining = seconds || 60;
+            if (undoCountdown) undoCountdown.textContent = String(remaining);
+            if (undoToast) undoToast.style.display = 'block';
+            if (undoTimer) clearInterval(undoTimer);
+            undoTimer = setInterval(function() {
+                remaining -= 1;
+                if (undoCountdown) undoCountdown.textContent = String(Math.max(0, remaining));
+                if (remaining <= 0) dismissUndoToast();
+            }, 1000);
         }
 
         // SAĞ TIK MANTIĞI
@@ -626,9 +670,85 @@
         silTrigger.addEventListener('click', function(e) {
             e.preventDefault();
             menu.style.display = 'none';
-            deleteForm.action = currentDeleteUrl;
+            if (deletePasswordField) deletePasswordField.value = '';
+            if (deletePasswordError) {
+                deletePasswordError.style.display = 'none';
+                deletePasswordError.textContent = '';
+            }
             deleteModal.show();
+            window.setTimeout(function() { deletePasswordField && deletePasswordField.focus(); }, 150);
         });
+
+        if (deleteConfirmBtn) {
+            deleteConfirmBtn.addEventListener('click', async function() {
+                const password = deletePasswordField ? deletePasswordField.value : '';
+                if (!password) {
+                    if (deletePasswordError) {
+                        deletePasswordError.textContent = 'Şifre gerekli.';
+                        deletePasswordError.style.display = 'block';
+                    }
+                    return;
+                }
+                deleteConfirmBtn.disabled = true;
+                try {
+                    const formData = new FormData();
+                    formData.append('delete_confirm_password', password);
+                    formData.append('csrf_token', csrfToken);
+                    formData.append('ajax', '1');
+                    const response = await fetch(currentDeleteUrl, {
+                        method: 'POST',
+                        body: formData,
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                        credentials: 'same-origin',
+                    });
+                    const payload = await response.json();
+                    if (!response.ok || !payload.ok) {
+                        throw new Error(payload.message || 'Silme işlemi başarısız oldu.');
+                    }
+                    deleteModal.hide();
+                    const undoSeconds = payload.undo_seconds || 60;
+                    const deletedRow = document.querySelector('.sag-tik-satir[data-sil-url="' + currentDeleteUrl + '"]');
+                    if (deletedRow) deletedRow.remove();
+                    showUndoToast(payload.id, undoSeconds);
+                } catch (err) {
+                    if (deletePasswordError) {
+                        deletePasswordError.textContent = err.message || 'Silme başarısız.';
+                        deletePasswordError.style.display = 'block';
+                    }
+                } finally {
+                    deleteConfirmBtn.disabled = false;
+                }
+            });
+        }
+
+        if (undoBtn) {
+            undoBtn.addEventListener('click', async function() {
+                if (!pendingUndoId) return;
+                undoBtn.disabled = true;
+                try {
+                    const formData = new FormData();
+                    formData.append('csrf_token', csrfToken);
+                    const response = await fetch('/nakliyeler/geri-al/' + pendingUndoId, {
+                        method: 'POST',
+                        body: formData,
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                        credentials: 'same-origin',
+                    });
+                    const payload = await response.json();
+                    if (!response.ok || !payload.ok) {
+                        throw new Error(payload.message || 'Geri alma başarısız.');
+                    }
+                    dismissUndoToast();
+                    window.location.reload();
+                } catch (err) {
+                    alert(err.message || 'Geri alınamadı.');
+                    undoBtn.disabled = false;
+                }
+            });
+        }
+        if (undoDismiss) {
+            undoDismiss.addEventListener('click', dismissUndoToast);
+        }
 
         // MENÜYÜ KAPATMA
         document.addEventListener('click', () => menu.style.display = 'none');

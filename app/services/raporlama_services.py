@@ -490,7 +490,7 @@ class RaporlamaService:
                 month_row["harici_odeme"] += alis_birim * month_days
 
         nakliye_query = Nakliye.query.filter(
-            Nakliye.is_active.is_(True),
+            *Nakliye.active_filters(),
             Nakliye.tarih >= start_date,
             Nakliye.tarih <= end_date,
         )
@@ -792,7 +792,7 @@ class RaporlamaService:
         nakliyeler = (
             Nakliye.query.options(joinedload(Nakliye.kendi_aracimiz))
             .filter(
-                Nakliye.is_active.is_(True),
+                *Nakliye.active_filters(),
                 Nakliye.tarih >= start_date,
                 Nakliye.tarih <= end_date,
             )
@@ -926,7 +926,7 @@ class RaporlamaService:
         nakliyeler = (
             Nakliye.query.options(joinedload(Nakliye.kendi_aracimiz))
             .filter(
-                Nakliye.is_active.is_(True),
+                *Nakliye.active_filters(),
                 Nakliye.tarih >= start_date,
                 Nakliye.tarih <= end_date,
             )

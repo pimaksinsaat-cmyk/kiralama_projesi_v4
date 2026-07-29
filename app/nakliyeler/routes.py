@@ -1,14 +1,15 @@
 from io import BytesIO
 
-from flask import render_template, redirect, url_for, flash, request, send_file
-from flask_login import current_user
+from flask import render_template, redirect, url_for, flash, request, send_file, jsonify, session
+from flask_login import current_user, login_required
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload
 from app.extensions import db
 from app.nakliyeler import nakliye_bp
 from app.nakliyeler.models import Nakliye
 from app.nakliyeler.forms import NakliyeForm
-from app.services.nakliye_services import CariServis
+from app.services.nakliye_services import CariServis, NakliyeService
+from app.services.base import ValidationError
 from app.services.operation_log_service import OperationLogService
 from app.firmalar.models import Firma
 from app.araclar.models import Arac
@@ -90,7 +91,7 @@ class _NakliyeListPagination:
 
 
 def _nakliye_filtered_query(baslangic, bitis, secili_plaka, secili_taseron_id, secili_firma_id):
-    query = Nakliye.query.filter(Nakliye.tutar > 0)
+    query = Nakliye.query.filter(Nakliye.tutar > 0, *Nakliye.active_filters())
     effective_date = func.coalesce(Nakliye.islem_tarihi, Nakliye.tarih)
 
     if baslangic:
@@ -162,26 +163,9 @@ def index():
         )
 
         stage = 'ana_sorgu'
-        query = Nakliye.query.filter(Nakliye.tutar > 0)
-        effective_date = func.coalesce(Nakliye.islem_tarihi, Nakliye.tarih)
-
-        # Filtreleri uygula
-        if baslangic:
-            try:
-                baslangic_date = datetime.strptime(baslangic, '%Y-%m-%d').date()
-                query = query.filter(effective_date >= baslangic_date)
-            except ValueError: pass
-        if bitis:
-            try:
-                bitis_date = datetime.strptime(bitis, '%Y-%m-%d').date()
-                query = query.filter(effective_date <= bitis_date)
-            except ValueError: pass
-        if secili_plaka:
-            query = query.filter(Nakliye.plaka == secili_plaka)
-        if secili_taseron_id and secili_taseron_id.isdigit():
-            query = query.filter(Nakliye.taseron_firma_id == int(secili_taseron_id))
-        if secili_firma_id and secili_firma_id.isdigit():
-            query = query.filter(Nakliye.firma_id == int(secili_firma_id))
+        query = _nakliye_filtered_query(
+            baslangic, bitis, secili_plaka, secili_taseron_id, secili_firma_id
+        )
 
         stage = 'nakliye_listesi_yukleme'
         filtered_all = (
@@ -203,7 +187,15 @@ def index():
 
         # Dropdown listelerini hazırla
         stage = 'dropdown_listeleri'
-        plakalar = db.session.query(Nakliye.plaka).filter(Nakliye.plaka.isnot(None)).distinct().all()
+        plakalar = (
+            db.session.query(Nakliye.plaka)
+            .filter(
+                *Nakliye.active_filters(),
+                Nakliye.plaka.isnot(None),
+            )
+            .distinct()
+            .all()
+        )
         plaka_listesi = [p[0] for p in plakalar if p[0] and p[0].strip() != ""]
         taseron_listesi = Firma.query.filter_by(is_tedarikci=True, is_active=True).order_by(Firma.firma_adi).all()
         firma_listesi = [{'id': f.id, 'firma_adi': f.firma_adi}
@@ -624,7 +616,7 @@ def arac_ekle():
 # ---------------------------------------------------
 @nakliye_bp.route('/duzenle/<int:id>', methods=['GET', 'POST'])
 def duzenle(id):
-    nakliye = Nakliye.query.get_or_404(id)
+    nakliye = NakliyeService.get_active_or_404(id)
 
     if nakliye.kiralama_id:
         flash('Bu kayıt kiralama modülüne bağlıdır.', 'warning')
@@ -706,28 +698,54 @@ def duzenle(id):
     return render_template('nakliyeler/duzenle.html', form=form, nakliye=nakliye)
 
 # ---------------------------------------------------
-# 5. SİLME (Tam Temizlik)
+# 5. SİLME (Soft-delete + geri alınabilir)
 # ---------------------------------------------------
 @nakliye_bp.route('/sil/<int:id>', methods=['POST'])
+@login_required
 def sil(id):
-    nakliye = Nakliye.query.get_or_404(id)
-    
-    if nakliye.kiralama_id:
-        flash('Kiralama bağlantılı kayıtlar silinemez.', 'danger')
-        return redirect(url_for('nakliyeler.index'))
-    
+    wants_json = (
+        request.accept_mimetypes.best == 'application/json'
+        or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        or request.form.get('ajax') == '1'
+    )
     try:
-        CariServis.nakliye_cari_temizle(nakliye.id)
-        db.session.delete(nakliye)
-        db.session.commit()
+        delete_password = request.form.get('delete_confirm_password') or ''
+        if not delete_password or not current_user.check_password(delete_password):
+            raise ValidationError(
+                'Nakliye silmek için kullanıcı şifrenizi doğrulamanız gerekir.'
+            )
+
+        actor_id = _actor()
+        snapshot = NakliyeService.delete_with_relations(id, actor_id=actor_id)
+        session[NakliyeService.undo_session_key(id)] = snapshot
+        session.modified = True
+        OperationLogService.log(
+            module='nakliyeler', action='delete',
+            user_id=actor_id, username=_uname(),
+            entity_type='Nakliye', entity_id=id,
+            description=f"Nakliye #{id} soft-delete edildi.",
+            success=True
+        )
+        if wants_json:
+            return jsonify({
+                'ok': True,
+                'id': id,
+                'undo_seconds': NakliyeService.UNDO_WINDOW_SECONDS,
+            })
+        flash('Kayıt silindi. Kısa süre içinde geri alınabilir.', 'success')
+        return redirect(url_for('nakliyeler.index'))
+    except ValidationError as e:
         OperationLogService.log(
             module='nakliyeler', action='delete',
             user_id=_actor(), username=_uname(),
             entity_type='Nakliye', entity_id=id,
-            description=f"Nakliye #{id} silindi.",
-            success=True
+            description=f"Nakliye silme doğrulama hatası: {str(e)}",
+            success=False
         )
-        flash('Kayıt silindi.', 'success')
+        if wants_json:
+            return jsonify({'ok': False, 'message': str(e)}), 400
+        flash(str(e), 'danger')
+        return redirect(url_for('nakliyeler.index'))
     except Exception as e:
         db.session.rollback()
         OperationLogService.log(
@@ -737,11 +755,53 @@ def sil(id):
             description=f"Nakliye silme hatası: {str(e)}",
             success=False
         )
+        if wants_json:
+            return jsonify({'ok': False, 'message': 'Silme işlemi başarısız oldu.'}), 500
         flash(f'Hata: {str(e)}', 'danger')
-        
-    return redirect(url_for('nakliyeler.index'))
+        return redirect(url_for('nakliyeler.index'))
+
+
+@nakliye_bp.route('/geri-al/<int:id>', methods=['POST'])
+@login_required
+def geri_al(id):
+    try:
+        actor_id = _actor()
+        undo_key = NakliyeService.undo_session_key(id)
+        snapshot = session.get(undo_key)
+        NakliyeService.restore_with_relations(
+            id, actor_id=actor_id, snapshot=snapshot
+        )
+        session.pop(undo_key, None)
+        session.modified = True
+        OperationLogService.log(
+            module='nakliyeler', action='restore',
+            user_id=actor_id, username=_uname(),
+            entity_type='Nakliye', entity_id=id,
+            description=f"Nakliye #{id} geri alındı.",
+            success=True
+        )
+        return jsonify({'ok': True, 'id': id})
+    except ValidationError as e:
+        OperationLogService.log(
+            module='nakliyeler', action='restore',
+            user_id=_actor(), username=_uname(),
+            entity_type='Nakliye', entity_id=id,
+            description=f"Nakliye geri alma doğrulama hatası: {str(e)}",
+            success=False
+        )
+        return jsonify({'ok': False, 'message': str(e)}), 400
+    except Exception as e:
+        OperationLogService.log(
+            module='nakliyeler', action='restore',
+            user_id=_actor(), username=_uname(),
+            entity_type='Nakliye', entity_id=id,
+            description=f"Nakliye geri alma hatası: {str(e)}",
+            success=False
+        )
+        return jsonify({'ok': False, 'message': 'Geri alma başarısız oldu.'}), 500
+
 
 @nakliye_bp.route('/detay/<int:id>')
 def detay(id):
-    nakliye = Nakliye.query.get_or_404(id)
+    nakliye = NakliyeService.get_active_or_404(id)
     return render_template('nakliyeler/detay.html', nakliye=nakliye)

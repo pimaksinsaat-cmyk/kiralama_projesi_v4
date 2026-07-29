@@ -293,15 +293,18 @@ class KiralamaKalemiService(BaseService):
         db.session.add(hizmet_kaydi)
 
     @staticmethod
-    def _create_donus_nakliye_seferi(kalem, makine_bilgisi, musteri_adi, is_yeri_donus, donus_sube_adi, donus_satis):
+    def _create_donus_nakliye_seferi(kalem, makine_bilgisi, musteri_adi, is_yeri_donus, donus_sube_adi, donus_satis, actor_id=None):
         if not kalem.kiralama:
             return None
 
         form_no = kalem.kiralama.kiralama_form_no or ''
-        Nakliye.query.filter(
+        from app.services.nakliye_services import NakliyeService
+        NakliyeService.soft_delete_matching(
             Nakliye.kiralama_id == kalem.kiralama_id,
-            Nakliye.aciklama == f"Dönüş: {form_no} #{kalem.id}"
-        ).delete(synchronize_session=False)
+            Nakliye.aciklama == f"Dönüş: {form_no} #{kalem.id}",
+            actor_id=actor_id,
+            soft_delete_cari=True,
+        )
 
         donus_guzergah = (
             f"{makine_bilgisi} {musteri_adi} firmasının {is_yeri_donus}'nden "
@@ -570,10 +573,13 @@ class KiralamaKalemiService(BaseService):
             donus_satis = KiralamaService._get_donus_nakliye_satis(kalem)
             if validated['donus_satis_explicit'] or donus_satis > 0:
                 form_no = kalem.kiralama.kiralama_form_no or ''
-                Nakliye.query.filter(
+                from app.services.nakliye_services import NakliyeService
+                NakliyeService.soft_delete_matching(
                     Nakliye.kiralama_id == kalem.kiralama_id,
-                    Nakliye.aciklama == f"Dönüş: {form_no} #{kalem.id}"
-                ).delete(synchronize_session=False)
+                    Nakliye.aciklama == f"Dönüş: {form_no} #{kalem.id}",
+                    actor_id=actor_id,
+                    soft_delete_cari=True,
+                )
 
                 donus_guzergah = (
                     f"{makine_bilgisi_donus} {musteri_adi} firmasının {is_yeri_donus}'nden "
@@ -867,10 +873,13 @@ class KiralamaKalemiService(BaseService):
         # Dönüş özmal sefer kaydını geri al
         if kalem.kiralama:
             form_no_iptal = kalem.kiralama.kiralama_form_no or ''
-            Nakliye.query.filter(
+            from app.services.nakliye_services import NakliyeService
+            NakliyeService.soft_delete_matching(
                 Nakliye.kiralama_id == kalem.kiralama_id,
-                Nakliye.aciklama == f"Dönüş: {form_no_iptal} #{kalem.id}"
-            ).delete(synchronize_session=False)
+                Nakliye.aciklama == f"Dönüş: {form_no_iptal} #{kalem.id}",
+                actor_id=actor_id,
+                soft_delete_cari=True,
+            )
 
         cls.save(kalem, is_new=False, auto_commit=False, actor_id=actor_id)
         
@@ -1058,23 +1067,22 @@ class KiralamaService(BaseService):
         return (degisim.neden or '').strip().lower() if degisim else None
 
     @classmethod
-    def _soft_delete_donus_nakliye_artifacts(cls, kalem):
+    def _soft_delete_donus_nakliye_artifacts(cls, kalem, actor_id=None):
         """Kaleme bağlı dönüş seferi ve cari kayıtlarını transaction içinde kapatır."""
         if not kalem or not kalem.kiralama:
             return 0
 
+        from app.services.nakliye_services import NakliyeService
+
         form_no = kalem.kiralama.kiralama_form_no or ''
-        seferler = Nakliye.query.filter(
+        seferler = NakliyeService.soft_delete_matching(
             Nakliye.kiralama_id == kalem.kiralama_id,
             Nakliye.aciklama == f"Dönüş: {form_no} #{kalem.id}",
-            Nakliye.is_active == True,
-        ).all()
-        kapatilan = 0
+            actor_id=actor_id,
+            soft_delete_cari=False,
+        )
+        kapatilan = len(seferler)
         nakliye_ids = {sefer.id for sefer in seferler}
-        for sefer in seferler:
-            sefer.is_active = False
-            db.session.add(sefer)
-            kapatilan += 1
 
         cari_kayitlari = HizmetKaydi.query.filter(
             HizmetKaydi.is_deleted == False,
@@ -1087,12 +1095,12 @@ class KiralamaService(BaseService):
             ),
         ).all()
         for kayit in cari_kayitlari:
-            _soft_delete_hizmet_kaydi(kayit)
+            _soft_delete_hizmet_kaydi(kayit, actor_id=actor_id)
             kapatilan += 1
         return kapatilan
 
     @classmethod
-    def reconcile_swap_donus_nakliye(cls, kalem, neden=None, explicit_sales=None):
+    def reconcile_swap_donus_nakliye(cls, kalem, neden=None, explicit_sales=None, actor_id=None):
         """Swap politikasına göre eski kalemin dönüş hareketini reconcile eder.
 
         Pozitif swap ekranı bedeli yeni swap seferinde tutulur; eski dönüş seferi
@@ -1102,20 +1110,20 @@ class KiralamaService(BaseService):
         reason = (neden or cls._swap_reason_for_kalem(kalem) or '').strip().lower()
         explicit_sales = to_decimal(explicit_sales)
         if explicit_sales > 0 or reason in ('serviste', 'periyodik', 'bakimda'):
-            return cls._soft_delete_donus_nakliye_artifacts(kalem)
+            return cls._soft_delete_donus_nakliye_artifacts(kalem, actor_id=actor_id)
         return 0
 
     @classmethod
-    def reconcile_donus_nakliye_policy(cls, kalem):
+    def reconcile_donus_nakliye_policy(cls, kalem, actor_id=None):
         """Form güncellemesinde dönüş seferini güncel fiyat politikasına uyarlar."""
         reason = cls._swap_reason_for_kalem(kalem)
         if reason in ('serviste', 'periyodik', 'bakimda'):
-            return cls._soft_delete_donus_nakliye_artifacts(kalem)
+            return cls._soft_delete_donus_nakliye_artifacts(kalem, actor_id=actor_id)
         if reason == 'bosta':
             # Müşteri talebi swapında daha önce açıkça oluşturulmuş ücret korunur.
             return 0
         if kalem.sonlandirildi and cls._get_donus_nakliye_satis(kalem) <= 0:
-            return cls._soft_delete_donus_nakliye_artifacts(kalem)
+            return cls._soft_delete_donus_nakliye_artifacts(kalem, actor_id=actor_id)
         return 0
 
     @staticmethod
@@ -1438,7 +1446,7 @@ class KiralamaService(BaseService):
         # Kiralamaya bağlı nakliye HizmetKaydi'lerini ayrı olarak senkronize et
         from app.services.nakliye_services import CariServis as NakliyeCariServis
         db.session.flush()
-        nakliyeler = Nakliye.query.filter_by(kiralama_id=kiralama.id).all()
+        nakliyeler = Nakliye.active_query().filter_by(kiralama_id=kiralama.id).all()
         for nakliye in nakliyeler:
             NakliyeCariServis.musteri_nakliye_senkronize_et(nakliye)
 
@@ -1805,7 +1813,9 @@ class KiralamaService(BaseService):
                         dis_kiralama_hizmet.ozel_id = kalem.id
                     if to_decimal(kalem.nakliye_satis_fiyat) > 0 or to_decimal(kalem.nakliye_alis_fiyat) > 0:
                         logger.debug(f"[CREATE] Nakliye ve cari oluşturuluyor: kalem_id={kalem.id}")
-                        cls._create_nakliye_ve_cari(kiralama, kalem, makine_adi, bas)
+                        cls._create_nakliye_ve_cari(
+                            kiralama, kalem, makine_adi, bas, actor_id=actor_id
+                        )
                 logger.debug(f"[CREATE] Cari toplam güncelleniyor: kiralama_id={kiralama.id}")
                 cls.guncelle_cari_toplam(kiralama.id, auto_commit=False)
                 logger.debug(f"[CREATE] Commit ediliyor...")
@@ -1838,10 +1848,13 @@ class KiralamaService(BaseService):
             ).filter(HizmetKaydi.is_deleted == False).all():
                 _soft_delete_hizmet_kaydi(kayit)
             # Dönüş sefer kayıtlarını koru (bunlar sonlandırma sırasında eklenir)
-            Nakliye.query.filter(
+            from app.services.nakliye_services import NakliyeService
+            NakliyeService.soft_delete_matching(
                 Nakliye.kiralama_id == kiralama.id,
-                (Nakliye.aciklama == None) | ~Nakliye.aciklama.like('Dönüş:%')
-            ).delete(synchronize_session=False)
+                (Nakliye.aciklama == None) | ~Nakliye.aciklama.like('Dönüş:%'),
+                actor_id=actor_id,
+                soft_delete_cari=True,
+            )
 
             for key, value in kiralama_data.items():
                 if hasattr(kiralama, key): setattr(kiralama, key, value)
@@ -1963,7 +1976,9 @@ class KiralamaService(BaseService):
                     or to_decimal(aktif.nakliye_alis_fiyat) > 0
                     or getattr(aktif, 'sonlandirildi', False)
                 ):
-                    cls._create_nakliye_ve_cari(kiralama, aktif, makine_adi, bas)
+                    cls._create_nakliye_ve_cari(
+                        kiralama, aktif, makine_adi, bas, actor_id=actor_id
+                    )
                     if (
                         aktif.sonlandirildi
                         and aktif.donus_is_harici_nakliye
@@ -1987,7 +2002,7 @@ class KiralamaService(BaseService):
             # nedeni ve güncel ücret politikasına göre eski hareketleri kapatır.
             for policy_kalem in list(kiralama.kalemler):
                 if not policy_kalem.is_deleted:
-                    cls.reconcile_donus_nakliye_policy(policy_kalem)
+                    cls.reconcile_donus_nakliye_policy(policy_kalem, actor_id=actor_id)
 
             for k in list(kiralama.kalemler):
                 if k.id not in formdan_gelen_idler:
@@ -2097,6 +2112,9 @@ class KiralamaService(BaseService):
 
     @classmethod
     def _related_nakliyeler(cls, kiralama_id):
+        # Silme/restore lifecycle'i icin parent'a bagli tum cocuklar gerekir;
+        # finansal ve gorunurluk sorgulari bunun yerine Nakliye.active_query()
+        # kullanmalidir.
         return Nakliye.query.filter_by(kiralama_id=kiralama_id).all()
 
     @classmethod
@@ -2289,8 +2307,11 @@ class KiralamaService(BaseService):
                 cls._soft_delete_instance(kayit, actor_id=actor_id, deleted_at=deleted_at)
 
             for nakliye in nakliyeler:
-                nakliye.is_active = False
-                db.session.add(nakliye)
+                # Önceden pasif seferleri soft-delete etme; listelerde zaten gizli kalırlar
+                # ve arşiv restore kör aktifleştirmesinden korunurlar.
+                if not nakliye.is_active and not getattr(nakliye, 'is_deleted', False):
+                    continue
+                cls._soft_delete_instance(nakliye, actor_id=actor_id, deleted_at=deleted_at)
 
             for kalem in list(kiralama.kalemler):
                 cls._soft_delete_instance(kalem, actor_id=actor_id, deleted_at=deleted_at)
@@ -2353,8 +2374,12 @@ class KiralamaService(BaseService):
 
             for nakliye in nakliyeler:
                 state = (snapshot.get('nakliyeler') or {}).get(str(nakliye.id), {})
-                nakliye.is_active = state.get('is_active', True)
-                db.session.add(nakliye)
+                if state:
+                    cls._restore_instance(nakliye, state=state)
+                else:
+                    # Snapshot yoksa yalnızca soft-deleted olanları geri aç
+                    if getattr(nakliye, 'is_deleted', False):
+                        cls._restore_instance(nakliye)
 
             cls._restore_instance(kiralama, state=snapshot.get('kiralama'))
             for kalem in list(kiralama.kalemler):
@@ -2420,21 +2445,26 @@ class KiralamaService(BaseService):
             nakliyeler = cls._related_nakliyeler(kiralama.id)
             hizmetler = cls._related_hizmetler(kiralama, nakliyeler)
             affected_firma_ids = cls._collect_affected_firma_ids(kiralama, nakliyeler, hizmetler)
+            parent_deleted_at = cls._normalize_utc(kiralama.deleted_at)
             affected_ekipman_ids = {
                 kalem.ekipman_id for kalem in kiralama.kalemler if kalem.ekipman_id
             }
 
             for kayit in hizmetler:
-                if getattr(kayit, 'is_deleted', False):
+                if (
+                    getattr(kayit, 'is_deleted', False)
+                    and cls._deleted_at_matches(kayit.deleted_at, parent_deleted_at)
+                ):
                     cls._restore_instance(kayit)
 
             for nakliye in nakliyeler:
-                if hasattr(nakliye, 'is_deleted'):
-                    nakliye.is_deleted = False
-                    nakliye.deleted_at = None
-                    nakliye.deleted_by_id = None
-                nakliye.is_active = True
-                db.session.add(nakliye)
+                if (
+                    getattr(nakliye, 'is_deleted', False)
+                    and cls._deleted_at_matches(nakliye.deleted_at, parent_deleted_at)
+                ):
+                    # Soft-delete edilmiş (silme anında aktif olan) seferleri geri aç.
+                    # Önceden pasif olanlar is_deleted=False bırakıldığı için dokunulmaz.
+                    cls._restore_instance(nakliye)
 
             cls._restore_instance(kiralama)
             for kalem in list(kiralama.kalemler):
@@ -2468,7 +2498,7 @@ class KiralamaService(BaseService):
             raise ValidationError(f"Arşivden geri yükleme hatası: {str(e)}") from e
 
     @staticmethod
-    def _create_nakliye_ve_cari(kiralama, kalem, makine_adi, bas_tarihi):
+    def _create_nakliye_ve_cari(kiralama, kalem, makine_adi, bas_tarihi, actor_id=None):
         """Nakliye seferi ve varsa taşeron cari gider kaydını senkronize eder."""
         firma_adi = kiralama.firma_musteri.firma_adi if kiralama.firma_musteri else "Müşteri"
         is_yeri = (kiralama.makine_calisma_adresi or '').strip() or firma_adi
@@ -2484,11 +2514,13 @@ class KiralamaService(BaseService):
         yeni_sefer = Nakliye.query.filter(
             Nakliye.kiralama_id == kiralama.id,
             Nakliye.aciklama == gidis_aciklama,
+            *Nakliye.active_filters(),
         ).first()
         if not yeni_sefer and kalem.id:
             legacy_adaylar = Nakliye.query.filter(
                 Nakliye.kiralama_id == kiralama.id,
                 Nakliye.aciklama == legacy_gidis_aciklama,
+                *Nakliye.active_filters(),
             ).order_by(Nakliye.id.asc()).all()
             if len(legacy_adaylar) == 1:
                 yeni_sefer = legacy_adaylar[0]
@@ -2515,6 +2547,9 @@ class KiralamaService(BaseService):
         yeni_sefer.tevkifat_orani = kalem.nakliye_satis_tevkifat_oran or None
         yeni_sefer.aciklama = gidis_aciklama
         yeni_sefer.is_active = True
+        yeni_sefer.is_deleted = False
+        yeni_sefer.deleted_at = None
+        yeni_sefer.deleted_by_id = None
 
         if kalem.is_harici_nakliye and kalem.nakliye_tedarikci_id:
             # TAŞERON NAKLİYE
@@ -2585,10 +2620,13 @@ class KiralamaService(BaseService):
             donus_satis = KiralamaService._get_donus_nakliye_satis(kalem)
             if donus_satis and donus_satis > 0:
                 form_no = kiralama.kiralama_form_no or ''
-                Nakliye.query.filter(
+                from app.services.nakliye_services import NakliyeService
+                NakliyeService.soft_delete_matching(
                     Nakliye.kiralama_id == kiralama.id,
-                    Nakliye.aciklama == f"Dönüş: {form_no} #{kalem.id}"
-                ).delete(synchronize_session=False)
+                    Nakliye.aciklama == f"Dönüş: {form_no} #{kalem.id}",
+                    actor_id=actor_id,
+                    soft_delete_cari=True,
+                )
 
                 donus_sube_adi = "Şube"
                 if kalem.ekipman and kalem.ekipman.sube:

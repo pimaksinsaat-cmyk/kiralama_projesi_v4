@@ -6,7 +6,7 @@ from app.makinedegisim.models import MakineDegisim
 from app.filo.models import Ekipman, BakimKaydi
 from app.nakliyeler.models import Nakliye
 from app.araclar.models import Arac
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 # Kötü bir pratik olan "Rotadan fonksiyon çağırma" işlemini mecburiyetten koruyoruz
@@ -255,6 +255,7 @@ class MakineDegisimService(BaseService):
                 aktif_kalem,
                 neden=data.get('neden'),
                 explicit_sales=satis_fiyat,
+                actor_id=actor_id,
             )
 
             # PLAKAYI BUL (Arac modelinden)
@@ -413,10 +414,20 @@ class MakineDegisimService(BaseService):
                     Nakliye.aciklama.like(f"Makine Değişim (Swap) Operasyonu [Ref:{aktif_child.id}]%")
                 ).first()
 
-            if silinecek_nakliye:
+            if silinecek_nakliye and not getattr(silinecek_nakliye, 'is_deleted', False):
+                from app.services.nakliye_services import NakliyeService
+                deleted_at = datetime.now(timezone.utc)
                 if CariServis and hasattr(CariServis, 'nakliye_cari_temizle'):
-                    CariServis.nakliye_cari_temizle(silinecek_nakliye.id)
-                db.session.delete(silinecek_nakliye)
+                    CariServis.nakliye_cari_temizle(
+                        silinecek_nakliye.id,
+                        actor_id=actor_id,
+                        deleted_at=deleted_at,
+                    )
+                NakliyeService.soft_delete_instance(
+                    silinecek_nakliye,
+                    actor_id=actor_id,
+                    deleted_at=deleted_at,
+                )
             elif degisim_log and degisim_log.swap_taseron_hizmet_id and HizmetKaydi:
                 taseron_hizmeti = db.session.get(HizmetKaydi, degisim_log.swap_taseron_hizmet_id)
                 if taseron_hizmeti:

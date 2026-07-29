@@ -305,9 +305,14 @@ def test_nakliye_cari_temizle_kalem_bazli_kayitlara_dokunmaz(app):
     CariServis.nakliye_cari_temizle(nakliye.id)
     db.session.commit()
 
-    assert db.session.get(HizmetKaydi, canonical_id) is None
+    silinen = db.session.get(HizmetKaydi, canonical_id)
+    assert silinen is not None
+    assert silinen.is_deleted is True
+    assert silinen.is_active is False
     assert db.session.get(HizmetKaydi, kalem_taseron_id).ozel_id == kalem.id
     assert db.session.get(HizmetKaydi, kalem_fark_id).ozel_id == kalem.id
+    assert db.session.get(HizmetKaydi, kalem_taseron_id).is_deleted is False
+    assert db.session.get(HizmetKaydi, kalem_fark_id).is_deleted is False
 
 
 def test_taseron_maliyet_senkronize_et_legacy_satiri_normalize_eder(app):
@@ -769,6 +774,7 @@ def test_sonlandir_donus_taseron_giderini_idempotent_gunceller(app):
     donus_seferleri = Nakliye.query.filter(
         Nakliye.kiralama_id == kiralama.id,
         Nakliye.aciklama.like(f"Dönüş: {kiralama.kiralama_form_no} #{kalem.id}"),
+        *Nakliye.active_filters(),
     ).all()
     assert len(donus_seferleri) == 1
     assert donus_seferleri[0].nakliye_tipi == "taseron"
