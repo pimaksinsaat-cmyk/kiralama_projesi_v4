@@ -80,9 +80,13 @@
                  {{ form.tipi.label(text="Makine Tipi:") }}
                  {{ form.tipi(id="tipi", class="form-control", list="tip-listesi") }}
                 <datalist id="tip-listesi">
-                    <option value="Makaslı Platform"><option value="Eklemli Platform">
-                    <option value="Dikey Mastlı"><option value="Teleskopik">
-                    <option value="Sepetli Platform"><option value="Forklift">
+                    <option value="Makaslı Platform">
+                    <option value="Eklemli Platform">
+                    <option value="Bomlu Platform">
+                    <option value="Dikey Platform">
+                    <option value="Forklift">
+                    <option value="MobilVinç">
+                    <option value="Diğer">
                 </datalist>
                 {% for error in form.tipi.errors %}<span style="color: red;">[{{ error }}]</span>{% endfor %}
             </div>

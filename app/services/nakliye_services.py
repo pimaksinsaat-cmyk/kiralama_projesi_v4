@@ -1,5 +1,6 @@
 from datetime import datetime, timezone, timedelta
 from decimal import Decimal
+import re
 
 from app.extensions import db
 from app.cari.models import HizmetKaydi
@@ -16,6 +17,74 @@ def _net_kdv_orani(kdv_orani, tevkifat_str):
         return kdv_orani * (payda - pay) / payda
     except (ValueError, ZeroDivisionError):
         return kdv_orani
+
+
+def _nakliye_kalemini_bul(nakliye):
+    """Bağlı nakliyenin açıklamadaki kalem ID'sine karşılık gelen satırı bulur."""
+    kiralama = getattr(nakliye, 'kiralama', None)
+    kalemler = list(getattr(kiralama, 'kalemler', None) or [])
+    if not kalemler:
+        return None
+
+    aciklama = str(getattr(nakliye, 'aciklama', '') or '')
+    eslesme = re.search(r'#(\d+)\s*$', aciklama)
+    if eslesme:
+        kalem_id = int(eslesme.group(1))
+        return next((kalem for kalem in kalemler if kalem.id == kalem_id), None)
+
+    # Kalem referansı olmayan eski kayıtlarda yalnızca tek satır varsa güvenle
+    # kullanılabilir. Birden fazla satırda ilk kalemi varsaymak hatalıdır.
+    aktif_kalemler = [
+        kalem for kalem in kalemler
+        if not getattr(kalem, 'is_deleted', False)
+        and getattr(kalem, 'is_active', True)
+    ]
+    return aktif_kalemler[0] if len(aktif_kalemler) == 1 else None
+
+
+def nakliye_satis_kdv_bilgisi(nakliye):
+    """Nakliye satış KDV'sini tevkifat sonrası raporlama değerleriyle hesaplar.
+
+    Kiralamaya bağlı kayıtlarda, açıklamadaki ``#kalem_id`` referansıyla doğru
+    kiralama kaleminin satış KDV bilgisi kullanılır. Bu yardımcı yalnızca
+    gösterim/raporlama hesabı yapar; veritabanındaki alanları değiştirmez.
+    """
+    kalem = _nakliye_kalemini_bul(nakliye) if getattr(nakliye, 'kiralama_id', None) else None
+
+    if kalem is not None:
+        brut_kdv_orani = (
+            kalem.nakliye_satis_kdv
+            if kalem.nakliye_satis_kdv is not None
+            else (nakliye.kdv_orani or 0)
+        )
+        tevkifat_str = (
+            kalem.nakliye_satis_tevkifat_oran
+            or nakliye.tevkifat_orani
+            or ''
+        )
+    else:
+        brut_kdv_orani = nakliye.kdv_orani or 0
+        tevkifat_str = nakliye.tevkifat_orani or ''
+
+    brut_kdv_orani = float(brut_kdv_orani or 0)
+    efektif_kdv_orani = _net_kdv_orani(brut_kdv_orani, tevkifat_str) or 0
+    efektif_kdv_orani = float(efektif_kdv_orani)
+    if efektif_kdv_orani.is_integer():
+        efektif_kdv_orani = int(efektif_kdv_orani)
+
+    matrah = float(nakliye.tutar or 0)
+    brut_kdv = matrah * brut_kdv_orani / 100.0
+    kdv = matrah * float(efektif_kdv_orani) / 100.0
+
+    return {
+        'brut_kdv_orani': brut_kdv_orani,
+        'tevkifat_str': tevkifat_str,
+        'efektif_kdv_orani': efektif_kdv_orani,
+        'matrah': matrah,
+        'brut_kdv': brut_kdv,
+        'kdv': kdv,
+        'toplam_tutar': matrah + kdv,
+    }
 
 
 def _soft_delete_hizmet(kayit, actor_id=None, deleted_at=None):

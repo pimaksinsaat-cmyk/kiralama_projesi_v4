@@ -401,17 +401,22 @@ class EkipmanRaporuService:
         sefer_sayisi = 0
         satis_geliri = Decimal(0)
 
+        from app.services.kiralama_services import KiralamaService
+
         for kalem in query.all():
             gidis_var = (kalem.nakliye_satis_fiyat or 0) > 0 or (kalem.nakliye_alis_fiyat or 0) > 0 or kalem.nakliye_araci_id or kalem.nakliye_tedarikci_id
-            donus_var = (kalem.donus_nakliye_satis_fiyat or 0) > 0
+            donus_satis = KiralamaService._get_donus_nakliye_satis(kalem)
+            donus_var = donus_satis > 0
 
             if gidis_var:
                 sefer_sayisi += 1
             if donus_var:
                 sefer_sayisi += 1
 
+            # Checkbox açıksa nakliye_satis_fiyat zaten gidiş+dönüş toplamıdır.
             satis_geliri += Decimal(kalem.nakliye_satis_fiyat or 0)
-            satis_geliri += Decimal(kalem.donus_nakliye_satis_fiyat or 0)
+            if not kalem.donus_nakliye_fatura_et and donus_satis > 0:
+                satis_geliri += donus_satis
 
         return {
             'sefer_sayisi': sefer_sayisi,

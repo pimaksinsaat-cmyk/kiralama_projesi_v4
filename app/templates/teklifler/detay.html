@@ -54,7 +54,18 @@
             <tbody>
                 {% for kalem in teklif.kalemler %}
                 <tr>
-                    <td>{{ kalem.ekipman.kod if kalem.ekipman else kalem.makine_tipi or '-' }}<br><small>{{ kalem.marka_model or '' }}</small></td>
+                    <td>
+                        {% if kalem.is_dis_tedarik_ekipman %}
+                            <span class="badge bg-warning text-dark">Harici Ekipman</span><br>
+                            {{ kalem.makine_tipi or '-' }}<br>
+                            <small>{{ kalem.marka_model or '' }}</small>
+                            <small class="text-muted d-block">Seri No: {{ kalem.harici_ekipman_seri_no or '-' }}</small>
+                            <small class="text-muted d-block">Tedarikçi: {{ kalem.harici_ekipman_tedarikci.firma_adi if kalem.harici_ekipman_tedarikci else '-' }}</small>
+                        {% else %}
+                            {{ kalem.ekipman.kod if kalem.ekipman else kalem.makine_tipi or '-' }}<br>
+                            <small>{{ kalem.marka_model or '' }}</small>
+                        {% endif %}
+                    </td>
                     <td>{{ kalem.calisma_yuksekligi or '-' }} m / {{ kalem.kaldirma_kapasitesi or '-' }} kg</td>
                     <td>{{ kalem.calisacagi_konum or '-' }}</td>
                     <td>{{ kalem.gun_sayisi }}</td>
@@ -66,6 +77,9 @@
                     <td class="text-end">
                         {{ "{:,.2f}".format(kalem.nakliye_fiyati or 0).replace(",", "X").replace(".", ",").replace("X", ".") }}
                         <small class="text-muted d-block">{{ 'Çift Yön' if kalem.nakliye_yon == 'cift_yon' else 'Tek Yön' }}</small>
+                        {% if kalem.is_harici_nakliye %}
+                            <small class="text-muted d-block">Harici: {{ kalem.nakliye_tedarikci.firma_adi if kalem.nakliye_tedarikci else '-' }}</small>
+                        {% endif %}
                     </td>
                     <td class="text-end fw-bold">{{ "{:,.2f}".format(kalem.satir_toplami).replace(",", "X").replace(".", ",").replace("X", ".") }}</td>
                 </tr>

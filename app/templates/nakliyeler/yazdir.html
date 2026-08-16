@@ -263,7 +263,7 @@
             <th>Güzergah / Açıklama</th>
             <th>Plaka / Tedarikçi</th>
             <th class="text-end">Matrah</th>
-            <th class="text-end">KDV %</th>
+            <th class="text-end">KDV % (Tevkifat Sonrası)</th>
             <th class="text-end">KDV</th>
             <th class="text-end">Tutar</th>
             <th class="text-center">Durum</th>
@@ -275,22 +275,13 @@
         {% set toplam_tutar = namespace(val=0) %}
 
         {% for nakliye in nakliyeler %}
-            {% if nakliye.kiralama_id and nakliye.kiralama and nakliye.kiralama.kalemler %}
-                {% set kdv_orani = nakliye.kiralama.kalemler[0].nakliye_satis_kdv or 0 %}
-                {% set tevkifat_str = nakliye.kiralama.kalemler[0].nakliye_satis_tevkifat_oran or '' %}
-            {% else %}
-                {% set kdv_orani = nakliye.kdv_orani or 0 %}
-                {% set tevkifat_str = nakliye.tevkifat_orani or '' %}
-            {% endif %}
-            {% set matrah = nakliye.tutar|float or 0 %}
-            {% set kdv_tam = matrah * (kdv_orani / 100.0) %}
-            {% if tevkifat_str %}
-                {% set tev_parts = tevkifat_str.split('/') %}
-                {% set kdv = kdv_tam * (tev_parts[1]|int - tev_parts[0]|int) / tev_parts[1]|int %}
-            {% else %}
-                {% set kdv = kdv_tam %}
-            {% endif %}
-            {% set tutar = matrah + kdv %}
+            {% set kdv_bilgisi = nakliye_kdv_bilgileri.get(nakliye.id, {}) %}
+            {% set efektif_kdv_orani = kdv_bilgisi.get('efektif_kdv_orani', nakliye.kdv_orani or 0) %}
+            {% set tevkifat_str = kdv_bilgisi.get('tevkifat_str', nakliye.tevkifat_orani or '') %}
+            {% set matrah = kdv_bilgisi.get('matrah', nakliye.tutar|float or 0) %}
+            {% set kdv_tam = kdv_bilgisi.get('brut_kdv', matrah * ((nakliye.kdv_orani or 0) / 100.0)) %}
+            {% set kdv = kdv_bilgisi.get('kdv', kdv_tam) %}
+            {% set tutar = kdv_bilgisi.get('toplam_tutar', matrah + kdv) %}
             {% set toplam_matrah.val = toplam_matrah.val + matrah %}
             {% set toplam_kdv.val = toplam_kdv.val + kdv %}
             {% set toplam_tutar.val = toplam_tutar.val + tutar %}
@@ -318,7 +309,7 @@
                     {% endif %}
                 </td>
                 <td class="text-end">{{ "{:,.2f}".format(matrah).replace(',', 'X').replace('.', ',').replace('X', '.') }}</td>
-                <td class="text-end">{% if kdv_orani %}%{{ kdv_orani }}{% else %}-{% endif %}</td>
+                <td class="text-end">{% if efektif_kdv_orani %}%{{ efektif_kdv_orani }}{% else %}-{% endif %}</td>
                 <td class="text-end">
                     {{ "{:,.2f}".format(kdv).replace(',', 'X').replace('.', ',').replace('X', '.') }}
                     {% if tevkifat_str %}

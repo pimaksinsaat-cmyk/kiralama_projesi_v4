@@ -871,6 +871,11 @@ def detay_modal(kiralama_id):
         'kiralama/detay_modal_content.html',
         kiralama=kiralama,
         today=date.today(),
+        donus_satis_by_kalem={
+            kalem.id: KiralamaService._get_donus_nakliye_satis(kalem)
+            for kalem in kiralama.kalemler
+            if not getattr(kalem, 'is_deleted', False)
+        },
     )
 
 
@@ -1454,6 +1459,12 @@ def sonlandir_kalem():
         nakliye_alis_fiyat = request.form.get('nakliye_alis_fiyat')
         donus_nakliye_alis_kdv = request.form.get('donus_nakliye_alis_kdv')
         donus_nakliye_satis_fiyat = request.form.get('donus_nakliye_satis_fiyat')
+        if 'donus_satis_override' in request.form:
+            donus_satis_override = request.form.get('donus_satis_override') in (
+                '1', 'on', 'true', 'True',
+            )
+        else:
+            donus_satis_override = None
         
         KiralamaKalemiService.sonlandir(
             kalem_id,
@@ -1466,6 +1477,7 @@ def sonlandir_kalem():
             nakliye_alis_fiyat=nakliye_alis_fiyat,
             donus_nakliye_alis_kdv=donus_nakliye_alis_kdv,
             donus_nakliye_satis_fiyat=donus_nakliye_satis_fiyat,
+            donus_satis_override=donus_satis_override,
         )
         OperationLogService.log(
             module='kiralama',

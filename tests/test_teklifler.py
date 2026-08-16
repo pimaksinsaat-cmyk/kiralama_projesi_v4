@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import date
 from decimal import Decimal
 
 from app.auth.models import User
@@ -15,8 +16,9 @@ from app.extensions import db
 from app.filo.models import Ekipman
 from app.firmalar.models import Firma
 from app.kiralama.models import Kiralama
+from app.kiralama.models import KiralamaKalemi
 from app.nakliyeler.models import Nakliye
-from app.teklifler.models import Teklif
+from app.teklifler.models import Teklif, TeklifKalemi
 
 
 def _login_user(client, user_id: int) -> None:
@@ -184,7 +186,6 @@ def test_aylik_fiyat_30_gun_uzerinden_oransal_hesaplanir(app, client):
         follow_redirects=False,
     )
     assert response.status_code == 302
-
     with app.app_context():
         teklif = Teklif.query.filter_by(teklif_no="TEK-2026-AYLIK").one()
         assert teklif.kalemler[0].fiyat_tipi == "aylik"
@@ -216,6 +217,179 @@ def test_cift_yon_nakliye_satir_toplaminda_iki_kat_hesaplanir(app, client):
         teklif = Teklif.query.filter_by(teklif_no="TEK-2026-CIFTNAK").one()
         assert teklif.kalemler[0].nakliye_yon == "cift_yon"
         assert teklif.kalemler[0].satir_toplami == Decimal("4000.00")
+
+
+def test_teklif_harici_ekipman_ve_nakliye_tedarikcisi_kaydeder_cariyi_etkilemez(app, client):
+    with app.app_context():
+        admin = _make_admin()
+        supplier = Firma(
+            firma_adi=f'Teklif Tedarikci {uuid.uuid4().hex[:6]}',
+            yetkili_adi='Yetkili',
+            iletisim_bilgileri='Adres',
+            vergi_dairesi='VD',
+            vergi_no=f'TED{uuid.uuid4().hex[:10].upper()}',
+            is_musteri=False,
+            is_tedarikci=True,
+            bakiye=Decimal('125.00'),
+        )
+        db.session.add(supplier)
+        db.session.commit()
+        admin_id = admin.id
+        supplier_id = supplier.id
+        firma_count = Firma.query.count()
+        kiralama_count = Kiralama.query.count()
+        nakliye_count = Nakliye.query.count()
+        hizmet_count = HizmetKaydi.query.count()
+        bakiye_before = supplier.bakiye
+
+    _login_user(client, admin_id)
+    response = client.post(
+        '/teklifler/ekle',
+        data=_teklif_post_data(
+            teklif_no='TEK-2026-HARICI',
+            **{
+                'kalemler-0-is_dis_tedarik_ekipman': 'y',
+                'kalemler-0-ekipman_id': '0',
+                'kalemler-0-harici_ekipman_tedarikci_id': str(supplier_id),
+                'kalemler-0-harici_ekipman_seri_no': 'HARICI-SN-01',
+                'kalemler-0-is_harici_nakliye': 'y',
+                'kalemler-0-nakliye_tedarikci_id': str(supplier_id),
+            },
+        ),
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+    detail_response = client.get(response.headers['Location'])
+    assert detail_response.status_code == 200
+    assert 'HARICI-SN-01' in detail_response.data.decode('utf-8')
+
+    with app.app_context():
+        teklif = Teklif.query.filter_by(teklif_no='TEK-2026-HARICI').one()
+        kalem = teklif.kalemler[0]
+        supplier = db.session.get(Firma, supplier_id)
+        assert kalem.is_dis_tedarik_ekipman is True
+        assert kalem.harici_ekipman_tedarikci_id == supplier_id
+        assert kalem.harici_ekipman_seri_no == 'HARICI-SN-01'
+        assert kalem.is_harici_nakliye is True
+        assert kalem.nakliye_tedarikci_id == supplier_id
+        assert Firma.query.count() == firma_count
+        assert Kiralama.query.count() == kiralama_count
+        assert Nakliye.query.count() == nakliye_count
+        assert HizmetKaydi.query.count() == hizmet_count
+        assert supplier.bakiye == bakiye_before
+
+
+def test_teklif_formu_tum_makineleri_ve_kirada_makinenin_musaitlik_planini_gosterir(app, client):
+    with app.app_context():
+        admin = _make_admin()
+        musteri = Firma(
+            firma_adi=f'Teklif Musteri {uuid.uuid4().hex[:6]}',
+            yetkili_adi='Yetkili',
+            iletisim_bilgileri='Adres',
+            vergi_dairesi='VD',
+            vergi_no=f'MUS{uuid.uuid4().hex[:10].upper()}',
+            is_musteri=True,
+        )
+        kirada = Ekipman(
+            kod=f'KIRADA-{uuid.uuid4().hex[:6]}', yakit='Elektrik', tipi='Platform', marka='Marka', model='Kirada',
+            seri_no=f'SN-{uuid.uuid4().hex[:8]}', calisma_yuksekligi=12, kaldirma_kapasitesi=300,
+            uretim_yili=2024, calisma_durumu='kirada',
+        )
+        serviste = Ekipman(
+            kod=f'SERVIS-{uuid.uuid4().hex[:6]}', yakit='Dizel', tipi='Forklift', marka='Marka', model='Serviste',
+            seri_no=f'SN-{uuid.uuid4().hex[:8]}', calisma_yuksekligi=5, kaldirma_kapasitesi=1000,
+            uretim_yili=2023, calisma_durumu='serviste',
+        )
+        db.session.add_all([musteri, kirada, serviste])
+        db.session.flush()
+        rental = Kiralama(
+            kiralama_form_no=f'KIR-TEK-{uuid.uuid4().hex[:6]}',
+            firma_musteri_id=musteri.id,
+            kiralama_olusturma_tarihi=date(2026, 6, 1),
+        )
+        db.session.add(rental)
+        db.session.flush()
+        db.session.add(KiralamaKalemi(
+            kiralama_id=rental.id,
+            ekipman_id=kirada.id,
+            kiralama_baslangici=date(2026, 6, 1),
+            kiralama_bitis=date(2026, 6, 14),
+            kiralama_brm_fiyat=Decimal('1000.00'),
+            is_active=True,
+            sonlandirildi=False,
+        ))
+        db.session.commit()
+        admin_id = admin.id
+        kirada_kod = kirada.kod
+        serviste_kod = serviste.kod
+
+    _login_user(client, admin_id)
+    response = client.get('/teklifler/ekle')
+    assert response.status_code == 200
+    html = response.data.decode('utf-8')
+    assert kirada_kod in html
+    assert 'Kirada - Müsaitlik planı: 14.06.2026' in html
+    assert serviste_kod in html
+    assert 'Serviste - Müsaitlik planı: belirtilmemiş' in html
+    assert 'js-harici-ekipman-tedarikci' in html
+
+
+def test_teklif_duzenle_mevcut_pasif_silinmis_ekipman_ve_tedarikciyi_secenekte_tutar(app, client):
+    with app.app_context():
+        admin = _make_admin()
+        supplier = Firma(
+            firma_adi=f'Silinmis Tedarikci {uuid.uuid4().hex[:6]}',
+            yetkili_adi='Yetkili',
+            iletisim_bilgileri='Adres',
+            vergi_dairesi='VD',
+            vergi_no=f'SIL{uuid.uuid4().hex[:10].upper()}',
+            is_musteri=False,
+            is_tedarikci=True,
+            is_active=False,
+            is_deleted=True,
+        )
+        machine = Ekipman(
+            kod=f'PASIF-{uuid.uuid4().hex[:6]}', yakit='Dizel', tipi='Platform', marka='Marka', model='Arsiv',
+            seri_no=f'SN-{uuid.uuid4().hex[:8]}', calisma_yuksekligi=10, kaldirma_kapasitesi=250,
+            uretim_yili=2022, calisma_durumu='iade_edildi', is_active=False, is_deleted=True,
+        )
+        teklif = Teklif(teklif_no=f'TEK-2026-PASIF-{uuid.uuid4().hex[:4]}', aday_firma_adi='Aday', durum='taslak', kdv_orani=20)
+        db.session.add_all([supplier, machine, teklif])
+        db.session.flush()
+        db.session.add_all([
+            TeklifKalemi(
+                teklif_id=teklif.id,
+                ekipman_id=machine.id,
+                makine_tipi='Platform',
+                marka_model='Arsiv',
+                gunluk_fiyat=Decimal('100.00'),
+                adet=1,
+            ),
+            TeklifKalemi(
+                teklif_id=teklif.id,
+                is_dis_tedarik_ekipman=True,
+                harici_ekipman_tedarikci_id=supplier.id,
+                harici_ekipman_seri_no='SIL-SN-01',
+                makine_tipi='Forklift',
+                marka_model='Arsiv Model',
+                gunluk_fiyat=Decimal('100.00'),
+                adet=1,
+            ),
+        ])
+        db.session.commit()
+        admin_id = admin.id
+        teklif_id = teklif.id
+        supplier_name = supplier.firma_adi
+        machine_code = machine.kod
+
+    _login_user(client, admin_id)
+    response = client.get(f'/teklifler/duzelt/{teklif_id}')
+    assert response.status_code == 200
+    html = response.data.decode('utf-8')
+    assert machine_code in html
+    assert '(İade Edildi - Müsaitlik planı: belirtilmemiş) (Silinmiş)' in html
+    assert f'{supplier_name} (Silinmiş)' in html
+    assert 'Serviste - Müsaitlik planı' not in html
 
 
 def test_aday_teklif_firmaya_aktarilirken_resmi_bilgiler_tamamlanir(app, client):

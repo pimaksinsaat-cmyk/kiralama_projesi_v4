@@ -79,9 +79,23 @@
             <div class="border rounded p-3 mb-3 kalem-row">
                 {{ entry.form.id() }}
                 <div class="row g-2">
-                    <div class="col-md-4">{{ entry.form.ekipman_id.label(class="form-label") }}{{ entry.form.ekipman_id(class="form-select") }}</div>
+                    <div class="col-md-12">
+                        <div class="form-check form-switch">
+                            {{ entry.form.is_dis_tedarik_ekipman(class="form-check-input js-dis-ekipman-switch", role="switch") }}
+                            {{ entry.form.is_dis_tedarik_ekipman.label(class="form-check-label") }}
+                        </div>
+                    </div>
+                    <div class="col-md-4 js-oz-mal-ekipman">
+                        {{ entry.form.ekipman_id.label(class="form-label") }}
+                        {{ entry.form.ekipman_id(class="form-select js-ekipman-select") }}
+                    </div>
+                    <div class="col-md-4 js-harici-ekipman-field">
+                        {{ entry.form.harici_ekipman_tedarikci_id.label(class="form-label") }}
+                        {{ entry.form.harici_ekipman_tedarikci_id(class="form-select js-harici-ekipman-tedarikci") }}
+                    </div>
                     <div class="col-md-4">{{ entry.form.makine_tipi.label(class="form-label") }}{{ entry.form.makine_tipi(class="form-control js-makine-tipi", list="makine-tipi-listesi") }}</div>
                     <div class="col-md-4">{{ entry.form.marka_model.label(class="form-label") }}{{ entry.form.marka_model(class="form-control js-marka-model", list="marka-model-listesi") }}</div>
+                    <div class="col-md-4 js-harici-ekipman-field">{{ entry.form.harici_ekipman_seri_no.label(class="form-label") }}{{ entry.form.harici_ekipman_seri_no(class="form-control") }}</div>
                     <div class="col-md-2">{{ entry.form.calisma_yuksekligi.label(class="form-label") }}{{ entry.form.calisma_yuksekligi(class="form-control") }}</div>
                     <div class="col-md-2">{{ entry.form.kaldirma_kapasitesi.label(class="form-label") }}{{ entry.form.kaldirma_kapasitesi(class="form-control") }}</div>
                     <div class="col-md-2">{{ entry.form.adet.label(class="form-label") }}{{ entry.form.adet(class="form-control") }}</div>
@@ -108,6 +122,13 @@
                             </div>
                         </div>
                         {{ entry.form.nakliye_fiyati(class="form-control js-money-cursor-left", type="text", inputmode="decimal") }}
+                        <div class="form-check form-switch mt-2">
+                            {{ entry.form.is_harici_nakliye(class="form-check-input js-harici-nakliye-switch", role="switch") }}
+                            {{ entry.form.is_harici_nakliye.label(class="form-check-label small") }}
+                        </div>
+                        <div class="js-harici-nakliye-field mt-1">
+                            {{ entry.form.nakliye_tedarikci_id(class="form-select form-select-sm js-nakliye-tedarikci", aria_label="Nakliye Tedarikçisi") }}
+                        </div>
                     </div>
                     <div class="col-md-6">{{ entry.form.calisacagi_konum.label(class="form-label") }}{{ entry.form.calisacagi_konum(class="form-control", rows="2") }}</div>
                     <div class="col-md-6">{{ entry.form.satir_notu.label(class="form-label") }}{{ entry.form.satir_notu(class="form-control", rows="2") }}</div>
@@ -136,16 +157,31 @@
     <div class="border rounded p-3 mb-3 kalem-row">
         <input id="kalemler-__prefix__-id" name="kalemler-__prefix__-id" type="hidden" value="">
         <div class="row g-2">
+            <div class="col-md-12">
+                <div class="form-check form-switch">
+                    <input class="form-check-input js-dis-ekipman-switch" id="kalemler-__prefix__-is_dis_tedarik_ekipman" name="kalemler-__prefix__-is_dis_tedarik_ekipman" type="checkbox" role="switch">
+                    <label class="form-check-label" for="kalemler-__prefix__-is_dis_tedarik_ekipman">Harici Ekipman</label>
+                </div>
+            </div>
             <div class="col-md-4">
+                <div class="js-oz-mal-ekipman">
                 <label class="form-label" for="kalemler-__prefix__-ekipman_id">Kayıtlı Makine</label>
-                <select class="form-select" id="kalemler-__prefix__-ekipman_id" name="kalemler-__prefix__-ekipman_id">
+                <select class="form-select js-ekipman-select" id="kalemler-__prefix__-ekipman_id" name="kalemler-__prefix__-ekipman_id">
                     {% for value, label in form.kalemler[0].form.ekipman_id.choices %}
                         <option value="{{ value }}">{{ label }}</option>
                     {% endfor %}
                 </select>
+                </div>
             </div>
             <div class="col-md-4"><label class="form-label" for="kalemler-__prefix__-makine_tipi">Makine Tipi</label><input class="form-control js-makine-tipi" id="kalemler-__prefix__-makine_tipi" name="kalemler-__prefix__-makine_tipi" list="makine-tipi-listesi" type="text"></div>
             <div class="col-md-4"><label class="form-label" for="kalemler-__prefix__-marka_model">Marka / Model</label><input class="form-control js-marka-model" id="kalemler-__prefix__-marka_model" name="kalemler-__prefix__-marka_model" list="marka-model-listesi" type="text"></div>
+            <div class="col-md-4 js-harici-ekipman-field">
+                <label class="form-label" for="kalemler-__prefix__-harici_ekipman_tedarikci_id">Ekipman Tedarikçisi</label>
+                <select class="form-select js-harici-ekipman-tedarikci" id="kalemler-__prefix__-harici_ekipman_tedarikci_id" name="kalemler-__prefix__-harici_ekipman_tedarikci_id">
+                    {% for value, label in form.kalemler[0].form.harici_ekipman_tedarikci_id.choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4 js-harici-ekipman-field"><label class="form-label" for="kalemler-__prefix__-harici_ekipman_seri_no">Harici Seri No</label><input class="form-control" id="kalemler-__prefix__-harici_ekipman_seri_no" name="kalemler-__prefix__-harici_ekipman_seri_no" maxlength="100" type="text"></div>
             <div class="col-md-2"><label class="form-label" for="kalemler-__prefix__-calisma_yuksekligi">Çalışma Yüksekliği</label><input class="form-control" id="kalemler-__prefix__-calisma_yuksekligi" name="kalemler-__prefix__-calisma_yuksekligi" type="text"></div>
             <div class="col-md-2"><label class="form-label" for="kalemler-__prefix__-kaldirma_kapasitesi">Kaldırma Kapasitesi</label><input class="form-control" id="kalemler-__prefix__-kaldirma_kapasitesi" name="kalemler-__prefix__-kaldirma_kapasitesi" type="number"></div>
             <div class="col-md-2"><label class="form-label" for="kalemler-__prefix__-adet">Adet</label><input class="form-control" id="kalemler-__prefix__-adet" name="kalemler-__prefix__-adet" type="number" value="1"></div>
@@ -172,6 +208,15 @@
                     </div>
                 </div>
                 <input class="form-control js-money-cursor-left" id="kalemler-__prefix__-nakliye_fiyati" name="kalemler-__prefix__-nakliye_fiyati" type="text" value="0,00">
+                <div class="form-check form-switch mt-2">
+                    <input class="form-check-input js-harici-nakliye-switch" id="kalemler-__prefix__-is_harici_nakliye" name="kalemler-__prefix__-is_harici_nakliye" type="checkbox" role="switch">
+                    <label class="form-check-label small" for="kalemler-__prefix__-is_harici_nakliye">Harici Nakliye</label>
+                </div>
+                <div class="js-harici-nakliye-field mt-1">
+                    <select class="form-select form-select-sm js-nakliye-tedarikci" id="kalemler-__prefix__-nakliye_tedarikci_id" name="kalemler-__prefix__-nakliye_tedarikci_id">
+                        {% for value, label in form.kalemler[0].form.nakliye_tedarikci_id.choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+                    </select>
+                </div>
             </div>
             <div class="col-md-6"><label class="form-label" for="kalemler-__prefix__-calisacagi_konum">Çalışacağı Konum</label><textarea class="form-control" id="kalemler-__prefix__-calisacagi_konum" name="kalemler-__prefix__-calisacagi_konum" rows="2"></textarea></div>
             <div class="col-md-6"><label class="form-label" for="kalemler-__prefix__-satir_notu">Satır Notu</label><textarea class="form-control" id="kalemler-__prefix__-satir_notu" name="kalemler-__prefix__-satir_notu" rows="2"></textarea></div>
@@ -260,8 +305,48 @@ function syncShippingMode(row) {
     label.textContent = isRoundTrip ? 'Çift Yön' : 'Tek Yön';
 }
 
+function toggleFieldGroup(row, selector, visible) {
+    row.querySelectorAll(selector).forEach(group => {
+        group.style.display = visible ? '' : 'none';
+        group.querySelectorAll('input, select, textarea').forEach(field => {
+            field.disabled = !visible;
+        });
+    });
+}
+
+function syncEquipmentSource(row) {
+    const toggle = row.querySelector('.js-dis-ekipman-switch');
+    if (!toggle) return;
+    const isExternal = toggle.checked;
+    toggleFieldGroup(row, '.js-oz-mal-ekipman', !isExternal);
+    toggleFieldGroup(row, '.js-harici-ekipman-field', isExternal);
+
+    if (isExternal) {
+        const equipment = row.querySelector('.js-ekipman-select');
+        if (equipment) equipment.value = '0';
+    } else {
+        const supplier = row.querySelector('.js-harici-ekipman-tedarikci');
+        const serial = row.querySelector('[name$="-harici_ekipman_seri_no"]');
+        if (supplier) supplier.value = '0';
+        if (serial) serial.value = '';
+    }
+}
+
+function syncTransportSource(row) {
+    const toggle = row.querySelector('.js-harici-nakliye-switch');
+    if (!toggle) return;
+    const isExternal = toggle.checked;
+    toggleFieldGroup(row, '.js-harici-nakliye-field', isExternal);
+    if (!isExternal) {
+        const supplier = row.querySelector('.js-nakliye-tedarikci');
+        if (supplier) supplier.value = '0';
+    }
+}
+
 document.querySelectorAll('.kalem-row').forEach(syncPriceMode);
 document.querySelectorAll('.kalem-row').forEach(syncShippingMode);
+document.querySelectorAll('.kalem-row').forEach(syncEquipmentSource);
+document.querySelectorAll('.kalem-row').forEach(syncTransportSource);
 
 function toggleCustomerSections() {
     const type = document.getElementById('musteri_tipi').value;
@@ -276,8 +361,11 @@ document.getElementById('add-row').addEventListener('click', function () {
     const index = container.querySelectorAll('.kalem-row').length;
     const html = document.getElementById('kalem-template').innerHTML.replaceAll('__prefix__', index);
     container.insertAdjacentHTML('beforeend', html);
-    syncPriceMode(container.querySelector('.kalem-row:last-child'));
-    syncShippingMode(container.querySelector('.kalem-row:last-child'));
+    const newRow = container.querySelector('.kalem-row:last-child');
+    syncPriceMode(newRow);
+    syncShippingMode(newRow);
+    syncEquipmentSource(newRow);
+    syncTransportSource(newRow);
 });
 document.getElementById('kalemler').addEventListener('click', function (event) {
     if (!event.target.classList.contains('remove-row')) return;
@@ -307,6 +395,12 @@ document.getElementById('kalemler').addEventListener('change', function (event) 
         const hidden = row.querySelector('.js-nakliye-yon');
         if (hidden) hidden.value = event.target.checked ? 'cift_yon' : 'tek_yon';
         syncShippingMode(row);
+    }
+    if (event.target.classList.contains('js-dis-ekipman-switch')) {
+        syncEquipmentSource(row);
+    }
+    if (event.target.classList.contains('js-harici-nakliye-switch')) {
+        syncTransportSource(row);
     }
 });
 document.getElementById('kalemler').addEventListener('focusin', function (event) {

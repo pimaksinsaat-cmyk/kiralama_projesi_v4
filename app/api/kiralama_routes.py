@@ -13,6 +13,8 @@ from app.api.kiralama_payload import (
     rental_detail,
     rental_query_options,
     rental_summary,
+    _optional_bool,
+    _pick,
 )
 from app.api.routes import fail, ok
 from app.araclar.models import Arac as NakliyeAraci
@@ -211,24 +213,32 @@ def rental_line_terminate(line_id):
     try:
         KiralamaKalemiService.sonlandir(
             line_id,
-            body.get('end_date') or body.get('bitis_tarihi'),
-            body.get('return_branch_id') or body.get('donus_sube_id'),
+            _pick(body, 'end_date', 'bitis_tarihi'),
+            _pick(body, 'return_branch_id', 'donus_sube_id'),
             actor_id=_actor_id(),
             is_harici_nakliye=bool(
                 body.get('return_is_external_transport')
                 if 'return_is_external_transport' in body
                 else body.get('is_harici_nakliye', False)
             ),
-            nakliye_tedarikci_id=body.get('return_transport_supplier_id')
-            or body.get('nakliye_tedarikci_id'),
-            nakliye_araci_id=body.get('return_transport_vehicle_id')
-            or body.get('nakliye_araci_id'),
-            nakliye_alis_fiyat=body.get('return_transport_purchase_price')
-            or body.get('nakliye_alis_fiyat'),
-            donus_nakliye_alis_kdv=body.get('return_transport_purchase_vat_rate')
-            or body.get('donus_nakliye_alis_kdv'),
-            donus_nakliye_satis_fiyat=body.get('return_transport_sale_price')
-            or body.get('donus_nakliye_satis_fiyat'),
+            nakliye_tedarikci_id=_pick(
+                body, 'return_transport_supplier_id', 'nakliye_tedarikci_id'
+            ),
+            nakliye_araci_id=_pick(
+                body, 'return_transport_vehicle_id', 'nakliye_araci_id'
+            ),
+            nakliye_alis_fiyat=_pick(
+                body, 'return_transport_purchase_price', 'nakliye_alis_fiyat'
+            ),
+            donus_nakliye_alis_kdv=_pick(
+                body, 'return_transport_purchase_vat_rate', 'donus_nakliye_alis_kdv'
+            ),
+            donus_nakliye_satis_fiyat=_pick(
+                body, 'return_transport_sale_price', 'donus_nakliye_satis_fiyat'
+            ),
+            donus_satis_override=_optional_bool(
+                body, 'donus_satis_override', 'return_transport_sale_is_override'
+            ),
         )
         kalem = _load_line(line_id)
         return ok(line_payload(kalem) if kalem else {'id': line_id})

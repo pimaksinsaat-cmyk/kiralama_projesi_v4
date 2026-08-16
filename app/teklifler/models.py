@@ -76,6 +76,12 @@ class TeklifKalemi(BaseModel):
     teklif_id = db.Column(db.Integer, db.ForeignKey('teklif.id'), nullable=False, index=True)
     ekipman_id = db.Column(db.Integer, db.ForeignKey('ekipman.id'), nullable=True, index=True)
 
+    # Kiralama operasyonundaki harici ekipman/nakliye seçimlerinin teklif karşılığı.
+    # Bu alanlar yalnızca teklif metadata'sıdır; operasyon veya cari kaydı üretmez.
+    is_dis_tedarik_ekipman = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
+    harici_ekipman_tedarikci_id = db.Column(db.Integer, db.ForeignKey('firma.id'), nullable=True, index=True)
+    harici_ekipman_seri_no = db.Column(db.String(100), nullable=True)
+
     makine_tipi = db.Column(db.String(100), nullable=True)
     marka_model = db.Column(db.String(150), nullable=True)
     calisma_yuksekligi = db.Column(db.Numeric(10, 2), nullable=True)
@@ -88,10 +94,14 @@ class TeklifKalemi(BaseModel):
     gunluk_fiyat = db.Column(db.Numeric(15, 2), nullable=False, default=0)
     nakliye_fiyati = db.Column(db.Numeric(15, 2), nullable=False, default=0)
     nakliye_yon = db.Column(db.String(20), nullable=False, default='tek_yon')
+    is_harici_nakliye = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
+    nakliye_tedarikci_id = db.Column(db.Integer, db.ForeignKey('firma.id'), nullable=True, index=True)
     satir_notu = db.Column(db.Text, nullable=True)
 
     teklif = db.relationship('Teklif', back_populates='kalemler')
     ekipman = db.relationship('Ekipman', back_populates='teklif_kalemleri', foreign_keys=[ekipman_id])
+    harici_ekipman_tedarikci = db.relationship('Firma', foreign_keys=[harici_ekipman_tedarikci_id])
+    nakliye_tedarikci = db.relationship('Firma', foreign_keys=[nakliye_tedarikci_id])
 
     @property
     def gun_sayisi(self):

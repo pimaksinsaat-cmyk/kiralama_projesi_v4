@@ -646,6 +646,7 @@
                             <span class="input-group-text bg-light text-muted" id="donus-lock-icon"><i class="fas fa-lock"></i></span>
                         </div>
                         <div class="form-check mt-2">
+                            <input type="hidden" name="donus_satis_override" id="donusSatisOverrideHidden" value="0">
                             <input class="form-check-input" type="checkbox" id="donusFiyatDegistirCheck">
                             <label class="form-check-label small text-secondary" for="donusFiyatDegistirCheck">Dönüş nakliyesinde farklı fiyat uygula</label>
                         </div>
@@ -1946,6 +1947,11 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('sonlandir-kalem-form').addEventListener('submit', function(e) {
         refreshReturnUrls();
         saveListState({ kalemId: state.kId });
+        const overrideHidden = document.getElementById('donusSatisOverrideHidden');
+        const degistirCheck = document.getElementById('donusFiyatDegistirCheck');
+        if (overrideHidden && degistirCheck) {
+            overrideHidden.value = degistirCheck.checked ? '1' : '0';
+        }
         const subeVal = this.querySelector('[name="donus_sube_id"]').value;
         const donusSatis = parseFloat(document.getElementById('donusNakliyeSatisInput').value || '0');
         if (!subeVal) {

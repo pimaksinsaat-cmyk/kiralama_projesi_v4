@@ -3,12 +3,13 @@ from io import BytesIO
 from flask import render_template, redirect, url_for, flash, request, send_file, jsonify, session
 from flask_login import current_user, login_required
 from sqlalchemy import func
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 from app.extensions import db
 from app.nakliyeler import nakliye_bp
 from app.nakliyeler.models import Nakliye
 from app.nakliyeler.forms import NakliyeForm
-from app.services.nakliye_services import CariServis, NakliyeService
+from app.services.nakliye_services import CariServis, NakliyeService, nakliye_satis_kdv_bilgisi
+from app.kiralama.models import Kiralama
 from app.services.base import ValidationError
 from app.services.operation_log_service import OperationLogService
 from app.firmalar.models import Firma
@@ -114,10 +115,19 @@ def _nakliye_filtered_query(baslangic, bitis, secili_plaka, secili_taseron_id, s
     return query
 
 
-def _nakliye_kdv_orani(nakliye):
-    if nakliye.kiralama_id and nakliye.kiralama and nakliye.kiralama.kalemler:
-        return nakliye.kiralama.kalemler[0].nakliye_satis_kdv or 0
-    return nakliye.kdv_orani or 0
+def _nakliye_output_options():
+    return (
+        joinedload(Nakliye.firma),
+        joinedload(Nakliye.taseron_firma),
+        selectinload(Nakliye.kiralama).selectinload(Kiralama.kalemler),
+    )
+
+
+def _nakliye_kdv_bilgileri(nakliyeler):
+    return {
+        nakliye.id: nakliye_satis_kdv_bilgisi(nakliye)
+        for nakliye in nakliyeler
+    }
 
 
 def _turkce_tarih(iso_date):
@@ -170,8 +180,7 @@ def index():
         stage = 'nakliye_listesi_yukleme'
         filtered_all = (
             query.options(
-                joinedload(Nakliye.firma),
-                joinedload(Nakliye.taseron_firma),
+                *_nakliye_output_options(),
             )
             .order_by(func.coalesce(Nakliye.islem_tarihi, Nakliye.tarih).desc(), Nakliye.id.desc())
             .all()
@@ -184,6 +193,7 @@ def index():
         stage = 'sayfalama'
         pagination = _NakliyeListPagination(filtered_all, page, per_page)
         nakliyeler = pagination.items
+        nakliye_kdv_bilgileri = _nakliye_kdv_bilgileri(nakliyeler)
 
         # Dropdown listelerini hazırla
         stage = 'dropdown_listeleri'
@@ -225,6 +235,7 @@ def index():
                                plaka_listesi=plaka_listesi,
                                taseron_listesi=taseron_listesi,
                                firma_listesi=firma_listesi,
+                               nakliye_kdv_bilgileri=nakliye_kdv_bilgileri,
                                secili_taseron_id=secili_taseron_id,
                                secili_plaka=secili_plaka,
                                secili_firma_id=secili_firma_id)
@@ -239,6 +250,7 @@ def index():
         return render_template('nakliyeler/index.html',
                                nakliyeler=[], pagination=None, per_page=per_page,
                                stats={'sefer_sayisi': 0, 'ciro': 0, 'maliyet': 0, 'kar': 0},
+                               nakliye_kdv_bilgileri={},
                                baslangic=baslangic, bitis=bitis,
                                plaka_listesi=[], taseron_listesi=[], firma_listesi=[],
                                secili_taseron_id=secili_taseron_id,
@@ -264,7 +276,9 @@ def yazdir():
         bitis = bitis or bugun.isoformat()
 
     query = _nakliye_filtered_query(baslangic, bitis, secili_plaka, secili_taseron_id, secili_firma_id)
-    nakliyeler = query.order_by(func.coalesce(Nakliye.islem_tarihi, Nakliye.tarih).desc(), Nakliye.id.desc()).all()
+    nakliyeler = query.options(*_nakliye_output_options()).order_by(
+        func.coalesce(Nakliye.islem_tarihi, Nakliye.tarih).desc(), Nakliye.id.desc()
+    ).all()
 
     stats = _nakliye_stats(nakliyeler)
 
@@ -276,6 +290,7 @@ def yazdir():
                            secili_plaka=secili_plaka,
                            secili_taseron_id=secili_taseron_id,
                            secili_firma_id=secili_firma_id,
+                           nakliye_kdv_bilgileri=_nakliye_kdv_bilgileri(nakliyeler),
                            rapor_tarihi=date.today().strftime('%d.%m.%Y'))
 
 
@@ -299,7 +314,9 @@ def excel_aktar():
         secili_plaka,
         secili_taseron_id,
         secili_firma_id,
-    ).order_by(func.coalesce(Nakliye.islem_tarihi, Nakliye.tarih).desc(), Nakliye.id.desc()).all()
+    ).options(*_nakliye_output_options()).order_by(
+        func.coalesce(Nakliye.islem_tarihi, Nakliye.tarih).desc(), Nakliye.id.desc()
+    ).all()
 
     workbook = Workbook()
     sheet = workbook.active
@@ -357,7 +374,7 @@ def excel_aktar():
         sheet['G2'].font = meta_font
         sheet['G2'].alignment = left_alignment
 
-    headers = ['#', 'Tarih', 'Müşteri Firma', 'Güzergah / Açıklama', 'Plaka / Tedarikçi', 'Matrah', 'KDV %', 'KDV', 'Tutar', 'Durum']
+    headers = ['#', 'Tarih', 'Müşteri Firma', 'Güzergah / Açıklama', 'Plaka / Tedarikçi', 'Matrah', 'KDV % (Tevkifat Sonrası)', 'KDV', 'Tutar', 'Durum']
     header_row = 4
     for col_idx, header in enumerate(headers, start=1):
         cell = sheet.cell(row=header_row, column=col_idx, value=header)
@@ -372,10 +389,11 @@ def excel_aktar():
     toplam_tutar = 0.0
 
     for index, nakliye in enumerate(nakliyeler, start=1):
-        kdv_orani = float(_nakliye_kdv_orani(nakliye) or 0)
-        matrah = float(nakliye.tutar or 0)
-        kdv = matrah * (kdv_orani / 100.0)
-        tutar = matrah + kdv
+        kdv_bilgisi = nakliye_satis_kdv_bilgisi(nakliye)
+        kdv_orani = kdv_bilgisi['efektif_kdv_orani']
+        matrah = kdv_bilgisi['matrah']
+        kdv = kdv_bilgisi['kdv']
+        tutar = kdv_bilgisi['toplam_tutar']
 
         toplam_matrah += matrah
         toplam_kdv += kdv

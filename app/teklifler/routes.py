@@ -1,7 +1,7 @@
 from flask import flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
-from sqlalchemy import or_
-from sqlalchemy.orm import joinedload
+from sqlalchemy import and_, or_
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.extensions import db
 from app.filo.models import Ekipman
@@ -18,7 +18,89 @@ def _actor_id():
     return current_user.id if current_user and current_user.is_authenticated else None
 
 
+def _positive_ids(values):
+    result = set()
+    for value in values:
+        try:
+            value = int(value or 0)
+        except (TypeError, ValueError):
+            continue
+        if value > 0:
+            result.add(value)
+    return result
+
+
+def _supplier_choices(include_ids=None):
+    include_ids = _positive_ids(include_ids or [])
+    suppliers = (
+        Firma.query
+        .filter(
+            Firma.is_tedarikci == True,
+            or_(
+                and_(Firma.is_active == True, Firma.is_deleted == False),
+                Firma.id.in_(include_ids) if include_ids else False,
+            ),
+        )
+        .order_by(Firma.firma_adi)
+        .all()
+    )
+    choices = [(0, '--- Tedarikçi seçiniz ---')]
+    for firma in suppliers:
+        suffix = ''
+        if firma.is_deleted:
+            suffix = ' (Silinmiş)'
+        elif not firma.is_active:
+            suffix = ' (Pasif)'
+        choices.append((firma.id, f'{firma.firma_adi}{suffix}'))
+    return choices
+
+
+def _equipment_label(ekipman):
+    base = f"{ekipman.kod} | {ekipman.tipi} {ekipman.marka} {ekipman.model or ''}".strip()
+    status_key = (ekipman.calisma_durumu or '').strip().lower()
+    status_labels = {
+        'bosta': 'Boşta',
+        'kirada': 'Kirada',
+        'serviste': 'Serviste',
+        'iade_edildi': 'İade Edildi',
+    }
+    status = status_labels.get(status_key, (ekipman.calisma_durumu or 'Bilinmiyor').replace('_', ' ').title())
+    if status_key == 'bosta' and ekipman.is_active and not ekipman.is_deleted:
+        return base
+
+    active_rentals = [
+        kalem for kalem in ekipman.kiralama_kalemleri
+        if kalem.is_active and not kalem.is_deleted and not kalem.sonlandirildi
+    ]
+    if status_key == 'kirada' or active_rentals:
+        status = 'Kirada'
+    planned_dates = [kalem.kiralama_bitis for kalem in active_rentals if kalem.kiralama_bitis]
+    if planned_dates:
+        planned = max(planned_dates).strftime('%d.%m.%Y')
+        label = f'{base} ({status} - Müsaitlik planı: {planned})'
+    else:
+        label = f'{base} ({status} - Müsaitlik planı: belirtilmemiş)'
+
+    if ekipman.is_deleted:
+        label += ' (Silinmiş)'
+    elif not ekipman.is_active:
+        label += ' (Pasif)'
+    return label
+
+
 def _populate_choices(form):
+    equipment_ids = _positive_ids(
+        entry.form.ekipman_id.data for entry in form.kalemler
+    )
+    supplier_ids = _positive_ids(
+        field.data
+        for entry in form.kalemler
+        for field in (
+            entry.form.harici_ekipman_tedarikci_id,
+            entry.form.nakliye_tedarikci_id,
+        )
+    )
+
     firmalar = (
         Firma.query
         .filter(Firma.is_musteri == True, Firma.is_active == True, Firma.is_deleted == False)
@@ -29,16 +111,25 @@ def _populate_choices(form):
 
     ekipmanlar = (
         Ekipman.query
-        .filter(Ekipman.is_deleted == False, Ekipman.is_active == True)
+        .filter(
+            or_(
+                and_(Ekipman.is_deleted == False, Ekipman.is_active == True),
+                Ekipman.id.in_(equipment_ids) if equipment_ids else False,
+            )
+        )
+        .options(selectinload(Ekipman.kiralama_kalemleri))
         .order_by(Ekipman.kod)
         .all()
     )
     ekipman_choices = [(0, '--- Kayıtlı makine seçme ---')] + [
-        (e.id, f"{e.kod} | {e.tipi} {e.marka} {e.model or ''}".strip())
+        (e.id, _equipment_label(e))
         for e in ekipmanlar
     ]
+    supplier_choices = _supplier_choices(supplier_ids)
     for entry in form.kalemler:
         entry.form.ekipman_id.choices = ekipman_choices
+        entry.form.harici_ekipman_tedarikci_id.choices = supplier_choices
+        entry.form.nakliye_tedarikci_id.choices = supplier_choices
 
 
 def _filo_spec_options():
@@ -176,7 +267,12 @@ def duzelt(teklif_id):
 @teklifler_bp.route('/detay/<int:teklif_id>')
 @login_required
 def detay(teklif_id):
-    teklif = Teklif.query.options(joinedload(Teklif.firma_musteri), joinedload(Teklif.kalemler)).filter(
+    teklif = Teklif.query.options(
+        joinedload(Teklif.firma_musteri),
+        joinedload(Teklif.kalemler).joinedload(TeklifKalemi.harici_ekipman_tedarikci),
+        joinedload(Teklif.kalemler).joinedload(TeklifKalemi.nakliye_tedarikci),
+        joinedload(Teklif.kalemler).joinedload(TeklifKalemi.ekipman),
+    ).filter(
         Teklif.id == teklif_id,
         Teklif.is_deleted == False,
     ).first_or_404()

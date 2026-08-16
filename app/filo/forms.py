@@ -6,6 +6,7 @@ EKIPMAN_TIPI_SECENEKLERI = [
     ('MAKAS', 'Makaslı Platform'),
     ('EKLEMLI PLATFORM', 'Eklemli Platform'),
     ('BOOM', 'Bomlu Platform'),
+    ('DIKEY PLATFORM', 'Dikey Platform'),
     ('FORKLIFT', 'Forklift'),
     ('VINC', 'MobilVinç'),
     ('DIGER', 'Diğer'),

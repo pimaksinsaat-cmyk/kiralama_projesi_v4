@@ -1,6 +1,7 @@
-"""Kiralama API JSON payload builders — yalnizca SQLAlchemy model kolonlari."""
+"""Kiralama API JSON payload builders."""
 
 from app.kiralama.models import Kiralama, KiralamaKalemi
+from app.services.kiralama_services import KiralamaService
 
 
 def equipment_label(kalem):
@@ -55,7 +56,12 @@ def line_payload(kalem):
         'transport_supplier_id': kalem.nakliye_tedarikci_id,
         'transport_vehicle_id': kalem.nakliye_araci_id,
         'return_transport_invoice': kalem.donus_nakliye_fatura_et,
-        'return_transport_sale_price': kalem.donus_nakliye_satis_fiyat,
+        'return_transport_sale_price': (
+            KiralamaService._get_donus_nakliye_satis(kalem)
+            if (kalem.donus_nakliye_fatura_et or kalem.donus_nakliye_satis_fiyat is not None)
+            else None
+        ),
+        'return_transport_sale_price_override': kalem.donus_nakliye_satis_fiyat,
         'return_transport_purchase_vat_rate': kalem.donus_nakliye_alis_kdv,
         'return_is_external_transport': kalem.donus_is_harici_nakliye,
         'return_transport_supplier_id': kalem.donus_nakliye_tedarikci_id,
@@ -118,6 +124,14 @@ def _pick(data, *keys, default=None):
         if key in data and data[key] is not None:
             return data[key]
     return default
+
+
+def _optional_bool(data, *keys):
+    """Key varsa ve değer None değilse bool döner; hiçbiri yoksa None (legacy)."""
+    for key in keys:
+        if key in data and data[key] is not None:
+            return bool(_bool_flag(data[key]))
+    return None
 
 
 def _bool_flag(value):
@@ -209,6 +223,12 @@ def line_to_service(line):
         ),
         'donus_nakliye_araci_id': int(
             _pick(line, 'donus_nakliye_araci_id', 'return_transport_vehicle_id') or 0
+        ),
+        'donus_nakliye_satis_fiyat': _pick(
+            line, 'donus_nakliye_satis_fiyat', 'return_transport_sale_price'
+        ),
+        'donus_satis_override': _optional_bool(
+            line, 'donus_satis_override', 'return_transport_sale_is_override'
         ),
         'sonlandirildi': _bool_flag(_pick(line, 'sonlandirildi', 'is_ended')),
         'is_active': _bool_flag(_pick(line, 'is_active', default=1)),

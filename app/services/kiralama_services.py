@@ -2,7 +2,7 @@ import os
 import requests
 import xml.etree.ElementTree as ET
 from datetime import datetime, date, timedelta, timezone
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import logging
 import re
 from sqlalchemy import and_, func, or_
@@ -98,6 +98,19 @@ def to_decimal(value, default=Decimal('0.00')):
     except (ValueError, InvalidOperation):
         return default
 
+
+_MONEY_QUANT = Decimal('0.01')
+
+
+def quantize_money(value):
+    """Para tutarını 2 ondalığa yuvarlar."""
+    return to_decimal(value).quantize(_MONEY_QUANT, rounding=ROUND_HALF_UP)
+
+
+def money_equal(left, right):
+    """İki para tutarını 0.01 hassasiyetle karşılaştırır."""
+    return quantize_money(left) == quantize_money(right)
+
 def to_date(value):
     """HTML'den gelen tarih verisini (str veya date) güvenli bir şekilde işler."""
     if not value: return None
@@ -187,6 +200,43 @@ class KiralamaKalemiService(BaseService):
             'donus_alis': donus_alis,
             'alis_kdv': alis_kdv,
         }
+
+    @staticmethod
+    def _apply_donus_satis_storage(kalem, posted, override_flag):
+        """donus_nakliye_satis_fiyat saklama politikası.
+
+        override_flag:
+          True  -> posted değeri (0 dahil) manuel override
+          False -> override temizlenir; posted varsayılan yok sayılır
+          None  -> legacy: posted varsa planlanan yarı eşitliğine göre;
+                   posted yoksa eski override temizlenir
+        """
+        if override_flag is False:
+            kalem.donus_nakliye_satis_fiyat = None
+            return
+
+        if override_flag is True:
+            if posted is None:
+                kalem.donus_nakliye_satis_fiyat = None
+                return
+            kalem.donus_nakliye_satis_fiyat = quantize_money(posted)
+            return
+
+        # Legacy / bayrak yok
+        if posted is None:
+            kalem.donus_nakliye_satis_fiyat = None
+            return
+
+        posted_q = quantize_money(posted)
+        planlanan = quantize_money(
+            KiralamaService._get_planlanan_donus_nakliye_satis(kalem)
+        )
+        if posted_q == Decimal('0.00'):
+            kalem.donus_nakliye_satis_fiyat = Decimal('0.00')
+        elif money_equal(posted_q, planlanan):
+            kalem.donus_nakliye_satis_fiyat = None
+        else:
+            kalem.donus_nakliye_satis_fiyat = posted_q
 
     @staticmethod
     def _donus_makine_bilgisi(kalem):
@@ -362,6 +412,7 @@ class KiralamaKalemiService(BaseService):
         nakliye_alis_fiyat=None,
         donus_nakliye_alis_kdv=None,
         donus_nakliye_satis_fiyat=None,
+        donus_satis_override=None,
     ):
         """Kiralama kalemini sonlandırır ve makinenin durumunu günceller."""
         kalem = cls.get_by_id(kalem_id)
@@ -382,9 +433,15 @@ class KiralamaKalemiService(BaseService):
         
         kalem.sonlandirildi = True
 
-        # Dönüş satış bedeli modaldan gelirse kaleme kaydet.
-        if validated['donus_satis_explicit']:
-            kalem.donus_nakliye_satis_fiyat = validated['donus_satis']
+        if donus_satis_override is not None:
+            override_flag = bool(donus_satis_override)
+        else:
+            override_flag = None
+        cls._apply_donus_satis_storage(
+            kalem,
+            validated['donus_satis'] if validated['donus_satis_explicit'] else None,
+            override_flag,
+        )
         fiili_donus_satis = KiralamaService._get_donus_nakliye_satis(kalem)
         cls._cleanup_legacy_musteri_donus_cari(kalem)
 
@@ -1882,10 +1939,24 @@ class KiralamaService(BaseService):
                 aktif.kiralama_baslangici, aktif.kiralama_bitis = bas, bit
                 aktif.kiralama_brm_fiyat = to_decimal(k_data.get('kiralama_brm_fiyat'))
                 aktif.kiralama_alis_fiyat = to_decimal(k_data.get('kiralama_alis_fiyat'))
+                # Eski yarı snapshot: form fiyatı değişince bilinçsiz dondurulmuş
+                # dönüş tutarını forma yeniden bağla (bilinçli override korunur).
+                eski_nakliye_toplam = to_decimal(aktif.nakliye_satis_fiyat) if not is_yeni else None
+                eski_donus_fatura = bool(aktif.donus_nakliye_fatura_et) if not is_yeni else False
+                eski_donus_override = aktif.donus_nakliye_satis_fiyat if not is_yeni else None
+
                 aktif.nakliye_satis_fiyat = to_decimal(k_data.get('nakliye_satis_fiyat'))
                 aktif.donus_nakliye_fatura_et = bool(int(k_data.get('donus_nakliye_fatura_et') or 0))
                 if not aktif.donus_nakliye_fatura_et:
                     aktif.donus_nakliye_satis_fiyat = None
+                elif (
+                    eski_donus_override is not None
+                    and eski_donus_fatura
+                    and eski_nakliye_toplam is not None
+                ):
+                    eski_yarim = quantize_money(eski_nakliye_toplam / Decimal('2'))
+                    if money_equal(eski_donus_override, eski_yarim):
+                        aktif.donus_nakliye_satis_fiyat = None
                 aktif.nakliye_alis_fiyat = to_decimal(k_data.get('nakliye_alis_fiyat'))
                 # Alış KDV oranı güncellemesi
                 aktif.kiralama_alis_kdv = to_int_or_none(k_data.get('kiralama_alis_kdv'))
@@ -2561,7 +2632,15 @@ class KiralamaService(BaseService):
             yeni_sefer.arac_id = None
 
             if yeni_sefer.taseron_maliyet > 0:
-                nakliye_kdv = kalem.nakliye_alis_kdv
+                # Alış tevkifatı yalnızca taşeronun cari kaydına uygulanır.
+                # HizmetKaydi'nde saklanan oran, cari toplamların kullandığı
+                # efektif (net) KDV oranıdır; müşteri satış tevkifatı bundan
+                # bağımsız olarak Nakliye.tevkifat_orani üzerinden yürür.
+                from app.services.nakliye_services import _net_kdv_orani
+                nakliye_kdv = _net_kdv_orani(
+                    kalem.nakliye_alis_kdv,
+                    kalem.nakliye_alis_tevkifat_oran or '',
+                )
                 taseron_kayitlari = HizmetKaydi.query.filter(
                     HizmetKaydi.firma_id == yeni_sefer.taseron_firma_id,
                     HizmetKaydi.ozel_id == kalem.id,

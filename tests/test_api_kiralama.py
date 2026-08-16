@@ -153,3 +153,51 @@ def test_api_kiralama_delete_requires_password(client, app):
         )
         assert ok_delete.status_code == 200
         assert ok_delete.get_json()['data']['undo_seconds'] == KiralamaService.UNDO_WINDOW_SECONDS
+
+
+def test_api_terminate_sifir_donus_fiyati_kaybolmaz(client, app):
+    with app.app_context():
+        from app.kiralama.models import KiralamaKalemi
+
+        admin, musteri, ekipman = _seed_rental_fixtures()
+        headers = _auth_headers(client, admin.username, 'pass123')
+        sube = Sube.query.filter_by(is_active=True).first()
+        kiralama = KiralamaService.create_kiralama_with_relations(
+            {
+                'kiralama_form_no': KiralamaService.get_next_form_no(),
+                'makine_calisma_adresi': 'Adres',
+                'firma_musteri_id': musteri.id,
+                'kdv_orani': 20,
+                'doviz_kuru_usd': 1,
+                'doviz_kuru_eur': 1,
+            },
+            [{
+                'dis_tedarik_ekipman': 0,
+                'ekipman_id': ekipman.id,
+                'kiralama_baslangici': '2026-06-01',
+                'kiralama_bitis': '2026-06-15',
+                'kiralama_brm_fiyat': 500,
+                'nakliye_satis_fiyat': 5000,
+                'donus_nakliye_fatura_et': 1,
+            }],
+        )
+        line_id = next(k.id for k in kiralama.kalemler if not k.is_deleted)
+
+        resp = client.post(
+            f'/api/kiralama/lines/{line_id}/terminate',
+            headers=headers,
+            json={
+                'end_date': '2026-06-15',
+                'return_branch_id': sube.id,
+                'return_transport_sale_price': 0,
+                'donus_satis_override': True,
+            },
+        )
+        assert resp.status_code == 200
+        data = resp.get_json()['data']
+        assert data['return_transport_sale_price'] == 0 or Decimal(str(data['return_transport_sale_price'])) == Decimal('0')
+        assert data['return_transport_sale_price_override'] is not None
+        assert Decimal(str(data['return_transport_sale_price_override'])) == Decimal('0.00')
+
+        kalem = db.session.get(KiralamaKalemi, line_id)
+        assert kalem.donus_nakliye_satis_fiyat == Decimal('0.00')

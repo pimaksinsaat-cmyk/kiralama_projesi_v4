@@ -211,9 +211,16 @@
             {% endif %}
             {% if kalem.donus_nakliye_fatura_et %}
                 | <span class="text-success fw-bold">Dönüş nakliye dahil</span>
-                {% if kalem.donus_nakliye_satis_fiyat is not none %}
-                    ({{ "{:,.2f}".format(kalem.donus_nakliye_satis_fiyat).replace(",","X").replace(".",",").replace("X",".") }} TL)
+                {% set donus_goster = donus_satis_by_kalem.get(kalem.id) if donus_satis_by_kalem is defined else kalem.donus_nakliye_satis_fiyat %}
+                {% if donus_goster is not none and donus_goster > 0 %}
+                    ({{ "{:,.2f}".format(donus_goster).replace(",","X").replace(".",",").replace("X",".") }} TL)
                 {% endif %}
+            {% elif donus_satis_by_kalem is defined and donus_satis_by_kalem.get(kalem.id) and donus_satis_by_kalem.get(kalem.id) > 0 %}
+                | <span class="text-info fw-bold">Dönüş nakliyesi ek</span>
+                ({{ "{:,.2f}".format(donus_satis_by_kalem.get(kalem.id)).replace(",","X").replace(".",",").replace("X",".") }} TL)
+            {% elif kalem.donus_nakliye_satis_fiyat is not none and kalem.donus_nakliye_satis_fiyat > 0 %}
+                | <span class="text-info fw-bold">Dönüş nakliyesi ek</span>
+                ({{ "{:,.2f}".format(kalem.donus_nakliye_satis_fiyat).replace(",","X").replace(".",",").replace("X",".") }} TL)
             {% endif %}
         </div>
     </div>

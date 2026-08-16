@@ -1,7 +1,7 @@
 from datetime import date
 from decimal import Decimal
 
-from wtforms import FieldList, FormField, HiddenField, IntegerField, SelectField, StringField, SubmitField, TextAreaField
+from wtforms import BooleanField, FieldList, FormField, HiddenField, IntegerField, SelectField, StringField, SubmitField, TextAreaField
 from wtforms.validators import DataRequired, Email, Length, NumberRange, Optional, ValidationError
 
 from app.forms.base_form import BaseForm, MoneyField, TRDateField
@@ -13,7 +13,10 @@ class TeklifKalemiForm(BaseForm):
         csrf = False
 
     id = HiddenField('Kalem ID')
+    is_dis_tedarik_ekipman = BooleanField('Harici Ekipman')
     ekipman_id = SelectField('Kayıtlı Makine', coerce=int, default=0, validators=[Optional()])
+    harici_ekipman_tedarikci_id = SelectField('Ekipman Tedarikçisi', coerce=int, default=0, validators=[Optional()])
+    harici_ekipman_seri_no = StringField('Harici Seri No', validators=[Optional(), Length(max=100)])
     makine_tipi = StringField('Makine Tipi', validators=[Optional(), Length(max=100)])
     marka_model = StringField('Marka / Model', validators=[Optional(), Length(max=150)])
     calisma_yuksekligi = MoneyField('Çalışma Yüksekliği', validators=[Optional()])
@@ -26,11 +29,36 @@ class TeklifKalemiForm(BaseForm):
     gunluk_fiyat = MoneyField('Günlük Fiyat', default=Decimal('0.00'), validators=[DataRequired(), NumberRange(min=0)])
     nakliye_yon = HiddenField('Nakliye Yönü', default='tek_yon')
     nakliye_fiyati = MoneyField('Nakliye Fiyatı', default=Decimal('0.00'), validators=[Optional(), NumberRange(min=0)])
+    is_harici_nakliye = BooleanField('Harici Nakliye')
+    nakliye_tedarikci_id = SelectField('Nakliye Tedarikçisi', coerce=int, default=0, validators=[Optional()])
     satir_notu = TextAreaField('Satır Notu', validators=[Optional()])
 
     def validate_bitis_tarihi(self, field):
         if self.baslangic_tarihi.data and field.data and field.data < self.baslangic_tarihi.data:
             raise ValidationError('Bitiş tarihi başlangıç tarihinden önce olamaz.')
+
+    def validate(self, extra_validators=None):
+        ok = super().validate(extra_validators=extra_validators)
+
+        if self.is_dis_tedarik_ekipman.data:
+            if not self.harici_ekipman_tedarikci_id.data:
+                self.harici_ekipman_tedarikci_id.errors.append('Harici ekipman tedarikçisi seçilmelidir.')
+                ok = False
+            if not (self.makine_tipi.data or '').strip():
+                self.makine_tipi.errors.append('Harici ekipman tipi zorunludur.')
+                ok = False
+            if not (self.marka_model.data or '').strip():
+                self.marka_model.errors.append('Harici ekipman marka/modeli zorunludur.')
+                ok = False
+            if not (self.harici_ekipman_seri_no.data or '').strip():
+                self.harici_ekipman_seri_no.errors.append('Harici ekipman seri no zorunludur.')
+                ok = False
+
+        if self.is_harici_nakliye.data and not self.nakliye_tedarikci_id.data:
+            self.nakliye_tedarikci_id.errors.append('Harici nakliye tedarikçisi seçilmelidir.')
+            ok = False
+
+        return ok
 
 
 class TeklifForm(BaseForm):
