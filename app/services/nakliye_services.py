@@ -517,6 +517,91 @@ class CariServis:
             _soft_delete_hizmet(eski_maliyet)
 
     @staticmethod
+    def _taseron_gider_bekleniyor(nakliye):
+        """Bağımsız taşeron seferde taşeron gider HizmetKaydi kaydı beklenir mi?"""
+        return (
+            nakliye.kiralama_id is None
+            and nakliye.nakliye_tipi == 'taseron'
+            and nakliye.taseron_firma_id is not None
+            and nakliye.taseron_maliyet is not None
+            and nakliye.taseron_maliyet > 0
+        )
+
+    @staticmethod
+    def nakliye_cari_durumlari(nakliyeler):
+        """
+        Nakliye listesi için cari işlenme durumunu salt-okunur hesaplar.
+        Kaynak: canlı HizmetKaydi kayıtları (cari_islendi_mi değil).
+        """
+        if not nakliyeler:
+            return {}
+
+        nakliye_by_id = {n.id: n for n in nakliyeler if getattr(n, 'id', None)}
+        if not nakliye_by_id:
+            return {}
+
+        ids = list(nakliye_by_id.keys())
+        legacy_ids = [
+            nid for nid, n in nakliye_by_id.items()
+            if CariServis._taseron_gider_bekleniyor(n)
+        ]
+
+        filters = [
+            db.and_(
+                HizmetKaydi.nakliye_id.in_(ids),
+                HizmetKaydi.is_deleted.is_(False),
+            )
+        ]
+        if legacy_ids:
+            filters.append(
+                db.and_(
+                    HizmetKaydi.nakliye_id.is_(None),
+                    HizmetKaydi.ozel_id.in_(legacy_ids),
+                    HizmetKaydi.yon == 'gelen',
+                    HizmetKaydi.aciklama.like('Nakliye Taşeron Gideri:%'),
+                    HizmetKaydi.is_deleted.is_(False),
+                )
+            )
+
+        kayitlar = HizmetKaydi.query.filter(db.or_(*filters)).all()
+
+        musteri_by_id = {nid: False for nid in ids}
+        gider_by_id = {nid: False for nid in ids}
+
+        for kayit in kayitlar:
+            if kayit.nakliye_id and kayit.nakliye_id in nakliye_by_id:
+                if kayit.yon == 'giden':
+                    musteri_by_id[kayit.nakliye_id] = True
+                elif (
+                    kayit.yon == 'gelen'
+                    and CariServis._taseron_gider_bekleniyor(nakliye_by_id[kayit.nakliye_id])
+                ):
+                    gider_by_id[kayit.nakliye_id] = True
+            elif (
+                kayit.nakliye_id is None
+                and kayit.ozel_id in nakliye_by_id
+                and kayit.yon == 'gelen'
+            ):
+                gider_by_id[kayit.ozel_id] = True
+
+        result = {}
+        for nid, nakliye in nakliye_by_id.items():
+            if not musteri_by_id[nid]:
+                result[nid] = False
+            elif CariServis._taseron_gider_bekleniyor(nakliye):
+                result[nid] = gider_by_id[nid]
+            else:
+                result[nid] = True
+        return result
+
+    @staticmethod
+    def nakliye_cari_durumu(nakliye):
+        """Tek nakliye için nakliye_cari_durumlari sarmalayıcısı."""
+        if not nakliye or not getattr(nakliye, 'id', None):
+            return False
+        return CariServis.nakliye_cari_durumlari([nakliye]).get(nakliye.id, False)
+
+    @staticmethod
     def nakliye_cari_temizle(nakliye_id, actor_id=None, deleted_at=None):
         """
         Nakliye silindiğinde bağlı cari kayıtları soft-delete eder.

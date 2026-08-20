@@ -318,8 +318,8 @@
                 </td>
                 <td class="text-end fw-bold">{{ "{:,.2f}".format(tutar).replace(',', 'X').replace('.', ',').replace('X', '.') }}</td>
                 <td class="text-center">
-                    {% if nakliye.cari_islendi_mi %}
-                        <span class="durum-badge durum-islendi">Islendi</span>
+                    {% if cari_durumlari.get(nakliye.id, False) %}
+                        <span class="durum-badge durum-islendi">İşlendi</span>
                     {% else %}
                         <span class="durum-badge durum-bekliyor">Bekliyor</span>
                     {% endif %}

@@ -159,7 +159,6 @@
                             data-detay-url="{{ url_for('nakliyeler.detay', id=nakliye.id) }}"
                             data-duzenle-url="{{ url_for('nakliyeler.duzenle', id=nakliye.id) }}"
                             data-sil-url="{{ url_for('nakliyeler.sil', id=nakliye.id) }}"
-                            data-islendi="{{ '1' if nakliye.cari_islendi_mi else '0' }}"
                             data-kiralama="{{ '1' if nakliye.kiralama_id else '0' }}"
                             data-kiralama-duzenle-url="{{ url_for('kiralama.duzenle', kiralama_id=nakliye.kiralama_id) if nakliye.kiralama_id else '' }}">
                             
@@ -240,7 +239,7 @@
                                         <i class="fas fa-lock text-muted" title="Kiralama Bağlantılı Kayıt"></i>
                                     {% endif %}
                                     
-                                    {% if nakliye.cari_islendi_mi %}
+                                    {% if cari_durumlari.get(nakliye.id, False) %}
                                         <span class="badge rounded-pill bg-success-subtle text-success border border-success-subtle">
                                             <i class="fas fa-check-circle me-1"></i> İşlendi
                                         </span>

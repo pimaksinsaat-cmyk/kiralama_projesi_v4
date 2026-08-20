@@ -224,6 +224,9 @@ def index():
             stats['sefer_sayisi'], stats['ciro'], stats['maliyet'], stats['kar']
         )
 
+        stage = 'cari_durumlari'
+        cari_durumlari = CariServis.nakliye_cari_durumlari(nakliyeler)
+
         stage = 'template_render'
         return render_template('nakliyeler/index.html',
                                nakliyeler=nakliyeler,
@@ -236,6 +239,7 @@ def index():
                                taseron_listesi=taseron_listesi,
                                firma_listesi=firma_listesi,
                                nakliye_kdv_bilgileri=nakliye_kdv_bilgileri,
+                               cari_durumlari=cari_durumlari,
                                secili_taseron_id=secili_taseron_id,
                                secili_plaka=secili_plaka,
                                secili_firma_id=secili_firma_id)
@@ -251,6 +255,7 @@ def index():
                                nakliyeler=[], pagination=None, per_page=per_page,
                                stats={'sefer_sayisi': 0, 'ciro': 0, 'maliyet': 0, 'kar': 0},
                                nakliye_kdv_bilgileri={},
+                               cari_durumlari={},
                                baslangic=baslangic, bitis=bitis,
                                plaka_listesi=[], taseron_listesi=[], firma_listesi=[],
                                secili_taseron_id=secili_taseron_id,
@@ -281,6 +286,7 @@ def yazdir():
     ).all()
 
     stats = _nakliye_stats(nakliyeler)
+    cari_durumlari = CariServis.nakliye_cari_durumlari(nakliyeler)
 
     return render_template('nakliyeler/yazdir.html',
                            nakliyeler=nakliyeler,
@@ -291,6 +297,7 @@ def yazdir():
                            secili_taseron_id=secili_taseron_id,
                            secili_firma_id=secili_firma_id,
                            nakliye_kdv_bilgileri=_nakliye_kdv_bilgileri(nakliyeler),
+                           cari_durumlari=cari_durumlari,
                            rapor_tarihi=date.today().strftime('%d.%m.%Y'))
 
 
@@ -317,6 +324,8 @@ def excel_aktar():
     ).options(*_nakliye_output_options()).order_by(
         func.coalesce(Nakliye.islem_tarihi, Nakliye.tarih).desc(), Nakliye.id.desc()
     ).all()
+
+    cari_durumlari = CariServis.nakliye_cari_durumlari(nakliyeler)
 
     workbook = Workbook()
     sheet = workbook.active
@@ -420,7 +429,7 @@ def excel_aktar():
             kdv_orani,
             kdv,
             tutar,
-            'Islendi' if nakliye.cari_islendi_mi else 'Bekliyor',
+            'İşlendi' if cari_durumlari.get(nakliye.id, False) else 'Bekliyor',
         ]
 
         for col_idx, value in enumerate(row_data, start=1):
@@ -822,4 +831,5 @@ def geri_al(id):
 @nakliye_bp.route('/detay/<int:id>')
 def detay(id):
     nakliye = NakliyeService.get_active_or_404(id)
-    return render_template('nakliyeler/detay.html', nakliye=nakliye)
+    cari_islendi = CariServis.nakliye_cari_durumu(nakliye)
+    return render_template('nakliyeler/detay.html', nakliye=nakliye, cari_islendi=cari_islendi)
