@@ -14,6 +14,10 @@ from app.nakliyeler.models import Nakliye, NakliyeDagitim
 from app.services.base import ValidationError
 from app.services.kiralama_services import KiralamaKalemiService, KiralamaService
 from app.services.nakliye_sefer_services import NakliyeSeferService
+from app.services.nakliye_guzergah_services import (
+    NAKLIYE_GUZERGAH_MAX_LENGTH,
+    build_nakliye_guzergah,
+)
 from app.subeler.models import Sube
 
 
@@ -104,6 +108,84 @@ def _payload(lines, amount1='0', amount2='1000', yon='gidis', date_value='2026-0
             {'kiralama_kalemi_id': lines[1].id, 'tutar': amount2},
         ],
     }]
+
+
+def _single_payload(line, guzergah, arac_id=None):
+    return [{
+        'sefer_uuid': str(uuid.uuid4()),
+        'yon': 'gidis',
+        'tarih': '2026-08-06',
+        'islem_tarihi': '2026-08-06',
+        'guzergah': guzergah,
+        'nakliye_tipi': 'oz_mal',
+        'arac_id': arac_id or _arac().id,
+        'taseron_maliyet': '0',
+        'dagitimlar': [{'kiralama_kalemi_id': line.id, 'tutar': '100'}],
+    }]
+
+
+def test_automatic_route_is_compact_normalized_and_bounded():
+    route = build_nakliye_guzergah(
+        '  ZOOMLION   ZS1012HD  ',
+        'Çok uzun çıkış ' * 80,
+        'Çok uzun varış ' * 80,
+    )
+
+    assert route.startswith('ZOOMLION ZS1012HD: ')
+    assert '  ' not in route
+    assert ' → ' in route
+    assert len(route) <= NAKLIYE_GUZERGAH_MAX_LENGTH
+
+
+def test_manual_route_accepts_500_and_rejects_501_before_flush(app):
+    with app.app_context():
+        rental, lines = _rental(count=1)
+        NakliyeSeferService.sync_kiralama(rental, _single_payload(lines[0], 'A' * 500))
+        db.session.flush()
+        assert Nakliye.query.filter_by(kiralama_id=rental.id).one().guzergah == 'A' * 500
+
+        other_rental, other_lines = _rental(count=1)
+        with pytest.raises(ValidationError, match='en fazla 500 karakter'):
+            NakliyeSeferService.sync_kiralama(
+                other_rental,
+                _single_payload(other_lines[0], 'B' * 501),
+            )
+
+
+def test_long_customer_return_route_is_compact_and_does_not_repeat_customer(app):
+    with app.app_context():
+        rental, lines = _rental(count=1)
+        line = lines[0]
+        rental.nakliye_modeli = 'sefer'
+        customer_name = (
+            'HALİL ERDOĞAN VE YAĞIZ İNŞAAT MAKİNE TAAH SAN VE TİC LTD ŞTİ '
+            'ADİ ORTAKLIĞI'
+        )
+        rental.firma_musteri.firma_adi = customer_name
+        rental.makine_calisma_adresi = customer_name
+        vehicle = _arac()
+        line.donus_nakliye_araci_id = vehicle.id
+
+        NakliyeSeferService.sync_kiralama(
+            rental,
+            _single_payload(line, 'Mevcut 187 karakterlik legacy güzergâh', vehicle.id),
+        )
+        return_trip = KiralamaKalemiService._create_donus_nakliye_seferi(
+            line,
+            'ZOOMLION ZS1012HD',
+            customer_name,
+            customer_name,
+            'Tedarikçiye İade',
+            Decimal('3000.00'),
+            allocation_kalem=line,
+        )
+        db.session.flush()
+
+        assert return_trip.guzergah == (
+            f'ZOOMLION ZS1012HD: {customer_name} → Tedarikçiye İade'
+        )
+        assert return_trip.guzergah.count(customer_name) == 1
+        assert len(return_trip.guzergah) <= NAKLIYE_GUZERGAH_MAX_LENGTH
 
 
 def test_zero_allocation_is_operational_but_not_customer_cari(app):
@@ -1015,8 +1097,7 @@ def test_create_sefer_model_restores_legacy_gidis_texts_from_first_allocation(ap
         sefer = Nakliye.query.filter_by(kiralama_id=created.id, yon='gidis').one()
         first_line = next(k for k in created.kalemler if k.ekipman_id == second_equipment.id)
         assert sefer.guzergah == (
-            f"{second_equipment.kod} {sube.isim} şubesinden {customer.firma_adi} firmasının "
-            "Şantiye A'ne götürüldü"
+            f"{second_equipment.kod}: {sube.isim} şubesi → Şantiye A"
         )
         assert sefer.aciklama == f'Gidiş: {form_no} #{first_line.id}'
         assert Nakliye.query.filter_by(kiralama_id=created.id).count() == 1
@@ -1043,7 +1124,7 @@ def test_create_sefer_model_uses_branchless_fallback_and_preserves_custom_text(a
         )
         sefer = Nakliye.query.filter_by(kiralama_id=rental.id).one()
         assert sefer.guzergah == (
-            f'{equipment.kod} {customer.firma_adi} firmasına götürüldü (Saha B)'
+            f'{equipment.kod}: Bilinmeyen çıkış → Saha B'
         )
         assert sefer.aciklama == f'Gidiş: {rental.kiralama_form_no} #{lines[0].id}'
 
@@ -1085,8 +1166,7 @@ def test_create_sefer_model_uses_branchless_fallback_and_preserves_custom_text(a
         )
         external_sefer = Nakliye.query.filter_by(kiralama_id=external_rental.id).one()
         assert external_sefer.guzergah == (
-            f'Zoomlion ZS0407 EXT-01 {customer.firma_adi} firmasına '
-            'götürüldü (Harici saha)'
+            'Zoomlion ZS0407 EXT-01: Bilinmeyen çıkış → Harici saha'
         )
 
 

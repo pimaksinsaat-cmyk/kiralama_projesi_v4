@@ -1,9 +1,14 @@
 import logging
 from logging.config import fileConfig
+from pathlib import Path
 
 from flask import current_app
 
 from alembic import context
+
+from migrations.check_revision_graph import validate_revision_graph
+
+validate_revision_graph(Path(__file__).resolve().parent / "versions")
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

@@ -45,7 +45,7 @@ class Nakliye(BaseModel):
     taseron_firma = db.relationship('Firma', foreign_keys=[taseron_firma_id], backref='taseron_nakliyeleri')
 
     # --- Operasyonel Bilgiler ---
-    guzergah = db.Column(db.String(200), nullable=False)
+    guzergah = db.Column(db.String(500), nullable=False)
     plaka = db.Column(db.String(20), nullable=True)
     aciklama = db.Column(db.Text, nullable=True)
 

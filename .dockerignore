@@ -1,0 +1,12 @@
+.git
+.pytest_tmp
+.pytest_cache
+**/__pycache__
+**/*.pyc
+venv
+.venv
+backups
+flask_session
+db_yedekler
+*.dump
+.env

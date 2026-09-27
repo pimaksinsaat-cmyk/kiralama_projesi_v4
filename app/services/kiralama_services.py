@@ -20,6 +20,7 @@ from app.firmalar.models import Firma
 from app.cari.models import HizmetKaydi
 from app.nakliyeler.models import Nakliye, NakliyeDagitim
 from app.services.nakliye_sefer_services import NakliyeSeferService
+from app.services.nakliye_guzergah_services import build_nakliye_guzergah
 from app.araclar.models import Arac as NakliyeAraci
 from app.subeler.models import Sube
 from app.ayarlar.models import AppSettings
@@ -484,9 +485,10 @@ class KiralamaKalemiService(BaseService):
         aciklama_kalem_id = allocation_kalem.id
         aciklama = f"Dönüş: {form_no} #{kalem.id}"
         aciklama = aciklama.rsplit('#', 1)[0] + f"#{aciklama_kalem_id}"
-        donus_guzergah = (
-            f"{makine_bilgisi} {musteri_adi} firmasının {is_yeri_donus}'nden "
-            f"{donus_sube_adi} şubesine getirildi"
+        donus_guzergah = build_nakliye_guzergah(
+            makine_bilgisi,
+            is_yeri_donus or musteri_adi,
+            donus_sube_adi,
         )
         arac_id = None if kalem.donus_is_harici_nakliye else (
             kalem.donus_nakliye_araci_id or cls._gidis_arac_id_for_kalem(kalem)
@@ -2941,10 +2943,11 @@ class KiralamaService(BaseService):
         firma_adi = kiralama.firma_musteri.firma_adi if kiralama.firma_musteri else "Müşteri"
         is_yeri = (kiralama.makine_calisma_adresi or '').strip() or firma_adi
         gidis_sube_adi = kalem.ekipman.sube.isim if (kalem.ekipman and kalem.ekipman.sube) else None
-        if gidis_sube_adi:
-            guzergah_gidis = f"{makine_adi} {gidis_sube_adi} şubesinden {firma_adi} firmasının {is_yeri}'ne götürüldü"
-        else:
-            guzergah_gidis = f"{makine_adi} {firma_adi} firmasına götürüldü ({is_yeri})"
+        guzergah_gidis = build_nakliye_guzergah(
+            makine_adi,
+            f"{gidis_sube_adi} şubesi" if gidis_sube_adi else "Bilinmeyen çıkış",
+            is_yeri,
+        )
 
         form_no = kiralama.kiralama_form_no or ''
         gidis_aciklama = f"Gidiş: {form_no} #{kalem.id}" if kalem.id else f"Gidiş: {form_no}"

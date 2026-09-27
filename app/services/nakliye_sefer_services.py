@@ -16,6 +16,10 @@ from app.nakliyeler.models import Nakliye, NakliyeDagitim
 from app.cari.models import HizmetKaydi
 from app.fatura.models import Hakedis
 from app.services.nakliye_services import _net_kdv_orani
+from app.services.nakliye_guzergah_services import (
+    build_nakliye_guzergah,
+    validate_nakliye_guzergah,
+)
 
 
 SATIS_KAYNAGI = 'nakliye_dagitim_satis'
@@ -150,13 +154,11 @@ class NakliyeSeferService:
             if ekipman and ekipman.sube and ekipman.sube.isim
             else None
         )
-        if sube_adi:
-            guzergah = (
-                f"{makine_adi} {sube_adi} şubesinden {firma_adi} firmasının "
-                f"{is_yeri}'ne götürüldü"
-            )
-        else:
-            guzergah = f"{makine_adi} {firma_adi} firmasına götürüldü ({is_yeri})"
+        guzergah = build_nakliye_guzergah(
+            makine_adi,
+            f"{sube_adi} şubesi" if sube_adi else "Bilinmeyen çıkış",
+            is_yeri,
+        )
 
         form_no = kiralama.kiralama_form_no or ''
         return guzergah, f"Gidiş: {form_no} #{kalem.id}"
@@ -965,7 +967,7 @@ class NakliyeSeferService:
             sefer.cift_yon = bool(raw.get('cift_yon')) and sefer.yon != 'donus'
             sefer.tarih = _date(raw.get('tarih'), date.today())
             sefer.islem_tarihi = _date(raw.get('islem_tarihi'), sefer.tarih)
-            sefer.guzergah = (raw.get('guzergah') or '').strip()
+            sefer.guzergah = validate_nakliye_guzergah(raw.get('guzergah'))
             legacy_guzergah = None
             legacy_aciklama = None
             if apply_legacy_gidis_defaults and is_new_sefer and sefer.yon == 'gidis':
@@ -974,8 +976,6 @@ class NakliyeSeferService:
                 )
                 if sefer.guzergah.casefold() in {'kiralama gidişi', 'kiralama gidisi'}:
                     sefer.guzergah = legacy_guzergah or sefer.guzergah
-            if not sefer.guzergah:
-                raise ValidationError('Sefer güzergâhı boş bırakılamaz.')
             sefer.nakliye_tipi = raw.get('nakliye_tipi') or 'oz_mal'
             sefer.arac_id = int(raw.get('arac_id') or 0) or None
             sefer.taseron_firma_id = int(raw.get('taseron_firma_id') or 0) or None

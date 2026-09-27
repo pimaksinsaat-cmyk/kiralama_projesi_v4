@@ -26,7 +26,8 @@ jobs:
 
             APP_SERVICE="kiralama_v4.service"
             SCHEDULER_SERVICE="kiralama_scheduler.service"
-            EXPECTED_DB_HEAD="c3d4e5f6a7b8"
+            PREVIOUS_DB_HEAD="c3d4e5f6a7b8"
+            TARGET_DB_HEAD="e8b2c4d6f0a1"
             RELEASE_SHA="${{ github.sha }}"
 
             echo ">>> Kod degismeden once canli DB revision kontrolu"
@@ -39,7 +40,7 @@ jobs:
 
             CURRENT_OUTPUT=$(venv/bin/python -m flask db current)
             echo "$CURRENT_OUTPUT"
-            echo "$CURRENT_OUTPUT" | grep -q "$EXPECTED_DB_HEAD"
+            echo "$CURRENT_OUTPUT" | grep -Eq "$PREVIOUS_DB_HEAD|$TARGET_DB_HEAD"
 
             echo ">>> Calisma agaci ve servis kontrolleri"
             git diff --quiet
@@ -69,13 +70,13 @@ jobs:
             HEADS_OUTPUT=$(venv/bin/python -m flask db heads)
             echo "$HEADS_OUTPUT"
             test "$(printf '%s\n' "$HEADS_OUTPUT" | grep -c '(head)')" -eq 1
-            echo "$HEADS_OUTPUT" | grep -q "$EXPECTED_DB_HEAD"
+            echo "$HEADS_OUTPUT" | grep -q "$TARGET_DB_HEAD"
 
-            venv/bin/python -m flask db upgrade "$EXPECTED_DB_HEAD"
+            venv/bin/python -m flask db upgrade "$TARGET_DB_HEAD"
 
             CURRENT_OUTPUT=$(venv/bin/python -m flask db current)
             echo "$CURRENT_OUTPUT"
-            echo "$CURRENT_OUTPUT" | grep -q "$EXPECTED_DB_HEAD"
+            echo "$CURRENT_OUTPUT" | grep -q "$TARGET_DB_HEAD"
 
             echo ">>> Servisler baslatiliyor"
             systemctl start "$APP_SERVICE"

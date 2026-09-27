@@ -4,18 +4,23 @@ Kullanim:
 
 Varsayilan olarak db_yedek.sql dosyasini kiralama_veritabani icindeki
 kiralama_db veritabanina aktarir. Restore oncesi backups/ altina yedek alir,
-kiralama_web ve kiralama_scheduler konteynerlerini gecici durdurur ve is
-bitince tekrar baslatir.
+kiralama_web ve kiralama_scheduler konteynerlerini gecici durdurur, SQL
+aktarimindan sonra calisma agacindaki migrationlari uygular ve is bitince
+konteynerleri tekrar baslatir.
 
 Ornekler:
   .\scripts\restore_db_yedek.ps1 -SqlFile .\db_yedek.sql
   .\scripts\restore_db_yedek.ps1 -SqlFile .\firma_data.sql -NoStopWeb
   .\scripts\restore_db_yedek.ps1 -SqlFile .\firma_data.sql -NoCleanPublicSchema
   .\scripts\restore_db_yedek.ps1 -SkipBackup
+  .\scripts\restore_db_yedek.ps1 -SkipMigrate
 
 db_yedek.utf8.sql Turkce karakterleri bozuk/mojibake icerebilir; script bu
 dosyayi varsayilan olarak engeller. Bilerek kullanmak icin:
   .\scripts\restore_db_yedek.ps1 -SqlFile .\db_yedek.utf8.sql -AllowMojibakeFile
+
+SQL restore sonrasi varsayilan olarak calisma agacindaki migrationlar
+(flask db upgrade) uygulanir. Atlamak icin -SkipMigrate kullanin.
 #>
 
 param(
@@ -31,6 +36,7 @@ param(
     [string]$BackupDir = "backups",
     [switch]$NoStopWeb,
     [switch]$SkipBackup,
+    [switch]$SkipMigrate,
     [switch]$NoCleanPublicSchema,
     [switch]$AllowMojibakeFile
 )
@@ -478,6 +484,24 @@ try {
         Invoke-Checked "Kullanici aktif oturumlari temizleniyor" {
             $ClearActiveSessionsSql = "DO `$`$ BEGIN EXECUTE 'UPDATE ' || chr(34) || 'user' || chr(34) || ' SET active_session_token = NULL, active_session_started_at = NULL, active_session_seen_at = NULL'; END `$`$;"
             docker exec $DbContainer psql -U $DbUser -d $DbName -v ON_ERROR_STOP=1 -c $ClearActiveSessionsSql
+        }
+
+        if (-not $SkipMigrate) {
+            Invoke-Checked "Migration durumu (oncesi)" {
+                docker compose run --rm --no-deps $WebService python -m flask db current
+            }
+
+            Invoke-Checked "Calisma agaci migrationlari uygulanıyor" {
+                docker compose run --rm --no-deps $WebService python -m flask db upgrade
+            }
+
+            Invoke-Checked "Migration durumu (sonrasi)" {
+                docker compose run --rm --no-deps $WebService python -m flask db current
+            }
+        }
+        else {
+            Write-Host ""
+            Write-Host "UYARI: -SkipMigrate verildi, calisma agaci migrationlari uygulanmadi." -ForegroundColor Yellow
         }
     }
     finally {

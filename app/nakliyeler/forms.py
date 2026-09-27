@@ -6,7 +6,7 @@ from wtforms import (
     StringField, TextAreaField, IntegerField, DateField, 
     SelectField, SubmitField
 )
-from wtforms.validators import DataRequired, Optional
+from wtforms.validators import DataRequired, Length, Optional
 
 # ==========================================
 # YARDIMCI ALAN: Türk Lirası Formatlayıcı
@@ -55,7 +55,11 @@ class NakliyeForm(FlaskForm):
     taseron_maliyet = TurkishDecimalField('Taşeron Alış Maliyeti (TL)', validators=[Optional()]) 
     taseron_kdv_orani = IntegerField('Taşeron KDV Oranı (%)', default=20, validators=[Optional()])
     
-    guzergah = StringField('Güzergah (Nereden - Nereye)', validators=[DataRequired()])
+    guzergah = StringField(
+        'Güzergah (Nereden - Nereye)',
+        validators=[DataRequired(), Length(max=500)],
+        render_kw={'maxlength': 500},
+    )
     plaka = StringField('Dış Araç Plakası', validators=[Optional()])
     aciklama = TextAreaField('Yük Açıklaması / Notlar')
     

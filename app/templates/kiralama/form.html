@@ -523,7 +523,7 @@
                     </div>
                     <div class="col-md-2"><label for="sefer-form-tarih">Sefer tarihi</label><input id="sefer-form-tarih" type="date" class="form-control"></div>
                     <div class="col-md-2"><label for="sefer-form-islem-tarihi">İşlem tarihi</label><input id="sefer-form-islem-tarihi" type="date" class="form-control"></div>
-                    <div class="col-md-6"><label for="sefer-form-guzergah">Güzergâh</label><input id="sefer-form-guzergah" type="text" maxlength="200" class="form-control" placeholder="Örn. Şantiye / depo"></div>
+                    <div class="col-md-6"><label for="sefer-form-guzergah">Güzergâh</label><input id="sefer-form-guzergah" type="text" maxlength="500" class="form-control" placeholder="Örn. Şantiye / depo"></div>
                     <div class="col-md-3">
                         <label for="sefer-form-tipi">Nakliye tipi</label>
                         <select id="sefer-form-tipi" class="form-select"><option value="oz_mal">Öz mal</option><option value="taseron">Taşeron</option></select>
@@ -1127,6 +1127,7 @@ function saveSeferModal() {
     const error = message => { seferFormError.textContent = message; return false; };
     if (!tarih || !islemTarihi) return error('Sefer ve işlem tarihi zorunludur.');
     if (!guzergah) return error('Güzergâh boş bırakılamaz.');
+    if (guzergah.length > 500) return error('Güzergâh en fazla 500 karakter olabilir.');
     const allocations = [];
     for (const row of rows) {
         const check = row.querySelector('.sefer-kalem-check');

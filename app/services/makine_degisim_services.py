@@ -16,6 +16,7 @@ from app.services.kiralama_services import (
     _soft_delete_hizmet_kaydi,
     to_decimal,
 )
+from app.services.nakliye_guzergah_services import build_nakliye_guzergah
 
 try:
     from app.cari.models import HizmetKaydi
@@ -239,7 +240,11 @@ class MakineDegisimService(BaseService):
                 yeni_makine_ad = f"{data.get('harici_marka') or ''} {data.get('harici_model') or ''}".strip()
             
             # --- KULLANICININ İSTEDİĞİ ÖZEL AÇIKLAMA METNİ ---
-            ozel_guzergah = f"{musteri_firma_adi} firmasından alınan {eski_makine_ad} makinenin {yeni_makine_ad} ile değişimi nakliye bedeli"
+            ozel_guzergah = build_nakliye_guzergah(
+                f"{eski_makine_ad} → {yeni_makine_ad}",
+                musteri_firma_adi,
+                "Makine değişimi",
+            )
             
             # İptal fonksiyonunun bu kaydı bulabilmesi için teknik ve BENZERSİZ bir iz bırakıyoruz
             detayli_aciklama = f"Makine Değişim (Swap) Operasyonu [Ref:{yeni_kalem.id}]. Neden: {data['neden']}"
