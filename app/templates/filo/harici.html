@@ -9,25 +9,25 @@
     th { background-color: #e9ecef; }
     a { color: #007bff; text-decoration: none; }
     a:hover { text-decoration: underline; }
-    .btn { display: inline-block; padding: 6px 14px; border-radius: 5px; font-weight: bold; color: white; border: none; cursor: pointer; font-size: 0.85em; transition: filter 0.15s; }
-    .btn:hover { filter: brightness(0.9); }
-    .btn-danger { background-color: #c82333; }
-    .btn-secondary { background-color: #6c757d; color: white; }
-    .btn-primary { background-color: #007bff; }
+    .container .btn, #iade-modal .btn { display: inline-block; padding: 6px 14px; border-radius: 5px; font-weight: bold; color: white; border: none; cursor: pointer; font-size: 0.85em; transition: filter 0.15s; }
+    .container .btn:hover, #iade-modal .btn:hover { filter: brightness(0.9); }
+    .container .btn-danger, #iade-modal .btn-danger { background-color: #c82333; }
+    .container .btn-secondary, #iade-modal .btn-secondary { background-color: #6c757d; color: white; }
+    .container .btn-primary, #iade-modal .btn-primary { background-color: #007bff; }
     .alert { padding: 1rem; margin-bottom: 1rem; border: 1px solid transparent; border-radius: .25rem; }
     .alert-danger { color: #721c24; background-color: #f8d7da; border-color: #f5c6cb; }
     .alert-success { color: #155724; background-color: #d4edda; border-color: #c3e6cb; }
     .text-muted { color: #6c757d; }
 
-    /* Modal */
-    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 1050; align-items: center; justify-content: center; padding: 1rem; }
-    .modal-overlay.active { display: flex; }
-    .modal-box { background: white; border-radius: 10px; box-shadow: 0 20px 60px rgba(0,0,0,0.25); width: 100%; max-width: 600px; max-height: 90vh; overflow-y: auto; display: flex; flex-direction: column; }
-    .modal-header { padding: 1.2rem 1.5rem; background: linear-gradient(135deg, #c82333 0%, #a71d2a 100%); color: white; border-radius: 10px 10px 0 0; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
-    .modal-header h3 { margin: 0; font-size: 1.1em; }
-    .modal-close { background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer; line-height: 1; }
-    .modal-body { padding: 1.5rem; flex: 1; }
-    .modal-footer { padding: 1rem 1.5rem; border-top: 1px solid #dee2e6; display: flex; gap: 10px; justify-content: flex-end; flex-shrink: 0; }
+    /* İade modalı — kiralama detay modalının Bootstrap stillerini ezmesin */
+    #iade-modal.modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 1050; align-items: center; justify-content: center; padding: 1rem; }
+    #iade-modal.modal-overlay.active { display: flex; }
+    #iade-modal .modal-box { background: white; border-radius: 10px; box-shadow: 0 20px 60px rgba(0,0,0,0.25); width: 100%; max-width: 600px; max-height: 90vh; overflow-y: auto; display: flex; flex-direction: column; }
+    #iade-modal .modal-header { padding: 1.2rem 1.5rem; background: linear-gradient(135deg, #c82333 0%, #a71d2a 100%); color: white; border-radius: 10px 10px 0 0; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+    #iade-modal .modal-header h3 { margin: 0; font-size: 1.1em; }
+    #iade-modal .modal-close { background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer; line-height: 1; }
+    #iade-modal .modal-body { padding: 1.5rem; flex: 1; }
+    #iade-modal .modal-footer { padding: 1rem 1.5rem; border-top: 1px solid #dee2e6; display: flex; gap: 10px; justify-content: flex-end; flex-shrink: 0; }
     .form-group { margin-bottom: 1rem; }
     .form-group label { display: block; font-weight: 600; font-size: 0.9em; margin-bottom: 4px; color: #333; }
     .form-group input, .form-group select, .form-group textarea {
@@ -80,7 +80,9 @@
             <tr>
                 <td>
                     {% if kalem.kiralama %}
-                        <a href="{{ url_for('kiralama.index') }}?form_no={{ kalem.kiralama.kiralama_form_no }}">
+                        <a href="#" class="form-detay-ac"
+                           data-kiralama-id="{{ kalem.kiralama.id }}"
+                           data-form-no="{{ kalem.kiralama.kiralama_form_no }}">
                             {{ kalem.kiralama.kiralama_form_no }}
                         </a>
                     {% else %}-{% endif %}
@@ -223,6 +225,23 @@
     </div>
 </div>
 
+<div class="modal fade" id="detayModal" tabindex="-1" aria-labelledby="detayModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-dark text-white py-2">
+                <h6 class="modal-title mb-0" id="detayModalLabel"><i class="fas fa-info-circle me-2"></i>Kiralama Detayı</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Kapat"></button>
+            </div>
+            <div class="modal-body" id="detayModalBody">
+                <div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div><p class="mt-2 text-muted">Yükleniyor...</p></div>
+            </div>
+            <div class="modal-footer py-1">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Kapat</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 function nakliyeToggle() {
     const var_ = document.getElementById('nakliye_var').checked;
@@ -263,6 +282,23 @@ document.querySelectorAll('.btn-iade-ac').forEach(btn => {
 // Overlay tıkla kapat
 document.getElementById('iade-modal').addEventListener('click', function(e) {
     if (e.target === this) kapat();
+});
+
+document.querySelectorAll('.form-detay-ac').forEach(link => {
+    link.addEventListener('click', function(e) {
+        e.preventDefault();
+        const rentalId = this.dataset.kiralamaId;
+        const formNo = this.dataset.formNo || 'Kiralama Detayı';
+        const body = document.getElementById('detayModalBody');
+        body.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div><p class="mt-2 text-muted">Yükleniyor...</p></div>';
+        document.getElementById('detayModalLabel').innerHTML = '<i class="fas fa-info-circle me-2"></i>' + formNo;
+        const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('detayModal'));
+        modal.show();
+        fetch('/kiralama/detay/' + rentalId)
+            .then(r => { if (!r.ok) throw new Error(r.status); return r.text(); })
+            .then(html => { body.innerHTML = html; })
+            .catch(() => { body.innerHTML = '<div class="alert alert-danger m-3">Detay bilgileri yüklenemedi.</div>'; });
+    });
 });
 </script>
 
