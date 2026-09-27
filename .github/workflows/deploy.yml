@@ -3,13 +3,17 @@ name: Deploy to Server
 on:
   push:
     branches:
-      - main  # Burayı kullandığınız ana branch adı (main veya master) yapın
+      - main
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Deploying to VPS via SSH
+      - name: Deploy fixed main SHA to VPS
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.SERVER_IP }}
@@ -22,69 +26,61 @@ jobs:
 
             APP_SERVICE="kiralama_v4.service"
             SCHEDULER_SERVICE="kiralama_scheduler.service"
+            EXPECTED_DB_HEAD="c3d4e5f6a7b8"
+            RELEASE_SHA="${{ github.sha }}"
 
-            echo ">>> Canli servis on kontrolleri"
-            systemctl is-active --quiet "$APP_SERVICE"
-
-            git pull --ff-only origin main
-
-            if ! systemctl list-unit-files "$SCHEDULER_SERVICE" --no-legend --no-pager | grep -q "^$SCHEDULER_SERVICE"; then
-              echo ">>> Scheduler servisi kuruluyor"
-              install -m 0644 deploy/kiralama_scheduler.service "/etc/systemd/system/$SCHEDULER_SERVICE"
-              systemctl daemon-reload
-              systemctl enable "$SCHEDULER_SERVICE"
-            fi
-
-            source venv/bin/activate
-            pip install -r requirements.txt
-            export FLASK_APP=run.py
-
-            # .env dosyasından environment variables'ları yükle
+            echo ">>> Kod degismeden once canli DB revision kontrolu"
+            test -f .env
             set -a
             source .env
             set +a
+            export FLASK_APP=run.py
+            test -n "${DATABASE_URL:-}"
 
-            # SERVICE_ENV'den SECRET_KEY'i override et (eğer tanımlıysa)
-            SERVICE_ENV=$(systemctl show kiralama_v4.service -p Environment --value)
-            if echo "$SERVICE_ENV" | grep -q "SECRET_KEY="; then
-              export SECRET_KEY=$(printf '%s\n' "$SERVICE_ENV" | tr ' ' '\n' | sed -n 's/^SECRET_KEY=//p')
-            fi
-
-            if [ -z "$DATABASE_URL" ]; then
-              echo ">>> DATABASE_URL bulunamadi"
-              exit 1
-            fi
-
-            MIGRATION_BACKUP="/tmp/kiralama_pre_migration_$(date +%Y%m%d_%H%M%S).dump"
-            echo ">>> Migration oncesi DB yedegi: $MIGRATION_BACKUP"
-            pg_dump "$DATABASE_URL" --format=custom --file="$MIGRATION_BACKUP"
-
-            echo ">>> Mevcut migration durumu"
-            python -m flask db current
-
-            echo ">>> Migration head kontrolu"
-            HEADS_OUTPUT=$(python -m flask db heads)
-            echo "$HEADS_OUTPUT"
-            echo "$HEADS_OUTPUT" | grep -q "a4b5c6d7e8f0"
-
-            echo ">>> Uygulama servisi durduruluyor"
-            systemctl stop "$APP_SERVICE"
-            migration_status=0
-            trap 'if [ "$migration_status" -ne 0 ]; then systemctl start "$APP_SERVICE" || true; fi' EXIT
-
-            python -m flask db upgrade
-
-            echo ">>> Migration sonrasi durum"
-            CURRENT_OUTPUT=$(python -m flask db current)
+            CURRENT_OUTPUT=$(venv/bin/python -m flask db current)
             echo "$CURRENT_OUTPUT"
-            echo "$CURRENT_OUTPUT" | grep -q "a4b5c6d7e8f0"
+            echo "$CURRENT_OUTPUT" | grep -q "$EXPECTED_DB_HEAD"
 
-            echo ">>> Uygulama ve scheduler baslatiliyor"
-            systemctl start "$APP_SERVICE"
-            systemctl restart "$SCHEDULER_SERVICE"
+            echo ">>> Calisma agaci ve servis kontrolleri"
+            git diff --quiet
+            git diff --cached --quiet
             systemctl is-active --quiet "$APP_SERVICE"
             systemctl is-active --quiet "$SCHEDULER_SERVICE"
-            migration_status=1
-            trap - EXIT
 
-            echo ">>> Deploy tamamlandi"
+            echo ">>> Sabit release SHA indiriliyor"
+            git fetch --no-tags origin "$RELEASE_SHA"
+            git cat-file -e "$RELEASE_SHA^{commit}"
+
+            MIGRATION_BACKUP="/tmp/kiralama_pre_deploy_$(date +%Y%m%d_%H%M%S).dump"
+            echo ">>> Deploy oncesi DB yedegi: $MIGRATION_BACKUP"
+            pg_dump "$DATABASE_URL" --format=custom --file="$MIGRATION_BACKUP"
+            sha256sum "$MIGRATION_BACKUP" > "$MIGRATION_BACKUP.sha256"
+
+            echo ">>> Uygulama ve scheduler durduruluyor"
+            systemctl stop "$SCHEDULER_SERVICE"
+            systemctl stop "$APP_SERVICE"
+
+            echo ">>> Sabit SHA kuruluyor: $RELEASE_SHA"
+            git checkout --detach "$RELEASE_SHA"
+            venv/bin/pip install -r requirements.txt
+            venv/bin/python -c "from app import create_app; create_app()"
+
+            echo ">>> Beklenen migration head kontrolu"
+            HEADS_OUTPUT=$(venv/bin/python -m flask db heads)
+            echo "$HEADS_OUTPUT"
+            test "$(printf '%s\n' "$HEADS_OUTPUT" | grep -c '(head)')" -eq 1
+            echo "$HEADS_OUTPUT" | grep -q "$EXPECTED_DB_HEAD"
+
+            venv/bin/python -m flask db upgrade "$EXPECTED_DB_HEAD"
+
+            CURRENT_OUTPUT=$(venv/bin/python -m flask db current)
+            echo "$CURRENT_OUTPUT"
+            echo "$CURRENT_OUTPUT" | grep -q "$EXPECTED_DB_HEAD"
+
+            echo ">>> Servisler baslatiliyor"
+            systemctl start "$APP_SERVICE"
+            systemctl start "$SCHEDULER_SERVICE"
+            systemctl is-active --quiet "$APP_SERVICE"
+            systemctl is-active --quiet "$SCHEDULER_SERVICE"
+
+            echo ">>> Deploy tamamlandi: $RELEASE_SHA"

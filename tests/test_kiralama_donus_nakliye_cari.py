@@ -226,6 +226,13 @@ def test_varsayilan_iade_donus_satis_override_none_birakir(app):
 
         donus_sefer = _aktif_donus_sefer(kiralama, kalem)
         assert donus_sefer.tutar == Decimal("2500.00")
+        assert donus_sefer.yon == "donus"
+        from app.nakliyeler.models import NakliyeDagitim
+        dagitim = NakliyeDagitim.query.filter_by(
+            nakliye_id=donus_sefer.id,
+            kiralama_kalemi_id=kalem.id,
+        ).filter(NakliyeDagitim.is_deleted.is_(False)).one()
+        assert dagitim.tutar == Decimal("2500.00")
 
 
 def test_sifreli_edit_eski_yari_snapshot_donusu_gunceller(app):

@@ -322,6 +322,8 @@
                     <span class="tur-badge" style="background:#dc3545;color:#fff;">Tedarik</span>{% if row.dondurma_aktif %} <span title="Tedarik alış dondurması devam ediyor">&#10052;</span>{% endif %}
                 {% elif row.islem_turu == 'nakliye_satis' %}
                     <span class="tur-badge" style="background:#0dcaf0;color:#000;">Nakliye Sat.</span>
+                {% elif row.islem_turu == 'nakliye_tedarik' %}
+                    <span class="tur-badge" style="background:#dc3545;color:#fff;">Nakliye Al.</span>
                 {% else %}
                     <span class="tur-badge tur-tahsilat">Tahsilat</span>
                 {% endif %}

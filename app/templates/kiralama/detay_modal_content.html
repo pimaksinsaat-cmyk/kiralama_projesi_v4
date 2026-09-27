@@ -67,7 +67,7 @@
 {% set gun = hesapla_kalem_etkin_gun(kalem, tam_sozlesme=True) %}
 {% set muaf_gun = toplam_muaf_gun_sayisi(kalem) %}
 {% set kira_tutari = (kalem.kiralama_brm_fiyat or 0) * gun %}
-{% set nakliye_tutari = kalem.nakliye_satis_fiyat or 0 %}
+{% set nakliye_tutari = nakliye_satis_by_kalem.get(kalem.id, kalem.nakliye_satis_fiyat or 0) if nakliye_satis_by_kalem is defined else (kalem.nakliye_satis_fiyat or 0) %}
 {% set kalem_toplam = kira_tutari + nakliye_tutari %}
 {% set genel_toplam.val = genel_toplam.val + kalem_toplam|float %}
 
@@ -205,7 +205,7 @@
                 {% if kalem.nakliye_alis_kdv is not none %} (KDV %{{ kalem.nakliye_alis_kdv }}){% endif %}
                 {% if kalem.nakliye_alis_tevkifat_oran %} | Tevkifat: {{ kalem.nakliye_alis_tevkifat_oran }}{% endif %}
             {% elif kalem.nakliye_araci %}
-                Öz Mal — {{ kalem.nakliye_araci.kod }}
+                Öz Mal — {{ kalem.nakliye_araci.plaka }}
             {% else %}
                 Öz Mal
             {% endif %}

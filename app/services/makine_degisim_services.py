@@ -248,7 +248,7 @@ class MakineDegisimService(BaseService):
             satis_fiyat = to_decimal(data.get('nakliye_satis_fiyat'))
             alis_fiyat = to_decimal(data.get('nakliye_alis_fiyat'))
             arac_id = data.get('nakliye_araci_id')
-
+            is_sefer_model = getattr(eski_kalem.kiralama, 'nakliye_modeli', 'legacy') == 'sefer'
             # Pozitif swap bedeli yeni kanonik swap seferidir. Bedel yoksa
             # arıza/periyodik swapın eski dönüş seferi müşteriye yansıtılmaz.
             KiralamaService.reconcile_swap_donus_nakliye(
@@ -266,46 +266,90 @@ class MakineDegisimService(BaseService):
                     plaka_str = secili_arac.plaka
 
             # NAKLİYE KAYDI OLUŞTUR
-            if data.get('yeni_nakliye_ekle') or is_harici or satis_fiyat > 0 or alis_fiyat > 0 or arac_id:
+            if (
+                data.get('yeni_nakliye_ekle')
+                or bool(arac_id)
+                or bool(data.get('nakliye_tedarikci_id'))
+                or satis_fiyat > 0
+                or alis_fiyat > 0
+            ):
                 guncel_kdv = eski_kalem.kiralama.kdv_orani if eski_kalem.kiralama.kdv_orani is not None else 20
-                
-                yeni_nakliye = Nakliye(
-                    kiralama_id=ana_kiralama_id,
-                    tarih=secilen_tarih,
-                    islem_tarihi=secilen_tarih,
-                    firma_id=eski_kalem.kiralama.firma_musteri_id,
-                    nakliye_tipi='taseron' if is_harici else 'oz_mal',
-                    arac_id=arac_id if not is_harici else None,
-                    taseron_firma_id=data.get('nakliye_tedarikci_id') if is_harici else None,
-                    guzergah=ozel_guzergah,
-                    plaka=plaka_str, 
-                    tutar=satis_fiyat,
-                    kdv_orani=guncel_kdv,
-                    taseron_maliyet=alis_fiyat,
-                    taseron_kdv_orani=_to_int_or_none(data.get('nakliye_alis_kdv')) if is_harici else None,
-                    aciklama=detayli_aciklama,
-                    cari_islendi_mi=True
-                )
-                yeni_nakliye.hesapla_ve_guncelle()
-                db.session.add(yeni_nakliye)
-                db.session.flush()
-                swap_nakliye = yeni_nakliye
-
-                # Cari Servis Entegrasyonu (Eğer ekliyse)
-                if CariServis and hasattr(CariServis, 'musteri_nakliye_senkronize_et'):
-                    if satis_fiyat > 0:
-                        CariServis.musteri_nakliye_senkronize_et(yeni_nakliye)
-                    if is_harici and alis_fiyat > 0:
-                        CariServis.taseron_maliyet_senkronize_et(yeni_nakliye)
-                        if HizmetKaydi:
-                            db.session.flush()
-                            swap_taseron_hizmeti = HizmetKaydi.query.filter_by(
-                                nakliye_id=yeni_nakliye.id,
-                                yon='gelen'
-                            ).order_by(HizmetKaydi.id.desc()).first()
+                if is_sefer_model:
+                    # Sefer modelinde fiziksel sefer ve müşteri/taşeron carileri
+                    # tek noktadan oluşturulur. Legacy Nakliye + CariServis
+                    # hibriti kullanılmaz.
+                    from app.services.nakliye_sefer_services import NakliyeSeferService
+                    NakliyeSeferService.sync_kiralama(
+                        eski_kalem.kiralama,
+                        [{
+                            'yon': 'gidis',
+                            # Swap nakliyesi yalnızca değişim bacağını temsil eder.
+                            # İlk sözleşmedeki çift yön paketin dönüşü, zincirin
+                            # asıl gidiş seferinde korunur ve sonlandırmada oradan
+                            # üretilir; swap bedeli ikinci bir dönüşe bölünmez.
+                            'cift_yon': False,
+                            'tarih': secilen_tarih.isoformat(),
+                            'islem_tarihi': secilen_tarih.isoformat(),
+                            'guzergah': ozel_guzergah,
+                            'nakliye_tipi': 'taseron' if is_harici else 'oz_mal',
+                            'arac_id': arac_id if not is_harici else None,
+                            'taseron_firma_id': data.get('nakliye_tedarikci_id') if is_harici else None,
+                            'taseron_maliyet': str(alis_fiyat),
+                            'taseron_kdv_orani': _to_int_or_none(data.get('nakliye_alis_kdv')) or 0,
+                            'kdv_orani': guncel_kdv,
+                            'plaka': plaka_str,
+                            'aciklama': detayli_aciklama,
+                            'dagitimlar': [{'kiralama_kalemi_id': yeni_kalem.id, 'tutar': str(satis_fiyat)}],
+                        }],
+                        actor_id=actor_id,
+                    )
+                    swap_nakliye = Nakliye.query.filter_by(
+                        kiralama_id=ana_kiralama_id,
+                        yon='gidis',
+                        aciklama=detayli_aciklama,
+                        is_deleted=False,
+                        is_active=True,
+                    ).order_by(Nakliye.id.desc()).first()
+                    if swap_nakliye and HizmetKaydi:
+                        swap_taseron_hizmeti = HizmetKaydi.query.filter_by(
+                            nakliye_id=swap_nakliye.id,
+                            kaynak='nakliye_sefer_taseron_gider',
+                        ).filter(HizmetKaydi.is_deleted.is_(False)).first()
                 else:
-                    # Manuel Hizmet Kaydı (Fallback)
-                    if is_harici and alis_fiyat > 0 and HizmetKaydi and yeni_nakliye.taseron_firma_id:
+                    yeni_nakliye = Nakliye(
+                        kiralama_id=ana_kiralama_id,
+                        tarih=secilen_tarih,
+                        islem_tarihi=secilen_tarih,
+                        firma_id=eski_kalem.kiralama.firma_musteri_id,
+                        nakliye_tipi='taseron' if is_harici else 'oz_mal',
+                        arac_id=arac_id if not is_harici else None,
+                        taseron_firma_id=data.get('nakliye_tedarikci_id') if is_harici else None,
+                        guzergah=ozel_guzergah,
+                        plaka=plaka_str,
+                        tutar=satis_fiyat,
+                        kdv_orani=guncel_kdv,
+                        taseron_maliyet=alis_fiyat,
+                        taseron_kdv_orani=_to_int_or_none(data.get('nakliye_alis_kdv')) if is_harici else None,
+                        aciklama=detayli_aciklama,
+                        cari_islendi_mi=True,
+                    )
+                    yeni_nakliye.hesapla_ve_guncelle()
+                    db.session.add(yeni_nakliye)
+                    db.session.flush()
+                    swap_nakliye = yeni_nakliye
+
+                    if CariServis and hasattr(CariServis, 'musteri_nakliye_senkronize_et'):
+                        if satis_fiyat > 0:
+                            CariServis.musteri_nakliye_senkronize_et(yeni_nakliye)
+                        if is_harici and alis_fiyat > 0:
+                            CariServis.taseron_maliyet_senkronize_et(yeni_nakliye)
+                            if HizmetKaydi:
+                                db.session.flush()
+                                swap_taseron_hizmeti = HizmetKaydi.query.filter_by(
+                                    nakliye_id=yeni_nakliye.id,
+                                    yon='gelen'
+                                ).order_by(HizmetKaydi.id.desc()).first()
+                    elif is_harici and alis_fiyat > 0 and HizmetKaydi and yeni_nakliye.taseron_firma_id:
                         swap_taseron_hizmeti = HizmetKaydi(
                             firma_id=yeni_nakliye.taseron_firma_id,
                             nakliye_id=yeni_nakliye.id,
@@ -314,11 +358,10 @@ class MakineDegisimService(BaseService):
                             tutar=alis_fiyat,
                             yon='gelen',
                             aciklama=ozel_guzergah,
-                            fatura_no=form_no
+                            fatura_no=form_no,
                         )
                         db.session.add(swap_taseron_hizmeti)
 
-            # Dış Tedarik Kira Cari Kaydı
             if yeni_kalem.is_dis_tedarik_ekipman and yeni_kalem.kiralama_alis_fiyat and yeni_kalem.kiralama_alis_fiyat > 0:
                 if HizmetKaydi and yeni_kalem.harici_ekipman_tedarikci_id:
                     swap_kira_hizmeti = HizmetKaydi(
@@ -368,6 +411,9 @@ class MakineDegisimService(BaseService):
             guncelle_cari_toplam(ana_kiralama_id, auto_commit=False)
             db.session.commit()
 
+        except ValidationError:
+            db.session.rollback()
+            raise
         except Exception as e:
             db.session.rollback()
             raise ValidationError(f"İşlem sırasında beklenmeyen hata: {str(e)}")
@@ -489,10 +535,24 @@ class MakineDegisimService(BaseService):
             geri_donen_kalem.sonlandirildi = False
             geri_donen_kalem.kiralama_bitis = aktif_child.kiralama_bitis
 
+            # Tarih/kalem tahminiyle soft-delete edilmiş eski dönüş satırını
+            # revive etmiyoruz. Eski kalemde aktif çift yön gidiş politikası
+            # sürüyor ve aktif dönüş yoksa yeni, faturasız bir dönüş dağıtımı
+            # planlanan tek bacak tutarıyla oluşturulur.
+            if getattr(eski_kalem.kiralama, 'nakliye_modeli', 'legacy') == 'sefer':
+                from app.services.kiralama_services import KiralamaKalemiService
+                KiralamaKalemiService.recreate_planned_donus_for_swap(
+                    geri_donen_kalem,
+                    actor_id=actor_id,
+                )
+
             db.session.delete(aktif_child)
             guncelle_cari_toplam(eski_kalem.kiralama_id, auto_commit=False)
             db.session.commit()
 
+        except ValidationError:
+            db.session.rollback()
+            raise
         except Exception as e:
             db.session.rollback()
             raise ValidationError(f"İptal işlemi başarısız: {str(e)}")

@@ -1,5 +1,6 @@
 from collections import defaultdict
 from datetime import date, timedelta
+from decimal import Decimal
 
 from sqlalchemy import func, inspect, or_
 from sqlalchemy.orm import contains_eager, joinedload
@@ -787,6 +788,24 @@ class RaporlamaService:
         )
         return float(sum(item["total_cost"] for item in maintenance_rows))
 
+    @staticmethod
+    def _effective_transport_revenue(sefer):
+        """Sefer raporlarında çift yön paketin efektif satış tutarını kullan."""
+        dagitimlar = [
+            dagitim for dagitim in (getattr(sefer, 'dagitimlar', None) or [])
+            if dagitim.is_active and not dagitim.is_deleted
+        ]
+        if not dagitimlar:
+            return float(sefer.toplam_tutar or 0)
+
+        from app.services.nakliye_sefer_services import NakliyeSeferService
+
+        return float(sum(
+            (NakliyeSeferService.dagitim_satis_tutari(dagitim)
+             for dagitim in dagitimlar),
+            Decimal('0.00'),
+        ))
+
     @classmethod
     def _calculate_transport_metrics(cls, start_date, end_date, sube_id=None):
         nakliyeler = (
@@ -821,7 +840,7 @@ class RaporlamaService:
             if sube_id and branch_id != sube_id:
                 continue
 
-            gelir = float(sefer.toplam_tutar or 0)
+            gelir = cls._effective_transport_revenue(sefer)
             maliyet = float(sefer.taseron_maliyet or 0)
             net = gelir - maliyet
 
@@ -947,7 +966,7 @@ class RaporlamaService:
             if idx is None:
                 continue
 
-            gelir = float(sefer.toplam_tutar or 0)
+            gelir = cls._effective_transport_revenue(sefer)
             if sefer.arac_id:
                 month_rows[idx]["ozmal_gelir"] += gelir
             else:

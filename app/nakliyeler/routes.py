@@ -52,11 +52,16 @@ def to_decimal(value):
 def _nakliye_stats(rows):
     """Decimal alanlarda `x or 0` kullanma: Decimal('0') falsy olduğunda int ile karışır ve sum() patlar."""
     zero = Decimal('0')
+    ciro = sum(
+        (Decimal(str(nakliye_satis_kdv_bilgisi(n)['matrah'])) for n in rows),
+        zero,
+    )
+    maliyet = sum((to_decimal(n.taseron_maliyet) for n in rows), zero)
     return {
         'sefer_sayisi': len(rows),
-        'ciro': sum((to_decimal(n.toplam_tutar) for n in rows), zero),
-        'maliyet': sum((to_decimal(n.taseron_maliyet) for n in rows), zero),
-        'kar': sum((to_decimal(n.tahmini_kar) for n in rows), zero),
+        'ciro': ciro,
+        'maliyet': maliyet,
+        'kar': ciro - maliyet,
     }
 
 
@@ -92,7 +97,9 @@ class _NakliyeListPagination:
 
 
 def _nakliye_filtered_query(baslangic, bitis, secili_plaka, secili_taseron_id, secili_firma_id):
-    query = Nakliye.query.filter(Nakliye.tutar > 0, *Nakliye.active_filters())
+    # 0 TL operasyonel seferler görünür; cari/fatura katmanı bunları ayrıca
+    # pozitif dağıtım kuralıyla filtreler.
+    query = Nakliye.query.outerjoin(Arac, Nakliye.arac_id == Arac.id).filter(*Nakliye.active_filters())
     effective_date = func.coalesce(Nakliye.islem_tarihi, Nakliye.tarih)
 
     if baslangic:
@@ -106,7 +113,7 @@ def _nakliye_filtered_query(baslangic, bitis, secili_plaka, secili_taseron_id, s
         except ValueError:
             pass
     if secili_plaka:
-        query = query.filter(Nakliye.plaka == secili_plaka)
+        query = query.filter(Nakliye.etkin_plaka_expression() == secili_plaka)
     if secili_taseron_id and secili_taseron_id.isdigit():
         query = query.filter(Nakliye.taseron_firma_id == int(secili_taseron_id))
     if secili_firma_id and secili_firma_id.isdigit():
@@ -119,6 +126,7 @@ def _nakliye_output_options():
     return (
         joinedload(Nakliye.firma),
         joinedload(Nakliye.taseron_firma),
+        joinedload(Nakliye.kendi_aracimiz),
         selectinload(Nakliye.kiralama).selectinload(Kiralama.kalemler),
     )
 
@@ -198,11 +206,9 @@ def index():
         # Dropdown listelerini hazırla
         stage = 'dropdown_listeleri'
         plakalar = (
-            db.session.query(Nakliye.plaka)
-            .filter(
-                *Nakliye.active_filters(),
-                Nakliye.plaka.isnot(None),
-            )
+            db.session.query(Nakliye.etkin_plaka_expression().label('plaka'))
+            .outerjoin(Arac, Nakliye.arac_id == Arac.id)
+            .filter(*Nakliye.active_filters())
             .distinct()
             .all()
         )
@@ -414,10 +420,10 @@ def excel_aktar():
 
         if nakliye.nakliye_tipi == 'taseron' and nakliye.taseron_firma:
             plaka_tedarikci = nakliye.taseron_firma.firma_adi or ''
-            if nakliye.plaka:
-                plaka_tedarikci = f"{plaka_tedarikci}\n{nakliye.plaka}"
+            if nakliye.etkin_plaka:
+                plaka_tedarikci = f"{plaka_tedarikci}\n{nakliye.etkin_plaka}"
         else:
-            plaka_tedarikci = nakliye.plaka or '-'
+            plaka_tedarikci = nakliye.etkin_plaka or '-'
 
         row_data = [
             index,
@@ -532,6 +538,9 @@ def ekle():
         return redirect(url_for('nakliyeler.index'))
 
     kiralama_id = request.args.get('kiralama_id', type=int)
+    if kiralama_id:
+        flash('Kiralama bağlı seferler kiralama formundan oluşturulur.', 'warning')
+        return redirect(url_for('nakliyeler.index'))
     kdv_orani = request.args.get('kdv_orani', type=int)
 
     # KDV oranını form varsayılanına ayarla
@@ -568,8 +577,6 @@ def ekle():
             nakliye.tutar = to_decimal(form.tutar.data)
             nakliye.taseron_maliyet = to_decimal(form.taseron_maliyet.data) if nakliye.nakliye_tipi == 'taseron' else Decimal('0.00')
             nakliye.taseron_kdv_orani = form.taseron_kdv_orani.data if nakliye.nakliye_tipi == 'taseron' else None
-            if kiralama_id: nakliye.kiralama_id = kiralama_id
-            
             nakliye.hesapla_ve_guncelle()
 
             # Veritabanına ekle

@@ -151,7 +151,8 @@
                         {% set kdv_bilgisi = nakliye_kdv_bilgileri.get(nakliye.id, {}) %}
                         {% set efektif_kdv = kdv_bilgisi.get('efektif_kdv_orani', nakliye.kdv_orani or 0) %}
                         {% set tevkifat_str = kdv_bilgisi.get('tevkifat_str', nakliye.tevkifat_orani or '') %}
-                        {% set kdv_tam = kdv_bilgisi.get('brut_kdv', (nakliye.tutar|float) * ((nakliye.kdv_orani or 0) / 100.0)) %}
+                        {% set matrah = kdv_bilgisi.get('matrah', nakliye.tutar|float) %}
+                        {% set kdv_tam = kdv_bilgisi.get('brut_kdv', matrah * ((nakliye.kdv_orani or 0) / 100.0)) %}
                         {% set net_kdv = kdv_bilgisi.get('kdv', kdv_tam) %}
                         {% set toplam_tutar = kdv_bilgisi.get('toplam_tutar', (nakliye.tutar|float) + net_kdv) %}
                         <tr class="sag-tik-satir" 
@@ -191,21 +192,21 @@
                                         <span class="badge bg-info text-dark border-info shadow-sm mb-1" style="font-size: 0.75rem; width: fit-content;" title="{{ nakliye.taseron_firma.firma_adi }}">
                                             <i class="fas fa-truck-loading me-1"></i> {{ nakliye.taseron_firma.firma_adi | truncate_name }}
                                         </span>
-                                        {% if nakliye.plaka %}
+                                        {% if nakliye.etkin_plaka %}
                                             <small class="text-muted fw-bold ms-1" style="font-size: 0.7rem;">
-                                                <i class="fas fa-id-card me-1"></i> {{ nakliye.plaka }}
+                                                <i class="fas fa-id-card me-1"></i> {{ nakliye.etkin_plaka }}
                                             </small>
                                         {% endif %}
                                     </div>
                                 {% else %}
                                     <span class="badge bg-white text-dark border shadow-sm">
-                                        <i class="fas fa-shuttle-van me-1 text-primary"></i> {{ nakliye.plaka or '-' }}
+                                        <i class="fas fa-shuttle-van me-1 text-primary"></i> {{ nakliye.etkin_plaka or '-' }}
                                     </span>
                                 {% endif %}
                             </td>
                             
                             <td class="text-end">
-                                {{ "{:,.2f}".format(nakliye.tutar or 0).replace(',', 'X').replace('.', ',').replace('X', '.') }} TL
+                                {{ "{:,.2f}".format(matrah).replace(',', 'X').replace('.', ',').replace('X', '.') }} TL
                             </td>
                             <td class="text-end nakliye-kdv-sutunu">
                                 {% if efektif_kdv and efektif_kdv != 0 %}

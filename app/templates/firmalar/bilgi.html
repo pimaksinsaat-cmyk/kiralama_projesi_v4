@@ -657,8 +657,10 @@
                                         {% if row.dondurma_aktif %}
                                             <i class="fas fa-snowflake text-info ms-1" title="Tedarik alış dondurması devam ediyor"></i>
                                         {% endif %}
-                                    {% elif row.islem_turu in ('nakliye_satis', 'nakliye_tedarik') %}
+                                    {% elif row.islem_turu == 'nakliye_satis' %}
                                         <span class="badge bg-info text-dark"><i class="fa fa-truck"></i> Nakliye Sat.</span>
+                                    {% elif row.islem_turu == 'nakliye_tedarik' %}
+                                        <span class="badge bg-danger"><i class="fa fa-arrow-up"></i> Nakliye Al.</span>
                                     {% elif row.islem_turu == 'tahsilat' %}
                                         <span class="badge bg-success"><i class="fa fa-arrow-down"></i> Tahsilat</span>
                                     {% elif row.islem_turu == 'odeme' %}

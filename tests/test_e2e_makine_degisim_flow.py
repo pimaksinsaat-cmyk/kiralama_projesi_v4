@@ -8,7 +8,10 @@ from app.extensions import db
 from app.filo.models import Ekipman, BakimKaydi
 from app.firmalar.models import Firma
 from app.kiralama.models import Kiralama, KiralamaKalemi
+from app.nakliyeler.models import Nakliye, NakliyeDagitim
+from app.araclar.models import Arac
 from app.subeler.models import Sube
+from app.services.nakliye_sefer_services import NakliyeSeferService
 
 
 def _unique_kod() -> str:
@@ -126,3 +129,119 @@ def test_makine_degisim_uygula_ve_iptal_et(app):
         assert yeni_makine.calisma_durumu == "bosta"
         assert KiralamaKalemi.query.get(aktif_yeni_kalem.id) is None
         assert BakimKaydi.query.filter_by(id=bakim.id).first() is None
+
+
+def test_sefer_swap_propagates_cift_yon_and_recreates_return_on_cancel(app):
+    with app.app_context():
+        musteri = Firma(
+            firma_adi=f'Swap Sefer Musteri {uuid.uuid4().hex[:4]}',
+            yetkili_adi='Yetkili', iletisim_bilgileri='Adres',
+            vergi_dairesi='VD', vergi_no=f'S{uuid.uuid4().hex[:10].upper()}',
+            is_musteri=True, bakiye=Decimal('0'),
+        )
+        sube = Sube(
+            isim='Swap Sefer Sube', adres='Adres', yetkili_kisi='Yetkili',
+            telefon='0212-8000001',
+        )
+        eski_makine = Ekipman(
+            kod=_unique_kod(), yakit='Diesel', tipi='LIFT', marka='Eski',
+            model='M1', seri_no=f'SN-{uuid.uuid4().hex[:8]}',
+            calisma_yuksekligi=15, kaldirma_kapasitesi=2500,
+            uretim_yili=2024, calisma_durumu='kirada',
+        )
+        yeni_makine = Ekipman(
+            kod=_unique_kod(), yakit='Diesel', tipi='LIFT', marka='Yeni',
+            model='M2', seri_no=f'SN-{uuid.uuid4().hex[:8]}',
+            calisma_yuksekligi=15, kaldirma_kapasitesi=3000,
+            uretim_yili=2024, calisma_durumu='bosta',
+        )
+        arac = Arac(
+            plaka=f'SW{uuid.uuid4().hex[:6].upper()}', arac_tipi='Kamyon',
+            marka_model='Test', is_nakliye_araci=True,
+        )
+        db.session.add_all([musteri, sube, eski_makine, yeni_makine, arac])
+        db.session.flush()
+        kiralama = Kiralama(
+            kiralama_form_no=f'PF-SWAP-SEFER-{uuid.uuid4().hex[:6]}',
+            firma_musteri_id=musteri.id, kdv_orani=20,
+            nakliye_modeli='sefer',
+        )
+        db.session.add(kiralama)
+        db.session.flush()
+        eski_kalem = KiralamaKalemi(
+            kiralama_id=kiralama.id, ekipman_id=eski_makine.id,
+            kiralama_baslangici=date(2026, 5, 1),
+            kiralama_bitis=date(2026, 5, 15),
+            kiralama_brm_fiyat=Decimal('120.00'),
+            is_active=True, sonlandirildi=False,
+        )
+        db.session.add(eski_kalem)
+        db.session.flush()
+        NakliyeSeferService.sync_kiralama(kiralama, [{
+            'yon': 'gidis', 'cift_yon': True,
+            'tarih': '2026-05-01', 'islem_tarihi': '2026-05-01',
+            'guzergah': 'Depo - Saha', 'nakliye_tipi': 'oz_mal',
+            'arac_id': arac.id,
+            'dagitimlar': [{'kiralama_kalemi_id': eski_kalem.id, 'tutar': '250'}],
+        }])
+        db.session.commit()
+
+        from app.services.makine_degisim_services import MakineDegisimService
+        MakineDegisimService.degisim_uygula(eski_kalem.id, {
+            'degisim_tarihi': date(2026, 5, 10),
+            'neden': 'bosta',
+            'donus_sube_val': str(sube.id),
+            'kiralama_brm_fiyat': Decimal('150.00'),
+            'yeni_ekipman_id': yeni_makine.id,
+            'is_harici_nakliye': False,
+            'nakliye_araci_id': arac.id,
+            'nakliye_satis_fiyat': Decimal('100.00'),
+            'nakliye_alis_fiyat': Decimal('0.00'),
+            'yeni_nakliye_ekle': True,
+        })
+
+        yeni_kalem = KiralamaKalemi.query.filter_by(
+            parent_id=eski_kalem.id, is_active=True,
+        ).one()
+        swap_dagitim = NakliyeDagitim.query.filter_by(
+            kiralama_kalemi_id=yeni_kalem.id,
+            is_deleted=False,
+            is_active=True,
+        ).one()
+        # Swap bedeli yalnızca değişim bacağıdır; ilk paketin dönüşü
+        # zincirin asıl gidiş seferinde korunur.
+        assert swap_dagitim.nakliye.cift_yon is False
+
+        MakineDegisimService.iptal_et(eski_kalem.id)
+        db.session.refresh(eski_kalem)
+        donus = Nakliye.query.filter_by(kiralama_id=kiralama.id, yon='donus').filter(
+            Nakliye.is_deleted.is_(False), Nakliye.is_active.is_(True),
+        ).one()
+        restored = NakliyeDagitim.query.filter_by(
+            nakliye_id=donus.id,
+            kiralama_kalemi_id=eski_kalem.id,
+            is_deleted=False,
+            is_active=True,
+        ).one()
+        assert restored.tutar == Decimal('125.00')
+        assert eski_kalem.nakliye_satis_fiyat == Decimal('250.00')
+
+        MakineDegisimService.degisim_uygula(eski_kalem.id, {
+            'degisim_tarihi': date(2026, 5, 11),
+            'neden': 'bosta',
+            'donus_sube_val': str(sube.id),
+            'kiralama_brm_fiyat': Decimal('150.00'),
+            'yeni_ekipman_id': yeni_makine.id,
+            'is_harici_nakliye': True,
+            'nakliye_tedarikci_id': None,
+            'nakliye_satis_fiyat': Decimal('0.00'),
+            'nakliye_alis_fiyat': Decimal('0.00'),
+        })
+        ikinci_kalem = KiralamaKalemi.query.filter_by(
+            parent_id=eski_kalem.id, is_active=True,
+        ).one()
+        assert NakliyeDagitim.query.filter_by(
+            kiralama_kalemi_id=ikinci_kalem.id,
+            is_deleted=False,
+            is_active=True,
+        ).count() == 0

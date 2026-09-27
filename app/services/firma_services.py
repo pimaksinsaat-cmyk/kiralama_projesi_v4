@@ -798,6 +798,35 @@ class FirmaService(BaseService):
                         return kalem
             return None
 
+        def _nakliye_dagitim_kalemlerini_bul(nakliye, kir_kalem_map):
+            """Sefer modelinde nakliyenin aktif, ücretli kalem dağıtımlarını döndürür.
+
+            Sefer açıklaması/güzergahı fiziksel seferi tanımlar; makine bağı ise
+            dağıtım kaydındadır. Bu nedenle dağıtım mevcut olduğunda açıklama
+            üretiminde bu kaynak, legacy metin eşleştirmelerinden önce gelir.
+            """
+            kalemler = []
+            gorulen_kalem_idleri = set()
+            dagitimlar = sorted(
+                getattr(nakliye, 'dagitimlar', None) or [],
+                key=lambda dagitim: dagitim.id or 0,
+            )
+            for dagitim in dagitimlar:
+                if (
+                    getattr(dagitim, 'is_deleted', False)
+                    or not getattr(dagitim, 'is_active', True)
+                    or float(dagitim.tutar or 0) <= 0
+                ):
+                    continue
+                kalem_id = getattr(dagitim, 'kiralama_kalemi_id', None)
+                if not kalem_id or kalem_id in gorulen_kalem_idleri:
+                    continue
+                kalem = kiralama_kalemi_by_id.get(kalem_id) or kir_kalem_map.get(kalem_id)
+                if kalem:
+                    kalemler.append(kalem)
+                    gorulen_kalem_idleri.add(kalem_id)
+            return kalemler
+
         # --- Kiralama ve nakliye satırları ---
         for kir in sorted(aktif_kiralamalar, key=lambda k: k.kiralama_form_no or ''):
             form_tarihi = kir.kiralama_olusturma_tarihi or (kir.created_at.date() if kir.created_at else None)
@@ -863,14 +892,45 @@ class FirmaService(BaseService):
                 if not nakliye.is_active or getattr(nakliye, 'is_deleted', False):
                     continue
                 nak_tutar = float(nakliye.tutar or 0)
+                # Sefer modelinde fiziksel sefer tutarı, çift yön paket için
+                # ham 6.000 TL olabilir. Cari satırında ise gerçek satış
+                # dağılımı kullanılmalıdır: gidiş ve oluşan dönüş ayrı ayrı
+                # 3.000 TL görünür; müşteri toplamı 6.000 TL olur.
+                if getattr(kir, 'nakliye_modeli', 'legacy') == 'sefer':
+                    aktif_dagitimlar = [
+                        dagitim for dagitim in (getattr(nakliye, 'dagitimlar', None) or [])
+                        if dagitim.is_active and not dagitim.is_deleted
+                    ]
+                    if aktif_dagitimlar:
+                        from app.services.nakliye_sefer_services import NakliyeSeferService
+
+                        nak_tutar = float(sum(
+                            (NakliyeSeferService.dagitim_satis_tutari(dagitim)
+                             for dagitim in aktif_dagitimlar),
+                            Decimal('0.00'),
+                        ))
                 if nak_tutar <= 0:
                     continue
                 nakliye_islem_tarihi = getattr(nakliye, 'islem_tarihi', None) or nakliye.tarih
                 nak_kdv_pct = float(FirmaService._musteri_nakliye_kdv_orani(nakliye) or 0)
                 nak_kdv = nak_tutar * nak_kdv_pct / 100
                 gl = (nakliye.guzergah or '').lower()
-                nakliye_kalem = _nakliye_kalemini_bul(nakliye, kir, kir_kalem_map)
-                nakliye_kod, nakliye_sube = _nakliye_kalem_bilgisi(nakliye_kalem)
+                dagitim_kalemleri = _nakliye_dagitim_kalemlerini_bul(nakliye, kir_kalem_map)
+                if dagitim_kalemleri:
+                    nakliye_kalemleri = dagitim_kalemleri
+                else:
+                    nakliye_kalem = _nakliye_kalemini_bul(nakliye, kir, kir_kalem_map)
+                    nakliye_kalemleri = [nakliye_kalem] if nakliye_kalem else []
+
+                nakliye_kodlari = []
+                nakliye_sube = ''
+                for nakliye_kalem in nakliye_kalemleri:
+                    nakliye_kod, kalem_sube = _nakliye_kalem_bilgisi(nakliye_kalem)
+                    if nakliye_kod and nakliye_kod not in nakliye_kodlari:
+                        nakliye_kodlari.append(nakliye_kod)
+                    if not nakliye_sube and kalem_sube:
+                        nakliye_sube = kalem_sube
+                nakliye_kod = ', '.join(nakliye_kodlari)
                 if not nakliye_kod:
                     nakliye_kod = fallback_kod
                 if not nakliye_sube:
@@ -1114,6 +1174,7 @@ class FirmaService(BaseService):
                 not is_standalone_taseron
                 and aciklama_text.startswith('Nakliye Taşeron Gideri:')
             )
+            nakliye_obj = None
             if is_standalone_taseron:
                 nakliye_obj = db.session.get(Nakliye, hizmet.nakliye_id)
                 nakliye_link_id = hizmet.nakliye_id
@@ -1135,12 +1196,38 @@ class FirmaService(BaseService):
             )
             kdv_tutar = matrah * kdv_pct / 100
             toplam = -(matrah + kdv_tutar)
+            cari_form_no = hizmet.fatura_no or '-'
+            cari_aciklama = hizmet.aciklama or 'Taşeron Nakliye'
+            if (
+                nakliye_obj
+                and nakliye_obj.kiralama_id
+                and (
+                    hizmet.kaynak == 'nakliye_sefer_taseron_gider'
+                    or not aciklama_text
+                    or aciklama_text.casefold().startswith('nakliye taşeron gideri:')
+                )
+            ):
+                from app.services.nakliye_sefer_services import NakliyeSeferService
+
+                kiralama_obj = nakliye_obj.kiralama or db.session.get(
+                    Kiralama, nakliye_obj.kiralama_id,
+                )
+                if kiralama_obj:
+                    legacy_bilgi = NakliyeSeferService.legacy_taseron_cari_bilgileri(
+                        nakliye_obj, kiralama_obj,
+                    )
+                    cari_form_no = hizmet.fatura_no or legacy_bilgi['form_no'] or '-'
+                    if (
+                        not aciklama_text
+                        or aciklama_text.casefold().startswith('nakliye taşeron gideri:')
+                    ):
+                        cari_aciklama = legacy_bilgi['aciklama']
             rows.append({
                 'id': hizmet.id, 'sort_date': islem_tarih,
-                'form_no': hizmet.fatura_no or '-', 'form_tarihi': islem_tarih,
+                'form_no': cari_form_no, 'form_tarihi': islem_tarih,
                 'kiralama_id': kiralama_link_id, 'nakliye_id': nakliye_link_id,
                 'islem_turu': 'nakliye_tedarik', 'nakliye_sira': 2,
-                'aciklama': hizmet.aciklama or 'Taşeron Nakliye',
+                'aciklama': cari_aciklama,
                 'seri_no': '',
                 'baslangic': islem_tarih, 'bitis': None,
                 'bitis_bugun': False, 'gun_sayisi': None,

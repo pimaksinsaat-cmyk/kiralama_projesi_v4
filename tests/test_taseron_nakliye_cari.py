@@ -2,6 +2,8 @@ from datetime import date
 from decimal import Decimal
 import importlib.util
 from pathlib import Path
+import pytest
+import sqlalchemy as sa
 
 from app.cari.models import HizmetKaydi
 from app.araclar.models import Arac
@@ -10,8 +12,9 @@ from app.filo.models import Ekipman
 from app.firmalar.models import Firma
 from app.kiralama.models import Kiralama, KiralamaKalemi
 from app.subeler.models import Sube
-from app.nakliyeler.models import Nakliye
+from app.nakliyeler.models import Nakliye, NakliyeDagitim
 from app.nakliyeler.routes import _nakliye_filtered_query
+from app.services.base import ValidationError
 from app.services.firma_services import FirmaService
 from app.services.nakliye_services import CariServis
 from app.services.kiralama_services import KiralamaKalemiService, KiralamaService
@@ -59,7 +62,10 @@ class _FakeAlembicOp:
         self.connection = connection
 
     def execute(self, sql):
-        return self.connection.exec_driver_sql(sql)
+        # Alembic op.execute metni SQLAlchemy tarafindan calistirir. text()
+        # kullanmak PostgreSQL surucusunun LIKE icindeki '%' karakterlerini
+        # DBAPI parametreleri sanmasini da engeller.
+        return self.connection.execute(sa.text(sql))
 
     def get_bind(self):
         return self.connection
@@ -652,6 +658,154 @@ def test_build_cari_rows_kiralama_nakliye_aciklamasini_ilk_kalemden_degilde_kale
     assert nakliye_rows[seferler[3].id].endswith("dönüş")
 
 
+def test_build_cari_rows_sefer_dagitimindan_dogru_makine_kodunu_alir(app):
+    musteri = _firma("3A YASAM ALANLARI", vergi_no="4444444444")
+    sube = Sube(isim="Sefer Subesi")
+    db.session.add_all([musteri, sube])
+    db.session.flush()
+
+    pf1 = _ekipman("PF-1", sube)
+    pf2 = _ekipman("PF-2", sube)
+    db.session.add_all([pf1, pf2])
+    db.session.flush()
+
+    kiralama = Kiralama(
+        kiralama_form_no="PF-2026/0255-TEST",
+        firma_musteri_id=musteri.id,
+        makine_calisma_adresi="Santiye",
+        kdv_orani=20,
+        nakliye_modeli="sefer",
+    )
+    db.session.add(kiralama)
+    db.session.flush()
+
+    kalem_pf1 = KiralamaKalemi(
+        kiralama_id=kiralama.id,
+        ekipman_id=pf1.id,
+        kiralama_baslangici=date(2026, 8, 24),
+        kiralama_bitis=date(2026, 8, 25),
+        kiralama_brm_fiyat=Decimal("1000.00"),
+    )
+    kalem_pf2 = KiralamaKalemi(
+        kiralama_id=kiralama.id,
+        ekipman_id=pf2.id,
+        kiralama_baslangici=date(2026, 8, 24),
+        kiralama_bitis=date(2026, 8, 24),
+        kiralama_brm_fiyat=Decimal("1000.00"),
+    )
+    db.session.add_all([kalem_pf1, kalem_pf2])
+    db.session.flush()
+
+    sefer_pf1 = Nakliye(
+        kiralama_id=kiralama.id,
+        firma_id=musteri.id,
+        tarih=date(2026, 8, 24),
+        islem_tarihi=date(2026, 8, 24),
+        guzergah="santiye teslim",
+        tutar=Decimal("2500.00"),
+        kdv_orani=20,
+        yon="gidis",
+        nakliye_tipi="oz_mal",
+        aciklama="santiye teslim",
+    )
+    sefer_pf2 = Nakliye(
+        kiralama_id=kiralama.id,
+        firma_id=musteri.id,
+        tarih=date(2026, 8, 24),
+        islem_tarihi=date(2026, 8, 24),
+        guzergah="Kiralama gidisi",
+        tutar=Decimal("3000.00"),
+        kdv_orani=20,
+        yon="gidis",
+        nakliye_tipi="oz_mal",
+        aciklama="Kiralama gidisi",
+    )
+    db.session.add_all([sefer_pf1, sefer_pf2])
+    db.session.flush()
+    db.session.add_all([
+        NakliyeDagitim(
+            nakliye_id=sefer_pf1.id,
+            kiralama_kalemi_id=kalem_pf1.id,
+            tutar=Decimal("2500.00"),
+        ),
+        NakliyeDagitim(
+            nakliye_id=sefer_pf2.id,
+            kiralama_kalemi_id=kalem_pf2.id,
+            tutar=Decimal("3000.00"),
+        ),
+    ])
+    db.session.commit()
+
+    rows = FirmaService.build_cari_rows(musteri, date(2026, 8, 24))
+    nakliye_rows = {
+        row["nakliye_id"]: row["aciklama"]
+        for row in rows
+        if row.get("islem_turu") == "nakliye"
+    }
+
+    assert nakliye_rows[sefer_pf1.id].startswith("PF-1 ")
+    assert nakliye_rows[sefer_pf2.id].startswith("PF-2 ")
+    assert "PF-1" not in nakliye_rows[sefer_pf2.id]
+
+
+def test_build_cari_rows_coklu_dagitimda_ucretli_makineleri_gosterir(app):
+    musteri = _firma("COKLU DAGITIM MUSTERI", vergi_no="5555555555")
+    sube = Sube(isim="Coklu Subesi")
+    db.session.add_all([musteri, sube])
+    db.session.flush()
+
+    kalemler = []
+    kiralama = Kiralama(
+        kiralama_form_no="PF-2026/COKLU-DAGITIM",
+        firma_musteri_id=musteri.id,
+        kdv_orani=20,
+        nakliye_modeli="sefer",
+    )
+    db.session.add(kiralama)
+    db.session.flush()
+    for kod in ("PF-1", "PF-2", "PF-3"):
+        ekipman = _ekipman(kod, sube)
+        db.session.add(ekipman)
+        db.session.flush()
+        kalem = KiralamaKalemi(
+            kiralama_id=kiralama.id,
+            ekipman_id=ekipman.id,
+            kiralama_baslangici=date(2026, 8, 24),
+            kiralama_bitis=date(2026, 8, 24),
+            kiralama_brm_fiyat=Decimal("1000.00"),
+        )
+        db.session.add(kalem)
+        db.session.flush()
+        kalemler.append(kalem)
+
+    sefer = Nakliye(
+        kiralama_id=kiralama.id,
+        firma_id=musteri.id,
+        tarih=date(2026, 8, 24),
+        islem_tarihi=date(2026, 8, 24),
+        guzergah="Kiralama gidisi",
+        tutar=Decimal("3000.00"),
+        kdv_orani=20,
+        yon="gidis",
+        nakliye_tipi="oz_mal",
+        aciklama="Kiralama gidisi",
+    )
+    db.session.add(sefer)
+    db.session.flush()
+    db.session.add_all([
+        NakliyeDagitim(nakliye_id=sefer.id, kiralama_kalemi_id=kalemler[0].id, tutar=Decimal("0.00")),
+        NakliyeDagitim(nakliye_id=sefer.id, kiralama_kalemi_id=kalemler[1].id, tutar=Decimal("1000.00")),
+        NakliyeDagitim(nakliye_id=sefer.id, kiralama_kalemi_id=kalemler[2].id, tutar=Decimal("2000.00")),
+    ])
+    db.session.commit()
+
+    rows = FirmaService.build_cari_rows(musteri, date(2026, 8, 24))
+    nakliye_row = next(row for row in rows if row.get("nakliye_id") == sefer.id)
+
+    assert nakliye_row["aciklama"].startswith("PF-2, PF-3 ")
+    assert "PF-1" not in nakliye_row["aciklama"]
+
+
 def test_sonlandir_donus_taseron_giderini_idempotent_gunceller(app):
     musteri = _firma("PAK MEKANIK", vergi_no="3333333333")
     taseron = _firma("GEYLANI ERCAN", is_tedarikci=True, vergi_no="4444444444")
@@ -731,16 +885,18 @@ def test_sonlandir_donus_taseron_giderini_idempotent_gunceller(app):
         donus_nakliye_alis_kdv=20,
         donus_nakliye_satis_fiyat="2000.00",
     )
-    KiralamaKalemiService.sonlandir(
-        kalem.id,
-        "2026-05-03",
-        "tedarikci",
-        is_harici_nakliye=True,
-        nakliye_tedarikci_id=taseron.id,
-        nakliye_alis_fiyat="1500.00",
-        donus_nakliye_alis_kdv=20,
-        donus_nakliye_satis_fiyat="2000.00",
-    )
+
+    with pytest.raises(ValidationError, match="Kiralama kalemi zaten sonlandırılmış"):
+        KiralamaKalemiService.sonlandir(
+            kalem.id,
+            "2026-05-03",
+            "tedarikci",
+            is_harici_nakliye=True,
+            nakliye_tedarikci_id=taseron.id,
+            nakliye_alis_fiyat="1500.00",
+            donus_nakliye_alis_kdv=20,
+            donus_nakliye_satis_fiyat="2000.00",
+        )
 
     db.session.refresh(kalem)
     assert kalem.is_harici_nakliye is True

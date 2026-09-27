@@ -293,8 +293,6 @@
                             {% set g = hesapla_kalem_etkin_gun(kalem, tam_sozlesme=True) %}
                             {% set muaf_gun = toplam_muaf_gun_sayisi(kalem) %}
                             {% set dondurulabilir = dondurulabilir_bitis_tarihi(kalem) %}
-                            {% set nk_sayi = 2 if kalem.donus_nakliye_fatura_et else 1 %}
-                            {% set nk_birim = (kalem.nakliye_satis_fiyat or 0) / nk_sayi %}
                             {% set bdl = (g * kalem.kiralama_brm_fiyat) + (kalem.nakliye_satis_fiyat or 0) %}
                             {% set satir_toplam.val = satir_toplam.val + bdl %}
 
@@ -341,7 +339,7 @@
                                     <div class="small text-muted mt-1">
                                         {{ g }} Etkin Gün x {{ "{:,.2f}".format(kalem.kiralama_brm_fiyat or 0).replace(",", "X").replace(".", ",").replace("X", ".") }} TL
                                         +
-                                        {{ nk_sayi }} x {{ "{:,.2f}".format(nk_birim).replace(",", "X").replace(".", ",").replace("X", ".") }} TL
+                                        {{ "{:,.2f}".format(kalem.nakliye_satis_fiyat or 0).replace(",", "X").replace(".", ",").replace("X", ".") }} TL
                                         =
                                         <span class="fw-bold">{{ "{:,.2f}".format(bdl).replace(",", "X").replace(".", ",").replace("X", ".") }} TL</span>
                                         <span class="ms-1">({{ 'Dönüş dahil' if kalem.donus_nakliye_fatura_et else 'Tek Yön' }})</span>
@@ -394,7 +392,7 @@
                                     <div class="small text-muted mt-1">
                                         {{ g }} Etkin Gün x {{ "{:,.2f}".format(kalem.kiralama_brm_fiyat or 0).replace(",", "X").replace(".", ",").replace("X", ".") }} TL
                                         +
-                                        {{ nk_sayi }} x {{ "{:,.2f}".format(nk_birim).replace(",", "X").replace(".", ",").replace("X", ".") }} TL
+                                        {{ "{:,.2f}".format(kalem.nakliye_satis_fiyat or 0).replace(",", "X").replace(".", ",").replace("X", ".") }} TL
                                         =
                                         <span class="fw-bold">{{ "{:,.2f}".format(bdl).replace(",", "X").replace(".", ",").replace("X", ".") }} TL</span>
                                         <span class="ms-1">({{ 'Dönüş dahil' if kalem.donus_nakliye_fatura_et else 'Tek Yön' }})</span>

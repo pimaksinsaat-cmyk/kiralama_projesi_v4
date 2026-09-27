@@ -9,6 +9,8 @@ class Kiralama(BaseModel):
     
     
     kiralama_form_no = db.Column(db.String(100), nullable=False, unique=True)
+    # legacy: eski kalem-bazlı nakliye; sefer: fiziksel sefer + dağıtım modeli
+    nakliye_modeli = db.Column(db.String(20), nullable=False, default='legacy', server_default='legacy')
     makine_calisma_adresi = db.Column(db.Text, nullable=True)
     kiralama_olusturma_tarihi = db.Column(db.Date, nullable=True)  # Form ilk hazırlandı ğında set edilir, sonra değişmez
     kdv_orani = db.Column(db.Integer, nullable=False, default=20)
@@ -85,7 +87,8 @@ class KiralamaKalemi(BaseModel):
     donus_nakliye_tedarikci_id = db.Column(db.Integer, db.ForeignKey('firma.id'), nullable=True)
     donus_nakliye_alis_fiyat = db.Column(db.Numeric(15, 2), nullable=True)
     donus_nakliye_araci_id = db.Column(db.Integer, db.ForeignKey('araclar.id'), nullable=True)
-    nakliye_araci_id = db.Column(db.Integer, db.ForeignKey('ekipman.id'), nullable=True)
+    # Sefer modelinde bu alan, oz mal nakliye aracinin Arac.id aynasidir.
+    nakliye_araci_id = db.Column(db.Integer, db.ForeignKey('araclar.id'), nullable=True)
     
     # --- DURUM VE VERSİYONLAMA (YENİ EKLENENLER) ---
     sonlandirildi = db.Column(db.Boolean, default=False, nullable=False)
@@ -121,7 +124,7 @@ class KiralamaKalemi(BaseModel):
     ekipman = db.relationship('Ekipman', back_populates='kiralama_kalemleri', foreign_keys=[ekipman_id])
     
     # Nakliye aracı ve tedarikçiler
-    nakliye_araci = db.relationship('Ekipman', foreign_keys=[nakliye_araci_id], backref='yapilan_nakliyeler')
+    nakliye_araci = db.relationship('Arac', foreign_keys=[nakliye_araci_id], backref='kiralama_nakliye_kalemleri')
     harici_tedarikci = db.relationship('Firma', foreign_keys=[harici_ekipman_tedarikci_id])
     nakliye_tedarikci = db.relationship('Firma', foreign_keys=[nakliye_tedarikci_id])
     donus_nakliye_tedarikci = db.relationship('Firma', foreign_keys=[donus_nakliye_tedarikci_id])
@@ -135,6 +138,12 @@ class KiralamaKalemi(BaseModel):
         back_populates='kalem',
         lazy='selectin',
         primaryjoin='and_(KiralamaKalemi.id==KiralamaKalemDondurma.kalem_id, KiralamaKalemDondurma.is_deleted==False)',
+    )
+
+    nakliye_dagitimlari = db.relationship(
+        'NakliyeDagitim',
+        back_populates='kiralama_kalemi',
+        cascade='all, delete-orphan',
     )
 
     # Versiyon Ağacı İlişkisi (Self-Referential)

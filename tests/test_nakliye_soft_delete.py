@@ -1,4 +1,3 @@
-"""Nakliye soft-delete listeleme, silme ve geri alma testleri."""
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
@@ -7,6 +6,7 @@ from io import BytesIO
 import pytest
 
 from app.extensions import db
+from app.araclar.models import Arac
 from app.firmalar.models import Firma
 from app.cari.models import HizmetKaydi
 from app.nakliyeler.models import Nakliye
@@ -93,6 +93,27 @@ def test_filtered_query_excludes_inactive_and_soft_deleted(app):
         assert aktif.id in ids
         assert pasif.id not in ids
         assert silinmis.id not in ids
+
+
+def test_filtered_query_uses_arac_plaka_when_nakliye_plaka_is_empty(app):
+    with app.app_context():
+        firma = _firma()
+        arac = Arac(
+            plaka='34FALLBACK',
+            arac_tipi='Kamyon',
+            is_nakliye_araci=True,
+            is_active=True,
+        )
+        db.session.add(arac)
+        db.session.flush()
+        fallback = _nakliye(firma, plaka=None, arac_id=arac.id)
+        db.session.commit()
+
+        rows = _nakliye_filtered_query(
+            None, None, '34FALLBACK', None, str(firma.id)
+        ).all()
+        assert fallback in rows
+        assert fallback.etkin_plaka == '34FALLBACK'
 
 
 def test_plaka_dropdown_query_excludes_inactive(app):

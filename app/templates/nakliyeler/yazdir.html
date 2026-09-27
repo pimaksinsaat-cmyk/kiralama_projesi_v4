@@ -301,11 +301,11 @@
                 <td>
                     {% if nakliye.nakliye_tipi == 'taseron' and nakliye.taseron_firma %}
                         <span class="taseron-badge">{{ nakliye.taseron_firma.firma_adi | truncate_name }}</span>
-                        {% if nakliye.plaka %}
-                            <div class="text-muted" style="font-size:8px;">{{ nakliye.plaka }}</div>
+                        {% if nakliye.etkin_plaka %}
+                            <div class="text-muted" style="font-size:8px;">{{ nakliye.etkin_plaka }}</div>
                         {% endif %}
                     {% else %}
-                        <span class="plaka-badge">{{ nakliye.plaka or '-' }}</span>
+                        <span class="plaka-badge">{{ nakliye.etkin_plaka or '-' }}</span>
                     {% endif %}
                 </td>
                 <td class="text-end">{{ "{:,.2f}".format(matrah).replace(',', 'X').replace('.', ',').replace('X', '.') }}</td>

@@ -150,7 +150,8 @@ def kiralama_formu_yazdir(rental_id):
             # Süre ve tutar hesaplama
             gun = KiralamaService.hesapla_kalem_etkin_gun(kalem, tam_sozlesme=True)
             birim_fiyat = float(kalem.kiralama_brm_fiyat or 0)
-            nakliye = float(kalem.nakliye_satis_fiyat or 0)
+            from app.services.nakliye_sefer_services import NakliyeSeferService
+            nakliye = float(NakliyeSeferService.kalem_satis_tutari(kalem))
             satir_toplam = (gun * birim_fiyat) + nakliye
             genel_toplam += satir_toplam
             

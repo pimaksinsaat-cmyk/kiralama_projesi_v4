@@ -246,7 +246,7 @@
                                             </div>
                                             <div class="col-md-2">  
                                                 <div class="d-flex align-items-center justify-content-between mb-0">                                 
-                                                    <label class="fw-bold mb-0 me-2" style="white-space:nowrap;">Nakliye Bedeli (TL)</label>
+                                                    <label id="g-nakliye-label" class="fw-bold mb-0 me-2" style="white-space:nowrap;">Nakliye Bedeli (TL)</label>
                                                    
                                                 </div> 
                                                 <input type="number" id="g-nakliye" class="form-control " placeholder="Tek Yön Bedeli" >
@@ -460,12 +460,15 @@ function liveCalc() {
     const gunluk = parseFloat(val('g-gunluk')) || 0;
     const nakBirim = parseFloat(val('g-nakliye')) || 0;
     const donusFatura = document.getElementById('g-donus-fatura-et')?.checked;
-    const sefer = donusFatura ? 2 : 1;
-    const nakToplam = nakBirim * sefer;
+    const nakToplam = nakBirim;
+    const nakliyeLabel = document.getElementById('g-nakliye-label');
+    const nakliyeInput = document.getElementById('g-nakliye');
+    if (nakliyeLabel) nakliyeLabel.textContent = donusFatura ? 'Gidiş + Dönüş Nakliye (TL)' : 'Gidiş Nakliye (TL)';
+    if (nakliyeInput) nakliyeInput.placeholder = donusFatura ? 'Gidiş + Dönüş toplam bedeli' : 'Gidiş bedeli';
     if (bas && bit) {
         const gun = hesaplaGun(bas, bit);
         const toplam = (gun * gunluk) + nakToplam;
-        const nakStr = nakBirim > 0 ? ` + ${sefer} sefer x ${formatTRCurrency(nakBirim)} TL` : '';
+        const nakStr = nakBirim > 0 ? ` + ${donusFatura ? 'gidiş + dönüş toplamı' : 'gidiş bedeli'} ${formatTRCurrency(nakBirim)} TL` : '';
         infoDiv.innerHTML = `<i class="fas fa-calculator me-2"></i> Tahmini: ${gun} Gün x ${formatTRCurrency(gunluk)} TL${nakStr} = <span class="text-success">${formatTRCurrency(toplam)} TL</span>`;
     } else { infoDiv.innerHTML = ""; }
 }
@@ -641,9 +644,8 @@ g_btn_ekle.onclick = function() {
     const s_fiyat = parseFloat(val('g-gunluk')) || 0;
     const n_fiyat = parseFloat(val('g-nakliye')) || 0;
     const donusFaturaEt = document.getElementById('g-donus-fatura-et').checked;
-    const nk_adet = donusFaturaEt ? 2 : 1;
     const nk_birim = n_fiyat;
-    const n_toplam = donusFaturaEt ? n_fiyat * 2 : n_fiyat;
+    const n_toplam = n_fiyat;
     const toplam = (gun * s_fiyat) + n_toplam;
 
     const isDisNak = g_dis_nakliye.checked;
@@ -660,7 +662,7 @@ g_btn_ekle.onclick = function() {
         const group = hiddenContainer.querySelectorAll('.kalem-group')[editingIdx];
         
         tr.dataset.toplam = toplam;
-        tr.innerHTML = `<td></td><td>${makineAdi}</td><td>${turDetay}</td><td>${formatTRDate(bas)} / ${formatTRDate(bit)} (${gun}g)</td><td>${gun}x${s_fiyat} + ${nk_adet}x${nk_birim.toFixed(2)} TL${donusFaturaEt ? ' (Dönüş dahil)' : ' (Tek Yön)'}</td><td><b>${toplam.toFixed(2)} TL</b></td><td class="text-center"><button type="button" class="btn btn-sm btn-outline-info duzenle-btn"><i class="fas fa-edit"></i></button> <button type="button" class="btn btn-sm btn-outline-danger sil-btn"><i class="fas fa-trash"></i></button></td>`;
+        tr.innerHTML = `<td></td><td>${makineAdi}</td><td>${turDetay}</td><td>${formatTRDate(bas)} / ${formatTRDate(bit)} (${gun}g)</td><td>${gun}x${s_fiyat} + ${nk_birim.toFixed(2)} TL${donusFaturaEt ? ' (Gidiş + Dönüş)' : ' (Tek Yön)'}</td><td><b>${toplam.toFixed(2)} TL</b></td><td class="text-center"><button type="button" class="btn btn-sm btn-outline-info duzenle-btn"><i class="fas fa-edit"></i></button> <button type="button" class="btn btn-sm btn-outline-danger sil-btn"><i class="fas fa-trash"></i></button></td>`;
         
         group.querySelector('[name$="-dis_tedarik_ekipman"]').value = isDis ? 1 : 0;
         group.querySelector('[name$="-ekipman_id"]').value = isDis ? 0 : g_ekipman.value;
@@ -689,7 +691,7 @@ g_btn_ekle.onclick = function() {
         // YENİ KAYIT MODU
         const tr = document.createElement('tr');
         tr.dataset.toplam = toplam;
-        tr.innerHTML = `<td></td><td>${makineAdi}</td><td>${turDetay}</td><td>${formatTRDate(bas)} / ${formatTRDate(bit)} (${gun}g)</td><td>${gun}x${s_fiyat} + ${nk_adet}x${nk_birim.toFixed(2)} TL${donusFaturaEt ? ' (Dönüş dahil)' : ' (Tek Yön)'}</td><td><b>${toplam.toFixed(2)} TL</b></td><td class="text-center"><button type="button" class="btn btn-sm btn-outline-info duzenle-btn"><i class="fas fa-edit"></i></button> <button type="button" class="btn btn-sm btn-outline-danger sil-btn"><i class="fas fa-trash"></i></button></td>`;
+        tr.innerHTML = `<td></td><td>${makineAdi}</td><td>${turDetay}</td><td>${formatTRDate(bas)} / ${formatTRDate(bit)} (${gun}g)</td><td>${gun}x${s_fiyat} + ${nk_birim.toFixed(2)} TL${donusFaturaEt ? ' (Gidiş + Dönüş)' : ' (Tek Yön)'}</td><td><b>${toplam.toFixed(2)} TL</b></td><td class="text-center"><button type="button" class="btn btn-sm btn-outline-info duzenle-btn"><i class="fas fa-edit"></i></button> <button type="button" class="btn btn-sm btn-outline-danger sil-btn"><i class="fas fa-trash"></i></button></td>`;
         tbody.appendChild(tr);
 
         const group = document.createElement('div');
@@ -751,7 +753,8 @@ tbody.onclick = function(e) {
         setVal('nakliye-satis-tevkifat-oran', nakSatisTevkifat || '2/10');
         const donusFaturaEtVal = group.querySelector('[name$="-donus_nakliye_fatura_et"]').value === '1';
         const nakSatisToplam = parseFloat(group.querySelector('[name$="-nakliye_satis_fiyat"]').value) || 0;
-        setVal('g-nakliye', donusFaturaEtVal ? (nakSatisToplam / 2).toFixed(2) : nakSatisToplam.toFixed(2));
+        // Saklanan değer gidiş+dönüş için birleşik toplamdır; edit açılışında tekrar bölme.
+        setVal('g-nakliye', nakSatisToplam.toFixed(2));
         document.getElementById('g-donus-fatura-et').checked = donusFaturaEtVal;
         document.getElementById('g-donus-fatura-et').dispatchEvent(new Event('change'));
         

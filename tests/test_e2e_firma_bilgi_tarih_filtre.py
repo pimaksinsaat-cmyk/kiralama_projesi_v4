@@ -19,10 +19,12 @@ from app.auth.session_security import (
     utc_now,
 )
 from app.extensions import db
+from app.cari.models import HizmetKaydi
 from app.filo.models import Ekipman
 from app.firmalar.models import Firma
 from app.kiralama.models import Kiralama, KiralamaKalemi
 from app.makinedegisim.models import MakineDegisim
+from app.nakliyeler.models import Nakliye, NakliyeDagitim
 from app.subeler.models import Sube
 
 
@@ -389,3 +391,115 @@ def test_bilgi_cari_flag_kapalı_dönem_başlığı_yok(app, client):
     )
     assert r.status_code == 200
     assert "Dönem Borç".encode("utf-8") not in r.data
+
+
+def test_taseron_cari_sefer_kaydini_eski_bilgilerle_nakliye_alisi_gosterir(app, client):
+    with app.app_context():
+        admin = User(username=f"taseron_cari_{uuid.uuid4().hex[:6]}", rol="admin")
+        admin.set_password("pass123")
+        sube = Sube(isim="İkitelli", adres="Depo")
+        musteri = Firma(
+            firma_adi="ACR TEST MÜŞTERİ",
+            yetkili_adi="Yetkili",
+            iletisim_bilgileri="Adres",
+            vergi_dairesi="İstanbul VD",
+            vergi_no=_uniq_vergi(),
+            is_musteri=True,
+            is_tedarikci=False,
+            bakiye=Decimal("0"),
+        )
+        taseron = Firma(
+            firma_adi="TEST NAKLİYE TAŞERONU",
+            yetkili_adi="Yetkili",
+            iletisim_bilgileri="Adres",
+            vergi_dairesi="İstanbul VD",
+            vergi_no=_uniq_vergi(),
+            is_musteri=False,
+            is_tedarikci=True,
+            bakiye=Decimal("0"),
+        )
+        db.session.add_all([admin, sube, musteri, taseron])
+        db.session.flush()
+
+        ekipman = Ekipman(
+            kod="PM04-CARI-TEST",
+            yakit="Elektrik",
+            tipi="MAKAS",
+            marka="Test",
+            model="M1",
+            seri_no=f"SN-{uuid.uuid4().hex[:8]}",
+            calisma_yuksekligi=10,
+            kaldirma_kapasitesi=250,
+            uretim_yili=2025,
+            calisma_durumu="kirada",
+            sube_id=sube.id,
+        )
+        kiralama = Kiralama(
+            kiralama_form_no="PF-2026/CARI-TEST",
+            firma_musteri_id=musteri.id,
+            makine_calisma_adresi="Test sahası",
+            kdv_orani=20,
+            nakliye_modeli="sefer",
+        )
+        db.session.add_all([ekipman, kiralama])
+        db.session.flush()
+        kalem = KiralamaKalemi(
+            kiralama_id=kiralama.id,
+            ekipman_id=ekipman.id,
+            kiralama_baslangici=date(2026, 9, 5),
+            kiralama_bitis=date(2026, 9, 30),
+            kiralama_brm_fiyat=Decimal("100"),
+        )
+        sefer = Nakliye(
+            kiralama_id=kiralama.id,
+            firma_id=musteri.id,
+            yon="gidis",
+            tarih=date(2026, 9, 5),
+            islem_tarihi=date(2026, 9, 5),
+            guzergah="Kiralama gidişi",
+            nakliye_tipi="taseron",
+            taseron_firma_id=taseron.id,
+            taseron_maliyet=Decimal("750"),
+            tutar=Decimal("1000"),
+            kdv_orani=20,
+        )
+        db.session.add_all([kalem, sefer])
+        db.session.flush()
+        db.session.add(NakliyeDagitim(
+            nakliye_id=sefer.id,
+            kiralama_kalemi_id=kalem.id,
+            tutar=Decimal("1000"),
+        ))
+        db.session.add(HizmetKaydi(
+            firma_id=taseron.id,
+            nakliye_id=sefer.id,
+            kaynak="nakliye_sefer_taseron_gider",
+            yon="gelen",
+            tarih=date(2026, 9, 5),
+            islem_tarihi=date(2026, 9, 5),
+            tutar=Decimal("750"),
+            kdv_orani=20,
+            fatura_no=None,
+            aciklama="Nakliye taşeron gideri: PF-2026/CARI-TEST",
+        ))
+        db.session.commit()
+        admin_id = admin.id
+        taseron_id = taseron.id
+
+    _login(client, admin_id)
+    expected_description = "Taşeron Nakliye Bedeli (PM04-CARI-TEST) - PF-2026/CARI-TEST"
+
+    ekran = client.get(f"/firmalar/bilgi/{taseron_id}?tab=cari")
+    assert ekran.status_code == 200
+    ekran_body = ekran.data.decode("utf-8", errors="replace")
+    assert "05.09.2026" in ekran_body
+    assert "PF-2026/CARI-TEST" in ekran_body
+    assert expected_description in ekran_body
+    assert "Nakliye Al." in ekran_body
+    assert "Nakliye Sat." not in ekran_body
+
+    yazdir = client.get(f"/firmalar/bilgi/{taseron_id}/yazdir?tab=cari")
+    assert yazdir.status_code == 200
+    yazdir_body = yazdir.data.decode("utf-8", errors="replace")
+    assert expected_description in yazdir_body
+    assert "Nakliye Al." in yazdir_body

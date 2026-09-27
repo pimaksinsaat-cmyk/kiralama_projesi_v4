@@ -92,6 +92,21 @@ class HizmetKaydi(BaseModel):
     __table_args__ = (
         db.CheckConstraint("yon IN ('gelen', 'giden')", name='check_hizmet_yon'),
         db.Index('ix_hizmet_kaydi_firma_deleted_yon', 'firma_id', 'is_deleted', 'yon'),
+        db.Index(
+            'uq_hizmet_aktif_sefer_taseron_gider',
+            'nakliye_id',
+            unique=True,
+            postgresql_where=db.text(
+                "is_deleted = false AND is_active = true "
+                "AND nakliye_id IS NOT NULL "
+                "AND kaynak = 'nakliye_sefer_taseron_gider'"
+            ),
+            sqlite_where=db.text(
+                "is_deleted = 0 AND is_active = 1 "
+                "AND nakliye_id IS NOT NULL "
+                "AND kaynak = 'nakliye_sefer_taseron_gider'"
+            ),
+        ),
     )
     
     firma_id = db.Column(db.Integer, db.ForeignKey('firma.id'), nullable=False)
@@ -99,6 +114,18 @@ class HizmetKaydi(BaseModel):
         db.Integer, 
         db.ForeignKey('nakliye.id', ondelete='CASCADE'), 
         nullable=True
+    )
+    nakliye_dagitim_id = db.Column(
+        db.Integer,
+        db.ForeignKey('nakliye_dagitim.id', ondelete='CASCADE'),
+        nullable=True,
+        index=True,
+    )
+    kiralama_kalemi_id = db.Column(
+        db.Integer,
+        db.ForeignKey('kiralama_kalemi.id', ondelete='SET NULL'),
+        nullable=True,
+        index=True,
     )
     ozel_id = db.Column(db.Integer, nullable=True)
     # Cari hareketin sistem kaynagini ayirt eder; legacy kayitlarda nullable'dir.

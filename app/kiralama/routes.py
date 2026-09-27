@@ -23,6 +23,7 @@ from app.kiralama.forms import KiralamaForm
 
 # Servis Katmanı ve Hata Yönetimi
 from app.services.kiralama_services import KiralamaService, KiralamaKalemiService
+from app.services.nakliye_sefer_services import NakliyeSeferService
 from app.services.base import ValidationError
 from app.services.operation_log_service import OperationLogService
 from app.utils import ensure_active_sube_exists, get_safe_next_redirect, tr_ilike
@@ -76,6 +77,31 @@ def _fmt_tr_date(value):
     if hasattr(value, 'strftime'):
         return value.strftime('%d.%m.%Y')
     return str(value)
+
+
+def _posted_nakliye_seferleri():
+    """Yeni sefer formunun JSON alanını güvenli biçimde okur.
+
+    Alan yoksa None dönmesi, eski kayıt/form akışının geriye dönük çalışmasını
+    sağlar. Alan gönderilmiş fakat boşsa yeni model açıkça reddedilir.
+    """
+    raw = request.form.get('nakliye_seferleri_json')
+    if raw is None:
+        return None
+    try:
+        value = json.loads(raw or 'null')
+    except (TypeError, ValueError):
+        raise ValidationError('Nakliye seferleri verisi geçerli JSON değil.')
+    if value is None:
+        return None
+    if not isinstance(value, list):
+        raise ValidationError('Nakliye seferleri listesi geçerli değil.')
+    return value
+
+
+def _posted_nakliye_archive_ids():
+    raw = request.form.get('nakliye_seferleri_archive_ids') or ''
+    return [int(value) for value in raw.split(',') if value.strip().isdigit()]
 
 
 HACIM_ARALIKLARI = {
@@ -871,8 +897,25 @@ def detay_modal(kiralama_id):
         'kiralama/detay_modal_content.html',
         kiralama=kiralama,
         today=date.today(),
+        nakliye_satis_by_kalem={
+            kalem.id: sum(
+                (d.tutar or 0 for d in getattr(kalem, 'nakliye_dagitimlari', [])
+                 if not d.is_deleted and d.is_active),
+                0,
+            ) if any(not d.is_deleted and d.is_active for d in getattr(kalem, 'nakliye_dagitimlari', []))
+            else (kalem.nakliye_satis_fiyat or 0)
+            for kalem in kiralama.kalemler
+            if not getattr(kalem, 'is_deleted', False)
+        },
         donus_satis_by_kalem={
-            kalem.id: KiralamaService._get_donus_nakliye_satis(kalem)
+            kalem.id: sum(
+                (d.tutar or 0 for d in getattr(kalem, 'nakliye_dagitimlari', [])
+                 if not d.is_deleted and d.is_active and getattr(d.nakliye, 'yon', None) == 'donus'),
+                0,
+            ) if any(
+                not d.is_deleted and d.is_active and getattr(d.nakliye, 'yon', None) == 'donus'
+                for d in getattr(kalem, 'nakliye_dagitimlari', [])
+            ) else KiralamaService._get_donus_nakliye_satis(kalem)
             for kalem in kiralama.kalemler
             if not getattr(kalem, 'is_deleted', False)
         },
@@ -948,11 +991,23 @@ def ekle():
                 'doviz_kuru_usd': form.doviz_kuru_usd.data,
                 'doviz_kuru_eur': getattr(form, 'doviz_kuru_eur', form.doviz_kuru_usd).data
             }
-            kalemler_data = [k_form.data for k_form in form.kalemler]
+            kalemler_data = [
+                dict(
+                    k_form.data,
+                    _temp_id=request.form.get(f'kalemler-{idx}-temp_id') or f'kalem-{idx}',
+                )
+                for idx, k_form in enumerate(form.kalemler)
+            ]
             current_app.logger.debug(f"[EKLE] kiralama_data: {kiralama_data}")
             current_app.logger.debug(f"[EKLE] kalemler_data: {kalemler_data}")
 
-            created_kiralama = KiralamaService.create_kiralama_with_relations(kiralama_data, kalemler_data, actor_id=actor_id)
+            nakliye_seferleri = _posted_nakliye_seferleri()
+            nakliye_archive_ids = _posted_nakliye_archive_ids()
+            created_kiralama = KiralamaService.create_kiralama_with_relations(
+                kiralama_data, kalemler_data, actor_id=actor_id,
+                nakliye_seferleri=nakliye_seferleri,
+                nakliye_archive_ids=nakliye_archive_ids,
+            )
             current_app.logger.debug(f"[EKLE] created_kiralama: {created_kiralama}")
             OperationLogService.log(
                 module='kiralama',
@@ -1042,7 +1097,7 @@ def ekle():
         markalar = []
     tipler = [tip for tip, _ in EKIPMAN_TIPI_SECENEKLERI]
     preselect_ekipman_id = request.args.get('ekipman_id', 0, type=int)
-    return render_template('kiralama/form.html', form=form, subeler=subeler, markalar=markalar, tipler=tipler, is_edit=False, ekipman_sube_map=ekipman_sube_map, ekipman_map_json='{}', preselect_ekipman_id=preselect_ekipman_id)
+    return render_template('kiralama/form.html', form=form, subeler=subeler, markalar=markalar, tipler=tipler, is_edit=False, ekipman_sube_map=ekipman_sube_map, ekipman_map_json='{}', preselect_ekipman_id=preselect_ekipman_id, nakliye_seferleri_json='')
 
 @kiralama_bp.route('/duzenle/<int:kiralama_id>', methods=['GET', 'POST'])
 @login_required
@@ -1191,7 +1246,13 @@ def duzenle(kiralama_id):
                 'doviz_kuru_usd': form.doviz_kuru_usd.data,
                 'doviz_kuru_eur': getattr(form, 'doviz_kuru_eur', form.doviz_kuru_usd).data
             }
-            kalemler_data = [k_form.data for k_form in form.kalemler]
+            kalemler_data = [
+                dict(
+                    k_form.data,
+                    _temp_id=request.form.get(f'kalemler-{idx}-temp_id') or f'kalem-{idx}',
+                )
+                for idx, k_form in enumerate(form.kalemler)
+            ]
             kapali_duzeltme_sayisi = 0
 
             for k_data in kalemler_data:
@@ -1217,7 +1278,13 @@ def duzenle(kiralama_id):
             if date_conflicts:
                 raise ValidationError(date_conflicts[0]['message'])
 
-            KiralamaService.update_kiralama_with_relations(kiralama.id, kiralama_data, kalemler_data, actor_id=actor_id)
+            nakliye_seferleri = _posted_nakliye_seferleri()
+            nakliye_archive_ids = _posted_nakliye_archive_ids()
+            KiralamaService.update_kiralama_with_relations(
+                kiralama.id, kiralama_data, kalemler_data, actor_id=actor_id,
+                nakliye_seferleri=nakliye_seferleri,
+                nakliye_archive_ids=nakliye_archive_ids,
+            )
             log_description = f"Kiralama güncellendi: {kiralama.kiralama_form_no}"
             if kapali_duzeltme_sayisi:
                 log_description += f" | Şifre doğrulamalı kapalı kalem düzenleme: {kapali_duzeltme_sayisi} kapatılmış kalem"
@@ -1322,7 +1389,94 @@ def duzenle(kiralama_id):
         subeler = []
         markalar = []
     tipler = [tip for tip, _ in EKIPMAN_TIPI_SECENEKLERI]
-    return render_template('kiralama/form.html', form=form, kiralama=kiralama, markalar=markalar, subeler=subeler, tipler=tipler, is_edit=True, ekipman_sube_map=ekipman_sube_map, ekipman_map_json=json.dumps(ekipman_map, ensure_ascii=False), return_url=_kiralama_return_url(), date_conflicts=date_conflicts)
+    sefer_json = request.form.get('nakliye_seferleri_json') if request.method == 'POST' else ''
+    if not sefer_json and getattr(kiralama, 'nakliye_modeli', 'legacy') == 'sefer':
+        sefer_json = json.dumps(
+            NakliyeSeferService.sefer_modeli_payload(kiralama),
+            ensure_ascii=False,
+            default=str,
+        )
+    return render_template('kiralama/form.html', form=form, kiralama=kiralama, markalar=markalar, subeler=subeler, tipler=tipler, is_edit=True, ekipman_sube_map=ekipman_sube_map, ekipman_map_json=json.dumps(ekipman_map, ensure_ascii=False), return_url=_kiralama_return_url(), date_conflicts=date_conflicts, nakliye_seferleri_json=sefer_json or '')
+
+
+@kiralama_bp.route('/sefer-modeline-gecir/<int:kiralama_id>', methods=['POST'])
+@login_required
+def sefer_modeline_gecir(kiralama_id):
+    """Legacy kayıtları mali satırları koruyan sefer dönüşümüyle geçirir."""
+    kiralama = db.get_or_404(Kiralama, kiralama_id)
+    try:
+        from app.services.nakliye_gecis_services import GuvenliNakliyeGecisService
+        GuvenliNakliyeGecisService.convert_single(
+            kiralama, actor_id=getattr(current_user, 'id', None)
+        )
+        db.session.commit()
+        flash('Nakliye sefer modeli etkinleştirildi. Seferleri aynı formda gruplayabilirsiniz.', 'success')
+    except Exception as exc:
+        db.session.rollback()
+        flash(f'Sefer dönüşümü başarısız: {exc}', 'warning')
+    return redirect(url_for('kiralama.duzenle', kiralama_id=kiralama_id))
+
+
+@kiralama_bp.route('/<int:kiralama_id>/coklu-donus', methods=['POST'])
+@login_required
+def coklu_donus(kiralama_id):
+    """Sefer modelindeki seçili kalemleri tek dönüş seferinde sonlandırır."""
+    kiralama = db.get_or_404(Kiralama, kiralama_id)
+    try:
+        data = request.get_json(silent=True)
+        if data is None:
+            raw = request.form.get('donus_seferi_json') or '{}'
+            data = json.loads(raw)
+        allocations = data.get('dagitimlar') or data.get('allocations') or []
+        if not allocations:
+            ids = data.get('kalem_ids') or []
+            amounts = data.get('tutarlar') or {}
+            allocations = [
+                {'kiralama_kalemi_id': int(kid), 'tutar': amounts.get(str(kid), amounts.get(kid, 0))}
+                for kid in ids
+            ]
+        if not allocations:
+            raise ValidationError('Dönüş için en az bir makine seçilmelidir.')
+        date_value = data.get('islem_tarihi') or data.get('tarih') or date.today().isoformat()
+        payload = [{
+            'id': data.get('id'),
+            'sefer_uuid': data.get('sefer_uuid'),
+            'yon': 'donus',
+            'tarih': date_value,
+            'islem_tarihi': date_value,
+            'guzergah': data.get('guzergah') or 'Dönüş',
+            'nakliye_tipi': data.get('nakliye_tipi') or 'oz_mal',
+            'arac_id': data.get('arac_id'),
+            'taseron_firma_id': data.get('taseron_firma_id'),
+            'taseron_maliyet': data.get('taseron_maliyet', 0),
+            'kdv_orani': data.get('kdv_orani', kiralama.kdv_orani or 0),
+            'tevkifat_orani': data.get('tevkifat_orani'),
+            'dagitimlar': allocations,
+        }]
+        NakliyeSeferService.sync_kiralama(kiralama, payload, actor_id=getattr(current_user, 'id', None), allow_new_donus=True)
+        selected_ids = {int(a.get('kiralama_kalemi_id') or a.get('kalem_id')) for a in allocations}
+        for kalem in kiralama.kalemler:
+            if kalem.id in selected_ids:
+                kalem.sonlandirildi = True
+                if data.get('donus_sube_id'):
+                    kalem.donus_sube_id = int(data['donus_sube_id'])
+                db.session.add(kalem)
+        db.session.commit()
+        if request.is_json:
+            return jsonify({'ok': True, 'message': 'Çoklu dönüş seferi kaydedildi.'})
+        flash('Çoklu dönüş seferi kaydedildi.', 'success')
+    except (ValidationError, ValueError, TypeError) as exc:
+        db.session.rollback()
+        if request.is_json:
+            return jsonify({'ok': False, 'message': str(exc)}), 400
+        flash(f'Dönüş kaydedilemedi: {exc}', 'warning')
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('Çoklu dönüş seferi kaydedilemedi')
+        if request.is_json:
+            return jsonify({'ok': False, 'message': 'Dönüş seferi kaydedilemedi.'}), 500
+        flash('Dönüş seferi kaydedilemedi.', 'danger')
+    return redirect(url_for('kiralama.detay_modal', kiralama_id=kiralama_id))
 
 @kiralama_bp.route('/sil/<int:kiralama_id>', methods=['POST'])
 @login_required
@@ -1491,6 +1645,7 @@ def sonlandir_kalem():
         )
         flash("Kiralama başarıyla sonlandırıldı.", "success")
     except ValidationError as e:
+        db.session.rollback()
         OperationLogService.log(
             module='kiralama',
             action='sonlandir_kalem',
@@ -1503,6 +1658,7 @@ def sonlandir_kalem():
         )
         flash(f"Hata: {str(e)}", "warning")
     except Exception as e:
+        db.session.rollback()
         current_app.logger.error(f"Kalem Sonlandırma Hatası: {str(e)}")
         OperationLogService.log(
             module='kiralama',

@@ -363,6 +363,10 @@ def hizmet_duzelt(id):
 
     if form.validate_on_submit():
         try:
+            if getattr(hizmet, 'nakliye_dagitim_id', None):
+                from app.services.nakliye_sefer_services import NakliyeSeferService
+                if NakliyeSeferService._faturali(hizmet):
+                    raise ValidationError('Faturalı nakliye dağıtımı doğrudan düzenlenemez; iade/ek fatura süreci kullanılmalıdır.')
             hizmet.firma_id = form.firma_id.data
             hizmet.tarih = form.tarih.data
             hizmet.islem_tarihi = form.islem_tarihi.data or form.tarih.data

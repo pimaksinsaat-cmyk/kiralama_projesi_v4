@@ -9,6 +9,7 @@
 {% block content %}
 
 <style>
+    .main-content { max-width: 2000px; width: 100%; }
     label { font-weight: 600; font-size: .9rem }
     .hidden { display: none }
     table td, table th { font-size: .85rem; white-space: nowrap; vertical-align: middle; }
@@ -22,12 +23,39 @@
     .form-check-input[type="checkbox"]:focus { box-shadow: 0 0 0 0.2rem rgba(13,110,253,.25); }
     .ts-control input { text-align: left; }
     .ts-control input::placeholder, #firma-musteri-filtre::placeholder { color: #9ca3af !important; opacity: 1; font-style: italic; }
+    .sefer-card { border: 1px solid #b7dce8; border-left: 4px solid #0dcaf0; border-radius: .5rem; height: 100%; }
+    .sefer-card .sefer-card-title { font-weight: 700; }
+    .sefer-card .sefer-meta { font-size: .82rem; color: #64748b; }
+    .sefer-card .sefer-allocation { display: flex; justify-content: space-between; gap: .5rem; border-top: 1px solid #eef2f5; padding-top: .25rem; margin-top: .25rem; }
+    .sefer-model-mode #dis-nakliye-alani, .sefer-model-mode #donus-taseron-finans-alani { display: none !important; }
+    .sefer-model-mode #ozmal-nakliye-alani, .sefer-model-mode .col-md-2:has(#g-dis-nakliye), .sefer-model-mode .col-md-2:has(#g-nakliye), .sefer-model-mode .col-md-1:has(#g-nakliye-kdv), .sefer-model-mode .col-md-1:has(#nakliye-satis-tevkifat-toggle), .sefer-model-mode .col-md-3:has(#g-donus-fatura-et) { display: none !important; }
+    .sefer-model-mode #g-nakliye, .sefer-model-mode #g-nakliye-kdv, .sefer-model-mode #nakliye-satis-tevkifat-toggle, .sefer-model-mode #nakliye-satis-tevkifat-oran, .sefer-model-mode #g-donus-fatura-et { display: none !important; }
+    @media (min-width: 768px) {
+        /* Tarih ve günlük satış alanları kolon tarafından sıkıştırılmasın. */
+        .row.g-3.align-items-end > .col-md-2:has(#g-baslangic),
+        .row.g-3.align-items-end > .col-md-2:has(#g-bitis),
+        .row.g-3.align-items-end > .col-md-2:has(#g-gunluk) {
+            flex: 0 0 22% !important;
+            max-width: 22% !important;
+        }
+        .row.g-3.align-items-end > .col-md-2:has(#g-baslangic) .form-control,
+        .row.g-3.align-items-end > .col-md-2:has(#g-bitis) .form-control,
+        .row.g-3.align-items-end > .col-md-2:has(#g-gunluk) .form-control { width: 100%; }
+    }
 </style>
 
-<div class="container">
-    <form method="POST" id="kiralama-form">
+<div class="container-fluid">
+    <form method="POST" id="kiralama-form" class="{% if not is_edit or (kiralama.nakliye_modeli|default('legacy', true)) == 'sefer' %}sefer-model-mode{% endif %}">
         {{ form.hidden_tag() }}
         <input type="hidden" name="financial_edit_password" id="financial-edit-password" value="{{ request.form.get('financial_edit_password', '') if date_conflicts else '' }}">
+        <input type="hidden" name="nakliye_seferleri_json" id="nakliye-seferleri-json" value="{{ nakliye_seferleri_json|default('', true)|e }}">
+        <input type="hidden" name="nakliye_seferleri_archive_ids" id="nakliye-seferleri-archive-ids" value="">
+        {% if is_edit and (kiralama.nakliye_modeli|default('legacy', true)) != 'sefer' %}
+        <div class="alert alert-info d-flex justify-content-between align-items-center gap-3 mt-2">
+            <span><strong>Legacy nakliye kayıtları:</strong> Mevcut sefer ve cari kimlikleri korunarak sefer modeline geçirilebilir.</span>
+            <button type="submit" class="btn btn-outline-primary btn-sm" formmethod="post" formaction="{{ url_for('kiralama.sefer_modeline_gecir', kiralama_id=kiralama.id) }}">Sefer modeline geçir</button>
+        </div>
+        {% endif %}
         {% if is_edit and return_url %}
         <input type="hidden" name="return_url" value="{{ return_url }}">
         {% endif %}
@@ -107,8 +135,10 @@
             </div>
         </div>
 
+        <div class="row g-3 mb-3 align-items-start">
+        <div class="{% if not is_edit or (kiralama.nakliye_modeli|default('legacy', true)) == 'sefer' %}col-lg-7{% else %}col-12{% endif %}">
         <!-- 2. EKİPMAN VE FİNANSAL GİRİŞ -->
-        <div class="card mb-3 shadow-sm border-success">
+        <div class="card shadow-sm border-success h-100">
             <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">2. Ekipman ve Finansal Giriş</h5>
                 <small>Satır eklemek için tüm bilgileri doldurun</small>
@@ -295,12 +325,12 @@
                                 <label class="d-block mb-0 fw-bold">Günlük Satış (TL)</label>
                                 <input type="number" id="g-gunluk" class="form-control">
                             </div>
-                            <div class="col-md-1">
+                            <div class="col-md-2">
                                 <label class="d-block mb-0 fw-bold">KDV (%)</label>
                                 {{ form.kdv_orani(class="form-control") }}
                             </div>
                             <div class="col-md-2">
-                                <label class="fw-bold mb-0" style="white-space:nowrap;">Nakliye Bedeli (TL)</label>
+                                <label id="g-nakliye-label" class="fw-bold mb-0" style="white-space:nowrap;">Nakliye Bedeli (TL)</label>
                                 <input type="number" id="g-nakliye" class="form-control" placeholder="Tek Yön Bedeli">
                             </div>
                             <div class="col-md-1">
@@ -354,10 +384,29 @@
                 </div>
             </div>
         </div>
+        </div>
+        {% if not is_edit or (kiralama.nakliye_modeli|default('legacy', true)) == 'sefer' %}
+        <div class="col-lg-5">
+        <div class="card border-info shadow-sm h-100">
+            <div class="card-header bg-primary text-white fw-bold d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">3. Nakliye Bilgileri</h5>
+                <button type="button" class="btn btn-sm btn-light" id="sefer-ekle-btn">
+                    <i class="fas fa-plus me-1"></i>Sefer ekle
+                </button>
+            </div>
+            <div class="card-body">
+                <div id="nakliye-seferleri-cards" class="row g-3"></div>
+                <div id="nakliye-seferleri-empty" class="alert alert-light border text-muted mb-0">Henüz sefer eklenmedi.</div>
+                <div id="nakliye-seferleri-editor-error" class="text-danger small mt-2"></div>
+            </div>
+        </div>
+        </div>
+        {% endif %}
+        </div>
 
         <!-- 3. KİRALAMA KALEMLERİ -->
         <div class="card shadow-sm mb-3">
-            <div class="card-header"><h5>3. Kiralama Kalemleri</h5></div>
+            <div class="card-header"><h5>4. Kiralama Kalemleri</h5></div>
             <div class="table-responsive">
                 <table class="table table-hover mb-0" id="kalem-tablosu">
                     <thead class="table-light">
@@ -379,6 +428,7 @@
         {% for k_form in form.kalemler %}
         <div class="kalem-group" data-idx="{{ loop.index0 }}">
             <input type="hidden" name="kalemler-{{ loop.index0 }}-id" value="{{ k_form.form.id.data or '' }}">
+            <input type="hidden" name="kalemler-{{ loop.index0 }}-temp_id" value="kalem-{{ k_form.form.id.data or loop.index0 }}">
             <input type="hidden" name="kalemler-{{ loop.index0 }}-dis_tedarik_ekipman" value="{{ k_form.form.dis_tedarik_ekipman.data or 0 }}">
             <input type="hidden" name="kalemler-{{ loop.index0 }}-dis_tedarik_nakliye" value="{{ k_form.form.dis_tedarik_nakliye.data or 0 }}">
             <input type="hidden" name="kalemler-{{ loop.index0 }}-ekipman_id" value="{{ k_form.form.ekipman_id.data or 0 }}">
@@ -455,6 +505,104 @@
     </div>
 </div>
 
+<div class="modal fade" id="nakliyeSeferModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-info-subtle">
+                <h5 class="modal-title fw-bold" id="nakliye-sefer-modal-title">Nakliye seferi</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-3 mb-3">
+                    <div class="col-md-2">
+                        <label for="sefer-form-yon">Yön</label>
+                        <select id="sefer-form-yon" class="form-select">
+                            <option value="gidis">Gidiş</option>
+                            <option value="cift_yon">Gidiş ve dönüş</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2"><label for="sefer-form-tarih">Sefer tarihi</label><input id="sefer-form-tarih" type="date" class="form-control"></div>
+                    <div class="col-md-2"><label for="sefer-form-islem-tarihi">İşlem tarihi</label><input id="sefer-form-islem-tarihi" type="date" class="form-control"></div>
+                    <div class="col-md-6"><label for="sefer-form-guzergah">Güzergâh</label><input id="sefer-form-guzergah" type="text" maxlength="200" class="form-control" placeholder="Örn. Şantiye / depo"></div>
+                    <div class="col-md-3">
+                        <label for="sefer-form-tipi">Nakliye tipi</label>
+                        <select id="sefer-form-tipi" class="form-select"><option value="oz_mal">Öz mal</option><option value="taseron">Taşeron</option></select>
+                    </div>
+                    <div class="col-md-3" id="sefer-ozmal-alani">
+                        <label for="sefer-form-arac">Öz mal aracı</label>
+                        <select id="sefer-form-arac" class="form-select"></select>
+                    </div>
+                    <div class="col-12 d-none" id="sefer-taseron-alani">
+                        <div class="row g-3 align-items-end">
+                            <div class="col-md-4"><label for="sefer-form-taseron">Taşeron firma</label><select id="sefer-form-taseron" class="form-select"></select></div>
+                            <div class="col-md-2"><label for="sefer-form-taseron-maliyet">Taşeron maliyeti</label><input id="sefer-form-taseron-maliyet" type="number" min="0" step="0.01" class="form-control" value="0"></div>
+                            <div class="col-md-2"><label for="sefer-form-taseron-kdv">Taşeron KDV (%)</label><input id="sefer-form-taseron-kdv" type="number" min="0" max="100" step="1" class="form-control" value="20"></div>
+                            <div class="col-md-4">
+                                <label class="d-block">Taşeron alış tevkifatı</label>
+                                <div class="d-flex flex-wrap align-items-center gap-2">
+                                    <div class="form-check mb-0">
+                                        <input class="form-check-input" type="radio" name="sefer-form-taseron-tevkifat-mod" id="sefer-form-taseron-tevkifatsiz" value="yok" checked>
+                                        <label class="form-check-label" for="sefer-form-taseron-tevkifatsiz">Tevkifatsız</label>
+                                    </div>
+                                    <div class="form-check mb-0">
+                                        <input class="form-check-input" type="radio" name="sefer-form-taseron-tevkifat-mod" id="sefer-form-taseron-tevkifatli" value="var">
+                                        <label class="form-check-label" for="sefer-form-taseron-tevkifatli">Tevkifatlı</label>
+                                    </div>
+                                    <select id="sefer-form-taseron-tevkifat" class="form-select form-select-sm" style="max-width:110px;display:none;">
+                                        <option value="2/10">2/10</option>
+                                        <option value="2/5">2/5</option>
+                                        <option value="3/10">3/10</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-12"><label for="sefer-form-aciklama">Açıklama</label><input id="sefer-form-aciklama" type="text" maxlength="500" class="form-control"></div>
+                </div>
+                <div class="border rounded">
+                    <div class="p-2 bg-light border-bottom fw-bold">Makine dağıtımları</div>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0" id="sefer-dagitim-tablosu">
+                            <thead><tr><th style="width:42px"></th><th>Makine</th><th>Kiralamadaki dönem</th><th id="sefer-dagitim-tutar-th" style="width:180px">Dağıtım tutarı (TL)</th><th>Durum</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="row g-3 align-items-end mt-3">
+                    <div class="col-md-2">
+                        <label for="sefer-form-kdv">KDV (%)</label>
+                        <input id="sefer-form-kdv" type="number" min="0" max="100" step="1" class="form-control" value="20">
+                    </div>
+                    <div class="col-md-5">
+                        <label class="d-block">Müşteri tevkifatı</label>
+                        <div class="d-flex flex-wrap align-items-center gap-3">
+                            <div class="form-check mb-0">
+                                <input class="form-check-input" type="radio" name="sefer-form-tevkifat-mod" id="sefer-form-tevkifatsiz" value="yok" checked>
+                                <label class="form-check-label" for="sefer-form-tevkifatsiz">Tevkifatsız</label>
+                            </div>
+                            <div class="form-check mb-0">
+                                <input class="form-check-input" type="radio" name="sefer-form-tevkifat-mod" id="sefer-form-tevkifatli" value="var">
+                                <label class="form-check-label" for="sefer-form-tevkifatli">Tevkifatlı</label>
+                            </div>
+                            <select id="sefer-form-tevkifat" class="form-select form-select-sm" style="max-width:140px;display:none;">
+                                <option value="2/10">2/10</option>
+                                <option value="2/5">2/5</option>
+                                <option value="3/10">3/10</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-5 text-md-end fw-bold">Sefer toplamı: <span id="sefer-form-toplam" class="ms-2 text-primary">0,00 TL</span></div>
+                </div>
+                <div id="sefer-form-error" class="text-danger small mt-2"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Vazgeç</button>
+                <button type="button" class="btn btn-primary" id="sefer-form-kaydet">Seferi kaydet</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% include 'kiralama/_filtre_modal.html' %}
 <script id="ekipman-sube-map" type="application/json">{{ ekipman_sube_map|default({}, true)|tojson|safe }}</script>
 <script id="ekipman-map" type="application/json">{{ ekipman_map_json|default('{}', true)|safe }}</script>
@@ -480,7 +628,8 @@ document.addEventListener('DOMContentLoaded', function() {
     gunSayisiGuncelle();
     document.getElementById('g-baslangic').addEventListener('change', gunSayisiGuncelle);
     document.getElementById('g-bitis').addEventListener('change', gunSayisiGuncelle);
-    if (IS_EDIT) renderTable();
+    initSeferEditor();
+    if (hiddenContainer?.querySelectorAll('.kalem-group').length) renderTable();
     if (IS_EDIT && DATE_CONFLICTS.length > 0) {
         const firstConflict = DATE_CONFLICTS[0];
         window.setTimeout(() => {
@@ -547,6 +696,543 @@ const financialPasswordField = document.getElementById('financial-edit-password-
 const financialPasswordError = document.getElementById('financial-edit-password-error');
 const financialPasswordConfirm = document.getElementById('financial-edit-password-confirm');
 const ekipmanSubeMap = JSON.parse(document.getElementById('ekipman-sube-map')?.textContent || '{}');
+const SEFER_MODEL = {{ 'true' if not is_edit or (kiralama.nakliye_modeli|default('legacy', true)) == 'sefer' else 'false' }};
+const seferCards = document.getElementById('nakliye-seferleri-cards');
+const seferEmpty = document.getElementById('nakliye-seferleri-empty');
+const seferHidden = document.getElementById('nakliye-seferleri-json');
+const seferArchiveHidden = document.getElementById('nakliye-seferleri-archive-ids');
+const seferModalEl = document.getElementById('nakliyeSeferModal');
+const seferModalTitle = document.getElementById('nakliye-sefer-modal-title');
+const seferFormError = document.getElementById('sefer-form-error');
+let seferModal = null;
+let seferState = [];
+let seferArchiveIds = [];
+let editingSeferIdx = null;
+
+function htmlEscape(value) {
+    return String(value ?? '').replace(/[&<>'"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[ch]));
+}
+
+function moneyNumber(value) {
+    const number = Number.parseFloat(String(value ?? '').replace(',', '.'));
+    return Number.isFinite(number) ? number : 0;
+}
+
+function moneyText(value) {
+    return moneyNumber(value).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' TL';
+}
+
+function isoToday() {
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    return now.toISOString().slice(0, 10);
+}
+
+function getKalemTempId(group, idx) {
+    return group.querySelector('[name$="-temp_id"]')?.value || `kalem-${idx}`;
+}
+
+function getSeferKalemler() {
+    return Array.from(hiddenContainer.querySelectorAll('.kalem-group')).map((group, idx) => {
+        const isDis = isTruthyFlag(group.querySelector('[name$="-dis_tedarik_ekipman"]')?.value || '0');
+        const kalemId = Number(group.querySelector('[name$="-id"]')?.value || 0) || null;
+        const tempId = getKalemTempId(group, idx);
+        const ekipmanId = group.querySelector('[name$="-ekipman_id"]')?.value || '0';
+        const harici = [
+            group.querySelector('[name$="-harici_ekipman_marka"]')?.value,
+            group.querySelector('[name$="-harici_ekipman_model"]')?.value,
+        ].filter(Boolean).join(' ');
+        const label = isDis ? (harici || 'Harici ekipman') : (getOptionTextByValue(g_ekipman, ekipmanId) || `Makine #${kalemId || idx + 1}`);
+        return {
+            id: kalemId,
+            temp_id: tempId,
+            key: kalemId ? `id:${kalemId}` : `temp:${tempId}`,
+            label,
+            baslangic: group.querySelector('[name$="-kiralama_baslangici"]')?.value || '',
+            bitis: group.querySelector('[name$="-kiralama_bitis"]')?.value || '',
+        };
+    });
+}
+
+function allocationKey(allocation) {
+    const kalemId = Number(allocation?.kiralama_kalemi_id || 0);
+    if (kalemId > 0) return `id:${kalemId}`;
+    return `temp:${allocation?.kalem_temp_id || ''}`;
+}
+
+function pruneSeferStateToCurrentKalemler() {
+    if (!SEFER_MODEL) return;
+    const keys = new Set(getSeferKalemler().map(kalem => kalem.key));
+    seferState = (seferState || []).filter(sefer => {
+        sefer.dagitimlar = (sefer.dagitimlar || []).filter(d => keys.has(allocationKey(d)));
+        if (sefer.dagitimlar.length) return true;
+        if (sefer.id) seferArchiveIds.push(sefer.id);
+        return false;
+    });
+}
+
+function removeKalemFromSeferState(kalemKey) {
+    if (!SEFER_MODEL || !kalemKey) return;
+    seferState = (seferState || []).filter(sefer => {
+        sefer.dagitimlar = (sefer.dagitimlar || []).filter(d => allocationKey(d) !== kalemKey);
+        if (sefer.dagitimlar.length) return true;
+        if (sefer.id) seferArchiveIds.push(sefer.id);
+        return false;
+    });
+    renderSeferCards();
+}
+
+function setKalemHidden(group, suffix, value) {
+    if (!group) return;
+    let field = group.querySelector(`[name$="-${suffix}"]`);
+    if (!field) {
+        const ref = group.querySelector('input[name^="kalemler-"]');
+        if (!ref) return;
+        field = document.createElement('input');
+        field.type = 'hidden';
+        field.name = ref.name.replace(/[^-]+$/, '') + suffix;
+        group.appendChild(field);
+    }
+    field.value = value;
+}
+
+function kalemSeferNakliye(key) {
+    let gidis = 0, donus = 0, plannedDonus = 0, hasRealDonus = false, kdv = null;
+    (seferState || []).forEach(sefer => {
+        (sefer.dagitimlar || []).forEach(d => {
+            if (allocationKey(d) !== key) return;
+            const amt = moneyNumber(d.tutar);
+            if (sefer.yon === 'donus') {
+                donus += amt;
+                hasRealDonus = true;
+            } else {
+                // cift_yon tutarı kullanıcı tarafından gidiş+dönüş toplamı
+                // olarak girilir. Kalem toplamında iki kez saymamak için
+                // gidiş ve planlanan dönüş paylarını eşit böl.
+                if (sefer.cift_yon) {
+                    gidis += amt / 2;
+                    plannedDonus += amt / 2;
+                } else {
+                    gidis += amt;
+                }
+                if (kdv == null && sefer.kdv_orani !== '' && sefer.kdv_orani != null) kdv = sefer.kdv_orani;
+            }
+        });
+    });
+    if (!hasRealDonus && plannedDonus) donus = plannedDonus;
+    return { gidis, donus, hasDonus: hasRealDonus || plannedDonus > 0, total: gidis + donus, kdv };
+}
+
+function syncKalemNakliyeFromSeferler() {
+    if (!SEFER_MODEL || !hiddenContainer) return;
+    getSeferKalemler().forEach((kalem, idx) => {
+        const group = hiddenContainer.querySelectorAll('.kalem-group')[idx];
+        if (!group) return;
+        const info = kalemSeferNakliye(kalem.key);
+        setKalemHidden(group, 'nakliye_satis_fiyat', info.total.toFixed(2));
+        setKalemHidden(group, 'donus_nakliye_fatura_et', info.hasDonus ? '1' : '0');
+        if (info.kdv != null) setKalemHidden(group, 'nakliye_satis_kdv', info.kdv);
+    });
+}
+
+const KIRA_TUTAR_IKON = ' <i class="fas fa-file-contract text-success" title="Kiralama tutarı"></i>';
+
+function kalemNakliyeHucre(gun, brFiyat, group, idx) {
+    if (SEFER_MODEL) {
+        const kalem = getSeferKalemler()[idx];
+        const info = kalem ? kalemSeferNakliye(kalem.key) : { gidis: 0, donus: 0, hasDonus: false, total: 0 };
+        // Sefer bilgisindeki toplam, gidiş+dönüş bedeliyse zaten birleşik tutardır.
+        // Kullanıcıya tekrar iki bacak gibi gösterip toplamı ikiyle çarpmayın.
+        const nkBirim = info.total;
+        const yonLabel = info.hasDonus
+            ? ' <i class="fas fa-truck text-primary"></i><span class="fw-bold text-primary ms-1" style="font-size:1.35em;line-height:1;letter-spacing:-1px;">⇄</span>'
+            : ' <i class="fas fa-truck text-primary"></i><span class="fw-bold text-primary ms-1" style="font-size:1.35em;line-height:1;">→</span>';
+        return {
+            html: `${gun}x${formatTRCurrency(brFiyat)}${KIRA_TUTAR_IKON} + ${formatTRCurrency(nkBirim)} TL${yonLabel}`,
+            toplam: (gun * brFiyat) + info.total,
+        };
+    }
+    const nkFiyat = parseFloat(group.querySelector('[name$="-nakliye_satis_fiyat"]')?.value) || 0;
+    const donusFatura = group.querySelector('[name$="-donus_nakliye_fatura_et"]')?.value === '1';
+    // Legacy kayıtlarda nakliye_satis_fiyat gidiş+dönüş için de birleşik toplamdır.
+    const nkBirim = nkFiyat;
+    return {
+        html: `${gun}x${formatTRCurrency(brFiyat)}${KIRA_TUTAR_IKON} + ${formatTRCurrency(nkBirim)} TL${donusFatura ? ' (Gidiş + Dönüş)' : ' (Tek Yön)'}`,
+        toplam: (gun * brFiyat) + nkFiyat,
+    };
+}
+
+function normalizeSefer(raw) {
+    return {
+        id: raw?.id || null,
+        sefer_uuid: raw?.sefer_uuid || ((window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : `tmp-${Date.now()}-${Math.random()}`),
+        yon: raw?.yon === 'donus' ? 'donus' : 'gidis',
+        cift_yon: Boolean(raw?.cift_yon) && raw?.yon !== 'donus',
+        tarih: raw?.tarih || isoToday(),
+        islem_tarihi: raw?.islem_tarihi || raw?.tarih || isoToday(),
+        guzergah: raw?.guzergah || '',
+        nakliye_tipi: raw?.nakliye_tipi || 'oz_mal',
+        arac_id: raw?.arac_id || null,
+        taseron_firma_id: raw?.taseron_firma_id || null,
+        taseron_maliyet: raw?.taseron_maliyet || '0',
+        taseron_kdv_orani: raw?.taseron_kdv_orani ?? 20,
+        taseron_tevkifat_orani: raw?.taseron_tevkifat_orani || '',
+        kdv_orani: raw?.kdv_orani ?? 20,
+        tevkifat_orani: raw?.tevkifat_orani || '',
+        plaka: raw?.plaka || '',
+        aciklama: raw?.aciklama || '',
+        dagitimlar: Array.isArray(raw?.dagitimlar) ? raw.dagitimlar.map(d => ({ ...d, tutar: String(d.tutar ?? '0') })) : [],
+    };
+}
+
+function syncSeferHidden() {
+    if (!SEFER_MODEL || !seferHidden) return;
+    seferHidden.value = JSON.stringify(seferState);
+    if (seferArchiveHidden) seferArchiveHidden.value = seferArchiveIds.join(',');
+}
+
+function ensureTaslakGidis() {
+    if (!SEFER_MODEL || seferState.length || !getSeferKalemler().length) return;
+    seferState = [normalizeSefer({
+        yon: 'gidis',
+        tarih: document.getElementById('g-baslangic')?.value || isoToday(),
+        islem_tarihi: document.getElementById('g-baslangic')?.value || isoToday(),
+        guzergah: 'Kiralama gidişi',
+        dagitimlar: getSeferKalemler().map(k => ({
+            ...(k.id ? { kiralama_kalemi_id: k.id } : { kalem_temp_id: k.temp_id }),
+            tutar: '0',
+            kalem_etiketi: k.label,
+        })),
+    })];
+}
+
+function renderSeferCards() {
+    if (!SEFER_MODEL || !seferCards) return;
+    seferCards.innerHTML = '';
+    seferEmpty?.classList.toggle('d-none', seferState.length > 0);
+    const kalemler = getSeferKalemler();
+    seferState.forEach((sefer, idx) => {
+        const total = (sefer.dagitimlar || []).reduce((sum, d) => sum + moneyNumber(d.tutar), 0);
+        const isEmptySefer = !(sefer.dagitimlar || []).length;
+        const yonText = sefer.yon === 'donus' ? 'Dönüş' : (sefer.cift_yon ? 'Gidiş ve dönüş' : 'Gidiş');
+        const yonBadge = sefer.yon === 'donus' ? 'bg-warning text-dark' : (sefer.cift_yon ? 'bg-info text-dark' : 'bg-primary');
+        const partyText = sefer.nakliye_tipi === 'taseron'
+            ? seferSelectLabel('g-nakliye-tedarikci', sefer.taseron_firma_id)
+            : (seferSelectLabel('g-ozmal-nakliye-araci', sefer.arac_id) || sefer.plaka);
+        const allocations = (sefer.dagitimlar || []).map(d => {
+            const k = kalemler.find(item => item.key === allocationKey(d));
+            return `<div class="sefer-allocation"><span>${htmlEscape(k?.label || d.kalem_etiketi || `Kalem #${d.kiralama_kalemi_id || d.kalem_temp_id}`)}</span><strong>${htmlEscape(moneyText(d.tutar))}</strong></div>`;
+        }).join('');
+        const emptyNotice = isEmptySefer
+            ? `<div class="alert alert-warning py-2 mb-0"><i class="fas fa-triangle-exclamation me-1"></i>Dağıtımsız sefer — kaydetmeden önce ${sefer.id ? 'arşivleyin' : 'silin'}.</div>`
+            : allocations;
+        const card = document.createElement('div');
+        card.className = 'col-12';
+        card.innerHTML = `
+            <div class="sefer-card p-3 bg-white shadow-sm">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                    <div>
+                        <div class="sefer-card-title"><span class="badge ${yonBadge} me-1">${yonText}</span>${htmlEscape(sefer.guzergah || 'Güzergâh belirtilmedi')}</div>
+                        <div class="sefer-meta mt-1">${htmlEscape(partyText || (sefer.nakliye_tipi === 'taseron' ? 'Taşeron firma seçilmedi' : 'Araç seçilmedi'))}</div>
+                    </div>
+                    <div class="text-end"><div class="fw-bold text-primary">${htmlEscape(moneyText(total))}</div><small class="text-muted">${sefer.dagitimlar.length} makine</small></div>
+                </div>
+                <div class="small mt-3">${emptyNotice || '<span class="text-muted">Dağıtım yok</span>'}</div>
+                <div class="d-flex justify-content-between align-items-center mt-3 pt-2 border-top">
+                    <small class="text-muted">${sefer.id ? `Sefer #${sefer.id}` : 'Yeni sefer'}</small>
+                    <div class="btn-group btn-group-sm">
+                        <button type="button" class="btn btn-outline-info sefer-duzenle-btn" data-idx="${idx}"><i class="fas fa-edit me-1"></i>Düzenle</button>
+                        <button type="button" class="btn btn-outline-danger sefer-kaldir-btn" data-idx="${idx}">${sefer.id
+                            ? '<i class="fas fa-box-archive me-1"></i>Arşivle'
+                            : '<i class="fas fa-trash me-1"></i>Sil'}</button>
+                    </div>
+                </div>
+            </div>`;
+        seferCards.appendChild(card);
+    });
+    syncSeferHidden();
+}
+
+function seferSelectLabel(sourceId, id) {
+    if (id == null || id === '' || String(id) === '0') return '';
+    const source = document.getElementById(sourceId);
+    if (!source) return '';
+    const opt = Array.from(source.options).find(o => String(o.value) === String(id));
+    return (opt?.textContent || '').trim();
+}
+
+function fillSeferSelect(targetId, sourceId, selected) {
+    const target = document.getElementById(targetId);
+    const source = document.getElementById(sourceId);
+    if (!target) return;
+    target.innerHTML = source ? source.innerHTML : '<option value="0">Seçiniz</option>';
+    target.value = selected == null ? '0' : String(selected);
+    if (target.value !== String(selected ?? 0)) target.value = '0';
+}
+
+function findAllocation(sefer, kalem) {
+    return (sefer.dagitimlar || []).find(d => allocationKey(d) === kalem.key);
+}
+
+function renderSeferAllocationRows(sefer) {
+    const tbodyEl = document.querySelector('#sefer-dagitim-tablosu tbody');
+    if (!tbodyEl) return;
+    tbodyEl.innerHTML = '';
+    getSeferKalemler().forEach(kalem => {
+        const allocation = findAllocation(sefer, kalem);
+        const faturali = Boolean(allocation?.faturali);
+        const row = document.createElement('tr');
+        row.dataset.kalemKey = kalem.key;
+        row.innerHTML = `
+            <td><input class="form-check-input sefer-kalem-check" type="checkbox" ${allocation ? 'checked' : ''} ${faturali ? 'disabled' : ''}></td>
+            <td class="fw-semibold">${htmlEscape(kalem.label)}</td>
+            <td class="small text-muted">${htmlEscape(kalem.baslangic)} / ${htmlEscape(kalem.bitis)}</td>
+            <td><input class="form-control form-control-sm sefer-kalem-tutar" type="number" min="0" step="0.01" value="${htmlEscape(allocation?.tutar ?? '0')}" ${faturali ? 'readonly' : ''}></td>
+            <td class="small">${faturali ? '<span class="text-danger fw-bold">Faturalı</span>' : '<span class="text-muted">Düzenlenebilir</span>'}</td>`;
+        tbodyEl.appendChild(row);
+    });
+    updateDagitimTutarLabel(sefer);
+    updateSeferModalTotal();
+}
+
+function updateDagitimTutarLabel(seferOrYon) {
+    const header = document.getElementById('sefer-dagitim-tutar-th');
+    if (!header) return;
+    const yon = typeof seferOrYon === 'string'
+        ? seferOrYon
+        : (seferOrYon?.yon === 'donus'
+            ? 'donus'
+            : (seferOrYon?.cift_yon ? 'cift_yon' : 'gidis'));
+    header.textContent = yon === 'donus'
+        ? 'Dönüş Tutarı (TL)'
+        : (yon === 'cift_yon' ? 'Gidiş ve Dönüş Tutarı (TL)' : 'Gidiş Tutarı (TL)');
+}
+
+function updateSeferModalTotal() {
+    const total = Array.from(document.querySelectorAll('#sefer-dagitim-tablosu tbody tr')).reduce((sum, row) => {
+        const check = row.querySelector('.sefer-kalem-check');
+        return sum + (check?.checked ? moneyNumber(row.querySelector('.sefer-kalem-tutar')?.value) : 0);
+    }, 0);
+    const target = document.getElementById('sefer-form-toplam');
+    if (target) target.textContent = moneyText(total);
+}
+
+function applySeferTevkifatUi(oran, yokId, varId, selId) {
+    const hasOran = Boolean(oran);
+    const yok = document.getElementById(yokId);
+    const varEl = document.getElementById(varId);
+    const sel = document.getElementById(selId);
+    if (yok) yok.checked = !hasOran;
+    if (varEl) varEl.checked = hasOran;
+    if (sel) {
+        sel.value = hasOran ? oran : '2/10';
+        if (hasOran && sel.value !== oran) {
+            const extra = document.createElement('option');
+            extra.value = oran;
+            extra.textContent = oran;
+            sel.appendChild(extra);
+            sel.value = oran;
+        }
+        sel.style.display = hasOran ? 'block' : 'none';
+    }
+}
+
+function toggleSeferTevkifatFields() {
+    applySeferTevkifatUi(
+        document.getElementById('sefer-form-tevkifatli')?.checked ? (document.getElementById('sefer-form-tevkifat')?.value || '2/10') : '',
+        'sefer-form-tevkifatsiz', 'sefer-form-tevkifatli', 'sefer-form-tevkifat'
+    );
+}
+
+function toggleSeferTaseronTevkifatFields() {
+    applySeferTevkifatUi(
+        document.getElementById('sefer-form-taseron-tevkifatli')?.checked ? (document.getElementById('sefer-form-taseron-tevkifat')?.value || '2/10') : '',
+        'sefer-form-taseron-tevkifatsiz', 'sefer-form-taseron-tevkifatli', 'sefer-form-taseron-tevkifat'
+    );
+}
+
+function toggleSeferTypeFields() {
+    const type = document.getElementById('sefer-form-tipi')?.value;
+    const isTaseron = type === 'taseron';
+    document.getElementById('sefer-ozmal-alani')?.classList.toggle('d-none', isTaseron);
+    document.getElementById('sefer-taseron-alani')?.classList.toggle('d-none', !isTaseron);
+    if (isTaseron) {
+        const kdvEl = document.getElementById('sefer-form-taseron-kdv');
+        if (kdvEl && (kdvEl.value === '' || kdvEl.value === '0')) kdvEl.value = '20';
+    }
+}
+
+function openSeferModal(idx = null) {
+    if (!SEFER_MODEL || !seferModalEl) return;
+    editingSeferIdx = idx;
+    const sefer = normalizeSefer(idx === null ? {
+        yon: 'gidis', tarih: isoToday(), islem_tarihi: isoToday(), guzergah: 'Kiralama gidişi', dagitimlar: [],
+    } : seferState[idx]);
+    seferModalTitle.textContent = idx === null ? 'Nakliye seferi ekle' : 'Nakliye seferini düzenle';
+    const yonSelect = document.getElementById('sefer-form-yon');
+    const isDonusSefer = sefer.yon === 'donus';
+    yonSelect.innerHTML = isDonusSefer
+        ? '<option value="donus">Dönüş (sonlandırma)</option>'
+        : '<option value="gidis">Gidiş</option><option value="cift_yon">Gidiş ve dönüş</option>';
+    yonSelect.disabled = isDonusSefer;
+    yonSelect.value = isDonusSefer ? 'donus' : (sefer.cift_yon ? 'cift_yon' : 'gidis');
+    updateDagitimTutarLabel(yonSelect.value);
+    document.getElementById('sefer-form-tarih').value = sefer.tarih;
+    document.getElementById('sefer-form-islem-tarihi').value = sefer.islem_tarihi;
+    document.getElementById('sefer-form-guzergah').value = sefer.guzergah;
+    document.getElementById('sefer-form-tipi').value = sefer.nakliye_tipi;
+    document.getElementById('sefer-form-taseron-maliyet').value = sefer.taseron_maliyet || '0';
+    document.getElementById('sefer-form-taseron-kdv').value = sefer.taseron_kdv_orani ?? 20;
+    document.getElementById('sefer-form-kdv').value = sefer.kdv_orani ?? 20;
+    applySeferTevkifatUi(sefer.tevkifat_orani || '', 'sefer-form-tevkifatsiz', 'sefer-form-tevkifatli', 'sefer-form-tevkifat');
+    applySeferTevkifatUi(sefer.taseron_tevkifat_orani || '', 'sefer-form-taseron-tevkifatsiz', 'sefer-form-taseron-tevkifatli', 'sefer-form-taseron-tevkifat');
+    document.getElementById('sefer-form-aciklama').value = sefer.aciklama || '';
+    fillSeferSelect('sefer-form-arac', 'g-ozmal-nakliye-araci', sefer.arac_id);
+    fillSeferSelect('sefer-form-taseron', 'g-nakliye-tedarikci', sefer.taseron_firma_id);
+    toggleSeferTypeFields();
+    renderSeferAllocationRows(sefer);
+    seferFormError.textContent = '';
+    if (!seferModal) seferModal = new bootstrap.Modal(seferModalEl);
+    seferModal.show();
+}
+
+function seferSelectId(elementOrId) {
+    const el = typeof elementOrId === 'string' ? document.getElementById(elementOrId) : elementOrId;
+    const value = el?.value;
+    if (value == null || value === '' || value === '0') return null;
+    return value;
+}
+
+function seferTipiEksikMi(sefer) {
+    if (sefer?.id && sefer?.gecis_kaynagi === 'legacy_kiralama_v1' && sefer?.gecis_eksik_bilgiler) {
+        return false;
+    }
+    if ((sefer?.nakliye_tipi || 'oz_mal') === 'taseron') {
+        const id = sefer?.taseron_firma_id;
+        return !id || String(id) === '0';
+    }
+    const id = sefer?.arac_id;
+    return !id || String(id) === '0';
+}
+
+function saveSeferModal() {
+    const yonChoice = document.getElementById('sefer-form-yon').value;
+    const existingYon = editingSeferIdx === null ? null : seferState[editingSeferIdx]?.yon;
+    const yon = (existingYon === 'donus' || yonChoice === 'donus') ? 'donus' : 'gidis';
+    const ciftYon = yon === 'gidis' && yonChoice === 'cift_yon';
+    const tarih = document.getElementById('sefer-form-tarih').value;
+    const islemTarihi = document.getElementById('sefer-form-islem-tarihi').value;
+    const guzergah = document.getElementById('sefer-form-guzergah').value.trim();
+    const rows = Array.from(document.querySelectorAll('#sefer-dagitim-tablosu tbody tr'));
+    const error = message => { seferFormError.textContent = message; return false; };
+    if (!tarih || !islemTarihi) return error('Sefer ve işlem tarihi zorunludur.');
+    if (!guzergah) return error('Güzergâh boş bırakılamaz.');
+    const allocations = [];
+    for (const row of rows) {
+        const check = row.querySelector('.sefer-kalem-check');
+        if (!check?.checked) continue;
+        const amount = moneyNumber(row.querySelector('.sefer-kalem-tutar')?.value);
+        if (amount < 0) return error('Dağıtım tutarı negatif olamaz.');
+        const kalem = getSeferKalemler().find(item => item.key === row.dataset.kalemKey);
+        if (!kalem) continue;
+        const previousAllocation = editingSeferIdx === null ? null : (seferState[editingSeferIdx]?.dagitimlar || []).find(d => allocationKey(d) === kalem.key);
+        allocations.push({
+            ...(kalem.id ? { kiralama_kalemi_id: kalem.id } : { kalem_temp_id: kalem.temp_id }),
+            tutar: amount.toFixed(2),
+            kalem_etiketi: kalem.label,
+            ...(previousAllocation?.faturali ? { faturali: true } : {}),
+        });
+    }
+    if (!allocations.length) return error('Makinesiz sefer kaydedilemez.');
+    const nakliyeTipi = document.getElementById('sefer-form-tipi').value;
+    const taseronFirmaId = seferSelectId('sefer-form-taseron');
+    const aracId = seferSelectId('sefer-form-arac');
+    if (nakliyeTipi === 'taseron' && !taseronFirmaId) return error('Taşeron sefer için firma seçmelisiniz.');
+    if (nakliyeTipi !== 'taseron' && !aracId) return error('Öz mal sefer için araç seçmelisiniz.');
+    const currentId = editingSeferIdx === null ? null : seferState[editingSeferIdx]?.id;
+    for (const allocation of allocations) {
+        const key = allocationKey(allocation);
+        if (yon === 'donus') {
+            const hasGidis = seferState.some((other, otherIdx) => otherIdx !== editingSeferIdx && other.yon === 'gidis' && other.dagitimlar?.some(d => allocationKey(d) === key));
+            if (!hasGidis) return error('Gidiş seferi olmayan makine için dönüş oluşturulamaz.');
+        }
+        const duplicate = seferState.some((other, otherIdx) => otherIdx !== editingSeferIdx && other.yon === yon && other.dagitimlar?.some(d => allocationKey(d) === key));
+        if (duplicate) return error('Aynı makine için aynı yönde ikinci aktif sefer oluşturulamaz.');
+        const previous = editingSeferIdx === null ? null : (seferState[editingSeferIdx]?.dagitimlar || []).find(d => allocationKey(d) === key);
+        if (previous?.faturali && moneyNumber(previous.tutar) !== moneyNumber(allocation.tutar)) return error('Faturalı dağıtım tutarı değiştirilemez.');
+    }
+    const next = normalizeSefer({
+        ...(editingSeferIdx === null ? {} : seferState[editingSeferIdx]),
+        id: currentId,
+        yon, cift_yon: ciftYon, tarih, islem_tarihi: islemTarihi, guzergah,
+        nakliye_tipi: nakliyeTipi,
+        arac_id: nakliyeTipi === 'taseron' ? null : aracId,
+        taseron_firma_id: nakliyeTipi === 'taseron' ? taseronFirmaId : null,
+        plaka: nakliyeTipi === 'taseron' ? (seferState[editingSeferIdx]?.plaka || '') : '',
+        taseron_maliyet: nakliyeTipi === 'taseron' ? (document.getElementById('sefer-form-taseron-maliyet').value || '0') : '0',
+        taseron_kdv_orani: nakliyeTipi === 'taseron' ? (document.getElementById('sefer-form-taseron-kdv').value || 20) : 0,
+        taseron_tevkifat_orani: nakliyeTipi === 'taseron' && document.getElementById('sefer-form-taseron-tevkifatli')?.checked
+            ? (document.getElementById('sefer-form-taseron-tevkifat').value || '2/10') : '',
+        kdv_orani: document.getElementById('sefer-form-kdv').value || 0,
+        tevkifat_orani: document.getElementById('sefer-form-tevkifatli')?.checked ? (document.getElementById('sefer-form-tevkifat').value || '2/10') : '',
+        aciklama: document.getElementById('sefer-form-aciklama').value || '',
+        dagitimlar: allocations,
+    });
+    if (editingSeferIdx === null) seferState.push(next); else seferState[editingSeferIdx] = next;
+    renderSeferCards();
+    seferModal.hide();
+    if (hiddenContainer?.querySelectorAll('.kalem-group').length) {
+        renderTable();
+        updateSystem();
+    }
+}
+
+function initSeferEditor() {
+    if (!SEFER_MODEL || !seferHidden) return;
+    seferArchiveIds = (seferArchiveHidden?.value || '').split(',').filter(Boolean).map(Number).filter(Number.isFinite);
+    try {
+        const parsed = JSON.parse(seferHidden.value || '[]');
+        seferState = Array.isArray(parsed) ? parsed.map(normalizeSefer) : [];
+    } catch (error) {
+        seferState = [];
+        document.getElementById('nakliye-seferleri-editor-error').textContent = 'Sefer kayıtları okunamadı.';
+    }
+    ensureTaslakGidis();
+    renderSeferCards();
+}
+
+document.getElementById('sefer-ekle-btn')?.addEventListener('click', () => openSeferModal());
+document.getElementById('sefer-form-kaydet')?.addEventListener('click', saveSeferModal);
+document.getElementById('sefer-form-yon')?.addEventListener('change', event => updateDagitimTutarLabel(event.target.value));
+document.getElementById('sefer-form-tipi')?.addEventListener('change', toggleSeferTypeFields);
+document.querySelectorAll('input[name="sefer-form-tevkifat-mod"]').forEach(el => {
+    el.addEventListener('change', toggleSeferTevkifatFields);
+});
+document.querySelectorAll('input[name="sefer-form-taseron-tevkifat-mod"]').forEach(el => {
+    el.addEventListener('change', toggleSeferTaseronTevkifatFields);
+});
+document.querySelector('#sefer-dagitim-tablosu tbody')?.addEventListener('input', updateSeferModalTotal);
+document.querySelector('#sefer-dagitim-tablosu tbody')?.addEventListener('change', updateSeferModalTotal);
+seferCards?.addEventListener('click', event => {
+    const button = event.target.closest('button');
+    if (!button) return;
+    const idx = Number(button.dataset.idx);
+    if (button.classList.contains('sefer-duzenle-btn')) openSeferModal(idx);
+    if (button.classList.contains('sefer-kaldir-btn')) {
+        const sefer = seferState[idx];
+        const confirmMsg = sefer?.id
+            ? 'Bu seferi arşivlemek istediğinize emin misiniz?'
+            : 'Bu seferi silmek istediğinize emin misiniz?';
+        if (!sefer || !window.confirm(confirmMsg)) return;
+        if (sefer.id) seferArchiveIds.push(sefer.id);
+        seferState.splice(idx, 1);
+        renderSeferCards();
+        if (hiddenContainer?.querySelectorAll('.kalem-group').length) {
+            renderTable();
+            updateSystem();
+        }
+    }
+});
 
 const val = id => document.getElementById(id) ? document.getElementById(id).value : "";
 const setVal = (id, v) => { if (document.getElementById(id)) document.getElementById(id).value = v; };
@@ -644,13 +1330,16 @@ function liveCalc() {
     const gunluk = parseFloat(val('g-gunluk')) || 0;
     const nakBirim = parseFloat(val('g-nakliye')) || 0;
     const donusFatura = document.getElementById('g-donus-fatura-et')?.checked;
-    const sefer = donusFatura ? 2 : 1;
-    const nakToplam = nakBirim * sefer;
+    const nakToplam = nakBirim;
+    const nakliyeLabel = document.getElementById('g-nakliye-label');
+    const nakliyeInput = document.getElementById('g-nakliye');
+    if (nakliyeLabel) nakliyeLabel.textContent = donusFatura ? 'Gidiş + Dönüş Nakliye (TL)' : 'Gidiş Nakliye (TL)';
+    if (nakliyeInput) nakliyeInput.placeholder = donusFatura ? 'Gidiş + Dönüş toplam bedeli' : 'Gidiş bedeli';
     gunSayisiGuncelle();
     if (bas && bit && infoDiv) {
         const gun = hesaplaGun(bas, bit);
         const toplam = (gun * gunluk) + nakToplam;
-        const nakStr = nakBirim > 0 ? ` + ${sefer} sefer x ${formatTRCurrency(nakBirim)} TL` : '';
+        const nakStr = nakBirim > 0 ? ` + ${donusFatura ? 'gidiş + dönüş toplamı' : 'gidiş bedeli'} ${formatTRCurrency(nakBirim)} TL` : '';
         infoDiv.innerHTML = `<i class="fas fa-calculator me-2"></i> Tahmini: ${gun} Gün x ${formatTRCurrency(gunluk)} TL${nakStr} = <span class="text-success">${formatTRCurrency(toplam)} TL</span>`;
     } else if (infoDiv) { infoDiv.innerHTML = ""; }
 }
@@ -800,6 +1489,7 @@ function yeniGizliGrupOlustur(idx) {
     div.setAttribute('data-idx', idx);
     div.innerHTML = `
         <input type="hidden" name="kalemler-${idx}-id" value="">
+        <input type="hidden" name="kalemler-${idx}-temp_id" value="kalem-${(window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : Date.now()}">
         <input type="hidden" name="kalemler-${idx}-dis_tedarik_ekipman" value="0">
         <input type="hidden" name="kalemler-${idx}-dis_tedarik_nakliye" value="0">
         <input type="hidden" name="kalemler-${idx}-ekipman_id" value="0">
@@ -841,6 +1531,8 @@ function yeniGizliGrupOlustur(idx) {
 // TABLO RENDER (edit modunda)
 function renderTable() {
     const groups = hiddenContainer.querySelectorAll('.kalem-group');
+    ensureTaslakGidis();
+    syncKalemNakliyeFromSeferler();
     tbody.innerHTML = '';
     let grandTotal = 0;
     groups.forEach((group, idx) => {
@@ -848,12 +1540,9 @@ function renderTable() {
         const bas = group.querySelector('[name$="-kiralama_baslangici"]').value;
         const bit = group.querySelector('[name$="-kiralama_bitis"]').value;
         const brFiyat = parseFloat(group.querySelector('[name$="-kiralama_brm_fiyat"]').value) || 0;
-        const nkFiyat = parseFloat(group.querySelector('[name$="-nakliye_satis_fiyat"]').value) || 0;
-        const donusFatura = group.querySelector('[name$="-donus_nakliye_fatura_et"]').value === '1';
-        const nkAdet = donusFatura ? 2 : 1;
-        const nkBirim = donusFatura ? (nkFiyat / 2) : nkFiyat;
         const gun = hesaplaGun(bas, bit);
-        const satirToplam = (gun * brFiyat) + nkFiyat;
+        const nakliye = kalemNakliyeHucre(gun, brFiyat, group, idx);
+        const satirToplam = nakliye.toplam;
         grandTotal += satirToplam;
 
         let makine = isDis
@@ -885,11 +1574,12 @@ function renderTable() {
             : `<button type="button" class="btn btn-sm btn-outline-danger sil-btn" data-idx="${idx}"><i class="fas fa-trash"></i></button>`;
 
         const tarihCellClass = conflict ? ' class="text-danger fw-bold"' : '';
-        tr.innerHTML = `<td></td><td>${makine}</td><td>${turDetay}</td><td${tarihCellClass}>${formatTRDate(bas)} / ${formatTRDate(bit)} (${gun}g)</td><td>${gun}x${formatTRCurrency(brFiyat)} + ${nkAdet}x${formatTRCurrency(nkBirim)} TL${donusFatura ? ' (Dönüş dahil)' : ' (Tek Yön)'}</td><td><b>${formatTRCurrency(satirToplam)} TL</b></td><td class="text-center">${duzenleBtn} ${silBtn}</td>`;
+        tr.innerHTML = `<td></td><td>${makine}</td><td>${turDetay}</td><td${tarihCellClass}>${formatTRDate(bas)} / ${formatTRDate(bit)} (${gun}g)</td><td>${nakliye.html}</td><td><b>${formatTRCurrency(satirToplam)} TL</b></td><td class="text-center">${duzenleBtn} ${silBtn}</td>`;
         tbody.appendChild(tr);
     });
     genelToplamEl.innerText = grandTotal.toLocaleString('tr-TR', { minimumFractionDigits: 2 }) + " TL";
     refreshMakineListesi();
+    renderSeferCards();
 }
 
 // TABLO GÜNCELLE (ekle modunda)
@@ -911,6 +1601,8 @@ function updateSystem() {
     genelToplamEl.innerText = grandTotal.toLocaleString('tr-TR', { minimumFractionDigits: 2 }) + " TL";
     indexCounter = groups.length;
     refreshMakineListesi();
+    ensureTaslakGidis();
+    renderSeferCards();
 }
 
 // LİSTEYE EKLEME / GÜNCELLEME
@@ -927,9 +1619,8 @@ g_btn_ekle.onclick = function() {
     const sFiyat = parseFloat(val('g-gunluk')) || 0;
     const nFiyat = parseFloat(val('g-nakliye')) || 0;
     const donusFatura = document.getElementById('g-donus-fatura-et').checked;
-    const nkAdet = donusFatura ? 2 : 1;
     const nkBirim = nFiyat;
-    const nToplam = donusFatura ? nFiyat * 2 : nFiyat;
+    const nToplam = nFiyat;
     const toplam = (gun * sFiyat) + nToplam;
     const isDisNak = g_dis_nakliye.checked;
 
@@ -957,7 +1648,7 @@ g_btn_ekle.onclick = function() {
         ? `<button type="button" class="btn btn-sm btn-outline-secondary" disabled title="Tamamlanmış kalemler silinemez"><i class="fas fa-trash opacity-50"></i></button>`
         : `<button type="button" class="btn btn-sm btn-outline-danger sil-btn"><i class="fas fa-trash"></i></button>`;
 
-    const satirHTML = `<td></td><td>${makineAdi}</td><td>${turDetay}</td><td>${formatTRDate(bas)} / ${formatTRDate(bit)} (${gun}g)</td><td>${gun}x${formatTRCurrency(sFiyat)} + ${nkAdet}x${formatTRCurrency(nkBirim)} TL${donusFatura ? ' (Dönüş dahil)' : ' (Tek Yön)'}</td><td><b>${formatTRCurrency(toplam)} TL</b></td><td class="text-center">${duzenleBtn} ${silBtn}</td>`;
+    const satirHTML = `<td></td><td>${makineAdi}</td><td>${turDetay}</td><td>${formatTRDate(bas)} / ${formatTRDate(bit)} (${gun}g)</td><td>${gun}x${formatTRCurrency(sFiyat)}${KIRA_TUTAR_IKON} + ${formatTRCurrency(nkBirim)} TL${donusFatura ? ' (Gidiş + Dönüş)' : ' (Tek Yön)'}</td><td><b>${formatTRCurrency(toplam)} TL</b></td><td class="text-center">${duzenleBtn} ${silBtn}</td>`;
 
     if (editingIdx !== null) {
         const tr = tbody.querySelectorAll('tr')[editingIdx];
@@ -1058,6 +1749,7 @@ g_btn_ekle.onclick = function() {
             group.className = "kalem-group";
             group.innerHTML = `
                 <input type="hidden" name="kalemler-${indexCounter}-id" value="">
+                <input type="hidden" name="kalemler-${indexCounter}-temp_id" value="kalem-${(window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : Date.now()}">
                 <input type="hidden" name="kalemler-${indexCounter}-dis_tedarik_ekipman" value="${isDis?1:0}">
                 <input type="hidden" name="kalemler-${indexCounter}-ekipman_id" value="${isDis?0:g_ekipman.value}">
                 <input type="hidden" name="kalemler-${indexCounter}-harici_ekipman_tedarikci_id" value="${val('g-harici-tedarikci')}">
@@ -1089,7 +1781,8 @@ g_btn_ekle.onclick = function() {
     }
 
     resetEntryPanel();
-    if (IS_EDIT) renderTable(); else updateSystem();
+    renderTable();
+    updateSystem();
     } catch(err) {
         console.error('[form] Güncelle/Ekle hatası:', err);
         alert('⚠️ Kalem kaydı sırasında JS hatası:\n' + (err && err.message ? err.message : err) + '\n\nDetay: F12 > Console');
@@ -1127,7 +1820,8 @@ tbody.onclick = function(e) {
 
         const donusFaturaVal = group.querySelector('[name$="-donus_nakliye_fatura_et"]').value === '1';
         const nakSatisToplam = parseFloat(group.querySelector('[name$="-nakliye_satis_fiyat"]').value) || 0;
-        setVal('g-nakliye', donusFaturaVal ? (nakSatisToplam / 2).toFixed(2) : nakSatisToplam.toFixed(2));
+        // Saklanan değer gidiş+dönüş için birleşik toplamdır; edit açılışında tekrar bölme.
+        setVal('g-nakliye', nakSatisToplam.toFixed(2));
         const nakSatisKdvRaw = group.querySelector('[name$="-nakliye_satis_kdv"]')?.value;
         setVal('g-nakliye-kdv', (nakSatisKdvRaw !== undefined && nakSatisKdvRaw !== '') ? nakSatisKdvRaw : '20');
         const donusEl = document.getElementById('g-donus-fatura-et');
@@ -1211,7 +1905,12 @@ tbody.onclick = function(e) {
 
     if (btn.classList.contains('sil-btn')) {
         if (!confirm('🛑 Bu kiralama kalemini silmek istediğinize emin misiniz?')) return;
-        hiddenContainer.querySelectorAll('.kalem-group')[idx]?.remove();
+        const group = hiddenContainer.querySelectorAll('.kalem-group')[idx];
+        const kalemId = Number(group?.querySelector('[name$="-id"]')?.value || 0) || null;
+        const kalemTempId = group?.querySelector('[name$="-temp_id"]')?.value || '';
+        const deletedKalemKey = kalemId ? `id:${kalemId}` : (kalemTempId ? `temp:${kalemTempId}` : null);
+        group?.remove();
+        removeKalemFromSeferState(deletedKalemKey);
         if (IS_EDIT) renderTable(); else { tbody.querySelectorAll('tr')[idx]?.remove(); updateSystem(); }
     }
 };
@@ -1284,6 +1983,28 @@ document.getElementById('kiralama-form').onsubmit = function(e) {
     if (!IS_EDIT) {
         const musteriId = document.getElementById('firma_musteri_id').value;
         if (!musteriId || musteriId === "0") { alert("⚠️ Kiracı Müşteri seçimi zorunludur!"); window.scrollTo({ top: 0, behavior: 'smooth' }); e.preventDefault(); return false; }
+    }
+    if (SEFER_MODEL && seferHidden) {
+        pruneSeferStateToCurrentKalemler();
+        ensureTaslakGidis();
+        if (!seferState.length && hiddenContainer.querySelectorAll('.kalem-group').length) {
+            document.getElementById('nakliye-seferleri-editor-error').textContent = 'En az bir sefer eklemelisiniz.';
+            e.preventDefault();
+            return false;
+        }
+        if (seferState.some(seferTipiEksikMi)) {
+            document.getElementById('nakliye-seferleri-editor-error').textContent = 'Her seferde öz mal araç veya taşeron firma seçilmelidir.';
+            e.preventDefault();
+            return false;
+        }
+        const emptySavedSefer = seferState.find(sefer => sefer.id && !(sefer.dagitimlar || []).length);
+        if (emptySavedSefer) {
+            document.getElementById('nakliye-seferleri-editor-error').textContent = 'Dağıtımsız mevcut seferi arşivlemeden kayıt yapılamaz.';
+            e.preventDefault();
+            return false;
+        }
+        syncKalemNakliyeFromSeferler();
+        syncSeferHidden();
     }
 };
 

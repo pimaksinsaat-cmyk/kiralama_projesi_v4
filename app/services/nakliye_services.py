@@ -49,6 +49,12 @@ def nakliye_satis_kdv_bilgisi(nakliye):
     kiralama kaleminin satış KDV bilgisi kullanılır. Bu yardımcı yalnızca
     gösterim/raporlama hesabı yapar; veritabanındaki alanları değiştirmez.
     """
+    # Yeni modelde sefer toplamı yalnızca dağıtımların denormalize kopyasıdır;
+    # rapor matrahı dağıtımlar üzerinden okunur, sefer bir kez sayılır.
+    dagitimlar = [
+        d for d in (getattr(nakliye, 'dagitimlar', None) or [])
+        if not getattr(d, 'is_deleted', False) and getattr(d, 'is_active', True)
+    ]
     kalem = _nakliye_kalemini_bul(nakliye) if getattr(nakliye, 'kiralama_id', None) else None
 
     if kalem is not None:
@@ -72,7 +78,13 @@ def nakliye_satis_kdv_bilgisi(nakliye):
     if efektif_kdv_orani.is_integer():
         efektif_kdv_orani = int(efektif_kdv_orani)
 
-    matrah = float(nakliye.tutar or 0)
+    if dagitimlar and getattr(nakliye, 'kiralama_id', None):
+        # Sefer modelinde cift_yon gidiÅŸ daÄŸÄ±tÄ±mÄ± paket toplamÄ±dÄ±r. GerÃ§ek
+        # dÃ¶nÃ¼ÅŸ oluÅŸunca liste/KDV matrahÄ± gidiÅŸ ve dÃ¶nÃ¼ÅŸ paylarÄ±na ayrÄ±lÄ±r.
+        from app.services.nakliye_sefer_services import NakliyeSeferService
+        matrah = float(NakliyeSeferService.nakliye_satis_tutari(nakliye))
+    else:
+        matrah = float(sum((d.tutar or 0 for d in dagitimlar), 0)) if dagitimlar else float(nakliye.tutar or 0)
     brut_kdv = matrah * brut_kdv_orani / 100.0
     kdv = matrah * float(efektif_kdv_orani) / 100.0
 
@@ -159,6 +171,21 @@ class NakliyeService:
         if not nakliye or getattr(nakliye, 'is_deleted', False):
             return
         deleted_at = deleted_at or datetime.now(timezone.utc)
+        # Yeni modelde hard-CASCADE yerine dağıtım ve dağıtıma bağlı cari
+        # hareketleri aynı transaction içinde pasifleştir.
+        for dagitim in getattr(nakliye, 'dagitimlar', None) or []:
+            if getattr(dagitim, 'is_deleted', False):
+                continue
+            dagitim.is_deleted = True
+            dagitim.is_active = False
+            dagitim.deleted_at = deleted_at
+            if actor_id is not None:
+                dagitim.deleted_by_id = actor_id
+            db.session.add(dagitim)
+            for hizmet in HizmetKaydi.query.filter_by(nakliye_dagitim_id=dagitim.id).filter(
+                HizmetKaydi.is_deleted.is_(False)
+            ).all():
+                _soft_delete_hizmet(hizmet, actor_id=actor_id, deleted_at=deleted_at)
         nakliye.is_deleted = True
         nakliye.is_active = False
         nakliye.deleted_at = deleted_at
