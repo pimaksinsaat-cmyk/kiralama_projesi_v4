@@ -32,7 +32,7 @@ def _create_machine(kod, filoya_giris_tarihi, calisma_durumu="bosta"):
     return ekipman
 
 
-def _add_rental(ekipman, start_date, end_date, price="1000"):
+def _add_rental(ekipman, start_date, end_date, price="1000", sonlandirildi=False, is_active=True):
     firma = Firma(
         firma_adi=f"Test Musteri {ekipman.kod}",
         yetkili_adi="Yetkili",
@@ -51,8 +51,9 @@ def _add_rental(ekipman, start_date, end_date, price="1000"):
         kiralama_baslangici=start_date,
         kiralama_bitis=end_date,
         kiralama_brm_fiyat=Decimal(price),
-        sonlandirildi=False,
-        is_active=True,
+        sonlandirildi=sonlandirildi,
+        is_active=is_active,
+        is_deleted=False,
     )
     db.session.add_all([firma, kiralama, kalem])
     db.session.commit()
@@ -61,7 +62,7 @@ def _add_rental(ekipman, start_date, end_date, price="1000"):
 
 def test_machine_utilization_available_days_start_at_filoya_giris_tarihi(app):
     ekipman = _create_machine("PM-RP-01", date(2026, 4, 1))
-    _add_rental(ekipman, date(2026, 4, 1), date(2026, 4, 15))
+    _add_rental(ekipman, date(2026, 4, 1), date(2026, 4, 15), sonlandirildi=True)
 
     metrics, totals = RaporlamaService._calculate_machine_metrics(
         [ekipman],
@@ -95,7 +96,7 @@ def test_machine_utilization_is_zero_when_report_ends_before_filoya_giris_tarihi
 
 def test_service_status_counts_as_active_and_service_days_do_not_reduce_availability(app):
     ekipman = _create_machine("PM-RP-03", date(2026, 1, 1), calisma_durumu="serviste")
-    _add_rental(ekipman, date(2026, 1, 10), date(2026, 1, 14))
+    _add_rental(ekipman, date(2026, 1, 10), date(2026, 1, 14), sonlandirildi=True)
     db.session.add(
         BakimKaydi(
             ekipman=ekipman,
@@ -117,6 +118,66 @@ def test_service_status_counts_as_active_and_service_days_do_not_reduce_availabi
     assert metrics[ekipman.id]["available_days"] == 31
     assert metrics[ekipman.id]["work_days"] == 5
     assert round(metrics[ekipman.id]["utilization_pct"], 2) == round(5 / 31 * 100, 2)
+
+
+def test_open_rental_counts_through_report_end_when_planned_end_is_before_range(app):
+    ekipman = _create_machine("PM-RP-OPEN", date(2026, 1, 1))
+    _add_rental(ekipman, date(2026, 9, 1), date(2026, 9, 30), price="1000")
+
+    metrics, _totals = RaporlamaService._calculate_machine_metrics(
+        [ekipman],
+        date(2026, 10, 1),
+        date(2026, 10, 18),
+    )
+
+    assert metrics[ekipman.id]["available_days"] == 18
+    assert metrics[ekipman.id]["work_days"] == 18
+    assert metrics[ekipman.id]["idle_days"] == 0
+    assert metrics[ekipman.id]["utilization_pct"] == 100.0
+    assert metrics[ekipman.id]["revenue"] == 18000.0
+
+
+def test_closed_rental_before_range_does_not_count(app):
+    ekipman = _create_machine("PM-RP-CLOSED", date(2026, 1, 1))
+    _add_rental(
+        ekipman,
+        date(2026, 9, 1),
+        date(2026, 9, 30),
+        sonlandirildi=True,
+    )
+
+    metrics, _totals = RaporlamaService._calculate_machine_metrics(
+        [ekipman],
+        date(2026, 10, 1),
+        date(2026, 10, 18),
+    )
+
+    assert metrics[ekipman.id]["available_days"] == 18
+    assert metrics[ekipman.id]["work_days"] == 0
+    assert metrics[ekipman.id]["idle_days"] == 18
+    assert metrics[ekipman.id]["utilization_pct"] == 0.0
+
+
+def test_swap_closed_segment_counts_until_its_end_date(app):
+    ekipman = _create_machine("PM-RP-SWAP", date(2026, 1, 1))
+    _add_rental(
+        ekipman,
+        date(2026, 10, 1),
+        date(2026, 10, 10),
+        price="1000",
+        sonlandirildi=True,
+        is_active=False,
+    )
+
+    metrics, _totals = RaporlamaService._calculate_machine_metrics(
+        [ekipman],
+        date(2026, 10, 1),
+        date(2026, 10, 18),
+    )
+
+    assert metrics[ekipman.id]["work_days"] == 10
+    assert metrics[ekipman.id]["idle_days"] == 8
+    assert metrics[ekipman.id]["revenue"] == 10000.0
 
 
 def test_ekipman_form_requires_filoya_giris_tarihi(app):

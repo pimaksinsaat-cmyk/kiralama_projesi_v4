@@ -2,7 +2,7 @@ from collections import defaultdict
 from datetime import date, timedelta
 from decimal import Decimal
 
-from sqlalchemy import func, inspect, or_
+from sqlalchemy import and_, func, inspect, or_
 from sqlalchemy.orm import contains_eager, joinedload
 
 from app.extensions import db
@@ -12,6 +12,7 @@ from app.filo.models import Ekipman, BakimKaydi, StokHareket
 from app.kiralama.models import Kiralama, KiralamaKalemi
 from app.nakliyeler.models import Nakliye
 from app.personel.models import PersonelMaasDonemi
+from app.services.ekipman_rapor_services import EkipmanRaporuService
 from app.services.sube_gider_services import SubeSabitGiderDonemiService
 from app.subeler.models import Sube, SubeGideri
 from app.subeler.models import SubeSabitGiderDonemi
@@ -700,10 +701,16 @@ class RaporlamaService:
 
         kalemler = (
             KiralamaKalemi.query.filter(
-                KiralamaKalemi.is_active.is_(True),
+                KiralamaKalemi.is_deleted.is_(False),
                 KiralamaKalemi.ekipman_id.in_(ekipman_ids),
-                KiralamaKalemi.kiralama_bitis >= start_date,
                 KiralamaKalemi.kiralama_baslangici <= end_date,
+                or_(
+                    KiralamaKalemi.kiralama_bitis >= start_date,
+                    and_(
+                        KiralamaKalemi.sonlandirildi.is_(False),
+                        KiralamaKalemi.is_active.is_(True),
+                    ),
+                ),
             )
             .order_by(KiralamaKalemi.kiralama_baslangici.asc())
             .all()
@@ -723,9 +730,10 @@ class RaporlamaService:
             if not availability:
                 continue
 
+            etkin_bitis = EkipmanRaporuService._etkin_kiralama_bitis(kalem, end_date)
             overlap = cls._overlap_range(
                 kalem.kiralama_baslangici,
-                kalem.kiralama_bitis,
+                etkin_bitis,
                 availability[0],
                 availability[1],
             )
@@ -746,12 +754,14 @@ class RaporlamaService:
             available_days = cls._machine_availability_days(ekipman, start_date, end_date)
             merged_work_days = cls._merged_interval_days(intervals_by_machine.get(ekipman.id, []))
             work_days = min(merged_work_days, available_days)
+            idle_days = available_days - work_days
             utilization_pct = (work_days / available_days * 100.0) if available_days else 0.0
             revenue = revenue_by_machine.get(ekipman.id, 0.0)
 
             metrics_by_machine[ekipman.id] = {
                 "work_days": work_days,
                 "available_days": available_days,
+                "idle_days": idle_days,
                 "utilization_pct": utilization_pct,
                 "revenue": revenue,
             }
@@ -1252,6 +1262,7 @@ class RaporlamaService:
             machine_stat = metrics_by_machine.get(ekipman.id, {})
             work_days = machine_stat.get("work_days", 0)
             available_days = machine_stat.get("available_days", 0)
+            idle_days = machine_stat.get("idle_days", available_days - work_days)
             utilization_pct = machine_stat.get("utilization_pct", 0.0)
             revenue = machine_stat.get("revenue", 0.0)
             maintenance_cost_for_machine = maintenance_cost_by_machine.get(ekipman.id, 0.0)
@@ -1274,6 +1285,7 @@ class RaporlamaService:
                     "yukseklik": ekipman.calisma_yuksekligi,
                     "work_days": work_days,
                     "available_days": available_days,
+                    "idle_days": idle_days,
                     "utilization_pct": utilization_pct,
                     "calisma_payi": calisma_payi,
                     "gelir": revenue,

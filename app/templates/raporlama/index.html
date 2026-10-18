@@ -477,7 +477,7 @@
                                 <th>Sube</th>
                                 <th class="text-end">Yukseklik</th>
                                 <th class="text-end">Calisma</th>
-                                <th class="text-end">Musait</th>
+                                <th class="text-end">Boş</th>
                                 <th class="text-end">Calisma %</th>
                                 <th class="text-end">Calisma Payi %</th>
                                 <th class="text-end">Makine Geliri</th>
@@ -491,8 +491,8 @@
                                 <td>{{ row.kod }}</td>
                                 <td>{{ row.sube }}</td>
                                 <td class="text-end">{{ row.yukseklik }} mt</td>
-                                <td class="text-end">{{ row.work_days }}</td>
-                                <td class="text-end">{{ row.available_days }}</td>
+                                <td class="text-end">{{ '%d'|format(row.work_days or 0) }} g.</td>
+                                <td class="text-end">{{ '%d'|format(row.idle_days or 0) }} g.</td>
                                 <td class="text-end">{{ '%.1f'|format(row.utilization_pct) }}%</td>
                                 <td class="text-end">{{ '%.1f'|format(row.calisma_payi) }}%</td>
                                 <td class="text-end">{{ '{:,.0f}'.format(row.gelir) }} TL</td>
